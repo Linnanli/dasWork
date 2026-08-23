@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BrowserWorkspace } from './BrowserWorkspace'
 import { repositionBrowserWorkspaceView } from './browserWorkspaceMove'
+import { normalizeBrowserUrl } from './browserWorkspaceUrl'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -77,6 +78,69 @@ describe('BrowserWorkspace', () => {
       bounds: { x: 700, y: 100, width: 200, height: 500 }
     })
     expect(show).toHaveBeenCalledWith({ version: 1, viewId: 'view-1' })
+  })
+
+  it('does not reveal a native view after the browser workspace has unmounted', async () => {
+    const view = { viewId: 'view-1' }
+    let resolveBounds: ((value: typeof view) => void) | undefined
+    const setBounds = vi.fn(
+      () =>
+        new Promise<typeof view>((resolve) => {
+          resolveBounds = resolve
+        })
+    )
+    const show = vi.fn(async () => view)
+    const hide = vi.fn(async () => view)
+
+    vi.stubGlobal('desktopApp', {
+      workspace: {
+        browser: {
+          setBounds,
+          show,
+          hide,
+          onEvent: vi.fn(() => () => undefined)
+        }
+      }
+    })
+    vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      domRect({ x: 20, y: 40, width: 640, height: 480 })
+    )
+
+    await act(async () => {
+      root.render(
+        <BrowserWorkspace
+          tab={{ id: 'browser-1', type: 'browser', title: 'Browser', browserViewId: 'view-1' }}
+          workspaceId="workspace-1"
+          onRuntimeChange={vi.fn()}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    expect(setBounds).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      root.render(<div />)
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      resolveBounds?.(view)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(hide).toHaveBeenCalledOnce()
+    expect(show).not.toHaveBeenCalled()
+  })
+
+  it('normalizes HTTP and HTTPS addresses without accepting unsafe schemes', () => {
+    expect(normalizeBrowserUrl('example.test/docs')).toBe('https://example.test/docs')
+    expect(normalizeBrowserUrl('http://example.test/docs')).toBe('http://example.test/docs')
+    expect(normalizeBrowserUrl('https://example.test/docs')).toBe('https://example.test/docs')
+    expect(normalizeBrowserUrl('javascript:alert(1)')).toBeUndefined()
+    expect(normalizeBrowserUrl('file:///etc/passwd')).toBeUndefined()
   })
 
   it('repositions and reveals the same native view after a cross-panel move', async () => {

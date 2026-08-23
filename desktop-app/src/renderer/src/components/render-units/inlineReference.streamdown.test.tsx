@@ -19,6 +19,7 @@ import {
   referenceInlineRehypePlugins
 } from '@/lib/referenceInlineMarkdown'
 import { referenceUrlTransform } from '@/lib/referenceInlineTarget'
+import { resolveInlineReferenceAction } from '@/lib/referenceInlineAction'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -141,9 +142,22 @@ describe('Streamdown inline references', () => {
   })
 
   it('preserves raw local Markdown targets through Streamdown hardening', async () => {
+    const execute = vi.fn()
     await act(async () => {
       root.render(
-        <InlineReferenceProvider value={{ canOpenLocalPaths: true, workspaceCwd: '/workspace' }}>
+        <InlineReferenceProvider
+          value={{
+            canOpenLocalPaths: true,
+            workspaceCwd: '/workspace',
+            resolve: (descriptor) =>
+              resolveInlineReferenceAction(descriptor, {
+                canOpenLocalPaths: true,
+                canOpenWorkspace: true,
+                workspaceCwd: '/workspace'
+              }),
+            execute
+          }}
+        >
           <Streamdown
             animated={animation}
             components={components}
@@ -177,21 +191,25 @@ describe('Streamdown inline references', () => {
       await act(async () => reference.click())
     }
 
-    expect(window.desktopApp.codex.openLocalPath).toHaveBeenNthCalledWith(1, {
-      cwd: '/workspace',
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      type: 'workspace-file',
+      relativePath: 'src/App.tsx',
       line: 4,
-      path: 'src/App.tsx'
+      mode: 'preview'
     })
-    expect(window.desktopApp.codex.openLocalPath).toHaveBeenNthCalledWith(2, {
-      cwd: '/workspace',
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      type: 'workspace-file',
+      relativePath: 'src/App.tsx',
       line: 5,
-      path: './src/App.tsx'
+      mode: 'preview'
     })
-    expect(window.desktopApp.codex.openLocalPath).toHaveBeenNthCalledWith(3, {
+    expect(execute).toHaveBeenNthCalledWith(3, {
+      type: 'system-file',
       line: 6,
       path: '/tmp/App.tsx'
     })
-    expect(window.desktopApp.codex.openLocalPath).toHaveBeenNthCalledWith(4, {
+    expect(execute).toHaveBeenNthCalledWith(4, {
+      type: 'system-file',
       line: 7,
       path: 'C:/repo/src/App.tsx'
     })

@@ -6,6 +6,8 @@ import {
   createWorkspaceDescriptor,
   WorkspaceContainerProvider,
   useWorkspaceContainer,
+  type WorkspaceFileLocation,
+  type WorkspaceOpenMode,
   type WorkspaceTabRecord
 } from '../workspace-container'
 import {
@@ -20,7 +22,11 @@ type RightWorkspaceContextValue = {
   openTab(type: Exclude<RightWorkspaceTabType, 'review' | 'file'>): void
   openBrowser(url?: string, title?: string): void
   openReview(source?: LocalGitReviewSource): void
-  openFile(relativePath: string, title?: string): void
+  openFile(
+    relativePath: string,
+    title?: string,
+    options?: { location?: WorkspaceFileLocation; mode?: WorkspaceOpenMode; revealPath?: string }
+  ): void
   activateTab(tabId: string): void
   closeTab(tabId: string): void
   collapse(): void
@@ -94,11 +100,20 @@ function RightWorkspaceBridge({ children }: { children: ReactNode }): React.JSX.
           panelId: 'right',
           tab: createWorkspaceDescriptor({ type: 'review', source })
         }),
-      openFile: (relativePath, title) =>
+      openFile: (relativePath, title, options) =>
         container.dispatch({
           type: 'open-tab',
           panelId: 'right',
-          tab: createWorkspaceDescriptor({ type: 'file', relativePath, title })
+          tab: createWorkspaceDescriptor(
+            {
+              type: 'file',
+              relativePath,
+              title,
+              ...(options?.location ? { location: options.location } : {}),
+              ...(options?.revealPath ? { revealPath: options.revealPath } : {})
+            },
+            { mode: options?.mode }
+          )
         }),
       activateTab: (tabId) => container.dispatch({ type: 'activate-tab', panelId: 'right', tabId }),
       closeTab: (tabId) => container.dispatch({ type: 'close-tab', panelId: 'right', tabId }),
@@ -155,7 +170,9 @@ function toRightWorkspaceTab(
         id: tab.id,
         type: 'file',
         title: tab.title,
-        relativePath: typeof tab.props.relativePath === 'string' ? tab.props.relativePath : ''
+        relativePath: typeof tab.props.relativePath === 'string' ? tab.props.relativePath : '',
+        revealPath: typeof tab.props.revealPath === 'string' ? tab.props.revealPath : undefined,
+        location: fileLocationFromProps(tab.props)
       }
     case 'terminal':
       return {
@@ -175,4 +192,19 @@ function toRightWorkspaceTab(
     default:
       return undefined
   }
+}
+
+function fileLocationFromProps(
+  props: WorkspaceTabRecord['props']
+): WorkspaceFileLocation | undefined {
+  const line = positiveInteger(props.line)
+  const column = positiveInteger(props.column)
+  const endLine = positiveInteger(props.endLine)
+  return line || column || endLine
+    ? { ...(line ? { line } : {}), ...(column ? { column } : {}), ...(endLine ? { endLine } : {}) }
+    : undefined
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
 }

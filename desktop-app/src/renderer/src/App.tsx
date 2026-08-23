@@ -175,6 +175,10 @@ import {
   referenceInlineRehypePlugins
 } from './lib/referenceInlineMarkdown'
 import { referenceUrlTransform } from './lib/referenceInlineTarget'
+import {
+  resolveInlineReferenceAction,
+  type InlineReferenceAction
+} from './lib/referenceInlineAction'
 import { blockedAssistantMessageText, pendingAssistantMessageText } from './lib/assistantMessages'
 import {
   buildAssistantRenderUnits,
@@ -246,6 +250,7 @@ import { useComposerContextSearch } from './composer/useComposerContextSearch'
 import {
   type ComposerContextIdentityIndex,
   ComposerContextIdentityProvider,
+  inlineReferenceSemanticTargetsFromIdentityIndex,
   useComposerContextIdentityIndex
 } from './composer/composerContextIdentity'
 import {
@@ -2868,16 +2873,62 @@ function AssistantText({
   canOpenLocalPaths: boolean
   onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
+  const workspace = useRightWorkspace()
+  const identityIndex = useComposerContextIdentityIndex()
+  const semanticTargets = useMemo(
+    () => inlineReferenceSemanticTargetsFromIdentityIndex(identityIndex),
+    [identityIndex]
+  )
   const referenceContext = useMemo(
     () => ({
       workspaceCwd,
       canOpenLocalPaths,
-      onOpenConversation,
-      onOpenExternalUrl: (url: string): void => {
-        void window.desktopApp.codex.openExternalHttpUrl(url).catch(() => undefined)
+      resolve: (descriptor: Parameters<typeof resolveInlineReferenceAction>[0]) =>
+        resolveInlineReferenceAction(descriptor, {
+          canOpenLocalPaths,
+          canOpenWorkspace: true,
+          semanticTargets,
+          workspaceCwd
+        }),
+      execute: (action: InlineReferenceAction): void => {
+        switch (action.type) {
+          case 'workspace-file':
+            workspace.openFile(action.relativePath, undefined, {
+              location: {
+                ...(action.line ? { line: action.line } : {}),
+                ...(action.column ? { column: action.column } : {}),
+                ...(action.endLine ? { endLine: action.endLine } : {})
+              },
+              mode: action.mode
+            })
+            return
+          case 'workspace-folder':
+            workspace.openFile('', 'Files', { mode: 'pinned', revealPath: action.relativePath })
+            return
+          case 'workspace-browser':
+            workspace.openBrowser(action.url)
+            return
+          case 'conversation':
+            onOpenConversation(action.conversationId)
+            return
+          case 'system-file':
+            void window.desktopApp.codex
+              .openLocalPath({
+                path: action.path,
+                ...(action.cwd ? { cwd: action.cwd } : {}),
+                ...(action.line ? { line: action.line } : {})
+              })
+              .catch(() => undefined)
+            return
+          case 'external-browser':
+            void window.desktopApp.codex.openExternalHttpUrl(action.url).catch(() => undefined)
+            return
+          case 'display-only':
+            return
+        }
       }
     }),
-    [canOpenLocalPaths, onOpenConversation, workspaceCwd]
+    [canOpenLocalPaths, onOpenConversation, semanticTargets, workspace, workspaceCwd]
   )
 
   return (
@@ -2999,7 +3050,13 @@ function EntryUnit({
   }
 
   if (unit.renderMode === 'custom') {
-    return <SpecialEntryRenderer unit={unit} />
+    return (
+      <SpecialEntryRenderer
+        unit={unit}
+        workspaceCwd={workspaceCwd}
+        canOpenLocalPaths={canOpenLocalPaths}
+      />
+    )
   }
 
   return (

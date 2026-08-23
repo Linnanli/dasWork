@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FileWorkspaceListDirectoryResult } from '../../../../../shared/fileWorkspaceApi'
 import { FileWorkspace } from './FileWorkspace'
+import { codePreviewSelectionForLocation } from './workspaceFileLocation'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -80,6 +81,7 @@ describe('FileWorkspace', () => {
     })
 
     expect(container.querySelector('input[placeholder="筛选文件…"]')).not.toBeNull()
+    expect(container.textContent).toContain('只读预览')
     await vi.waitFor(() => expect(container.querySelector('file-tree-container')).not.toBeNull())
     const fileTree = container.querySelector('file-tree-container')
     const fileTreeViewport = fileTree?.parentElement?.parentElement
@@ -370,6 +372,73 @@ describe('FileWorkspace', () => {
       expect(diffsContainer?.shadowRoot?.textContent).toContain('export const value = 1')
       expect(container.querySelector('.cm-editor')).toBeNull()
     })
+  })
+
+  it('scrolls to a requested line after the Pierre file renderer completes', async () => {
+    const scrollTo = vi.fn()
+    const originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+      writable: true
+    })
+    window.desktopApp.workspace.files.readFile = vi.fn(async () => ({
+      version: 1 as const,
+      rootId: 'root-1',
+      entry: {
+        name: 'example.ts',
+        path: 'src/example.ts',
+        kind: 'file' as const,
+        size: 128,
+        mtimeMs: 0
+      },
+      content: {
+        kind: 'text' as const,
+        encoding: 'utf8' as const,
+        text: Array.from({ length: 12 }, (_value, index) => `const line${index + 1} = true`).join(
+          '\n'
+        )
+      }
+    }))
+    const selectedFileProps = baseProps()
+    selectedFileProps.tab = {
+      ...selectedFileProps.tab,
+      relativePath: 'src/example.ts',
+      title: 'example.ts',
+      location: { line: 6 }
+    }
+
+    try {
+      await act(async () => {
+        root.render(<FileWorkspace {...selectedFileProps} />)
+        await Promise.resolve()
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      })
+
+      await vi.waitFor(() => {
+        expect(scrollTo).toHaveBeenCalledWith({ behavior: 'instant', top: 110 })
+      })
+    } finally {
+      if (originalScrollTo) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollTo', originalScrollTo)
+      } else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo')
+    }
+  })
+
+  it('clamps a requested code location and clears selection when none is requested', () => {
+    expect(
+      codePreviewSelectionForLocation({ line: 99, endLine: 101 }, 'first\nsecond\nthird')
+    ).toEqual({
+      start: 3,
+      end: 3
+    })
+    expect(
+      codePreviewSelectionForLocation({ line: 2, endLine: 3 }, 'first\nsecond\nthird')
+    ).toEqual({
+      start: 2,
+      end: 3
+    })
+    expect(codePreviewSelectionForLocation(undefined, 'first\nsecond')).toBeUndefined()
   })
 })
 

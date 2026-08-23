@@ -6,12 +6,21 @@ import {
   browserWorkspaceCreateRequestSchema,
   browserWorkspaceEventSchema,
   browserWorkspaceNavigateRequestSchema,
-  browserWorkspaceSetBoundsRequestSchema
+  browserWorkspaceSetBoundsRequestSchema,
+  isBrowserWorkspaceUrl
 } from './browserWorkspaceApi'
 
 const bounds = { x: 0, y: 0, width: 640, height: 480 }
 
 describe('browser workspace API schemas', () => {
+  it('uses the same HTTP/HTTPS policy for browser-initiated navigation', () => {
+    expect(isBrowserWorkspaceUrl(BROWSER_WORKSPACE_BLANK_URL)).toBe(true)
+    expect(isBrowserWorkspaceUrl('http://example.com')).toBe(true)
+    expect(isBrowserWorkspaceUrl('https://example.com')).toBe(true)
+    expect(isBrowserWorkspaceUrl('file:///etc/passwd')).toBe(false)
+    expect(isBrowserWorkspaceUrl('javascript:alert(1)')).toBe(false)
+  })
+
   it('accepts bounded browser view requests', () => {
     expect(
       browserWorkspaceCreateRequestSchema.safeParse({
@@ -48,16 +57,15 @@ describe('browser workspace API schemas', () => {
     ).toBe(true)
   })
 
-  it('rejects non-HTTPS URLs, malformed bounds, and arbitrary view options', () => {
+  it('accepts HTTP/HTTPS and rejects unsafe schemes, malformed bounds, and arbitrary view options', () => {
     expect(
       browserWorkspaceCreateRequestSchema.safeParse({
         version: BROWSER_WORKSPACE_API_VERSION,
         workspaceId: 'workspace-1',
         url: 'http://example.com',
-        bounds,
-        webPreferences: { nodeIntegration: true }
+        bounds
       }).success
-    ).toBe(false)
+    ).toBe(true)
 
     expect(
       browserWorkspaceCreateRequestSchema.safeParse({

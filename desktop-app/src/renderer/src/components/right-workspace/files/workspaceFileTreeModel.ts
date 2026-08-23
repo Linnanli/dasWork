@@ -1,6 +1,6 @@
 import type {
   FileWorkspaceEntry,
-  FileWorkspaceListDirectoryResult,
+  FileWorkspaceDirectoryListing,
   FileWorkspaceSearchMatch
 } from '../../../../../shared/fileWorkspaceApi'
 
@@ -13,7 +13,7 @@ export type WorkspaceFileTreeModel = {
   truncatedDirectoryPaths: ReadonlySet<string>
 }
 
-type DirectoryListing = Pick<FileWorkspaceListDirectoryResult, 'entries' | 'path' | 'truncated'>
+type DirectoryListing = Pick<FileWorkspaceDirectoryListing, 'entries' | 'path' | 'truncated'>
 
 const naturalPathCollator = new Intl.Collator(undefined, {
   numeric: true,

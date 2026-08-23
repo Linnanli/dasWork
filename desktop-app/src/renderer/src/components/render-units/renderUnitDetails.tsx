@@ -64,6 +64,11 @@ import {
   isToolPartActive,
   type ToolGroupSummary
 } from '@/lib/toolGroupSummary'
+import {
+  resolveInlineReferenceAction,
+  type InlineReferenceAction
+} from '@/lib/referenceInlineAction'
+import type { InlineReferenceDescriptor } from '@/lib/referenceInlineTarget'
 import { cn } from '@/lib/utils'
 import { renderUnitAttributes } from './renderUnitAttributes'
 import { ResourceFileIcon } from './resourceFileIcon'
@@ -186,7 +191,15 @@ function webSearchDetailForPart(part: AnyRecord): {
   }
 }
 
-export function SpecialEntryRenderer({ unit }: { unit: EntryUnit }): React.JSX.Element | null {
+export function SpecialEntryRenderer({
+  unit,
+  workspaceCwd,
+  canOpenLocalPaths = true
+}: {
+  unit: EntryUnit
+  workspaceCwd?: string
+  canOpenLocalPaths?: boolean
+}): React.JSX.Element | null {
   const item = unit.item
   if (!item) return null
 
@@ -198,7 +211,13 @@ export function SpecialEntryRenderer({ unit }: { unit: EntryUnit }): React.JSX.E
     case 'imageGeneration':
       return <GeneratedImageEntryUnit unit={unit} />
     case 'endResources':
-      return <EndResourceCardsUnit unit={unit} />
+      return (
+        <EndResourceCardsUnit
+          unit={unit}
+          workspaceCwd={workspaceCwd}
+          canOpenLocalPaths={canOpenLocalPaths}
+        />
+      )
     case 'reviewComments':
       return <ReviewCommentsEntryUnit unit={unit} />
     case 'automaticApprovalReview':
@@ -810,7 +829,15 @@ function GeneratedImageFileUnit({
   )
 }
 
-function EndResourceCardsUnit({ unit }: { unit: EntryUnit }): React.JSX.Element | null {
+function EndResourceCardsUnit({
+  unit,
+  workspaceCwd,
+  canOpenLocalPaths
+}: {
+  unit: EntryUnit
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
+}): React.JSX.Element | null {
   const resources = useMemo(
     () => arrayValue(unit.item?.resources ?? unit.item?.items).map(resourceCardData),
     [unit.item]
@@ -848,6 +875,8 @@ function EndResourceCardsUnit({ unit }: { unit: EntryUnit }): React.JSX.Element 
           key={`${resource.type}:${resource.openPath ?? resource.openUrl ?? resource.label}:${index}`}
           resource={resource}
           actionsDisabled={localPathCheckPending && Boolean(resource.openPath)}
+          workspaceCwd={workspaceCwd}
+          canOpenLocalPaths={canOpenLocalPaths}
         />
       ))}
     </div>
@@ -1148,26 +1177,69 @@ function ImageGallery({ images }: { images: readonly ImageEntry[] }): React.JSX.
 
 function ResourceCard({
   resource,
-  actionsDisabled = false
+  actionsDisabled = false,
+  workspaceCwd,
+  canOpenLocalPaths
 }: {
   resource: ResourceCardData
   actionsDisabled?: boolean
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
 }): React.JSX.Element {
   const Icon = resource.icon
   const workspace = useOptionalRightWorkspace()
-  const canOpenInApp = Boolean(workspace && (resource.workspacePath || resource.inAppUrl))
+  const descriptor = resourceReferenceDescriptor(resource)
+  const action =
+    descriptor &&
+    resolveInlineReferenceAction(descriptor, {
+      canOpenLocalPaths,
+      canOpenWorkspace: Boolean(workspace),
+      workspaceCwd: workspaceCwd ?? resource.cwd
+    })
+  const canOpenInApp = isWorkspaceAction(action)
 
-  const openInApp = (): boolean => {
-    if (!workspace) return false
-    if (resource.workspacePath) {
-      workspace.openFile(resource.workspacePath, resource.label)
-      return true
+  const executeAction = (nextAction: InlineReferenceAction): void => {
+    switch (nextAction.type) {
+      case 'workspace-file':
+        if (!workspace) return
+        workspace.openFile(nextAction.relativePath, resource.label, {
+          location: {
+            ...(nextAction.line ? { line: nextAction.line } : {}),
+            ...(nextAction.column ? { column: nextAction.column } : {}),
+            ...(nextAction.endLine ? { endLine: nextAction.endLine } : {})
+          },
+          mode: nextAction.mode
+        })
+        return
+      case 'workspace-folder':
+        if (!workspace) return
+        workspace.openFile('', 'Files', { mode: 'pinned', revealPath: nextAction.relativePath })
+        return
+      case 'workspace-browser':
+        if (!workspace) return
+        workspace.openBrowser(nextAction.url, resource.label)
+        return
+      case 'system-file':
+        void window.desktopApp.codex
+          .openLocalPath({
+            path: nextAction.path,
+            ...(nextAction.cwd ? { cwd: nextAction.cwd } : {}),
+            ...(nextAction.line ? { line: nextAction.line } : {})
+          })
+          .catch(() => undefined)
+        return
+      case 'external-browser':
+        void window.desktopApp.codex.openExternalHttpUrl(nextAction.url).catch(() => undefined)
+        return
+      case 'conversation':
+      case 'display-only':
+        return
     }
-    if (resource.inAppUrl) {
-      workspace.openBrowser(resource.inAppUrl, resource.label)
-      return true
-    }
-    return false
+  }
+
+  const openInApp = (): void => {
+    if (!action || !isWorkspaceAction(action)) return
+    executeAction(action)
   }
   const openWithSystem = (): void => {
     if (resource.openPath) {
@@ -1185,8 +1257,8 @@ function ResourceCard({
     }
   }
   const handleOpen = (): void => {
-    if (openInApp()) return
-    openWithSystem()
+    if (!action || actionsDisabled) return
+    executeAction(action)
   }
   const revealInFileManager = (): void => {
     if (!resource.openPath) return
@@ -1197,8 +1269,7 @@ function ResourceCard({
       })
       .catch(() => undefined)
   }
-  const canOpen =
-    !actionsDisabled && (canOpenInApp || Boolean(resource.openUrl || resource.openPath))
+  const canOpen = !actionsDisabled && action !== undefined && action.type !== 'display-only'
   const canCopyLink = Boolean(resource.openUrl && navigator.clipboard?.writeText)
 
   return (
@@ -1289,6 +1360,38 @@ function ResourceCard({
         ) : null}
       </CardAction>
     </CardHeader>
+  )
+}
+
+function resourceReferenceDescriptor(
+  resource: ResourceCardData
+): InlineReferenceDescriptor | undefined {
+  if (resource.openPath) {
+    return {
+      href: resource.openPath,
+      kind: 'local-file',
+      label: resource.label,
+      path: resource.openPath,
+      tooltip: resource.openPath,
+      ...(resource.line ? { line: resource.line } : {})
+    }
+  }
+  if (!resource.openUrl) return undefined
+  return {
+    href: resource.openUrl,
+    kind: 'external-url',
+    label: resource.label,
+    tooltip: resource.openUrl
+  }
+}
+
+function isWorkspaceAction(
+  action: InlineReferenceAction | undefined
+): action is Extract<InlineReferenceAction, { type: `workspace-${string}` }> {
+  return (
+    action?.type === 'workspace-file' ||
+    action?.type === 'workspace-folder' ||
+    action?.type === 'workspace-browser'
   )
 }
 
@@ -1572,9 +1675,7 @@ type ResourceCardData = {
   kind: string
   label: string
   openUrl?: string
-  inAppUrl?: string
   openPath?: string
-  workspacePath?: string
   line?: number
   cwd?: string
   icon: LucideIcon
@@ -1733,7 +1834,6 @@ function resourceCardData(value: unknown): ResourceCardData {
     stringValue(record?.contentType)
   const cwd = localFilePath(stringValue(record?.cwd))
   const path = resourceOpenPath(rawPath, cwd)
-  const workspacePath = resourceWorkspacePath(rawPath, cwd)
   const label =
     stringValue(record?.title) ??
     stringValue(record?.name) ??
@@ -1741,7 +1841,6 @@ function resourceCardData(value: unknown): ResourceCardData {
     url ??
     '未命名资源'
   const openUrl = externalHttpUrl(url)
-  const inAppUrl = httpsUrl(openUrl)
 
   if (type === 'google-drive') {
     return {
@@ -1749,12 +1848,11 @@ function resourceCardData(value: unknown): ResourceCardData {
       kind: googleDriveKind(openUrl),
       label,
       icon: LinkIcon,
-      openUrl,
-      inAppUrl
+      openUrl
     }
   }
   if (type === 'appgen-app') {
-    return { type, kind: 'Site', label, icon: WrenchIcon, openUrl, inAppUrl }
+    return { type, kind: 'Site', label, icon: WrenchIcon, openUrl }
   }
   if (type === 'website') {
     return {
@@ -1763,7 +1861,6 @@ function resourceCardData(value: unknown): ResourceCardData {
       label,
       icon: LinkIcon,
       openUrl,
-      inAppUrl,
       openPath: path,
       line: positiveInteger(record?.line),
       cwd
@@ -1778,7 +1875,6 @@ function resourceCardData(value: unknown): ResourceCardData {
       filePath: rawPath,
       mimeType,
       openPath: path,
-      workspacePath,
       line: positiveInteger(record?.line),
       cwd
     }
@@ -1790,33 +1886,6 @@ function resourceOpenPath(path: string | undefined, cwd: string | undefined): st
   const absolutePath = localFilePath(path)
   if (absolutePath) return absolutePath
   return cwd && safeRelativeLocalPath(path ?? '') ? path : undefined
-}
-
-function resourceWorkspacePath(
-  path: string | undefined,
-  cwd: string | undefined
-): string | undefined {
-  const relativePath = safeRelativeLocalPath(path ?? '')
-  if (relativePath && !localFilePath(path)) return relativePath
-  if (!path || !cwd || !localFilePath(path)) return undefined
-
-  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+$/, '')
-  const normalizedCwd = cwd.replace(/\\/g, '/').replace(/\/+$/, '')
-  const caseInsensitive = /^[A-Za-z]:\//.test(normalizedPath) || /^[A-Za-z]:\//.test(normalizedCwd)
-  const pathForComparison = caseInsensitive ? normalizedPath.toLowerCase() : normalizedPath
-  const cwdForComparison = caseInsensitive ? normalizedCwd.toLowerCase() : normalizedCwd
-  const prefix = `${cwdForComparison}/`
-  if (!pathForComparison.startsWith(prefix)) return undefined
-  return safeRelativeLocalPath(normalizedPath.slice(normalizedCwd.length + 1))
-}
-
-function httpsUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined
-  try {
-    return new URL(url).protocol === 'https:' ? url : undefined
-  } catch {
-    return undefined
-  }
 }
 
 function googleDriveKind(url: string | undefined): string {

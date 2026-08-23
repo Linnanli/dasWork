@@ -11,6 +11,20 @@ export const FILE_WORKSPACE_MAX_SEARCH_BYTES = 2 * 1024 * 1024
 const rootIdSchema = z.string().min(1).max(512)
 const searchSessionIdSchema = z.string().min(1).max(512)
 
+/**
+ * Canonicalizes harmless workspace-relative path spelling. Callers must still
+ * validate the result before accepting it as a workspace-relative path.
+ */
+export function normalizeFileWorkspaceRelativePath(path: string): string {
+  const normalized = path.trim().replaceAll('\\', '/').replace(/\/+/gu, '/')
+  const result = normalized
+    .split('/')
+    .filter((segment, index) => segment !== '.' && (segment !== '' || index === 0))
+    .join('/')
+    .replace(/\/$/u, '')
+  return result || (normalized.startsWith('/') ? '/' : '')
+}
+
 export const fileWorkspaceRelativePathSchema = z
   .string()
   .max(4096)
@@ -58,6 +72,34 @@ export const fileWorkspaceEntrySchema = z
   .strict()
 export type FileWorkspaceEntry = z.infer<typeof fileWorkspaceEntrySchema>
 
+export const fileWorkspacePathUnavailableReasonSchema = z.enum([
+  'not-found',
+  'not-directory',
+  'not-file',
+  'workspace-unavailable'
+])
+export type FileWorkspacePathUnavailableReason = z.infer<
+  typeof fileWorkspacePathUnavailableReasonSchema
+>
+
+export const fileWorkspacePathUnavailableResultSchema = z
+  .object({
+    version: z.literal(FILE_WORKSPACE_API_VERSION),
+    rootId: rootIdSchema,
+    path: fileWorkspaceRelativePathSchema,
+    unavailable: fileWorkspacePathUnavailableReasonSchema
+  })
+  .strict()
+export type FileWorkspacePathUnavailableResult = z.infer<
+  typeof fileWorkspacePathUnavailableResultSchema
+>
+
+export function isFileWorkspacePathUnavailableResult(
+  result: object
+): result is FileWorkspacePathUnavailableResult {
+  return 'unavailable' in result
+}
+
 export const fileWorkspaceListDirectoryRequestSchema = fileWorkspaceBaseRequestSchema
   .extend({
     path: fileWorkspaceRelativePathSchema.optional(),
@@ -68,7 +110,7 @@ export type FileWorkspaceListDirectoryRequest = z.infer<
   typeof fileWorkspaceListDirectoryRequestSchema
 >
 
-export const fileWorkspaceListDirectoryResultSchema = z
+export const fileWorkspaceDirectoryListingSchema = z
   .object({
     version: z.literal(FILE_WORKSPACE_API_VERSION),
     rootId: rootIdSchema,
@@ -77,6 +119,12 @@ export const fileWorkspaceListDirectoryResultSchema = z
     truncated: z.boolean()
   })
   .strict()
+export type FileWorkspaceDirectoryListing = z.infer<typeof fileWorkspaceDirectoryListingSchema>
+
+export const fileWorkspaceListDirectoryResultSchema = z.union([
+  fileWorkspaceDirectoryListingSchema,
+  fileWorkspacePathUnavailableResultSchema
+])
 export type FileWorkspaceListDirectoryResult = z.infer<
   typeof fileWorkspaceListDirectoryResultSchema
 >
@@ -88,13 +136,19 @@ export const fileWorkspaceMetadataRequestSchema = fileWorkspaceBaseRequestSchema
   .strict()
 export type FileWorkspaceMetadataRequest = z.infer<typeof fileWorkspaceMetadataRequestSchema>
 
-export const fileWorkspaceMetadataResultSchema = z
+export const fileWorkspaceMetadataSuccessSchema = z
   .object({
     version: z.literal(FILE_WORKSPACE_API_VERSION),
     rootId: rootIdSchema,
     entry: fileWorkspaceEntrySchema
   })
   .strict()
+export type FileWorkspaceMetadataSuccess = z.infer<typeof fileWorkspaceMetadataSuccessSchema>
+
+export const fileWorkspaceMetadataResultSchema = z.union([
+  fileWorkspaceMetadataSuccessSchema,
+  fileWorkspacePathUnavailableResultSchema
+])
 export type FileWorkspaceMetadataResult = z.infer<typeof fileWorkspaceMetadataResultSchema>
 
 const byteLimitSchema = z.number().int().min(1).max(FILE_WORKSPACE_MAX_SEARCH_BYTES)
@@ -141,7 +195,7 @@ export const fileWorkspaceReadFileContentSchema = z.discriminatedUnion('kind', [
 ])
 export type FileWorkspaceReadFileContent = z.infer<typeof fileWorkspaceReadFileContentSchema>
 
-export const fileWorkspaceReadFileResultSchema = z
+export const fileWorkspaceReadFileSuccessSchema = z
   .object({
     version: z.literal(FILE_WORKSPACE_API_VERSION),
     rootId: rootIdSchema,
@@ -149,6 +203,12 @@ export const fileWorkspaceReadFileResultSchema = z
     content: fileWorkspaceReadFileContentSchema
   })
   .strict()
+export type FileWorkspaceReadFileSuccess = z.infer<typeof fileWorkspaceReadFileSuccessSchema>
+
+export const fileWorkspaceReadFileResultSchema = z.union([
+  fileWorkspaceReadFileSuccessSchema,
+  fileWorkspacePathUnavailableResultSchema
+])
 export type FileWorkspaceReadFileResult = z.infer<typeof fileWorkspaceReadFileResultSchema>
 
 export const fileWorkspaceSearchRequestSchema = fileWorkspaceBaseRequestSchema

@@ -29,14 +29,24 @@ describe('InlineReference', () => {
     container.remove()
   })
 
-  it('opens a local path only when the current conversation grants local capability', async () => {
+  it('executes a workspace file action only when the resolver grants one', async () => {
     const descriptor = classifyReferenceTarget({ href: 'src/App.tsx:4', label: 'App.tsx' })
     expect(descriptor).toBeDefined()
+    const execute = vi.fn()
 
     await act(async () => {
       root.render(
         <InlineReference
-          context={{ canOpenLocalPaths: true, workspaceCwd: '/repo' }}
+          context={{
+            canOpenLocalPaths: true,
+            resolve: () => ({
+              type: 'workspace-file',
+              relativePath: 'src/App.tsx',
+              line: 4,
+              mode: 'preview'
+            }),
+            execute
+          }}
           descriptor={descriptor!}
         />
       )
@@ -47,16 +57,21 @@ describe('InlineReference', () => {
     expect(button?.dataset.interactive).toBe('true')
     expect(button?.textContent).toBe('App.tsx (line 4)')
     await act(async () => button?.click())
-    expect(window.desktopApp.codex.openLocalPath).toHaveBeenCalledWith({
-      path: 'src/App.tsx',
-      cwd: '/repo',
-      line: 4
+    expect(execute).toHaveBeenCalledWith({
+      type: 'workspace-file',
+      relativePath: 'src/App.tsx',
+      line: 4,
+      mode: 'preview'
     })
 
     act(() => {
       root.render(
         <InlineReference
-          context={{ canOpenLocalPaths: false, workspaceCwd: '/repo' }}
+          context={{
+            canOpenLocalPaths: false,
+            resolve: () => ({ type: 'display-only', reason: 'local-access-unavailable' }),
+            execute
+          }}
           descriptor={descriptor!}
         />
       )
@@ -69,13 +84,17 @@ describe('InlineReference', () => {
     expect(disabledToken?.getAttribute('tabindex')).toBeNull()
   })
 
-  it('uses a link for HTTP and an existing resolver for a conversation', async () => {
-    const openExternalUrl = vi.fn()
+  it('uses an anchor for HTTP and executes unified browser/conversation actions', async () => {
+    const execute = vi.fn()
     const external = classifyReferenceTarget({ href: 'https://example.test', label: 'Example' })
     await act(async () => {
       root.render(
         <InlineReference
-          context={{ canOpenLocalPaths: true, onOpenExternalUrl: openExternalUrl }}
+          context={{
+            canOpenLocalPaths: true,
+            resolve: () => ({ type: 'workspace-browser', url: 'https://example.test/' }),
+            execute
+          }}
           descriptor={external!}
         />
       )
@@ -85,14 +104,21 @@ describe('InlineReference', () => {
     )
     expect(link?.getAttribute('href')).toBe('https://example.test/')
     await act(async () => link?.click())
-    expect(openExternalUrl).toHaveBeenCalledWith('https://example.test/')
+    expect(execute).toHaveBeenCalledWith({
+      type: 'workspace-browser',
+      url: 'https://example.test/'
+    })
 
-    const openConversation = vi.fn()
+    execute.mockClear()
     const conversation = classifyReferenceTarget({ href: 'thread://thread-child', label: 'Child' })
     act(() => {
       root.render(
         <InlineReference
-          context={{ canOpenLocalPaths: true, onOpenConversation: openConversation }}
+          context={{
+            canOpenLocalPaths: true,
+            resolve: () => ({ type: 'conversation', conversationId: 'thread-child' }),
+            execute
+          }}
           descriptor={conversation!}
         />
       )
@@ -102,7 +128,106 @@ describe('InlineReference', () => {
     )
     expect(button?.dataset.interactive).toBe('true')
     act(() => button?.click())
-    expect(openConversation).toHaveBeenCalledWith('thread-child')
+    expect(execute).toHaveBeenCalledWith({ type: 'conversation', conversationId: 'thread-child' })
+  })
+
+  it('keeps modified URL clicks native and only pins file references on a double click', () => {
+    const execute = vi.fn()
+    const external = classifyReferenceTarget({ href: 'https://example.test', label: 'Example' })
+    const file = classifyReferenceTarget({ href: 'src/App.tsx:4', label: 'App.tsx' })
+    const conversation = classifyReferenceTarget({ href: 'thread://thread-child', label: 'Child' })
+
+    act(() => {
+      root.render(
+        <>
+          <InlineReference
+            context={{
+              canOpenLocalPaths: true,
+              resolve: () => ({ type: 'workspace-browser', url: 'https://example.test/' }),
+              execute
+            }}
+            descriptor={external!}
+          />
+          <InlineReference
+            context={{
+              canOpenLocalPaths: true,
+              resolve: () => ({
+                type: 'workspace-file',
+                relativePath: 'src/App.tsx',
+                line: 4,
+                mode: 'preview'
+              }),
+              execute
+            }}
+            descriptor={file!}
+          />
+          <InlineReference
+            context={{
+              canOpenLocalPaths: true,
+              resolve: () => ({ type: 'conversation', conversationId: 'thread-child' }),
+              execute
+            }}
+            descriptor={conversation!}
+          />
+        </>
+      )
+    })
+
+    const link = container.querySelector<HTMLAnchorElement>(
+      'a[data-inline-reference-kind="external-url"]'
+    )
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[data-inline-reference-kind="local-file"]'
+    )
+    const conversationButton = container.querySelector<HTMLButtonElement>(
+      'button[data-inline-reference-kind="conversation"]'
+    )
+    expect(link).not.toBeNull()
+    expect(button).not.toBeNull()
+    expect(conversationButton).not.toBeNull()
+
+    act(() => {
+      link?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true })
+      )
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      button?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+      conversationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      conversationButton?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      conversationButton?.dispatchEvent(
+        new MouseEvent('dblclick', { bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(execute.mock.calls).toEqual([
+      [
+        {
+          type: 'workspace-file',
+          relativePath: 'src/App.tsx',
+          line: 4,
+          mode: 'preview'
+        }
+      ],
+      [
+        {
+          type: 'workspace-file',
+          relativePath: 'src/App.tsx',
+          line: 4,
+          mode: 'preview'
+        }
+      ],
+      [
+        {
+          type: 'workspace-file',
+          relativePath: 'src/App.tsx',
+          line: 4,
+          mode: 'pinned'
+        }
+      ],
+      [{ type: 'conversation', conversationId: 'thread-child' }],
+      [{ type: 'conversation', conversationId: 'thread-child' }]
+    ])
   })
 
   it('keeps agent mentions display-only without the reference agent resolver', () => {

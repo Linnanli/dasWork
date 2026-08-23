@@ -21,6 +21,7 @@ export {
 export {
   createWorkspaceDescriptor,
   normalizeRelativePath,
+  type WorkspaceFileLocation,
   type WorkspaceOpenMode,
   type WorkspaceOpenOptions,
   type WorkspaceOpenTarget

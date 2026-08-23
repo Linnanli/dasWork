@@ -1,11 +1,25 @@
 import type { LocalGitReviewSource } from '../../../../shared/localGitApi'
+import { normalizeFileWorkspaceRelativePath } from '../../../../shared/fileWorkspaceApi'
 
 import type { WorkspaceJsonValue, WorkspacePanelId, WorkspaceTabRecord } from './workspaceTypes'
 
 export type WorkspaceOpenMode = 'preview' | 'pinned'
 
+export type WorkspaceFileLocation = {
+  line?: number
+  column?: number
+  endLine?: number
+}
+
 export type WorkspaceOpenTarget =
-  | { type: 'file'; relativePath: string; title?: string }
+  | {
+      type: 'file'
+      relativePath: string
+      title?: string
+      location?: WorkspaceFileLocation
+      /** Select and expand a directory while keeping the Files explorer open. */
+      revealPath?: string
+    }
   | { type: 'review'; source?: LocalGitReviewSource }
   | { type: 'terminal'; id?: string; title?: string }
   | { type: 'browser'; id?: string; title?: string; url?: string }
@@ -27,11 +41,16 @@ export function createWorkspaceDescriptor(
     case 'file': {
       const relativePath = normalizeRelativePath(target.relativePath)
       const isExplorer = !relativePath
+      const revealPath = target.revealPath ? normalizeRelativePath(target.revealPath) : undefined
       return {
         id: isExplorer ? 'files:explorer' : `file:${relativePath}`,
         kind: 'file',
         title: target.title ?? (isExplorer ? 'Files' : basename(relativePath)),
-        props: { relativePath },
+        props: {
+          relativePath,
+          ...(revealPath ? { revealPath } : {}),
+          ...(target.location ? sanitizedFileLocation(target.location) : {})
+        },
         isPreview: !isExplorer && options.mode !== 'pinned',
         isClosable: true
       }
@@ -66,8 +85,23 @@ export function createWorkspaceDescriptor(
   }
 }
 
+function sanitizedFileLocation(location: WorkspaceFileLocation): WorkspaceFileLocation {
+  const line = positiveInteger(location.line)
+  const column = positiveInteger(location.column)
+  const endLine = positiveInteger(location.endLine)
+  return {
+    ...(line ? { line } : {}),
+    ...(column ? { column } : {}),
+    ...(endLine && line && endLine >= line ? { endLine } : {})
+  }
+}
+
+function positiveInteger(value: number | undefined): number | undefined {
+  return value && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
 export function normalizeRelativePath(path: string): string {
-  return path.replaceAll('\\', '/').replace(/^\.\//u, '').replace(/\/+/gu, '/')
+  return normalizeFileWorkspaceRelativePath(path)
 }
 
 function basename(path: string): string {

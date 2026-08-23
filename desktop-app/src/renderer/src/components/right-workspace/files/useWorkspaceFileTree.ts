@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   FILE_WORKSPACE_API_VERSION,
-  type FileWorkspaceListDirectoryResult,
+  isFileWorkspacePathUnavailableResult,
+  type FileWorkspaceDirectoryListing,
+  type FileWorkspacePathUnavailableReason,
   type FileWorkspaceSearchMatch
 } from '../../../../../shared/fileWorkspaceApi'
 import type { GitConversationTarget } from '../../../../../shared/localGitApi'
@@ -12,11 +14,12 @@ import {
   normalizeWorkspacePath
 } from './workspaceFileTreeModel'
 
-type DirectoryCache = Record<string, FileWorkspaceListDirectoryResult | undefined>
+type DirectoryCache = Record<string, FileWorkspaceDirectoryListing | undefined>
 
 type UseWorkspaceFileTreeOptions = {
   initialExpandedPaths: readonly string[]
   selectedPath: string
+  selectedPathIsDirectory?: boolean
   target?: GitConversationTarget
   workspaceId: string
   onExpandedPathsChange?(paths: readonly string[]): void
@@ -26,6 +29,10 @@ type LoadDirectoryOptions = {
   force?: boolean
   generation?: number
   rootId?: string
+}
+
+type RevealPathOptions = {
+  directory?: boolean
 }
 
 export type WorkspaceFileTreeController = {
@@ -38,7 +45,7 @@ export type WorkspaceFileTreeController = {
   loadingPaths: ReadonlySet<string>
   refresh(): Promise<void>
   retry(): void
-  revealPath(path: string): Promise<boolean>
+  revealPath(path: string, options?: RevealPathOptions): Promise<boolean>
   rootId?: string
   rootLabel: string
   search: string
@@ -52,6 +59,7 @@ export type WorkspaceFileTreeController = {
 export function useWorkspaceFileTree({
   initialExpandedPaths,
   selectedPath,
+  selectedPathIsDirectory = false,
   target,
   workspaceId,
   onExpandedPathsChange
@@ -77,7 +85,7 @@ export function useWorkspaceFileTree({
   const generationRef = useRef(0)
   const rootIdRef = useRef<string | undefined>(undefined)
   const directoriesRef = useRef<DirectoryCache>({})
-  const inFlightRef = useRef(new Map<string, Promise<FileWorkspaceListDirectoryResult>>())
+  const inFlightRef = useRef(new Map<string, Promise<FileWorkspaceDirectoryListing>>())
   const selectedPathRef = useRef(selectedPath)
   const fileEventTimerRef = useRef<number | undefined>(undefined)
   const queuedDirectoryRefreshesRef = useRef(new Set<string>())
@@ -118,7 +126,7 @@ export function useWorkspaceFileTree({
     async (
       path: string,
       options: LoadDirectoryOptions = {}
-    ): Promise<FileWorkspaceListDirectoryResult> => {
+    ): Promise<FileWorkspaceDirectoryListing> => {
       const normalizedPath = normalizeWorkspaceDirectoryPath(path)
       const requestRootId = options.rootId ?? rootIdRef.current
       const generation = options.generation ?? generationRef.current
@@ -139,6 +147,16 @@ export function useWorkspaceFileTree({
           path: normalizedPath
         })
         .then((result) => {
+          if (isFileWorkspacePathUnavailableResult(result)) {
+            if (isCurrentRequest(generation, requestRootId)) {
+              directoriesRef.current = withoutDirectoryBranch(
+                directoriesRef.current,
+                normalizedPath
+              )
+              setDirectories(directoriesRef.current)
+            }
+            throw new Error(directoryUnavailableMessage(result.unavailable, normalizedPath))
+          }
           if (isCurrentRequest(generation, requestRootId)) {
             directoriesRef.current = { ...directoriesRef.current, [normalizedPath]: result }
             setDirectories(directoriesRef.current)
@@ -163,22 +181,32 @@ export function useWorkspaceFileTree({
   )
 
   const revealPath = useCallback(
-    async (path: string): Promise<boolean> => {
-      const normalizedPath = normalizeWorkspacePath(path)
+    async (path: string, options: RevealPathOptions = {}): Promise<boolean> => {
+      const normalizedPath = options.directory
+        ? normalizeWorkspaceDirectoryPath(path)
+        : normalizeWorkspacePath(path)
       const requestRootId = rootIdRef.current
       const generation = generationRef.current
       if (!normalizedPath || !requestRootId) return false
 
-      const ancestors = workspacePathAncestors(normalizedPath)
+      const directoryPaths = options.directory
+        ? workspaceDirectoryAncestors(normalizedPath)
+        : workspacePathAncestors(normalizedPath)
       try {
-        for (const ancestor of ancestors) {
-          await loadDirectory(ancestor, { generation, rootId: requestRootId })
+        for (const directoryPath of directoryPaths) {
+          await loadDirectory(directoryPath, { generation, rootId: requestRootId })
         }
-      } catch {
+      } catch (cause) {
+        if (options.directory && isCurrentRequest(generation, requestRootId)) {
+          setError(cause instanceof Error ? cause.message : '无法读取目录。')
+        }
         return false
       }
       if (!isCurrentRequest(generation, requestRootId)) return false
-      setExpandedPathsState((current) => new Set([...current, ...ancestors.filter(Boolean)]))
+      if (options.directory) setError(undefined)
+      setExpandedPathsState(
+        (current) => new Set([...current, ...directoryPaths.filter(Boolean)])
+      )
       return true
     },
     [isCurrentRequest, loadDirectory]
@@ -298,8 +326,10 @@ export function useWorkspaceFileTree({
 
   useEffect(() => {
     if (!rootId || !selectedPath) return
-    void revealPath(selectedPath)
-  }, [revealPath, rootId, selectedPath])
+    void Promise.resolve().then(() =>
+      revealPath(selectedPath, { directory: selectedPathIsDirectory })
+    )
+  }, [revealPath, rootId, selectedPath, selectedPathIsDirectory])
 
   useEffect(() => {
     if (!rootId) return
@@ -507,4 +537,23 @@ function workspacePathAncestors(path: string): string[] {
 }
 function workspaceDirectoryAncestors(path: string): string[] {
   return workspacePathAncestors(`${path}/placeholder`)
+}
+
+function withoutDirectoryBranch(cache: DirectoryCache, path: string): DirectoryCache {
+  if (!path) return {}
+  const prefix = `${path}/`
+  return Object.fromEntries(
+    Object.entries(cache).filter(
+      ([cachedPath]) => cachedPath !== path && !cachedPath.startsWith(prefix)
+    )
+  )
+}
+
+function directoryUnavailableMessage(
+  reason: FileWorkspacePathUnavailableReason,
+  path: string
+): string {
+  if (reason === 'workspace-unavailable') return '当前任务的项目目录已不可用。'
+  if (reason === 'not-directory') return `“${path || '项目根目录'}”不是文件夹。`
+  return `当前任务的项目中不存在“${path || '项目根目录'}”。`
 }

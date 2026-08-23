@@ -187,12 +187,28 @@ export function WorkspaceRestoreFailure({ title }: { title: string }): React.JSX
 }
 
 function asFileTab(tab: WorkspaceTabRecord): Extract<RightWorkspaceTab, { type: 'file' }> {
+  const line = positiveInteger(tab.props.line)
+  const column = positiveInteger(tab.props.column)
+  const endLine = positiveInteger(tab.props.endLine)
   return {
     id: tab.id,
     type: 'file',
     title: tab.title,
-    relativePath: typeof tab.props.relativePath === 'string' ? tab.props.relativePath : ''
+    relativePath: typeof tab.props.relativePath === 'string' ? tab.props.relativePath : '',
+    revealPath: typeof tab.props.revealPath === 'string' ? tab.props.revealPath : undefined,
+    location:
+      line || column || endLine
+        ? {
+            ...(line ? { line } : {}),
+            ...(column ? { column } : {}),
+            ...(endLine ? { endLine } : {})
+          }
+        : undefined
   }
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 function fileOpenOptions(

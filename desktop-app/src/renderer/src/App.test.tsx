@@ -1192,6 +1192,7 @@ vi.mock('@assistant-ui/react', () => {
 })
 
 import App, { WorkspacePreviewBoundary } from './App'
+import * as referenceInlineAction from './lib/referenceInlineAction'
 import type { WorkspaceTabRecord } from './components/workspace-container'
 
 describe('App composer', () => {
@@ -4045,7 +4046,8 @@ describe('App composer', () => {
     expect(window.desktopApp.codex.listExistingLocalPaths).not.toHaveBeenCalled()
   })
 
-  it('opens local file resources inside the workspace when their project path is known', async () => {
+  it('routes local file resources through the shared inline action resolver', async () => {
+    const resolveAction = vi.spyOn(referenceInlineAction, 'resolveInlineReferenceAction')
     runtimeState.activeConversation = {
       conversationId: 'conversation-resources',
       threadId: 'thread-resources',
@@ -4062,6 +4064,7 @@ describe('App composer', () => {
             type: 'file',
             path: '/repo/exports/results.json',
             cwd: '/repo',
+            line: 14,
             title: 'Results'
           }
         ]
@@ -4073,6 +4076,20 @@ describe('App composer', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
+    expect(resolveAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: '/repo/exports/results.json',
+        kind: 'local-file',
+        line: 14,
+        path: '/repo/exports/results.json'
+      }),
+      expect.objectContaining({
+        canOpenLocalPaths: true,
+        canOpenWorkspace: true,
+        workspaceCwd: '/repo'
+      })
+    )
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="打开 Results"]')?.click()

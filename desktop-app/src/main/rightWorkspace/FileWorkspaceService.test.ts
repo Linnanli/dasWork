@@ -4,7 +4,10 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { FILE_WORKSPACE_API_VERSION } from '../../shared/fileWorkspaceApi'
+import {
+  FILE_WORKSPACE_API_VERSION,
+  isFileWorkspacePathUnavailableResult
+} from '../../shared/fileWorkspaceApi'
 import {
   FileWorkspaceService,
   type FileWorkspacePathSearchProviderLike
@@ -58,6 +61,9 @@ describe('FileWorkspaceService', () => {
       rootId: 'project-1',
       path: 'src'
     })
+    if (isFileWorkspacePathUnavailableResult(result)) {
+      throw new Error(`Expected directory listing, received ${result.unavailable}`)
+    }
 
     expect(result.entries.map((entry) => entry.path)).toEqual([
       'src/binary.dat',
@@ -67,6 +73,84 @@ describe('FileWorkspaceService', () => {
       'src/preview.png'
     ])
     expect(result.truncated).toBe(false)
+  })
+
+  it('returns domain-level unavailable results when a directory or file no longer exists', async () => {
+    const { service } = await createFixture()
+
+    await expect(
+      service.listDirectory({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: 'project-1',
+        path: 'missing'
+      })
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'project-1',
+      path: 'missing',
+      unavailable: 'not-found'
+    })
+
+    await expect(
+      service.readFile({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: 'project-1',
+        path: 'src/missing.ts'
+      })
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'project-1',
+      path: 'src/missing.ts',
+      unavailable: 'not-found'
+    })
+
+    await expect(
+      service.metadata({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: 'project-1',
+        path: 'src/missing.ts'
+      })
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'project-1',
+      path: 'src/missing.ts',
+      unavailable: 'not-found'
+    })
+  })
+
+  it('distinguishes an unavailable workspace root from a missing child path', async () => {
+    const { service } = await createFixture()
+
+    await expect(
+      service.readFile({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: 'missing-project',
+        path: 'src/hello.txt'
+      })
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'missing-project',
+      path: 'src/hello.txt',
+      unavailable: 'workspace-unavailable'
+    })
+  })
+
+  it('returns workspace-unavailable when the resolved project directory disappeared', async () => {
+    const { root, service } = await createFixture()
+    await rm(root, { recursive: true, force: true })
+
+    await expect(
+      service.readFile({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: 'project-1',
+        path: 'src/hello.txt'
+      })
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'project-1',
+      path: 'src/hello.txt',
+      unavailable: 'workspace-unavailable'
+    })
   })
 
   it('rejects symlinks that escape the project root', async () => {
@@ -285,7 +369,7 @@ describe('FileWorkspaceService', () => {
     expect(stop).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects unavailable roots and traversal before filesystem access', async () => {
+  it('returns unavailable roots and rejects traversal before filesystem access', async () => {
     const { service } = await createFixture()
 
     await expect(
@@ -294,7 +378,12 @@ describe('FileWorkspaceService', () => {
         rootId: 'missing',
         path: 'src/hello.txt'
       })
-    ).rejects.toThrow('not available')
+    ).resolves.toEqual({
+      version: FILE_WORKSPACE_API_VERSION,
+      rootId: 'missing',
+      path: 'src/hello.txt',
+      unavailable: 'workspace-unavailable'
+    })
 
     await expect(
       service.metadata({

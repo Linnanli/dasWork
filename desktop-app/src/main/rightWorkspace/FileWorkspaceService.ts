@@ -14,6 +14,7 @@ import {
   FILE_WORKSPACE_MAX_SEARCH_RESULTS,
   fileWorkspaceListDirectoryResultSchema,
   fileWorkspaceMetadataResultSchema,
+  fileWorkspacePathUnavailableResultSchema,
   fileWorkspaceRelativePathSchema,
   fileWorkspaceReadFileResultSchema,
   fileWorkspaceSearchSessionEventSchema,
@@ -25,6 +26,9 @@ import {
   type FileWorkspaceListDirectoryResult,
   type FileWorkspaceMetadataRequest,
   type FileWorkspaceMetadataResult,
+  type FileWorkspacePathUnavailableReason,
+  type FileWorkspacePathUnavailableResult,
+  type FileWorkspaceReadFileContent,
   type FileWorkspaceReadFileRequest,
   type FileWorkspaceReadFileResult,
   type FileWorkspaceRelativePath,
@@ -77,6 +81,8 @@ type SafePath = {
 
 type SearchPathStats = Pick<Stats, 'isDirectory' | 'isFile'> | Dirent
 
+class WorkspaceRootUnavailableError extends Error {}
+
 type ActiveSearchSession = {
   rootId: string
   rootPath: string
@@ -95,38 +101,52 @@ export class FileWorkspaceService {
   async listDirectory(
     input: FileWorkspaceListDirectoryRequest
   ): Promise<FileWorkspaceListDirectoryResult> {
-    const directoryPath = await this.resolveSafePath(input.rootId, input.path ?? '')
-    const directoryStats = await stat(directoryPath.absolutePath)
-    if (!directoryStats.isDirectory()) {
-      throw new Error('Workspace path is not a directory.')
+    try {
+      const directoryPath = await this.resolveSafePath(input.rootId, input.path ?? '')
+      const directoryStats = await stat(directoryPath.absolutePath)
+      if (!directoryStats.isDirectory()) {
+        return unavailablePath(input.rootId, input.path ?? '', 'not-directory')
+      }
+
+      const limit = input.limit ?? FILE_WORKSPACE_MAX_DIRECTORY_ENTRIES
+      const dirents = await readdir(directoryPath.absolutePath, { withFileTypes: true })
+      const entries: FileWorkspaceEntry[] = []
+
+      for (const dirent of dirents.sort((left, right) => left.name.localeCompare(right.name))) {
+        const childRelativePath = joinRelative(directoryPath.relativePath, dirent.name)
+        entries.push(
+          await this.entryForDirectoryChild(directoryPath, childRelativePath, dirent.name)
+        )
+        if (entries.length >= limit) break
+      }
+
+      return fileWorkspaceListDirectoryResultSchema.parse({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: directoryPath.rootId,
+        path: directoryPath.relativePath,
+        entries,
+        truncated: dirents.length > entries.length
+      })
+    } catch (cause) {
+      const unavailable = unavailableReason(cause)
+      if (!unavailable) throw cause
+      return unavailablePath(input.rootId, input.path ?? '', unavailable)
     }
-
-    const limit = input.limit ?? FILE_WORKSPACE_MAX_DIRECTORY_ENTRIES
-    const dirents = await readdir(directoryPath.absolutePath, { withFileTypes: true })
-    const entries: FileWorkspaceEntry[] = []
-
-    for (const dirent of dirents.sort((left, right) => left.name.localeCompare(right.name))) {
-      const childRelativePath = joinRelative(directoryPath.relativePath, dirent.name)
-      entries.push(await this.entryForDirectoryChild(directoryPath, childRelativePath, dirent.name))
-      if (entries.length >= limit) break
-    }
-
-    return fileWorkspaceListDirectoryResultSchema.parse({
-      version: FILE_WORKSPACE_API_VERSION,
-      rootId: directoryPath.rootId,
-      path: directoryPath.relativePath,
-      entries,
-      truncated: dirents.length > entries.length
-    })
   }
 
   async metadata(input: FileWorkspaceMetadataRequest): Promise<FileWorkspaceMetadataResult> {
-    const path = await this.resolveSafePath(input.rootId, input.path)
-    return fileWorkspaceMetadataResultSchema.parse({
-      version: FILE_WORKSPACE_API_VERSION,
-      rootId: path.rootId,
-      entry: await this.entryForPath(path)
-    })
+    try {
+      const path = await this.resolveSafePath(input.rootId, input.path)
+      return fileWorkspaceMetadataResultSchema.parse({
+        version: FILE_WORKSPACE_API_VERSION,
+        rootId: path.rootId,
+        entry: await this.entryForPath(path)
+      })
+    } catch (cause) {
+      const unavailable = unavailableReason(cause)
+      if (!unavailable) throw cause
+      return unavailablePath(input.rootId, input.path, unavailable)
+    }
   }
 
   async resolveFileForSystemOpen(input: FileWorkspaceMetadataRequest): Promise<string> {
@@ -137,52 +157,58 @@ export class FileWorkspaceService {
   }
 
   async readFile(input: FileWorkspaceReadFileRequest): Promise<FileWorkspaceReadFileResult> {
-    const path = await this.resolveSafePath(input.rootId, input.path)
-    const entry = await this.entryForPath(path)
-    if (entry.kind !== 'file') {
-      throw new Error('Workspace path is not a file.')
-    }
+    try {
+      const path = await this.resolveSafePath(input.rootId, input.path)
+      const entry = await this.entryForPath(path)
+      if (entry.kind !== 'file') {
+        return unavailablePath(input.rootId, input.path, 'not-file')
+      }
 
-    const textLimit = input.textByteLimit ?? FILE_WORKSPACE_DEFAULT_TEXT_BYTE_LIMIT
-    const binaryLimit = input.binaryByteLimit ?? FILE_WORKSPACE_DEFAULT_BINARY_BYTE_LIMIT
-    const largestAllowedRead = Math.max(textLimit, binaryLimit)
-    if (entry.size > largestAllowedRead) {
+      const textLimit = input.textByteLimit ?? FILE_WORKSPACE_DEFAULT_TEXT_BYTE_LIMIT
+      const binaryLimit = input.binaryByteLimit ?? FILE_WORKSPACE_DEFAULT_BINARY_BYTE_LIMIT
+      const largestAllowedRead = Math.max(textLimit, binaryLimit)
+      if (entry.size > largestAllowedRead) {
+        return fileWorkspaceReadFileResultSchema.parse({
+          version: FILE_WORKSPACE_API_VERSION,
+          rootId: path.rootId,
+          entry,
+          // Do not read an oversized file just to determine whether it is binary.
+          // The preview surface only needs the size and limit to render a safe fallback.
+          content: { kind: 'too-large', binary: false, size: entry.size, limit: largestAllowedRead }
+        })
+      }
+
+      const mediaUrl = toAppMediaUrl(path.absolutePath)
+      const mediaType = mediaTypeForPath(path.absolutePath)
+      if (
+        mediaUrl &&
+        mediaType &&
+        (mediaType.startsWith('image/') || mediaType === 'application/pdf')
+      ) {
+        return fileWorkspaceReadFileResultSchema.parse({
+          version: FILE_WORKSPACE_API_VERSION,
+          rootId: path.rootId,
+          entry,
+          content: { kind: 'media', url: mediaUrl, mediaType }
+        })
+      }
+
+      const bytes = await readFile(path.absolutePath)
+      const text = decodeUtf8(bytes)
+      const content =
+        text === null ? binaryContent(bytes, binaryLimit) : textContent(bytes, text, textLimit)
+
       return fileWorkspaceReadFileResultSchema.parse({
         version: FILE_WORKSPACE_API_VERSION,
         rootId: path.rootId,
         entry,
-        // Do not read an oversized file just to determine whether it is binary.
-        // The preview surface only needs the size and limit to render a safe fallback.
-        content: { kind: 'too-large', binary: false, size: entry.size, limit: largestAllowedRead }
+        content
       })
+    } catch (cause) {
+      const unavailable = unavailableReason(cause)
+      if (!unavailable) throw cause
+      return unavailablePath(input.rootId, input.path, unavailable)
     }
-
-    const mediaUrl = toAppMediaUrl(path.absolutePath)
-    const mediaType = mediaTypeForPath(path.absolutePath)
-    if (
-      mediaUrl &&
-      mediaType &&
-      (mediaType.startsWith('image/') || mediaType === 'application/pdf')
-    ) {
-      return fileWorkspaceReadFileResultSchema.parse({
-        version: FILE_WORKSPACE_API_VERSION,
-        rootId: path.rootId,
-        entry,
-        content: { kind: 'media', url: mediaUrl, mediaType }
-      })
-    }
-
-    const bytes = await readFile(path.absolutePath)
-    const text = decodeUtf8(bytes)
-    const content =
-      text === null ? binaryContent(bytes, binaryLimit) : textContent(bytes, text, textLimit)
-
-    return fileWorkspaceReadFileResultSchema.parse({
-      version: FILE_WORKSPACE_API_VERSION,
-      rootId: path.rootId,
-      entry,
-      content
-    })
   }
 
   async search(input: FileWorkspaceSearchRequest): Promise<FileWorkspaceSearchResult> {
@@ -406,10 +432,18 @@ export class FileWorkspaceService {
     assertWorkspaceRelativePath(relativePath)
 
     const root = await this.options.resolveRoot(rootId)
-    if (!root) throw new Error('Workspace root is not available.')
+    if (!root) throw new WorkspaceRootUnavailableError('Workspace root is not available.')
 
     const resolvedRoot = typeof root === 'string' ? { rootId, path: root } : root
-    const rootPath = await realpath(resolvedRoot.path)
+    let rootPath: string
+    try {
+      rootPath = await realpath(resolvedRoot.path)
+    } catch (cause) {
+      if (isMissingPathError(cause)) {
+        throw new WorkspaceRootUnavailableError('Workspace root is not available.')
+      }
+      throw cause
+    }
     const requestedPath = resolve(rootPath, relativePath || '.')
     const realRequestedPath = await realpath(requestedPath)
 
@@ -555,22 +589,41 @@ const DEFAULT_IGNORED_SEARCH_DIRECTORIES = new Set([
   'target'
 ])
 
-function textContent(
-  bytes: Buffer,
-  text: string,
-  limit: number
-): FileWorkspaceReadFileResult['content'] {
+function textContent(bytes: Buffer, text: string, limit: number): FileWorkspaceReadFileContent {
   if (bytes.byteLength > limit) {
     return { kind: 'too-large', binary: false, size: bytes.byteLength, limit }
   }
   return { kind: 'text', encoding: 'utf8', text }
 }
 
-function binaryContent(bytes: Buffer, limit: number): FileWorkspaceReadFileResult['content'] {
+function binaryContent(bytes: Buffer, limit: number): FileWorkspaceReadFileContent {
   if (bytes.byteLength > limit) {
     return { kind: 'too-large', binary: true, size: bytes.byteLength, limit }
   }
   return { kind: 'binary', encoding: 'base64', base64: bytes.toString('base64') }
+}
+
+function unavailablePath(
+  rootId: string,
+  path: string,
+  unavailable: FileWorkspacePathUnavailableReason
+): FileWorkspacePathUnavailableResult {
+  return fileWorkspacePathUnavailableResultSchema.parse({
+    version: FILE_WORKSPACE_API_VERSION,
+    rootId,
+    path,
+    unavailable
+  })
+}
+
+function unavailableReason(cause: unknown): FileWorkspacePathUnavailableReason | undefined {
+  if (cause instanceof WorkspaceRootUnavailableError) return 'workspace-unavailable'
+  return isMissingPathError(cause) ? 'not-found' : undefined
+}
+
+function isMissingPathError(cause: unknown): cause is NodeJS.ErrnoException {
+  if (!cause || typeof cause !== 'object' || !('code' in cause)) return false
+  return cause.code === 'ENOENT' || cause.code === 'ENOTDIR'
 }
 
 function findLineMatch(text: string, lowerQuery: string): { line: number; preview: string } | null {

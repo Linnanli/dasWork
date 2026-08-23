@@ -11,16 +11,18 @@ export type InlineReferenceKind =
   | 'skill'
   | 'unsupported'
 
-type LocalInlineReference = {
+export type LocalInlineReference = {
   href: string
   kind: 'local-file' | 'local-folder'
   label: string
+  column?: number
+  endLine?: number
   line?: number
   path: string
   tooltip: string
 }
 
-type SemanticInlineReference = {
+export type SemanticInlineReference = {
   href: string
   kind: Exclude<InlineReferenceKind, 'local-file' | 'local-folder' | 'unsupported'>
   label: string
@@ -47,6 +49,8 @@ export type ReferenceInlineTargetInput = {
 }
 
 export type ParsedLocalReference = {
+  column?: number
+  endLine?: number
   kind: 'local-file' | 'local-folder'
   line?: number
   path: string
@@ -154,12 +158,14 @@ export function parseLocalReferenceTarget(value: string):
   }
 
   if (!isSafeLocalPath(path)) return undefined
-  const { path: pathWithoutLine, line } = splitLineNumber(path)
+  const { path: pathWithoutLine, line, column, endLine } = splitLocation(path)
   if (!isSafeLocalPath(pathWithoutLine)) return undefined
   return {
     kind: /[\\/]$/u.test(pathWithoutLine) ? 'local-folder' : 'local-file',
     path: pathWithoutLine,
     ...(line ? { line } : {}),
+    ...(column ? { column } : {}),
+    ...(endLine ? { endLine } : {}),
     pathWithLine: line ? `${pathWithoutLine}:${line}` : pathWithoutLine
   }
 }
@@ -237,10 +243,28 @@ function safeHttpUrl(value: string): string | undefined {
   }
 }
 
-function splitLineNumber(path: string): { path: string; line?: number } {
-  const match = path.match(/^(.*):(\d+)$/u)
-  const line = match?.[2] ? Number.parseInt(match[2], 10) : undefined
-  return { path: match?.[1] ?? path, ...(line && line > 0 ? { line } : {}) }
+function splitLocation(path: string): {
+  path: string
+  line?: number
+  column?: number
+  endLine?: number
+} {
+  const match = path.match(/^(.*?):(\d+)(?::(\d+))?(?:-(\d+))?$/u)
+  const line = positiveInteger(match?.[2])
+  const column = positiveInteger(match?.[3])
+  const endLine = positiveInteger(match?.[4])
+  return {
+    path: match?.[1] ?? path,
+    ...(line ? { line } : {}),
+    ...(column ? { column } : {}),
+    ...(endLine && line && endLine >= line ? { endLine } : {})
+  }
+}
+
+function positiveInteger(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  return parsed > 0 ? parsed : undefined
 }
 
 function isSafeLocalPath(path: string): boolean {

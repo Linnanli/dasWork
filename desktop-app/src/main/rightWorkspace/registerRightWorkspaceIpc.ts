@@ -14,7 +14,8 @@ import {
   browserWorkspaceListRequestSchema,
   browserWorkspaceNavigateRequestSchema,
   browserWorkspaceSetBoundsRequestSchema,
-  browserWorkspaceViewRequestSchema
+  browserWorkspaceViewRequestSchema,
+  isBrowserWorkspaceUrl
 } from '../../shared/browserWorkspaceApi'
 import {
   fileWorkspaceListDirectoryRequestSchema,
@@ -146,15 +147,15 @@ export function registerRightWorkspaceIpc({
   })
   ipcMain.handle(rightWorkspaceIpcChannels.listDirectory, (event, payload: unknown) => {
     const request = fileWorkspaceListDirectoryRequestSchema.parse(payload)
-    return requireOwnedRoot(event, request.rootId).files.listDirectory(request)
+    return requireServices(event).files.listDirectory(request)
   })
   ipcMain.handle(rightWorkspaceIpcChannels.metadata, (event, payload: unknown) => {
     const request = fileWorkspaceMetadataRequestSchema.parse(payload)
-    return requireOwnedRoot(event, request.rootId).files.metadata(request)
+    return requireServices(event).files.metadata(request)
   })
   ipcMain.handle(rightWorkspaceIpcChannels.readFile, (event, payload: unknown) => {
     const request = fileWorkspaceReadFileRequestSchema.parse(payload)
-    return requireOwnedRoot(event, request.rootId).files.readFile(request)
+    return requireServices(event).files.readFile(request)
   })
   ipcMain.handle(rightWorkspaceIpcChannels.searchFiles, (event, payload: unknown) => {
     const request = fileWorkspaceSearchRequestSchema.parse(payload)
@@ -478,50 +479,47 @@ function createBrowserHost(window: BrowserWindow): BrowserWorkspaceHostAdapter {
           partition: `right-workspace-${window.webContents.id}-${crypto.randomUUID()}`
         }
       })
+      const webContents = nativeView.webContents
       nativeView.setBounds(bounds)
-      nativeView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-      nativeView.webContents.on('will-navigate', (event, url) => {
-        if (!isAllowedBrowserUrl(url)) event.preventDefault()
+      webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+      webContents.on('will-navigate', (event, url) => {
+        if (!isBrowserWorkspaceUrl(url)) event.preventDefault()
       })
-      nativeView.webContents.on('will-redirect', (event, url) => {
-        if (!isAllowedBrowserUrl(url)) event.preventDefault()
+      webContents.on('will-redirect', (event, url) => {
+        if (!isBrowserWorkspaceUrl(url)) event.preventDefault()
       })
-      nativeView.webContents.session.on('will-download', (event) => event.preventDefault())
-      nativeView.webContents.on(
-        'certificate-error',
-        (event, _url, _error, _certificate, callback) => {
-          event.preventDefault()
-          callback(false)
-        }
+      webContents.session.on('will-download', (event) => event.preventDefault())
+      webContents.on('certificate-error', (event, _url, _error, _certificate, callback) => {
+        event.preventDefault()
+        callback(false)
+      })
+      webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+        callback(false)
       )
-      nativeView.webContents.session.setPermissionRequestHandler(
-        (_contents, _permission, callback) => callback(false)
-      )
-      nativeView.webContents.session.setPermissionCheckHandler(() => false)
+      webContents.session.setPermissionCheckHandler(() => false)
       const adapter: BrowserWorkspaceViewAdapter = {
-        loadURL: (url: string) => nativeView.webContents.loadURL(url),
+        loadURL: (url: string) => webContents.loadURL(url),
         setBounds: (nextBounds: { x: number; y: number; width: number; height: number }) =>
           nativeView.setBounds(nextBounds),
-        goBack: () => nativeView.webContents.navigationHistory.goBack(),
-        goForward: () => nativeView.webContents.navigationHistory.goForward(),
-        reload: () => nativeView.webContents.reload(),
-        stop: () => nativeView.webContents.stop(),
-        destroy: () => nativeView.webContents.close(),
-        canGoBack: () => nativeView.webContents.navigationHistory.canGoBack(),
-        canGoForward: () => nativeView.webContents.navigationHistory.canGoForward(),
-        getTitle: () => nativeView.webContents.getTitle(),
-        onDidStartLoading: (listener: () => void) =>
-          nativeView.webContents.on('did-start-loading', listener),
-        onDidFinishLoad: (listener: () => void) =>
-          nativeView.webContents.on('did-finish-load', listener),
+        goBack: () => webContents.navigationHistory.goBack(),
+        goForward: () => webContents.navigationHistory.goForward(),
+        reload: () => webContents.reload(),
+        stop: () => webContents.stop(),
+        destroy: () => {
+          if (!webContents.isDestroyed()) webContents.close()
+        },
+        isDestroyed: () => webContents.isDestroyed(),
+        canGoBack: () => webContents.navigationHistory.canGoBack(),
+        canGoForward: () => webContents.navigationHistory.canGoForward(),
+        getTitle: () => webContents.getTitle(),
+        onDidStartLoading: (listener: () => void) => webContents.on('did-start-loading', listener),
+        onDidFinishLoad: (listener: () => void) => webContents.on('did-finish-load', listener),
         onDidFailLoad: (listener: (error?: string) => void) =>
-          nativeView.webContents.on('did-fail-load', (_event, errorCode, errorDescription) =>
+          webContents.on('did-fail-load', (_event, errorCode, errorDescription) =>
             listener(`${errorDescription} (${errorCode})`)
           ),
         onFaviconUpdated: (listener: (faviconUrls: string[]) => void) =>
-          nativeView.webContents.on('page-favicon-updated', (_event, faviconUrls) =>
-            listener(faviconUrls)
-          )
+          webContents.on('page-favicon-updated', (_event, faviconUrls) => listener(faviconUrls))
       }
       nativeViews.set(adapter, nativeView)
       return adapter
@@ -537,14 +535,5 @@ function createBrowserHost(window: BrowserWindow): BrowserWorkspaceHostAdapter {
       window.contentView.removeChildView(nativeView)
     },
     openExternal: (url: string) => shell.openExternal(url)
-  }
-}
-
-function isAllowedBrowserUrl(value: string): boolean {
-  if (value === 'about:blank') return true
-  try {
-    return new URL(value).protocol === 'https:'
-  } catch {
-    return false
   }
 }

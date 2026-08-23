@@ -17,7 +17,10 @@ class FakeBrowserView implements BrowserWorkspaceViewAdapter {
   readonly goForward = vi.fn()
   readonly reload = vi.fn()
   readonly stop = vi.fn()
-  readonly destroy = vi.fn()
+  readonly destroy = vi.fn(() => {
+    this.destroyed = true
+  })
+  private destroyed = false
   private finishLoad: (() => void) | null = null
   private failLoad: ((error?: string) => void) | null = null
   private faviconUpdated: ((faviconUrls: string[]) => void) | null = null
@@ -46,15 +49,22 @@ class FakeBrowserView implements BrowserWorkspaceViewAdapter {
     this.faviconUpdated?.(urls)
   }
 
+  isDestroyed(): boolean {
+    return this.destroyed
+  }
+
   canGoBack(): boolean {
+    if (this.destroyed) throw new Error('Object has been destroyed')
     return true
   }
 
   canGoForward(): boolean {
+    if (this.destroyed) throw new Error('Object has been destroyed')
     return false
   }
 
   getTitle(): string {
+    if (this.destroyed) throw new Error('Object has been destroyed')
     return 'Example'
   }
 }
@@ -137,13 +147,76 @@ describe('BrowserWorkspaceService', () => {
         url: 'http://example.com',
         bounds
       })
-    ).toThrow('browser workspace URL must use HTTPS')
+    ).toThrow('Blocked browser workspace URL: http://example.com')
 
     expect(service.handleWindowOpen('https://example.com/popup')).toEqual({ action: 'deny' })
     expect(host.openExternal).toHaveBeenCalledWith('https://example.com/popup')
     expect(service.handleWindowOpen('http://example.com/popup')).toEqual({ action: 'deny' })
     expect(service.handleWindowOpen('file:///etc/passwd')).toEqual({ action: 'deny' })
     expect(service.handlePermissionRequest()).toBe(false)
+  })
+
+  it('allows HTTP navigation by default while keeping non-web schemes blocked', () => {
+    const view = new FakeBrowserView()
+    const service = new BrowserWorkspaceService({
+      host: createHost(view),
+      createId: () => 'browser-1',
+      now: () => new Date('2026-08-01T00:00:00.000Z')
+    })
+    const created = service.create({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      workspaceId: 'workspace-1',
+      url: 'http://example.com',
+      bounds
+    })
+
+    expect(created.url).toBe('http://example.com')
+    expect(view.loadURL).toHaveBeenCalledWith('http://example.com')
+    expect(() =>
+      service.navigate({
+        version: BROWSER_WORKSPACE_API_VERSION,
+        viewId: created.viewId,
+        url: 'file:///etc/passwd'
+      })
+    ).toThrow()
+  })
+
+  it('preserves HTTP and HTTPS navigation while rejecting every non-web redirect target', () => {
+    const view = new FakeBrowserView()
+    const service = new BrowserWorkspaceService({
+      host: createHost(view),
+      createId: () => 'browser-1',
+      now: () => new Date('2026-08-01T00:00:00.000Z')
+    })
+    const created = service.create({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      workspaceId: 'workspace-1',
+      url: 'https://example.com/start',
+      bounds
+    })
+
+    service.navigate({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      viewId: created.viewId,
+      url: 'http://example.com/redirect'
+    })
+    service.navigate({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      viewId: created.viewId,
+      url: 'https://example.com/recovered'
+    })
+    expect(view.loadURL).toHaveBeenLastCalledWith('https://example.com/recovered')
+
+    for (const url of ['javascript:alert(1)', 'data:text/plain,blocked', 'file:///etc/passwd']) {
+      expect(() =>
+        service.navigate({
+          version: BROWSER_WORKSPACE_API_VERSION,
+          viewId: created.viewId,
+          url
+        })
+      ).toThrow()
+    }
+    expect(view.loadURL).toHaveBeenCalledTimes(3)
   })
 
   it('supports hiding with zero-height bounds and restoring bounds on show', () => {
@@ -238,6 +311,24 @@ describe('BrowserWorkspaceService', () => {
     ).toMatchObject({ state: 'destroyed' })
     expect(host.detachView).toHaveBeenCalledWith(view)
     expect(view.destroy).toHaveBeenCalled()
+    expect(
+      service.setBounds({
+        version: BROWSER_WORKSPACE_API_VERSION,
+        viewId: 'browser-1',
+        bounds: { x: 20, y: 30, width: 900, height: 700 }
+      })
+    ).toMatchObject({ state: 'destroyed', visible: false })
+    expect(
+      service.show({ version: BROWSER_WORKSPACE_API_VERSION, viewId: 'browser-1' })
+    ).toMatchObject({ state: 'destroyed', visible: false })
+    expect(
+      service.hide({ version: BROWSER_WORKSPACE_API_VERSION, viewId: 'browser-1' })
+    ).toMatchObject({ state: 'destroyed', visible: false })
+    expect(
+      service.destroy({ version: BROWSER_WORKSPACE_API_VERSION, viewId: 'browser-1' })
+    ).toMatchObject({ state: 'destroyed', visible: false })
+    expect(view.destroy).toHaveBeenCalledTimes(1)
+    expect(view.setBounds).toHaveBeenCalledTimes(1)
     expect(() =>
       service.navigate({
         version: BROWSER_WORKSPACE_API_VERSION,

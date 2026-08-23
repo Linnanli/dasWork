@@ -1,21 +1,33 @@
 import { FolderTreeIcon, LoaderCircleIcon, RefreshCwIcon, SearchIcon } from 'lucide-react'
-import { getFiletypeFromFileName, getHighlighterOptions, preloadHighlighter } from '@pierre/diffs'
-import { File as PierreFile, type FileOptions } from '@pierre/diffs/react'
+import {
+  getFiletypeFromFileName,
+  getHighlighterOptions,
+  preloadHighlighter,
+  type FileOptions
+} from '@pierre/diffs'
+import { File } from '@pierre/diffs/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { FILE_WORKSPACE_API_VERSION } from '../../../../../shared/fileWorkspaceApi'
+import {
+  FILE_WORKSPACE_API_VERSION,
+  isFileWorkspacePathUnavailableResult,
+  type FileWorkspacePathUnavailableReason,
+  type FileWorkspaceReadFileContent
+} from '../../../../../shared/fileWorkspaceApi'
 import type { GitStatusEntry } from '@pierre/trees'
 import type { GitConversationTarget, LocalGitReviewFile } from '../../../../../shared/localGitApi'
 import { useGitRepository } from '../../local-git-review/GitRepositoryProvider'
 import { buildWorkspaceFileTreeGitStatus } from './workspaceFileTreeGit'
 import { buildWorkspaceFileSearchTreeModel } from './workspaceFileTreeModel'
 import type { RightWorkspaceTab } from '../workspaceState'
+import type { WorkspaceFileLocation } from '../../workspace-container/workspaceOpenTargets'
 import { WorkspaceFileTree } from './WorkspaceFileTree'
 import { useWorkspaceFileTree } from './useWorkspaceFileTree'
+import { codePreviewSelectionForLocation } from './workspaceFileLocation'
 import {
   FILE_TREE_MIN_WIDTH,
   loadFileTreePreferences,
@@ -24,6 +36,8 @@ import {
 } from './workspaceFileTreePersistence'
 
 const FILE_TREE_MAX_WIDTH_RATIO = 0.6
+
+const WORKSPACE_CODE_LINE_HEIGHT = 20
 
 const workspaceFilePreviewUnsafeCss = `
 :host {
@@ -35,7 +49,7 @@ const workspaceFilePreviewUnsafeCss = `
   --diffs-bg-context-override: var(--muted);
   --diffs-font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --diffs-font-size: 13px;
-  --diffs-line-height: 20px;
+  --diffs-line-height: ${WORKSPACE_CODE_LINE_HEIGHT}px;
 }
 `
 
@@ -67,8 +81,7 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
   )
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string>()
-  const [content, setContent] =
-    useState<Awaited<ReturnType<typeof window.desktopApp.workspace.files.readFile>>['content']>()
+  const [content, setContent] = useState<FileWorkspaceReadFileContent>()
   const contentRef = useRef<HTMLDivElement>(null)
   const [contentWidth, setContentWidth] = useState(0)
   const [resizingTree, setResizingTree] = useState(false)
@@ -96,7 +109,8 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
 
   const tree = useWorkspaceFileTree({
     initialExpandedPaths: treePreferences.expandedPaths,
-    selectedPath: tab.relativePath,
+    selectedPath: tab.revealPath ?? tab.relativePath,
+    selectedPathIsDirectory: tab.revealPath !== undefined,
     target,
     workspaceId,
     onExpandedPathsChange: updateExpandedPaths
@@ -231,7 +245,13 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
         })
       })
       .then((result) => {
-        if (active && result) setContent(result.content)
+        if (!active || !result) return
+        if (isFileWorkspacePathUnavailableResult(result)) {
+          setContent(undefined)
+          setPreviewError(fileUnavailableMessage(result.unavailable, tab.relativePath))
+          return
+        }
+        setContent(result.content)
       })
       .catch((cause) => {
         if (active) setPreviewError(cause instanceof Error ? cause.message : '无法读取文件。')
@@ -294,6 +314,7 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
           error={target ? (previewError ?? tree.error) : '当前任务没有可用的本地项目。'}
           loading={previewLoading || tree.loading}
           path={tab.relativePath}
+          location={tab.location}
           onOpenWithSystem={
             treeRootId && tab.relativePath
               ? () => {
@@ -366,7 +387,7 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
                     persistExpansion={false}
                     rootId={tree.rootId}
                     scrollTop={0}
-                    selectedPath={tab.relativePath}
+                    selectedPath={tab.revealPath ?? tab.relativePath}
                     workspaceId={workspaceId}
                     onEnsureDirectory={async () => undefined}
                     onError={setPreviewError}
@@ -407,7 +428,7 @@ function FileWorkspaceInstance({ tab, workspaceId, target, onOpenFile }: Props):
                   model={tree.treeModel}
                   rootId={tree.rootId}
                   scrollTop={treePreferences.scrollTop}
-                  selectedPath={tab.relativePath}
+                  selectedPath={tab.revealPath ?? tab.relativePath}
                   workspaceId={workspaceId}
                   onEnsureDirectory={tree.ensureDirectory}
                   onError={setPreviewError}
@@ -480,14 +501,14 @@ function FilePreview({
   content,
   error,
   loading,
+  location,
   path,
   onOpenWithSystem
 }: {
-  content:
-    | Awaited<ReturnType<typeof window.desktopApp.workspace.files.readFile>>['content']
-    | undefined
+  content: FileWorkspaceReadFileContent | undefined
   error?: string
   loading: boolean
+  location?: WorkspaceFileLocation
   path: string
   onOpenWithSystem?(): void
 }): React.JSX.Element {
@@ -518,14 +539,14 @@ function FilePreview({
       </div>
     )
   if (content.kind === 'text') {
-    if (/\.mdx?$/iu.test(path)) {
+    if (/\.mdx?$/iu.test(path) && !location?.line) {
       return (
         <div className="min-w-0 flex-1 overflow-auto p-4">
           <Streamdown>{content.text}</Streamdown>
         </div>
       )
     }
-    return <CodePreview key={path} path={path} text={content.text} />
+    return <CodePreview key={path} location={location} path={path} text={content.text} />
   }
   if (content.kind === 'media') {
     if (content.mediaType === 'application/pdf') {
@@ -550,11 +571,64 @@ function FilePreview({
   )
 }
 
-function CodePreview({ path, text }: { path: string; text: string }): React.JSX.Element {
+function fileUnavailableMessage(reason: FileWorkspacePathUnavailableReason, path: string): string {
+  if (reason === 'workspace-unavailable') return '当前任务的项目目录已不可用。'
+  if (reason === 'not-file') return `“${path}”不是可预览的文件。`
+  return `当前任务的项目中不存在“${path}”。`
+}
+
+function CodePreview({
+  location,
+  path,
+  text
+}: {
+  location?: WorkspaceFileLocation
+  path: string
+  text: string
+}): React.JSX.Element {
   const [highlighterStatus, setHighlighterStatus] = useState<'loading' | 'ready' | 'failed'>(
     'loading'
   )
   const file = useMemo(() => ({ name: path, contents: text }), [path, text])
+  const previewRef = useRef<HTMLDivElement>(null)
+  const fallbackRef = useRef<HTMLPreElement>(null)
+  const scrollFrameRef = useRef<number | undefined>(undefined)
+  const selectedLines = useMemo(
+    () => codePreviewSelectionForLocation(location, text),
+    [location, text]
+  )
+
+  const scheduleLocationScroll = useCallback(() => {
+    if (!selectedLines) return
+    if (scrollFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(scrollFrameRef.current)
+    }
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = undefined
+      const preview = previewRef.current
+      if (!preview) return
+      preview.scrollTo({
+        behavior: 'instant',
+        top: Math.max(
+          0,
+          (selectedLines.start - 0.5) * WORKSPACE_CODE_LINE_HEIGHT - preview.clientHeight / 2
+        )
+      })
+    })
+  }, [selectedLines])
+
+  const codePreviewOptions = useMemo<FileOptions<undefined>>(
+    () => ({
+      ...workspaceFilePreviewOptions,
+      // The file renderer calls this only after it has produced the code DOM.
+      // This mirrors Codex Electron's selection-and-scroll ordering, avoiding
+      // a scroll request against an unmounted preview.
+      onPostRender: (_node, _instance, phase) => {
+        if (phase !== 'unmount') scheduleLocationScroll()
+      }
+    }),
+    [scheduleLocationScroll]
+  )
 
   useEffect(() => {
     let active = true
@@ -575,6 +649,25 @@ function CodePreview({ path, text }: { path: string; text: string }): React.JSX.
     }
   }, [path])
 
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    if (highlighterStatus !== 'failed' || !selectedLines) return
+    const frame = window.requestAnimationFrame(() => {
+      fallbackRef.current
+        ?.querySelector<HTMLElement>(`[data-workspace-code-line="${selectedLines.start}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [highlighterStatus, selectedLines])
+
   if (highlighterStatus === 'loading') {
     return (
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -586,25 +679,55 @@ function CodePreview({ path, text }: { path: string; text: string }): React.JSX.
 
   if (highlighterStatus === 'failed') {
     return (
-      <pre className="min-w-0 flex-1 overflow-auto bg-background p-4 font-mono text-xs leading-5 whitespace-pre">
-        <code>{text}</code>
+      <pre
+        ref={fallbackRef}
+        className="min-w-0 flex-1 overflow-auto bg-background p-4 font-mono text-xs leading-5 whitespace-pre"
+        data-workspace-code-location={location?.line}
+      >
+        <code>{numberedFallbackCode(text, selectedLines)}</code>
       </pre>
     )
   }
 
   return (
     <div
+      ref={previewRef}
       className="min-w-0 flex-1 overflow-auto bg-background"
       data-workspace-code-preview="pierre"
     >
-      <PierreFile
+      <File
         file={file}
-        options={workspaceFilePreviewOptions}
+        options={codePreviewOptions}
         className="min-h-full"
         disableWorkerPool
+        selectedLines={selectedLines ?? null}
       />
     </div>
   )
+}
+
+function numberedFallbackCode(
+  text: string,
+  selection: { start: number; end: number } | undefined
+): React.JSX.Element[] {
+  return text.split('\n').map((line, index) => {
+    const lineNumber = index + 1
+    const selected = Boolean(
+      selection && lineNumber >= selection.start && lineNumber <= selection.end
+    )
+    return (
+      <span
+        key={lineNumber}
+        id={`workspace-line-${lineNumber}`}
+        data-workspace-code-line={lineNumber}
+        data-selected={selected || undefined}
+        className={selected ? 'block bg-sky-500/15' : 'block'}
+      >
+        {line}
+        {'\n'}
+      </span>
+    )
+  })
 }
 
 function UnsupportedPreview({

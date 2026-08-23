@@ -5,7 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { useOptionalRightWorkspace } from '@/components/right-workspace'
 import { cn } from '@/lib/utils'
-import { FILE_WORKSPACE_API_VERSION } from '../../../../../shared/fileWorkspaceApi'
+import {
+  FILE_WORKSPACE_API_VERSION,
+  isFileWorkspacePathUnavailableResult
+} from '../../../../../shared/fileWorkspaceApi'
 import { buildReviewFileTreeModel } from './reviewFileTreeModel'
 import { measureReviewPerformance } from './reviewPerformance'
 import type { ReviewWorkspaceController } from './reviewWorkspaceTypes'
@@ -295,6 +298,7 @@ async function verifyCurrentWorktreeFile(
       rootId: root.rootId,
       path
     })
+    if (isFileWorkspacePathUnavailableResult(metadata)) return undefined
     return metadata.entry.kind === 'file' ? { rootId: root.rootId } : undefined
   } catch {
     return undefined

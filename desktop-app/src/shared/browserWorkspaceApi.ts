@@ -5,14 +5,17 @@ export const BROWSER_WORKSPACE_API_VERSION = 1 as const
 const workspaceIdSchema = z.string().min(1).max(256)
 const browserViewIdSchema = z.string().min(1).max(256)
 export const BROWSER_WORKSPACE_BLANK_URL = 'about:blank' as const
-const httpsUrlSchema = z
+const httpUrlSchema = z
   .string()
   .url()
   .max(32_768)
-  .refine((value) => new URL(value).protocol === 'https:', {
-    message: 'browser workspace URL must use HTTPS'
+  .refine((value) => isBrowserWorkspaceUrl(value), {
+    message: 'browser workspace URL must use HTTP or HTTPS'
   })
-const browserWorkspaceUrlSchema = z.union([z.literal(BROWSER_WORKSPACE_BLANK_URL), httpsUrlSchema])
+const browserWorkspaceUrlSchema = z.union([z.literal(BROWSER_WORKSPACE_BLANK_URL), httpUrlSchema])
+const httpsUrlSchema = httpUrlSchema.refine((value) => new URL(value).protocol === 'https:', {
+  message: 'browser workspace favicon URL must use HTTPS'
+})
 
 export const browserWorkspaceIpcChannels = {
   create: 'right-workspace:browser:create',
@@ -28,6 +31,15 @@ export const browserWorkspaceIpcChannels = {
   list: 'right-workspace:browser:list',
   event: 'right-workspace:browser:event'
 } as const
+
+export function isBrowserWorkspaceUrl(value: string): boolean {
+  if (value === BROWSER_WORKSPACE_BLANK_URL) return true
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol)
+  } catch {
+    return false
+  }
+}
 
 export const browserWorkspaceBoundsSchema = z
   .object({

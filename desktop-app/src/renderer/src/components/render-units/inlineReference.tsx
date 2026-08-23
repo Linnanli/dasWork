@@ -20,17 +20,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { inlineCodeReference } from '@/lib/referenceInlineCode'
 import {
   classifyReferenceTarget,
-  isAbsoluteLocalPath,
-  isSafeRelativeReferencePath,
   type InlineReferenceDescriptor
 } from '@/lib/referenceInlineTarget'
+import type { InlineReferenceAction } from '@/lib/referenceInlineAction'
 import { cn } from '@/lib/utils'
 import { ResourceFileIcon } from './resourceFileIcon'
 
 export type InlineReferenceContext = {
   canOpenLocalPaths: boolean
+  execute?(action: InlineReferenceAction): void
+  resolve?(descriptor: InlineReferenceDescriptor): InlineReferenceAction
+  /** @deprecated Compatibility fields for standalone renderers; production uses resolve/execute. */
   onOpenConversation?: (conversationId: string) => void
+  /** @deprecated Compatibility fields for standalone renderers; production uses resolve/execute. */
   onOpenExternalUrl?: (url: string) => void
+  /** @deprecated Compatibility fields for standalone renderers; production uses resolve/execute. */
   workspaceCwd?: string
 }
 
@@ -62,8 +66,12 @@ export function InlineReference({
   const content = (
     <ReferenceToken descriptor={descriptor}>{children ?? descriptor.label}</ReferenceToken>
   )
+  const action =
+    context.resolve && context.execute
+      ? context.resolve(descriptor)
+      : ({ type: 'display-only', reason: 'unsupported' } as const)
 
-  if (descriptor.kind === 'external-url') {
+  if (descriptor.kind === 'external-url' && action.type !== 'display-only') {
     return (
       <ReferenceTooltip descriptor={descriptor}>
         <a
@@ -74,9 +82,16 @@ export function InlineReference({
           target="_blank"
           className={interactiveClassName}
           onClick={(event) => {
-            if (!context.onOpenExternalUrl) return
+            if (
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey ||
+              event.button !== 0
+            )
+              return
             event.preventDefault()
-            context.onOpenExternalUrl(descriptor.href)
+            context.execute?.(action)
           }}
         >
           {content}
@@ -85,9 +100,7 @@ export function InlineReference({
     )
   }
 
-  const action = actionForReference(descriptor, context)
-
-  if (action?.type === 'local-path') {
+  if (action.type !== 'display-only') {
     return (
       <ReferenceTooltip descriptor={descriptor}>
         <button
@@ -95,23 +108,12 @@ export function InlineReference({
           data-interactive="true"
           type="button"
           className={cn(interactiveClassName, 'bg-transparent p-0 text-left')}
-          onClick={action.open}
-        >
-          {content}
-        </button>
-      </ReferenceTooltip>
-    )
-  }
-
-  if (action?.type === 'conversation') {
-    return (
-      <ReferenceTooltip descriptor={descriptor}>
-        <button
-          data-inline-reference-kind={descriptor.kind}
-          data-interactive="true"
-          type="button"
-          className={cn(interactiveClassName, 'bg-transparent p-0 text-left')}
-          onClick={action.open}
+          onClick={() => context.execute?.(action)}
+          onDoubleClick={
+            action.type === 'workspace-file'
+              ? () => context.execute?.({ ...action, mode: 'pinned' })
+              : undefined
+          }
         >
           {content}
         </button>
@@ -274,47 +276,6 @@ function classifyAnchorReference(
 ): InlineReferenceDescriptor | undefined {
   const label = textFromChildren(children)
   return href ? classifyReferenceTarget({ href, label }) : undefined
-}
-
-function actionForReference(
-  descriptor: Exclude<InlineReferenceDescriptor, { kind: 'unsupported' }>,
-  context: InlineReferenceContext
-):
-  | { type: 'conversation'; open: () => void }
-  | { type: 'local-path'; open: () => void }
-  | undefined {
-  if (descriptor.kind === 'conversation') {
-    const targetId = descriptor.targetId
-    const openConversation = context.onOpenConversation
-    if (!targetId || !openConversation) return undefined
-    return { type: 'conversation', open: () => openConversation(targetId) }
-  }
-  if (descriptor.kind !== 'local-file' && descriptor.kind !== 'local-folder') return undefined
-  if (!context.canOpenLocalPaths) return undefined
-
-  const payload = localOpenPayload(descriptor, context)
-  if (!payload) return undefined
-  return {
-    type: 'local-path',
-    open: () => {
-      void window.desktopApp.codex.openLocalPath(payload).catch(() => undefined)
-    }
-  }
-}
-
-function localOpenPayload(
-  descriptor: Extract<InlineReferenceDescriptor, { kind: 'local-file' | 'local-folder' }>,
-  context: InlineReferenceContext
-): { cwd?: string; line?: number; path: string } | undefined {
-  if (isAbsoluteLocalPath(descriptor.path)) {
-    return { path: descriptor.path, ...(descriptor.line ? { line: descriptor.line } : {}) }
-  }
-  if (!context.workspaceCwd || !isSafeRelativeReferencePath(descriptor.path)) return undefined
-  return {
-    path: descriptor.path,
-    cwd: context.workspaceCwd,
-    ...(descriptor.line ? { line: descriptor.line } : {})
-  }
 }
 
 const tokenClassName = 'inline align-[-0.125em] text-sky-700 dark:text-sky-300'

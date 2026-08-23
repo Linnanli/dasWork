@@ -17,6 +17,7 @@ import {
 } from '../../../../../shared/browserWorkspaceApi'
 import type { RightWorkspaceTab } from '../workspaceState'
 import { browserWorkspaceBounds } from './browserWorkspaceMove'
+import { normalizeBrowserUrl } from './browserWorkspaceUrl'
 
 type Props = {
   tab: Extract<RightWorkspaceTab, { type: 'browser' }>
@@ -37,12 +38,11 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
     if (!viewId || !surface) return undefined
     const bounds = browserWorkspaceBounds(surface)
     if (!bounds) return undefined
-    const next = await window.desktopApp.workspace.browser.setBounds({
+    await window.desktopApp.workspace.browser.setBounds({
       version: BROWSER_WORKSPACE_API_VERSION,
       viewId,
       bounds
     })
-    setView(next)
     return bounds
   }, [tab.browserViewId])
 
@@ -61,24 +61,41 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
     const viewId = tab.browserViewId
     const surface = surfaceRef.current
     if (!viewId || !surface) return
-    const reveal = (): void => {
-      void updateBounds().then(() =>
-        window.desktopApp.workspace.browser.show({ version: BROWSER_WORKSPACE_API_VERSION, viewId })
-      )
+    let active = true
+    let revealGeneration = 0
+    const reveal = async (): Promise<void> => {
+      const generation = ++revealGeneration
+      try {
+        const bounds = await updateBounds()
+        if (!active || generation !== revealGeneration || !bounds) return
+        const next = await window.desktopApp.workspace.browser.show({
+          version: BROWSER_WORKSPACE_API_VERSION,
+          viewId
+        })
+        if (active && generation === revealGeneration) setView(next)
+      } catch (cause) {
+        if (active && generation === revealGeneration) {
+          setError(cause instanceof Error ? cause.message : '浏览器视图无法显示。')
+        }
+      }
     }
-    const observer = new ResizeObserver(reveal)
+    const observer = new ResizeObserver(() => void reveal())
     observer.observe(surface)
     const workspaceShell = surface.closest<HTMLElement>(
       '[data-workspace-panel-shell="true"], [data-slot="right-workspace-shell"]'
     )
     if (workspaceShell) observer.observe(workspaceShell)
-    reveal()
+    void reveal()
     return () => {
+      active = false
+      revealGeneration += 1
       observer.disconnect()
-      void window.desktopApp.workspace.browser.hide({
-        version: BROWSER_WORKSPACE_API_VERSION,
-        viewId
-      })
+      void window.desktopApp.workspace.browser
+        .hide({
+          version: BROWSER_WORKSPACE_API_VERSION,
+          viewId
+        })
+        .catch(() => undefined)
     }
   }, [tab.browserViewId, updateBounds])
 
@@ -98,7 +115,7 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
   )
 
   useEffect(() => {
-    const url = normalizeHttpsUrl(tab.initialUrl ?? '')
+    const url = normalizeBrowserUrl(tab.initialUrl ?? '')
     if (!url || tab.browserViewId || openedInitialUrl.current === url) return
     openedInitialUrl.current = url
     setDraftUrl(url)
@@ -106,9 +123,9 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
   }, [createBrowserView, tab.browserViewId, tab.initialUrl])
 
   const navigate = (): void => {
-    const url = normalizeHttpsUrl(draftUrl)
+    const url = normalizeBrowserUrl(draftUrl)
     if (!url) {
-      setError('请输入有效的 HTTPS 地址。')
+      setError('请输入有效的 HTTP 或 HTTPS 地址。')
       return
     }
     setError(undefined)
@@ -195,7 +212,7 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
               value={draftUrl}
               onChange={(event) => setDraftUrl(event.target.value)}
               className="h-8 border-transparent bg-muted/70 pl-8 text-sm focus-visible:bg-background"
-              placeholder="输入 HTTPS 地址"
+              placeholder="输入 HTTP 或 HTTPS 地址"
               aria-label="Browser address"
               title={view?.title}
             />
@@ -213,7 +230,7 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
             <div>
               <h2 className="text-lg font-semibold">开始浏览</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                输入一个 HTTPS 地址以在隔离浏览器标签中打开。
+                输入一个 HTTP 或 HTTPS 地址以在隔离浏览器标签中打开。
               </p>
             </div>
             {error ? (
@@ -234,15 +251,4 @@ export function BrowserWorkspace({ tab, workspaceId, onRuntimeChange }: Props): 
 
 function belongsToTab(event: BrowserWorkspaceEvent, viewId: string | undefined): boolean {
   return Boolean(viewId && event.view.viewId === viewId)
-}
-
-function normalizeHttpsUrl(input: string): string | undefined {
-  const value = input.trim()
-  if (!value) return undefined
-  const url = value.includes('://') ? value : `https://${value}`
-  try {
-    return new URL(url).protocol === 'https:' ? url : undefined
-  } catch {
-    return undefined
-  }
 }

@@ -8,6 +8,7 @@ import {
   browserWorkspaceSetBoundsRequestSchema,
   browserWorkspaceViewRequestSchema,
   browserWorkspaceViewSnapshotSchema,
+  isBrowserWorkspaceUrl,
   type BrowserWorkspaceBounds,
   type BrowserWorkspaceCreateRequest,
   type BrowserWorkspaceEvent,
@@ -27,6 +28,7 @@ export type BrowserWorkspaceViewAdapter = {
   reload?(): void
   stop?(): void
   destroy(): void
+  isDestroyed(): boolean
   canGoBack?(): boolean
   canGoForward?(): boolean
   getTitle?(): string
@@ -59,6 +61,9 @@ type BrowserRecord = {
   visible: boolean
   error?: string
   faviconUrl?: string
+  title?: string
+  canGoBack: boolean
+  canGoForward: boolean
   createdAt: string
   updatedAt: string
   view: BrowserWorkspaceViewAdapter
@@ -91,6 +96,8 @@ export class BrowserWorkspaceService {
       bounds: request.bounds,
       state: 'loading',
       visible: true,
+      canGoBack: false,
+      canGoForward: false,
       createdAt: timestamp,
       updatedAt: timestamp,
       view
@@ -127,7 +134,8 @@ export class BrowserWorkspaceService {
 
   setBounds(input: BrowserWorkspaceSetBoundsRequest): BrowserWorkspaceViewSnapshot {
     const request = browserWorkspaceSetBoundsRequestSchema.parse(input)
-    const record = this.getLiveView(request.viewId)
+    const record = this.getView(request.viewId)
+    if (record.state === 'destroyed') return this.snapshot(record)
     record.bounds = request.bounds
     record.updatedAt = this.nowIso()
     record.view.setBounds(this.renderBounds(record))
@@ -141,6 +149,7 @@ export class BrowserWorkspaceService {
     const record = this.getLiveView(request.viewId)
     record.view.goBack?.()
     record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     return this.snapshot(record)
   }
 
@@ -149,6 +158,7 @@ export class BrowserWorkspaceService {
     const record = this.getLiveView(request.viewId)
     record.view.goForward?.()
     record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     return this.snapshot(record)
   }
 
@@ -159,6 +169,7 @@ export class BrowserWorkspaceService {
     record.error = undefined
     record.view.reload?.()
     record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     return this.snapshot(record)
   }
 
@@ -169,6 +180,7 @@ export class BrowserWorkspaceService {
     record.state = 'ready'
     record.error = undefined
     record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     return this.snapshot(record)
   }
 
@@ -177,7 +189,8 @@ export class BrowserWorkspaceService {
     bounds?: BrowserWorkspaceBounds
   ): BrowserWorkspaceViewSnapshot {
     const request = browserWorkspaceViewRequestSchema.parse(input)
-    const record = this.getLiveView(request.viewId)
+    const record = this.getView(request.viewId)
+    if (record.state === 'destroyed') return this.snapshot(record)
     if (bounds) record.bounds = bounds
     record.visible = true
     record.updatedAt = this.nowIso()
@@ -189,7 +202,8 @@ export class BrowserWorkspaceService {
 
   hide(input: BrowserWorkspaceViewRequest): BrowserWorkspaceViewSnapshot {
     const request = browserWorkspaceViewRequestSchema.parse(input)
-    const record = this.getLiveView(request.viewId)
+    const record = this.getView(request.viewId)
+    if (record.state === 'destroyed') return this.snapshot(record)
     record.visible = false
     record.updatedAt = this.nowIso()
     record.view.setBounds(this.renderBounds(record))
@@ -202,9 +216,11 @@ export class BrowserWorkspaceService {
     const request = browserWorkspaceViewRequestSchema.parse(input)
     const record = this.getView(request.viewId)
     if (record.state !== 'destroyed') {
+      this.refreshLiveMetadata(record)
       this.dependencies.host.detachView(record.view)
       record.view.destroy()
       record.state = 'destroyed'
+      record.visible = false
       record.updatedAt = this.nowIso()
       const snapshot = this.snapshot(record)
       this.emit({ version: BROWSER_WORKSPACE_API_VERSION, type: 'destroyed', view: snapshot })
@@ -217,7 +233,10 @@ export class BrowserWorkspaceService {
     const request = browserWorkspaceListRequestSchema.parse(input)
     const views = [...this.views.values()]
       .filter((view) => !request.workspaceId || view.workspaceId === request.workspaceId)
-      .map((view) => this.snapshot(view))
+      .map((view) => {
+        this.refreshLiveMetadata(view)
+        return this.snapshot(view)
+      })
 
     return browserWorkspaceListResultSchema.parse({
       version: BROWSER_WORKSPACE_API_VERSION,
@@ -260,6 +279,7 @@ export class BrowserWorkspaceService {
   private getView(viewId: string): BrowserRecord {
     const record = this.views.get(viewId)
     if (!record) throw new Error(`Unknown browser view: ${viewId}`)
+    this.reconcileNativeLifecycle(record)
     return record
   }
 
@@ -269,6 +289,7 @@ export class BrowserWorkspaceService {
     record.state = state
     record.error = state === 'failed' ? (error ?? 'The page could not be loaded.') : undefined
     record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     this.emit({
       version: BROWSER_WORKSPACE_API_VERSION,
       type: 'updated',
@@ -307,18 +328,34 @@ export class BrowserWorkspaceService {
       viewId: record.viewId,
       workspaceId: record.workspaceId,
       url: record.url,
-      title: record.view.getTitle?.(),
+      title: record.title,
       faviconUrl: record.faviconUrl,
       error: record.error,
       state: record.state,
       loading: record.state === 'loading',
       visible: record.visible,
       bounds: record.bounds,
-      canGoBack: record.view.canGoBack?.() ?? false,
-      canGoForward: record.view.canGoForward?.() ?? false,
+      canGoBack: record.canGoBack,
+      canGoForward: record.canGoForward,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     })
+  }
+
+  private refreshLiveMetadata(record: BrowserRecord): void {
+    if (this.reconcileNativeLifecycle(record)) return
+    record.title = record.view.getTitle?.() || undefined
+    record.canGoBack = record.view.canGoBack?.() ?? false
+    record.canGoForward = record.view.canGoForward?.() ?? false
+  }
+
+  private reconcileNativeLifecycle(record: BrowserRecord): boolean {
+    if (record.state === 'destroyed') return true
+    if (!record.view.isDestroyed()) return false
+    record.state = 'destroyed'
+    record.visible = false
+    record.updatedAt = this.nowIso()
+    return true
   }
 
   private assertAllowedAppUrl(url: string): void {
@@ -326,14 +363,10 @@ export class BrowserWorkspaceService {
   }
 
   private isAllowedAppUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url)
-      if (url === BROWSER_WORKSPACE_BLANK_URL) return true
-      const allowed = this.dependencies.allowedProtocols ?? ['https:']
-      return parsed.protocol === 'https:' && allowed.includes(parsed.protocol)
-    } catch {
-      return false
-    }
+    if (!isBrowserWorkspaceUrl(url)) return false
+    if (url === BROWSER_WORKSPACE_BLANK_URL) return true
+    const allowed = this.dependencies.allowedProtocols ?? ['http:', 'https:']
+    return allowed.includes(new URL(url).protocol)
   }
 
   private emit(event: BrowserWorkspaceEvent): void {

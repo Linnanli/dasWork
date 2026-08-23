@@ -85,6 +85,43 @@ describe('useWorkspaceFileTree', () => {
     expect(controller?.expandedPaths).toEqual(new Set(['src', 'src/components']))
   })
 
+  it('validates and expands a selected directory', async () => {
+    const listDirectory = vi.fn(async ({ path }: { path: string }) => directory(path))
+    stubWorkspaceApi({ listDirectory })
+
+    await render({ selectedPath: 'src/components', selectedPathIsDirectory: true })
+
+    await vi.waitFor(() => {
+      expect(listDirectory.mock.calls.map(([request]) => request.path)).toEqual([
+        '',
+        'src',
+        'src/components'
+      ])
+    })
+    expect(controller?.expandedPaths).toEqual(new Set(['src', 'src/components']))
+    expect(controller?.error).toBeUndefined()
+  })
+
+  it('reports a controlled error when a selected directory is not a directory', async () => {
+    const listDirectory = vi.fn(async ({ path }: { path: string }) => {
+      if (path !== 'src/components') return directory(path)
+      return {
+        version: 1 as const,
+        rootId: 'root-1',
+        path,
+        unavailable: 'not-directory' as const
+      }
+    })
+    stubWorkspaceApi({ listDirectory })
+
+    await render({ selectedPath: 'src/components', selectedPathIsDirectory: true })
+
+    await vi.waitFor(() => {
+      expect(controller?.error).toBe('“src/components”不是文件夹。')
+    })
+    expect(controller?.expandedPaths).toEqual(new Set())
+  })
+
   it('updates one app-server search session without changing the loaded tree', async () => {
     const listDirectory = vi.fn(async ({ path }: { path: string }) => directory(path))
     const updateSearch = vi.fn(async () => undefined)
@@ -218,13 +255,19 @@ describe('useWorkspaceFileTree', () => {
 
 async function render({
   initialExpandedPaths = [],
-  selectedPath = ''
-}: { initialExpandedPaths?: string[]; selectedPath?: string } = {}): Promise<void> {
+  selectedPath = '',
+  selectedPathIsDirectory = false
+}: {
+  initialExpandedPaths?: string[]
+  selectedPath?: string
+  selectedPathIsDirectory?: boolean
+} = {}): Promise<void> {
   await act(async () => {
     root.render(
       <Probe
         initialExpandedPaths={initialExpandedPaths}
         selectedPath={selectedPath}
+        selectedPathIsDirectory={selectedPathIsDirectory}
         workspaceId="workspace-1"
       />
     )
@@ -237,16 +280,19 @@ async function render({
 function Probe({
   initialExpandedPaths,
   selectedPath,
+  selectedPathIsDirectory,
   workspaceId
 }: {
   initialExpandedPaths: string[]
   selectedPath: string
+  selectedPathIsDirectory: boolean
   workspaceId: string
 }): null {
   // eslint-disable-next-line react-hooks/globals -- the probe exposes current hook state to tests.
   controller = useWorkspaceFileTree({
     initialExpandedPaths,
     selectedPath,
+    selectedPathIsDirectory,
     target: { conversationId: 'conversation-1' },
     workspaceId
   })

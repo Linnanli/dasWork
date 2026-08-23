@@ -1,5 +1,6 @@
 import type { LocalGitReviewSource } from '../../../../shared/localGitApi'
 import { RIGHT_WORKSPACE_MIN_WIDTH } from '../workspace-container/workspaceTypes'
+import type { WorkspaceFileLocation } from '../workspace-container/workspaceOpenTargets'
 
 export { RIGHT_WORKSPACE_MIN_WIDTH }
 
@@ -20,6 +21,8 @@ export type RightWorkspaceTab =
       title: string
       label?: string
       relativePath: string
+      revealPath?: string
+      location?: WorkspaceFileLocation
     }
   | {
       id: string

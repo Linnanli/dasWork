@@ -4,6 +4,7 @@ import {
   FILE_WORKSPACE_API_VERSION,
   fileWorkspaceEventSchema,
   fileWorkspaceListDirectoryRequestSchema,
+  normalizeFileWorkspaceRelativePath,
   fileWorkspaceReadFileRequestSchema,
   fileWorkspaceRelativePathSchema,
   fileWorkspaceSearchRequestSchema,
@@ -12,6 +13,12 @@ import {
 } from './fileWorkspaceApi'
 
 describe('file workspace API schemas', () => {
+  it('canonicalizes harmless relative path spelling without resolving traversal', () => {
+    expect(normalizeFileWorkspaceRelativePath('./src//./main.ts')).toBe('src/main.ts')
+    expect(normalizeFileWorkspaceRelativePath('src/../secret.ts')).toBe('src/../secret.ts')
+    expect(normalizeFileWorkspaceRelativePath('/repo/./main.ts')).toBe('/repo/main.ts')
+  })
+
   it('accepts root ids and normalized relative paths', () => {
     expect(
       fileWorkspaceListDirectoryRequestSchema.parse({
