@@ -22,7 +22,7 @@ import {
 } from '@assistant-ui/react'
 import { getToolName, isToolUIPart, type UIMessage, type UIMessagePart } from 'ai'
 import { type DirectiveChipProps } from '@assistant-ui/react-lexical'
-import { Streamdown, type PluginConfig } from 'streamdown'
+import { Streamdown, type Components, type PluginConfig } from 'streamdown'
 import { cjk } from '@streamdown/cjk'
 import { code } from '@streamdown/code'
 import { math } from '@streamdown/math'
@@ -99,6 +99,11 @@ import {
 } from '@/components/render-units/subagentActivity'
 import { renderUnitAttributes } from '@/components/render-units/renderUnitAttributes'
 import {
+  InlineReferenceAnchor,
+  InlineReferenceCodeToken,
+  InlineReferenceProvider
+} from '@/components/render-units/inlineReference'
+import {
   ArrowDownIcon,
   ArrowUpIcon,
   BotIcon,
@@ -165,6 +170,11 @@ import {
   type ConversationStateController
 } from './sidebar/useConversationState'
 import { cn } from './lib/utils'
+import {
+  inlineReferenceCodeTagName,
+  referenceInlineRehypePlugins
+} from './lib/referenceInlineMarkdown'
+import { referenceUrlTransform } from './lib/referenceInlineTarget'
 import { blockedAssistantMessageText, pendingAssistantMessageText } from './lib/assistantMessages'
 import {
   buildAssistantRenderUnits,
@@ -373,6 +383,10 @@ const streamdownAnimation = {
   sep: 'word' as const,
   stagger: 12
 }
+const assistantMarkdownComponents = {
+  a: InlineReferenceAnchor,
+  [inlineReferenceCodeTagName]: InlineReferenceCodeToken
+} satisfies Components
 
 const sidebarBaseClass =
   'hidden h-full shrink-0 flex-col overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex'
@@ -2193,7 +2207,12 @@ function AssistantMessage({
                 resetKey={`${message.id}:${unit.key}`}
                 renderUnitKind={unit.type}
               >
-                <AssistantRenderUnitView unit={unit} onOpenConversation={onOpenConversation} />
+                <AssistantRenderUnitView
+                  unit={unit}
+                  onOpenConversation={onOpenConversation}
+                  workspaceCwd={workspaceCwd}
+                  canOpenLocalPaths={canOpenLocalPaths}
+                />
               </ConversationTurnErrorBoundary>
             ))}
           </>
@@ -2628,10 +2647,14 @@ function displayDirectiveLabel(
 
 function AssistantRenderUnitView({
   unit,
-  onOpenConversation
+  onOpenConversation,
+  workspaceCwd,
+  canOpenLocalPaths
 }: {
   unit: AssistantRenderUnit
   onOpenConversation: OpenSubagentConversation
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
 }): React.JSX.Element | null {
   switch (unit.type) {
     case 'message-thinking':
@@ -2648,15 +2671,37 @@ function AssistantRenderUnitView({
         </span>
       )
     case 'text':
-      return <AssistantText text={unit.text} unit={unit} />
+      return (
+        <AssistantText
+          text={unit.text}
+          unit={unit}
+          workspaceCwd={workspaceCwd}
+          canOpenLocalPaths={canOpenLocalPaths}
+          onOpenConversation={onOpenConversation}
+        />
+      )
     case 'review-comments':
       return <ReviewCommentsDetails unit={unit} />
     case 'reasoning-group':
-      return <ReasoningGroupUnit unit={unit} onOpenConversation={onOpenConversation} />
+      return (
+        <ReasoningGroupUnit
+          unit={unit}
+          onOpenConversation={onOpenConversation}
+          workspaceCwd={workspaceCwd}
+          canOpenLocalPaths={canOpenLocalPaths}
+        />
+      )
     case 'subagent-activity-group':
       return <SubagentActivityGroup unit={unit} onOpenConversation={onOpenConversation} />
     case 'entry':
-      return <EntryUnit unit={unit} />
+      return (
+        <EntryUnit
+          unit={unit}
+          workspaceCwd={workspaceCwd}
+          canOpenLocalPaths={canOpenLocalPaths}
+          onOpenConversation={onOpenConversation}
+        />
+      )
     case 'tool-group':
       return <ToolGroupUnit unit={unit} onOpenConversation={onOpenConversation} />
     case 'unknown':
@@ -2666,10 +2711,14 @@ function AssistantRenderUnitView({
 
 function ReasoningGroupUnit({
   unit,
-  onOpenConversation
+  onOpenConversation,
+  workspaceCwd,
+  canOpenLocalPaths
 }: {
   unit: Extract<AssistantRenderUnit, { type: 'reasoning-group' }>
   onOpenConversation: OpenSubagentConversation
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
 }): React.JSX.Element {
   const isActive = unit.active === true
   const [completedProcessOpen, setCompletedProcessOpen] = useState(false)
@@ -2714,7 +2763,12 @@ function ReasoningGroupUnit({
         <div className="min-w-0 space-y-4">
           {unit.children.map((child) => (
             <div key={child.key} data-slot="reasoning-process-item" className="min-w-0">
-              <AssistantRenderUnitView unit={child} onOpenConversation={onOpenConversation} />
+              <AssistantRenderUnitView
+                unit={child}
+                onOpenConversation={onOpenConversation}
+                workspaceCwd={workspaceCwd}
+                canOpenLocalPaths={canOpenLocalPaths}
+              />
             </div>
           ))}
         </div>
@@ -2803,21 +2857,44 @@ function formatProcessedDuration(durationMs: number): string {
 
 function AssistantText({
   text,
-  unit
+  unit,
+  workspaceCwd,
+  canOpenLocalPaths,
+  onOpenConversation
 }: {
   text: string
   unit?: AssistantRenderUnit
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
+  onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
+  const referenceContext = useMemo(
+    () => ({
+      workspaceCwd,
+      canOpenLocalPaths,
+      onOpenConversation,
+      onOpenExternalUrl: (url: string): void => {
+        void window.desktopApp.codex.openExternalHttpUrl(url).catch(() => undefined)
+      }
+    }),
+    [canOpenLocalPaths, onOpenConversation, workspaceCwd]
+  )
+
   return (
     <div data-slot="assistant-render-text" {...renderUnitAttributes(unit)}>
-      <Streamdown
-        animated={streamdownAnimation}
-        isAnimating={unit?.type === 'text' && unit.streaming === true}
-        mode="streaming"
-        plugins={streamdownPlugins}
-      >
-        {text}
-      </Streamdown>
+      <InlineReferenceProvider value={referenceContext}>
+        <Streamdown
+          animated={streamdownAnimation}
+          components={assistantMarkdownComponents}
+          isAnimating={unit?.type === 'text' && unit.streaming === true}
+          mode="streaming"
+          plugins={streamdownPlugins}
+          rehypePlugins={referenceInlineRehypePlugins}
+          urlTransform={referenceUrlTransform}
+        >
+          {text}
+        </Streamdown>
+      </InlineReferenceProvider>
     </div>
   )
 }
@@ -2896,15 +2973,29 @@ function ToolItemRenderer({
 }
 
 function EntryUnit({
-  unit
+  unit,
+  workspaceCwd,
+  canOpenLocalPaths,
+  onOpenConversation
 }: {
   unit: Extract<AssistantRenderUnit, { type: 'entry' }>
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
+  onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element | null {
   if (unit.renderMode === 'known-null') return null
 
   if (unit.renderMode === 'text') {
     const text = entryText(unit)
-    return text ? <AssistantText text={text} unit={unit} /> : null
+    return text ? (
+      <AssistantText
+        text={text}
+        unit={unit}
+        workspaceCwd={workspaceCwd}
+        canOpenLocalPaths={canOpenLocalPaths}
+        onOpenConversation={onOpenConversation}
+      />
+    ) : null
   }
 
   if (unit.renderMode === 'custom') {

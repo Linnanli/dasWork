@@ -843,6 +843,11 @@ vi.mock('streamdown', () => ({
   Streamdown: (props: Record<string, unknown>) => {
     streamdownPropsState.lastProps = props
     return <div data-testid="streamdown-text">{props.children as ReactNode}</div>
+  },
+  defaultRehypePlugins: {
+    raw: () => undefined,
+    sanitize: [() => undefined, { protocols: { href: ['http', 'https'] } }],
+    harden: () => undefined
   }
 }))
 
@@ -2905,7 +2910,13 @@ describe('App composer', () => {
         math: { plugin: 'math' },
         mermaid: { plugin: 'mermaid' },
         cjk: { plugin: 'cjk' }
-      }
+      },
+      components: expect.objectContaining({
+        a: expect.any(Function),
+        'inline-reference-code': expect.any(Function)
+      }),
+      rehypePlugins: expect.any(Array),
+      urlTransform: expect.any(Function)
     })
     expect(streamdownPropsState.lastProps).not.toHaveProperty('caret')
     expect(streamdownPropsState.lastProps?.children).toBe('# 标题\n\n- 条目')
@@ -3776,6 +3787,8 @@ describe('App composer', () => {
     expect(container.textContent).toContain('docs / search')
     expect(container.textContent).toContain('found docs')
     expect(container.textContent).toContain('Docs resource')
+    expect(container.textContent).toContain('app://docs/1')
+    expect(container.querySelector('[data-inline-reference-kind="mcp-resource"]')).toBeNull()
     expect(container.textContent).toContain('file:///docs/canonical.md')
     expect(container.textContent).toContain('canonical')
     expect(container.textContent).toContain('Embedded doc')

@@ -75,6 +75,113 @@ test('renders completed code-comment directives as one expandable review card', 
   }
 })
 
+test('renders semantic inline references through the real assistant Markdown flow', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  const responseText = [
+    '[GitHub](app://github)',
+    '普通文字 [source](desktop-app/src/renderer/src/App.tsx:42) 普通文字',
+    '[External docs](https://example.test/docs)',
+    '[Docs resource](mcp-resource://docs/app%3A%2F%2Fdocs%2F1)',
+    '`@desktop-app/src/renderer/src/App.tsx:42`',
+    '[unsafe](javascript:alert(1))'
+  ].join('\n\n')
+  const backend = await startMockBackend({
+    responses: [
+      assistantMessageResponse('resp-inline-references', 'msg-inline-references', responseText)
+    ]
+  })
+  const logs: string[] = []
+  let app: ElectronApplication | undefined
+
+  try {
+    app = await launchApp(backend, logs)
+    const page = await app.firstWindow()
+    collectRendererLogs(page, logs)
+
+    await sendMessage(page, '展示链接参考。')
+
+    const assistant = page.locator('[data-role="assistant"]').filter({ hasText: 'GitHub' })
+    await expect(assistant).toBeVisible()
+    const appToken = assistant.locator('[data-inline-reference-kind="app"]')
+    await expect(appToken).toBeVisible()
+    await expect(appToken).toHaveAttribute('data-interactive', 'false')
+
+    const fileToken = assistant.locator('[data-inline-reference-kind="local-file"]').first()
+    await expect(fileToken).toBeVisible()
+    await expect(fileToken).toHaveAttribute('data-interactive', 'true')
+    await expect(fileToken).toContainText('source (line 42)')
+    await expect(fileToken.locator('[data-file-icon="react"]')).toBeVisible()
+
+    const inlineAlignment = await fileToken.evaluate((token) => {
+      const content = token.querySelector<HTMLElement>('[data-slot="inline-reference-content"]')
+      const icon = content?.querySelector<SVGElement>('svg')
+      const label = content?.querySelector<HTMLElement>('[data-slot="inline-reference-label"]')
+      const paragraph = token.parentElement
+      const textWalker = paragraph
+        ? document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+        : undefined
+      let ordinaryText = textWalker?.nextNode()
+      while (
+        ordinaryText &&
+        (token.contains(ordinaryText.parentElement) ||
+          !ordinaryText.textContent?.includes('普通文字'))
+      ) {
+        ordinaryText = textWalker?.nextNode()
+      }
+      const labelText = label?.firstChild
+
+      if (!content || !icon || !label || !ordinaryText || !labelText) return undefined
+
+      const ordinaryRange = document.createRange()
+      ordinaryRange.selectNodeContents(ordinaryText)
+      const labelRange = document.createRange()
+      labelRange.selectNodeContents(labelText)
+      const iconRect = icon.getBoundingClientRect()
+      const labelRect = label.getBoundingClientRect()
+      const ordinaryTextRect = ordinaryRange.getBoundingClientRect()
+      const labelTextRect = labelRange.getBoundingClientRect()
+
+      return {
+        iconCenter: iconRect.top + iconRect.height / 2,
+        labelCenter: labelRect.top + labelRect.height / 2,
+        labelTextBottom: labelTextRect.bottom,
+        ordinaryTextBottom: ordinaryTextRect.bottom
+      }
+    })
+    if (!inlineAlignment) throw new Error('Expected measurable inline reference geometry')
+    expect(Math.abs(inlineAlignment.iconCenter - inlineAlignment.labelCenter)).toBeLessThanOrEqual(
+      1
+    )
+    expect(
+      Math.abs(inlineAlignment.labelTextBottom - inlineAlignment.ordinaryTextBottom)
+    ).toBeLessThanOrEqual(1)
+
+    const externalLink = assistant.locator('a[data-inline-reference-kind="external-url"]')
+    await expect(externalLink).toHaveAttribute('href', 'https://example.test/docs')
+    const resourceToken = assistant.locator('[data-inline-reference-kind="mcp-resource"]')
+    await expect(resourceToken).toHaveAttribute('data-interactive', 'false')
+    expect(await resourceToken.getAttribute('tabindex')).toBeNull()
+    await expect(assistant.locator('a[href^="javascript:"]')).toHaveCount(0)
+
+    await appToken.hover()
+    await expect(page.getByRole('tooltip')).toContainText('app://github')
+
+    await fileToken.focus()
+    await expect(
+      page
+        .locator('[role="tooltip"]')
+        .filter({ hasText: 'desktop-app/src/renderer/src/App.tsx:42' })
+    ).toContainText('desktop-app/src/renderer/src/App.tsx:42')
+  } finally {
+    await attachDiagnostics(testInfo, logs, backend, app)
+    await closeApp(app)
+    await backend.close()
+  }
+})
+
 test('renders web search and exploration render units through the real desktop chat flow', async ({
   browserName
 }, testInfo) => {
