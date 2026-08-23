@@ -18,6 +18,7 @@ import type { ReviewOpenIntent } from './reviewOpenIntent'
 
 export type LocalGitReviewLastTurn = {
   turnId: string
+  selectedPath?: string
   files: Array<{
     path: string
     diff?: string

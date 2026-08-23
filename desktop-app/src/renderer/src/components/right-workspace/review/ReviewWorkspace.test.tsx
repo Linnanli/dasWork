@@ -12,6 +12,7 @@ import type {
   LocalGitReviewSnapshot,
   LocalGitReviewSource
 } from '../../../../../shared/localGitApi'
+import type { LocalGitReviewLastTurn } from '../../local-git-review/LocalGitReviewProvider'
 import { ReviewWorkspace } from './ReviewWorkspace'
 import { reviewWorkspacePreferencesKey } from './reviewWorkspaceStore'
 
@@ -27,6 +28,7 @@ const target = {
 
 let reviewSource: LocalGitReviewSource = { type: 'unstaged' }
 let reviewOpenIntent: { type: 'uncommitted'; token: number } | undefined
+let lastTurn: LocalGitReviewLastTurn | undefined
 const setReviewSource = vi.fn()
 const acknowledgeReviewOpenIntent = vi.fn((token: number) => {
   if (reviewOpenIntent?.token === token) reviewOpenIntent = undefined
@@ -74,13 +76,16 @@ const pierreProcessFile = vi.hoisted(() =>
   )
 )
 const pierreTreeResetPaths = vi.hoisted(() => vi.fn())
+const pierreTreeSelectPath = vi.hoisted(() => vi.fn())
+const pierreTreeDeselectPath = vi.hoisted(() => vi.fn())
+const pierreTreeSelectedPaths = vi.hoisted(() => ({ current: [] as readonly string[] }))
 const scrollIntoView = vi.fn()
 
 vi.mock('@/components/local-git-review/LocalGitReviewProvider', () => ({
   useLocalGitReview: () => ({
     target,
     source: reviewSource,
-    lastTurn: undefined,
+    lastTurn,
     reviewOpenIntent,
     setReviewSource,
     notifyGitOperation,
@@ -146,8 +151,10 @@ vi.mock('@pierre/trees/react', () => ({
       resetPaths: pierreTreeResetPaths,
       setGitStatus: vi.fn(),
       setSearch: vi.fn(),
+      getSelectedPaths: vi.fn(() => pierreTreeSelectedPaths.current),
       getItem: vi.fn((path: string) => ({
-        select: vi.fn(),
+        deselect: () => pierreTreeDeselectPath(path),
+        select: () => pierreTreeSelectPath(path),
         isDirectory: () => path.endsWith('/')
       })),
       scrollToPath: vi.fn()
@@ -165,6 +172,7 @@ describe('ReviewWorkspace', () => {
     root = createRoot(container)
     reviewSource = { type: 'unstaged' }
     reviewOpenIntent = undefined
+    lastTurn = undefined
     setReviewSource.mockClear()
     acknowledgeReviewOpenIntent.mockClear()
     notifyGitOperation.mockClear()
@@ -172,6 +180,9 @@ describe('ReviewWorkspace', () => {
     pierreLineScroll.mockClear()
     pierreProcessFile.mockClear()
     pierreTreeResetPaths.mockClear()
+    pierreTreeSelectPath.mockClear()
+    pierreTreeDeselectPath.mockClear()
+    pierreTreeSelectedPaths.current = []
     scrollIntoView.mockClear()
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
@@ -199,6 +210,11 @@ describe('ReviewWorkspace', () => {
           conflicted: false
         })),
         getReviewDiffFileContents: vi.fn(async () => ({
+          status: 'text',
+          before: 'before\n',
+          after: 'after\n'
+        })),
+        getTurnDiffFileContents: vi.fn(async () => ({
           status: 'text',
           before: 'before\n',
           after: 'after\n'
@@ -267,6 +283,65 @@ describe('ReviewWorkspace', () => {
     expect(container.textContent).toContain('未提交')
     expect(container.textContent).toContain('src/a.ts')
     expect(container.textContent).toContain('README.md')
+  })
+
+  it('selects only the file requested by a last-turn review', async () => {
+    reviewSource = { type: 'last-turn', turnId: 'turn-1' }
+    lastTurn = {
+      turnId: 'turn-1',
+      selectedPath: 'README.md',
+      files: [
+        { path: 'src/a.ts', additions: 2, deletions: 1, diff: 'diff --git a/src/a.ts b/src/a.ts' },
+        {
+          path: 'README.md',
+          additions: 1,
+          deletions: 0,
+          diff: 'diff --git a/README.md b/README.md'
+        }
+      ]
+    }
+    const storageKey = reviewWorkspacePreferencesKey({
+      hostId: target.hostId,
+      repository: target.gitRoot,
+      workspaceId: 'review'
+    })
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        version: 1,
+        source: reviewSource,
+        diffMode: 'unified',
+        lineDiffType: 'word',
+        wrap: false,
+        ignoreWhitespace: false,
+        fullFiles: false,
+        richPreview: false,
+        skipRevertConfirmation: false,
+        treeVisible: true,
+        treeWidth: 280,
+        treeFilter: '',
+        collapsedKeys: ['README.md']
+      })
+    )
+
+    pierreTreeSelectedPaths.current = ['README.md']
+    await renderReview()
+
+    const selectedFile = container.querySelector<HTMLElement>('[data-review-path="README.md"]')
+    const otherFile = container.querySelector<HTMLElement>('[data-review-path="src/a.ts"]')
+    expect(selectedFile?.classList.contains('ring-1')).toBe(true)
+    expect(selectedFile?.classList.contains('ring-ring/35')).toBe(true)
+    expect(selectedFile?.querySelector('[data-testid="pierre-file-diff"]')).not.toBeNull()
+    expect(otherFile?.querySelector('[data-testid="pierre-file-diff"]')).toBeNull()
+    expect(window.desktopApp.git.getReviewSnapshot).not.toHaveBeenCalled()
+    expect(pierreTreeSelectPath).toHaveBeenLastCalledWith('README.md')
+
+    lastTurn = { ...lastTurn, selectedPath: 'src/a.ts' }
+    pierreTreeSelectedPaths.current = ['README.md']
+    await renderReview()
+
+    expect(pierreTreeDeselectPath).toHaveBeenLastCalledWith('README.md')
+    expect(pierreTreeSelectPath).toHaveBeenLastCalledWith('src/a.ts')
   })
 
   it('finishes the initial snapshot before applying a matching Git change refresh', async () => {

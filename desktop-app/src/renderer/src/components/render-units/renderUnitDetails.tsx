@@ -606,7 +606,17 @@ function TurnDiffEntryUnit({ unit }: { unit: EntryUnit }): React.JSX.Element {
           <Table>
             <TableBody>
               {visible.map((file, index) => (
-                <TurnDiffFileRow key={`${file.path}:${index}`} file={file} cwd={cwd} />
+                <TurnDiffFileRow
+                  key={`${file.path}:${index}`}
+                  file={file}
+                  cwd={cwd}
+                  onOpen={() =>
+                    openReview(
+                      { type: 'last-turn', turnId },
+                      lastTurnReview(turnId, files, file.path)
+                    )
+                  }
+                />
               ))}
             </TableBody>
           </Table>
@@ -714,9 +724,14 @@ function turnPatchUnavailableReason(
   return '缺少完整补丁数据，无法恢复。'
 }
 
-function lastTurnReview(turnId: string, files: readonly TurnDiffFile[]): LocalGitReviewLastTurn {
+function lastTurnReview(
+  turnId: string,
+  files: readonly TurnDiffFile[],
+  selectedPath?: string
+): LocalGitReviewLastTurn {
   return {
     turnId,
+    ...(selectedPath ? { selectedPath } : {}),
     files: files.map((file) => ({
       path: file.path,
       diff: file.diff,
@@ -728,17 +743,14 @@ function lastTurnReview(turnId: string, files: readonly TurnDiffFile[]): LocalGi
 
 function TurnDiffFileRow({
   file,
-  cwd
+  cwd,
+  onOpen
 }: {
   file: TurnDiffFile
   cwd: string | undefined
+  onOpen(): void
 }): React.JSX.Element {
-  const openPath = resolveTurnDiffFilePath(file.path, cwd)
   const displayPath = displayTurnDiffFilePath(file.path, cwd)
-  const handleOpen = (): void => {
-    if (!openPath) return
-    void window.desktopApp.codex.openLocalPath({ path: openPath }).catch(() => undefined)
-  }
 
   return (
     <TableRow>
@@ -747,13 +759,12 @@ function TurnDiffFileRow({
           <HoverCardTrigger asChild>
             <span className="block min-w-0">
               <Button
-                aria-label={openPath ? `打开 ${file.path}` : `无法打开 ${file.path}`}
-                disabled={!openPath}
+                aria-label={`在审核中查看 ${file.path}`}
                 type="button"
-                title={openPath ? `打开 ${openPath}` : '缺少工作目录，无法打开相对路径'}
+                title={`在审核中查看 ${file.path}`}
                 variant="ghost"
-                className="h-auto w-full min-w-0 justify-start gap-4 rounded-none px-4 py-3 text-left font-normal transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
-                onClick={handleOpen}
+                className="h-auto w-full min-w-0 justify-start gap-4 rounded-none px-4 py-3 text-left font-normal transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:px-6"
+                onClick={onOpen}
               >
                 <span
                   data-slot="turn-diff-file-path"
@@ -1727,16 +1738,6 @@ function completedTurnId(item: AnyRecord, fallback: string): string {
   return itemId?.startsWith('turn-diff:') ? itemId.slice('turn-diff:'.length) : (itemId ?? fallback)
 }
 
-function resolveTurnDiffFilePath(path: string, cwd: string | undefined): string | undefined {
-  const absolutePath = localFilePath(path)
-  if (absolutePath) return absolutePath
-  if (!cwd) return undefined
-
-  const relativePath = safeRelativeLocalPath(path)
-  if (!relativePath) return undefined
-  return joinLocalPath(cwd, relativePath)
-}
-
 function displayTurnDiffFilePath(path: string, cwd: string | undefined): string {
   const normalizedPath = path.replace(/\\/g, '/').replace(/^[ab]\//, '')
   const normalizedCwd = cwd?.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -1762,14 +1763,6 @@ function safeRelativeLocalPath(path: string): string | undefined {
   if (segments.length === 0) return undefined
   if (segments.some((segment) => segment === '.' || segment === '..')) return undefined
   return segments.join('/')
-}
-
-function joinLocalPath(base: string, relativePath: string): string {
-  const trimmedBase = base.replace(/[\\/]+$/, '')
-  if (/^[A-Za-z]:[\\/]/.test(trimmedBase)) {
-    return `${trimmedBase}\\${relativePath.replace(/\//g, '\\')}`
-  }
-  return `${trimmedBase}/${relativePath}`
 }
 
 function imageEntriesFromItem(item: AnyRecord): ImageEntry[] {

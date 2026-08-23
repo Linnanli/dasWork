@@ -175,11 +175,14 @@ function VisibleReviewFileTree({
     const selectedPath = controller.activePath
     if (!selectedPath) return
     const frame = window.requestAnimationFrame(() => {
-      const item = model.getItem(selectedPath)
-      if (item) {
-        item.select()
-        model.scrollToPath(selectedPath, { focus: false, offset: 'nearest' })
-      }
+      const selectedItem = model.getItem(selectedPath)
+      if (!selectedItem) return
+
+      model.getSelectedPaths().forEach((path) => {
+        if (path !== selectedPath) model.getItem(path)?.deselect()
+      })
+      selectedItem.select()
+      model.scrollToPath(selectedPath, { focus: false, offset: 'nearest' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [controller.activePath, model, treeModel.paths])

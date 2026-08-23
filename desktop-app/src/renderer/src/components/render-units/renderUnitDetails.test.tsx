@@ -108,6 +108,32 @@ describe('SpecialEntryRenderer turn diff patch actions', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
+  it('opens the clicked changed file in the matching turn review', async () => {
+    await renderTurnDiff()
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="在审核中查看 notes.txt"]')
+        ?.click()
+    })
+
+    expect(openReview).toHaveBeenCalledWith(
+      { type: 'last-turn', turnId: 'turn-history' },
+      {
+        turnId: 'turn-history',
+        selectedPath: 'notes.txt',
+        files: [
+          {
+            path: 'notes.txt',
+            diff: '--- a/notes.txt\n+++ b/notes.txt\n-old\n+new\n',
+            additions: 1,
+            deletions: 1
+          }
+        ]
+      }
+    )
+  })
+
   it('shows failure feedback when undo is rejected', async () => {
     ;(window.desktopApp.git.applyTurnPatch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       status: 'error',

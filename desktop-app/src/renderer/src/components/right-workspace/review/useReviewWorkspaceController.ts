@@ -229,8 +229,26 @@ export function useReviewWorkspaceController({
         loadedSourceIdentityRef.current = nextSourceIdentity
         setRefreshing(false)
         setMutationStale(false)
-        setSelectedPathState((current) => current ?? groups[0]?.path)
-        setActivePathState((current) => current ?? groups[0]?.path)
+        const selectedTurnPath = lastTurn?.selectedPath
+        const initialTurnPath =
+          selectedTurnPath && groups.some((group) => group.path === selectedTurnPath)
+            ? selectedTurnPath
+            : undefined
+        if (initialTurnPath) {
+          updatePreferences((current) => {
+            const currentTurnPaths = new Set(groups.map((group) => group.path))
+            const collapsedKeys = [
+              ...current.collapsedKeys.filter((key) => !currentTurnPaths.has(key)),
+              ...groups.filter((group) => group.path !== initialTurnPath).map((group) => group.path)
+            ]
+            return {
+              ...current,
+              collapsedKeys
+            }
+          })
+        }
+        setSelectedPathState((current) => initialTurnPath ?? current ?? groups[0]?.path)
+        setActivePathState((current) => initialTurnPath ?? current ?? groups[0]?.path)
         return true
       }
       if (!target) {
@@ -306,7 +324,7 @@ export function useReviewWorkspaceController({
       )
       return true
     },
-    [commitLoadState, displaySource, lastTurn, onFeedback, target]
+    [commitLoadState, displaySource, lastTurn, onFeedback, target, updatePreferences]
   )
 
   useEffect(() => {
