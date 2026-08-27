@@ -65,6 +65,8 @@ import { steerQueuedFollowUp } from './followUps/steerQueuedFollowUp'
 import { validateQueuedLocalAttachments } from './followUps/validateQueuedLocalAttachments'
 import { McpServerStatusService } from './mcp/McpServerStatusService'
 import { createListMcpServersHandler } from './mcp/mcpServerStatusIpc'
+import { PluginCenterService } from './pluginCenter/PluginCenterService'
+import { createPluginCenterIpcHandlers } from './pluginCenter/registerPluginCenterIpc'
 import type { ProjectApiService } from './projects/ProjectApiService'
 import type { ProjectService } from './projects/ProjectService'
 import { createProjectRuntimeServices } from './projects/projectRuntimeServices'
@@ -133,6 +135,7 @@ let composerContextSearch: ComposerContextSearchService | undefined
 let composerContextChanges: ComposerContextChangeBroker | undefined
 let composerContextClient: CodexContextCatalogClient | undefined
 let mcpServerStatus: McpServerStatusService | undefined
+let pluginCenterService: PluginCenterService | undefined
 let codexAppServerConnection: CodexAspSharedConnection | undefined
 let followUpQueue: ConversationFollowUpQueueService | undefined
 let localGitWatchBroker: LocalGitWatchBroker | undefined
@@ -200,6 +203,12 @@ function createCodexRuntime(
   })
   mcpServerStatus = new McpServerStatusService({
     provider: composerContextClient
+  })
+  pluginCenterService = new PluginCenterService({
+    provider: composerContextClient,
+    defaultCwd: () => undefined,
+    logger: (event, details) =>
+      console.info(`[plugin-center:perf:${event}]`, { atMs: Date.now(), ...details })
   })
   composerContextCatalog = new ComposerContextCatalogService({
     provider: composerContextClient,
@@ -344,6 +353,11 @@ function requireComposerContextClient(): CodexContextCatalogClient {
 function requireMcpServerStatus(): McpServerStatusService {
   if (!mcpServerStatus) throw new Error('MCP server status service is not initialized')
   return mcpServerStatus
+}
+
+function requirePluginCenterService(): PluginCenterService {
+  if (!pluginCenterService) throw new Error('Plugin Center service is not initialized')
+  return pluginCenterService
 }
 
 function requireFollowUpQueue(): ConversationFollowUpQueueService {
@@ -599,6 +613,11 @@ app.whenReady().then(() => {
   )
   ipcMain.handle('codex:list-models', () => runtime.listModels())
   ipcMain.handle('codex:list-mcp-servers', createListMcpServersHandler(requireMcpServerStatus()))
+  for (const [channel, handler] of Object.entries(
+    createPluginCenterIpcHandlers(requirePluginCenterService())
+  )) {
+    ipcMain.handle(channel, handler)
+  }
   ipcMain.handle('codex:set-selected-model', (_, payload: unknown) => {
     const request = codexSetSelectedModelPayloadSchema.parse(payload)
     return runtime.setSelectedModel(request.modelId)

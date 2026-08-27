@@ -107,6 +107,7 @@ import { createChatStreamBridge } from './chatStreamBridge'
 import { createComposerContextBridge } from './composerContextBridge'
 import { assertFollowUpSnapshotFitsIpc } from './followUpPayloadGuard'
 import { createMcpServerStatusBridge } from './mcpServerStatusBridge'
+import { createPluginCenterBridge } from './pluginCenterBridge'
 
 // Electron's renderer CSP disallows Zod's optional dynamic parser compilation.
 // Set this globally before any IPC payload is parsed, including the schemas
@@ -204,6 +205,10 @@ const desktopComposerContext: DesktopComposerContextApi = createComposerContextB
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   }
+)
+
+const desktopPlugins = createPluginCenterBridge((channel, payload) =>
+  ipcRenderer.invoke(channel, payload)
 )
 
 const desktopProjects: DesktopProjectsApi = {
@@ -701,6 +706,7 @@ const desktopApp = {
   codex: desktopCodex,
   chat: desktopCodexChat,
   composerContext: desktopComposerContext,
+  plugins: desktopPlugins,
   projects: desktopProjects,
   conversations: desktopConversations,
   followUps: desktopFollowUps,

@@ -2,15 +2,19 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   accessSync,
+  closeSync,
   constants,
+  copyFileSync,
   existsSync,
   mkdirSync,
+  openSync,
+  readSync,
   readdirSync,
   rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { basename, dirname, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
@@ -20,6 +24,33 @@ const prettier = require('prettier')
 const desktopRoot = resolve(import.meta.dirname, '..')
 const repoRoot = resolve(desktopRoot, '..')
 const options = parseArguments(process.argv.slice(2))
+const textSampleBytes = 8 * 1024
+const externalReferenceSources = [
+  {
+    name: 'plugins',
+    sourceSegments: ['plugins'],
+    destinationSegments: ['plugins'],
+    ignoredDirectoryNames: new Set(['node_modules'])
+  },
+  {
+    name: 'skills',
+    sourceSegments: ['skills'],
+    destinationSegments: ['skills'],
+    ignoredDirectoryNames: new Set()
+  },
+  {
+    name: 'cua-node-runtime',
+    sourceSegments: ['cua_node'],
+    destinationSegments: ['cua_node', 'runtime'],
+    ignoredDirectoryNames: new Set(['lib'])
+  },
+  {
+    name: 'cua-node-sky',
+    sourceSegments: ['cua_node', 'lib', 'node_modules', '@oai', 'sky'],
+    destinationSegments: ['cua_node', 'sky'],
+    ignoredDirectoryNames: new Set(['js-dependency-cache'])
+  }
+]
 
 if (options.help) {
   printHelp()
@@ -49,6 +80,9 @@ prepareOutputDirectory(outputPath, options.force)
 console.log(`Extracting ${asarPath}`)
 extractAll(asarPath, outputPath)
 
+console.log('Copying external readable resources')
+const externalResources = copyExternalTextResources(resourcesPath, outputPath)
+
 if (!options.skipFormat) {
   console.log(`Beautifying extracted code with Prettier ${prettier.version}`)
   runPrettier(outputPath)
@@ -63,7 +97,8 @@ writeAnalysisMetadata({
   bundleIdentifier,
   infoPlistPath,
   outputPath,
-  skipFormat: options.skipFormat
+  skipFormat: options.skipFormat,
+  externalResources
 })
 
 console.log(`Reference project ready: ${outputPath}`)
@@ -163,12 +198,12 @@ function runPrettier(path) {
     throw new Error(`Prettier is not installed. Run npm --prefix desktop-app install first.`)
   }
 
-  const formatRoots = ['.vite', 'webview', 'native-menu-locales']
+  const formatRoots = ['.vite', 'webview', 'native-menu-locales', 'external']
     .map((name) => join(path, name))
     .filter(existsSync)
   const supportedExtensions = new Set(['.cjs', '.css', '.html', '.js', '.json', '.mjs'])
   const files = formatRoots
-    .flatMap(walkFiles)
+    .flatMap((formatRoot) => walkFiles(formatRoot))
     .filter((filePath) => supportedExtensions.has(extname(filePath).toLowerCase()))
   const packageJsonPath = join(path, 'package.json')
   if (existsSync(packageJsonPath)) files.push(packageJsonPath)
@@ -192,7 +227,8 @@ function writeAnalysisMetadata({
   bundleIdentifier,
   infoPlistPath,
   outputPath,
-  skipFormat
+  skipFormat,
+  externalResources
 }) {
   const analysisPath = join(outputPath, '_analysis')
   mkdirSync(analysisPath, { recursive: true })
@@ -207,6 +243,10 @@ function writeAnalysisMetadata({
   writeFileSync(
     join(analysisPath, 'Info.json'),
     `${JSON.stringify(JSON.parse(plistJson), null, 2)}\n`
+  )
+  writeFileSync(
+    join(analysisPath, 'external-resources.json'),
+    `${JSON.stringify(externalResources, null, 2)}\n`
   )
 
   const inventory = collectInventory(outputPath, analysisPath)
@@ -224,11 +264,22 @@ function writeAnalysisMetadata({
       extractedWith: `@electron/asar ${require('@electron/asar/package.json').version}`,
       formatted: !skipFormat,
       prettierVersion: prettier.version,
-      sourceMapsPresent: (inventory.extensions['.map'] ?? 0) > 0
+      sourceMapsPresent: asarFiles.some((filePath) => extname(filePath).toLowerCase() === '.map')
+    },
+    externalResources: {
+      copiedTextOnly: true,
+      sources: externalResources
     },
     inventory
   }
   writeFileSync(join(analysisPath, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+
+  const externalResourceSummary = externalResources
+    .map(
+      (source) =>
+        `- \`${source.outputPath}\`：从 \`${source.name}\` 复制 ${source.copiedFiles} 个可读文件；跳过 ${source.skippedFiles} 个二进制或未纳入目录的文件。`
+    )
+    .join('\n')
 
   const readme = `# ChatGPT Electron ${appVersion} 分析参考
 
@@ -240,14 +291,23 @@ function writeAnalysisMetadata({
 - 主进程与 preload：\`.vite/build/\`
 - 页面入口：\`webview/index.html\`
 - 页面代码与样式：\`webview/assets/\`
+- 外置 Skill、Plugin 和 Computer Use JavaScript：\`external/\`
 - 文件清单与版本信息：\`_analysis/\`
+
+## 外置可读资源
+
+为了支持业务逻辑分析，\`external/\` 收录了应用外置资源中的可读代码、配置和文档：
+
+${externalResourceSummary}
+
+完整复制清单见 \`_analysis/external-resources.json\`。\`plugins/\` 的 \`node_modules/\`、二进制、图片、WASM 和字体均不会复制；\`cua_node/\` 只包含运行时入口文件及 OpenAI 的 \`@oai/sky\` Computer Use JavaScript。
 
 ## 还原边界
 
 - JavaScript/CSS/HTML/JSON 只做了 Prettier 排版，没有恢复原变量名、模块名、类型和注释。
 - 发布包没有携带 source map，因此不能可靠还原成原始源码目录。
 - \`.node\`、Mach-O、WASM、字体和图片保持二进制原样，只能另行使用对应工具分析。
-- App 外置的 \`plugins/\`、\`skills/\`、\`codex\` 和 \`cua_node/\` 不属于 app.asar，未复制到本目录。
+- 原生 \`codex\` 可执行文件和 \`app.asar.unpacked/\` 不在此目录中；它们不适合作为首轮 AI 业务逻辑分析输入。
 - 该目录位于仓库已忽略的 \`reference-projects/\` 下，适合本地行为分析，不应作为可构建源码或对外分发物。
 
 ## 重新生成
@@ -257,6 +317,68 @@ function writeAnalysisMetadata({
 \`npm --prefix desktop-app run reference:chatgpt -- --force\`
 `
   writeFileSync(join(analysisPath, 'README.md'), readme)
+}
+
+function copyExternalTextResources(resourcesPath, outputPath) {
+  return externalReferenceSources.map((source) => {
+    const sourcePath = join(resourcesPath, ...source.sourceSegments)
+    const outputPathForSource = join(outputPath, 'external', ...source.destinationSegments)
+
+    if (!existsSync(sourcePath)) {
+      return {
+        name: source.name,
+        sourcePath,
+        outputPath: relative(outputPath, outputPathForSource),
+        sourceFiles: 0,
+        copiedFiles: 0,
+        copiedBytes: 0,
+        skippedFiles: 0,
+        status: 'missing'
+      }
+    }
+
+    const sourceFiles = walkFiles(sourcePath, source.ignoredDirectoryNames)
+    let copiedFiles = 0
+    let copiedBytes = 0
+
+    for (const sourceFilePath of sourceFiles) {
+      if (!isReadableTextFile(sourceFilePath)) continue
+
+      const destinationPath = join(outputPathForSource, relative(sourcePath, sourceFilePath))
+      mkdirSync(dirname(destinationPath), { recursive: true })
+      copyFileSync(sourceFilePath, destinationPath)
+      copiedFiles += 1
+      copiedBytes += statSync(sourceFilePath).size
+    }
+
+    return {
+      name: source.name,
+      sourcePath,
+      outputPath: relative(outputPath, outputPathForSource),
+      sourceFiles: sourceFiles.length,
+      copiedFiles,
+      copiedBytes,
+      skippedFiles: sourceFiles.length - copiedFiles,
+      status: 'copied'
+    }
+  })
+}
+
+function isReadableTextFile(filePath) {
+  const fileSize = statSync(filePath).size
+  if (fileSize === 0) return true
+
+  const sampleSize = Math.min(fileSize, textSampleBytes)
+  const sample = Buffer.alloc(sampleSize)
+  const descriptor = openSync(filePath, 'r')
+
+  try {
+    const bytesRead = readSync(descriptor, sample, 0, sampleSize, 0)
+    const textSample = sample.subarray(0, bytesRead)
+    return !textSample.includes(0) && !textSample.toString('utf8').includes('\uFFFD')
+  } finally {
+    closeSync(descriptor)
+  }
 }
 
 function collectInventory(rootPath, excludedPath) {
@@ -282,7 +404,7 @@ function collectInventory(rootPath, excludedPath) {
   }
 }
 
-function walkFiles(rootPath) {
+function walkFiles(rootPath, ignoredDirectoryNames = new Set()) {
   const files = []
   const pending = [rootPath]
 
@@ -290,7 +412,7 @@ function walkFiles(rootPath) {
     const currentPath = pending.pop()
     for (const entry of readdirSync(currentPath, { withFileTypes: true })) {
       const entryPath = join(currentPath, entry.name)
-      if (entry.isDirectory()) pending.push(entryPath)
+      if (entry.isDirectory() && !ignoredDirectoryNames.has(entry.name)) pending.push(entryPath)
       if (entry.isFile()) files.push(entryPath)
     }
   }

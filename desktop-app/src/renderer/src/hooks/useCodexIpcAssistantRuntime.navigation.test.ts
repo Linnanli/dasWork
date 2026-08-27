@@ -138,6 +138,33 @@ describe('useCodexIpcAssistantRuntime conversation navigation', () => {
     expect(backgroundEntry.status).toBe('submitted')
   })
 
+  it('starts a fresh conversation with a plugin prompt draft and no inherited attachments', async () => {
+    installDesktopApp(vi.fn())
+    await renderProbe()
+    const previousEntry = runtimeState!.activeEntry
+    await act(async () => {
+      runtimeState!.setActiveDraft('Keep this older draft')
+      runtimeState!.setActiveDraftAttachments([
+        {
+          kind: 'file',
+          fileUrl: 'file:///tmp/old.txt',
+          label: 'old.txt',
+          path: '/tmp/old.txt'
+        }
+      ])
+      runtimeState!.startNewConversationWithDraft(
+        '@plugin://marketplace:personal/github Review the current pull request'
+      )
+    })
+
+    expect(runtimeState?.activeEntry).not.toBe(previousEntry)
+    expect(runtimeState?.activeEntry.draft).toBe(
+      '@plugin://marketplace:personal/github Review the current pull request'
+    )
+    expect(runtimeState?.activeEntry.draftAttachments).toEqual([])
+    expect(previousEntry.draft).toBe('Keep this older draft')
+  })
+
   it('reuses the local transcript controller when the bound thread is opened from the sidebar', async () => {
     const openConversation = vi.fn(async () => openResult('thread-real'))
     installDesktopApp(openConversation)

@@ -33,6 +33,10 @@ export type CodexIpcAssistantRuntimeState = {
   selectedModelId: string | undefined
   modelSelectionError: string | undefined
   startNewConversation: (projectSelection?: ProjectSelection) => ConversationChatEntry
+  startNewConversationWithDraft: (
+    draft: string,
+    projectSelection?: ProjectSelection
+  ) => ConversationChatEntry
   prepareNewConversation: (projectSelection?: ProjectSelection) => ConversationChatEntry
   activateConversation: (entry: ConversationChatEntry) => void
   restoreActiveConversation: (conversationId: string) => Promise<boolean>
@@ -190,6 +194,15 @@ export function useCodexIpcAssistantRuntime(
       registry.startNewConversation(projectSelection ?? options.projectSelection),
     [options.projectSelection, registry]
   )
+  const startNewConversationWithDraft = useCallback(
+    (draft: string, projectSelection?: ProjectSelection) => {
+      const entry = registry.startNewConversation(projectSelection ?? options.projectSelection)
+      registry.setDraft(entry, draft)
+      registry.setDraftAttachments(entry, [])
+      return entry
+    },
+    [options.projectSelection, registry]
+  )
   const prepareNewConversation = useCallback(
     (projectSelection?: ProjectSelection) =>
       registry.prepareNewConversation(projectSelection ?? options.projectSelection),
@@ -325,6 +338,7 @@ export function useCodexIpcAssistantRuntime(
     selectedModelId: activeEntry.selectedModelId ?? selectedModelId,
     modelSelectionError: activeEntry.modelSelectionError,
     startNewConversation,
+    startNewConversationWithDraft,
     prepareNewConversation,
     activateConversation,
     restoreActiveConversation,

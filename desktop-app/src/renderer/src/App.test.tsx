@@ -137,6 +137,17 @@ const streamdownPropsState = vi.hoisted<{
   lastProps: null
 }))
 
+const pluginCenterPagePropsState = vi.hoisted<{
+  lastProps: Record<string, unknown> | null
+}>(() => ({
+  lastProps: null
+}))
+
+const pluginCenterResourceState = vi.hoisted(() => ({
+  prefetch: vi.fn(async () => undefined),
+  subscribe: vi.fn(() => vi.fn())
+}))
+
 const runtimeState = vi.hoisted<{
   activeEntry: {
     localId: string
@@ -355,6 +366,11 @@ function resetThreadMessageState(): void {
   threadMessageState.externalMessages = []
   threadMessagesState.messages = []
   streamdownPropsState.lastProps = null
+  pluginCenterPagePropsState.lastProps = null
+  pluginCenterResourceState.prefetch.mockReset()
+  pluginCenterResourceState.prefetch.mockResolvedValue(undefined)
+  pluginCenterResourceState.subscribe.mockReset()
+  pluginCenterResourceState.subscribe.mockReturnValue(vi.fn())
   runtimeState.rejectServerRequest.mockReset()
   runtimeState.rejectServerRequest.mockResolvedValue(undefined)
   runtimeState.respondToServerRequest.mockReset()
@@ -470,6 +486,29 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
       }
     },
     chat: {},
+    plugins: {
+      getSnapshot: vi.fn(async () => ({
+        version: 1 as const,
+        snapshot: {
+          version: 1 as const,
+          generatedAt: '2026-08-24T00:00:00.000Z',
+          plugins: [],
+          skills: [],
+          apps: [],
+          mcp: { userServers: [], pluginServers: [] },
+          marketplaces: []
+        }
+      })),
+      addMarketplace: vi.fn(),
+      installPlugin: vi.fn(),
+      uninstallPlugin: vi.fn(),
+      setPluginEnabled: vi.fn(),
+      setSkillEnabled: vi.fn(),
+      setAppEnabled: vi.fn(),
+      setMcpServerEnabled: vi.fn(),
+      upsertMcpServer: vi.fn(),
+      removeMcpServer: vi.fn()
+    },
     git: {
       resolveRepositoryTarget: vi.fn(async ({ target }) => ({
         status: 'ready' as const,
@@ -758,6 +797,19 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
 vi.mock('./projects/useProjectState', () => ({
   useProjectState: () => projectHookState.controller
 }))
+
+vi.mock('./components/plugin-center', async () => {
+  const { createElement: mockCreateElement } = await import('react')
+
+  return {
+    PluginCenterPage: (props: Record<string, unknown>) => {
+      pluginCenterPagePropsState.lastProps = props
+      return mockCreateElement('div', { 'data-slot': 'plugin-center-page' }, '插件中心')
+    },
+    prefetchPluginCenterData: pluginCenterResourceState.prefetch,
+    subscribePluginCenterData: pluginCenterResourceState.subscribe
+  }
+})
 
 vi.mock('@assistant-ui/react-lexical', () => ({
   LexicalComposerInput: ({ placeholder, directiveChip, className }: PrimitiveProps) => (
@@ -2030,6 +2082,162 @@ describe('App composer', () => {
     })
 
     expect(runtimeState.startNewConversation).toHaveBeenCalledOnce()
+  })
+
+  it('keeps plugin catalog prefetch off the first commit and runs it from an idle task', async () => {
+    let idleCallback: IdleRequestCallback | undefined
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((callback: IdleRequestCallback) => {
+        idleCallback = callback
+        return 41
+      })
+    )
+    vi.stubGlobal('cancelIdleCallback', vi.fn())
+
+    act(() => {
+      root.render(<App />)
+    })
+
+    expect(container.textContent).toContain('新对话')
+    expect(pluginCenterResourceState.subscribe).toHaveBeenCalledWith(
+      window.desktopApp.plugins,
+      '/repo',
+      expect.any(Function)
+    )
+    expect(pluginCenterResourceState.prefetch).not.toHaveBeenCalled()
+
+    await act(async () => {
+      idleCallback?.({ didTimeout: false, timeRemaining: () => 16 })
+      await Promise.resolve()
+    })
+
+    expect(pluginCenterResourceState.prefetch).toHaveBeenCalledOnce()
+    expect(pluginCenterResourceState.prefetch).toHaveBeenCalledWith(
+      window.desktopApp.plugins,
+      '/repo'
+    )
+    expect(container.textContent).toContain('新对话')
+  })
+
+  it('keeps the conversation usable when plugin catalog prefetch fails', async () => {
+    let idleCallback: IdleRequestCallback | undefined
+    pluginCenterResourceState.prefetch.mockRejectedValueOnce(new Error('catalog unavailable'))
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((callback: IdleRequestCallback) => {
+        idleCallback = callback
+        return 42
+      })
+    )
+    vi.stubGlobal('cancelIdleCallback', vi.fn())
+
+    act(() => {
+      root.render(<App />)
+    })
+    await act(async () => {
+      idleCallback?.({ didTimeout: false, timeRemaining: () => 16 })
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('新对话')
+    expect(container.querySelector('[data-slot="plugin-center-page"]')).toBeNull()
+  })
+
+  it('opens the plugin center without clearing the active conversation runtime', async () => {
+    act(() => {
+      root.render(<App />)
+    })
+
+    const plugins = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '插件'
+    )
+    await act(async () => {
+      plugins?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('插件中心')
+    expect(pluginCenterPagePropsState.lastProps?.cwd).toBe('/repo')
+    expect(runtimeState.startNewConversation).not.toHaveBeenCalled()
+    expect(runtimeState.openConversation).not.toHaveBeenCalled()
+  })
+
+  it('does not pass a remote conversation cwd to the plugin center', async () => {
+    runtimeState.activeConversation = {
+      conversationId: 'remote-conversation',
+      threadId: 'remote-thread',
+      projectSelection: { projectKind: 'remote', projectId: 'remote', hostId: 'ssh-dev' },
+      cwd: '/srv/app'
+    }
+    runtimeState.activeEntry.context = runtimeState.activeConversation
+
+    act(() => {
+      root.render(<App />)
+    })
+
+    const plugins = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '插件'
+    )
+    await act(async () => {
+      plugins?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('插件中心')
+    expect(pluginCenterPagePropsState.lastProps?.cwd).toBeUndefined()
+    expect(pluginCenterPagePropsState.lastProps?.threadId).toBe('remote-thread')
+  })
+
+  it('returns from the plugin center when a sidebar conversation is opened', async () => {
+    vi.mocked(window.desktopApp.conversations.getConversationList).mockResolvedValue({
+      conversations: [
+        {
+          id: 'thread-quick',
+          title: 'Scratch',
+          projectAssignment: {
+            projectKind: 'projectless',
+            cwd: '/tmp/thread-quick',
+            workspaceRoot: '/tmp/thread-quick',
+            outputDirectory: null
+          },
+          updatedAt: '2026-06-30T04:00:00.000Z',
+          cwd: '/tmp/thread-quick'
+        }
+      ],
+      archivedConversationIds: [],
+      loaded: true
+    })
+
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const plugins = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '插件'
+    )
+    await act(async () => {
+      plugins?.click()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-slot="plugin-center-page"]')).not.toBeNull()
+
+    const row = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Scratch')
+    )
+    expect(row).not.toBeUndefined()
+    await act(async () => {
+      row?.click()
+      await Promise.resolve()
+    })
+
+    expect(runtimeState.openConversation).toHaveBeenCalledWith({ conversationId: 'thread-quick' })
+    expect(container.querySelector('[data-slot="plugin-center-page"]')).toBeNull()
   })
 
   it('moves the shared sidebar trigger into the conversation header rail when collapsed', () => {

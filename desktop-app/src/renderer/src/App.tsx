@@ -151,6 +151,13 @@ import {
 import { ModelSelector } from './components/assistant-ui'
 import { ServerRequestPanel } from './components/assistant-ui/server-request-panel'
 import { QueuedFollowUpList, QueuedFollowUpPausedBanner } from './components/queued-follow-ups'
+import {
+  PluginCenterPage,
+  prefetchPluginCenterData,
+  subscribePluginCenterData,
+  type PluginCenterSurface
+} from './components/plugin-center'
+import { serializeComposerContextReference } from './composer/composerContextDirectiveFormatter'
 import { Button } from './components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './components/ui/collapsible'
 import {
@@ -233,7 +240,7 @@ import type {
   QueuedFollowUpTrustedContext,
   QueuedUserMessageSnapshotInput
 } from '../../shared/codexFollowUpApi'
-import type { ProjectSelection } from '../../shared/projects/projectTypes'
+import type { ProjectSelection, ProjectState } from '../../shared/projects/projectTypes'
 import type { GitConversationTarget } from '../../shared/localGitApi'
 import { extractVisibleUserRequest } from '../../shared/userRequestEnvelope'
 import type { ModelOption } from './components/assistant-ui'
@@ -267,7 +274,12 @@ type CodexSidebarProps = {
   conversationState: ConversationStateController
   conversationIndicators: ConversationRuntimeIndicatorStore
   onNewChat: () => void
+  onOpenConversation: (conversationId: string) => void
+  onOpenPlugins: () => void
+  pluginsActive: boolean
 }
+
+type AppSurface = { kind: 'conversation' } | ({ kind: 'pluginCenter' } & PluginCenterSurface)
 
 type HeaderProps = {
   activeConversation?: ActiveConversationContext
@@ -547,6 +559,7 @@ function App(): React.JSX.Element {
     setSelectedModelId,
     activeConversation,
     startNewConversation,
+    startNewConversationWithDraft,
     restoreActiveConversation,
     restoreSingleActiveConversation,
     openConversation,
@@ -599,6 +612,7 @@ function App(): React.JSX.Element {
   const restoredActiveConversation = useRef(false)
   const restoringActiveConversation = useRef(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [surface, setSurface] = useState<AppSurface>({ kind: 'conversation' })
   const nativeBackdrop = useNativeBackdrop()
 
   useEffect(() => {
@@ -696,11 +710,27 @@ function App(): React.JSX.Element {
     void setSelectedModelId(modelId).catch(() => undefined)
   }
   const handleStartNewConversation = useCallback((): void => {
+    setSurface({ kind: 'conversation' })
     clearActiveConversationId()
     startNewConversation()
   }, [startNewConversation])
+  const handleActivatePluginPrompt = useCallback(
+    ({ mention, prompt }: { mention: { path: string; name: string }; prompt: string }): void => {
+      const directive = serializeComposerContextReference({
+        type: 'plugin',
+        path: mention.path,
+        label: mention.name,
+        mentionName: mention.name
+      })
+      setSurface({ kind: 'conversation' })
+      clearActiveConversationId()
+      startNewConversationWithDraft(`${directive} ${prompt}`)
+    },
+    [startNewConversationWithDraft]
+  )
   const handleOpenConversation = useCallback<OpenSubagentConversation>(
     (conversationId) => {
+      setSurface({ kind: 'conversation' })
       void openConversation({ conversationId })
     },
     [openConversation]
@@ -729,6 +759,36 @@ function App(): React.JSX.Element {
     activeConversation,
     workspaceProjectScope
   )
+  const pluginCenterCwd = resolvePluginCenterLocalCwd(
+    activeConversation,
+    activeEntry,
+    storedProjectState.state
+  )
+
+  useEffect(() => {
+    const pluginApi = window.desktopApp.plugins
+    const unsubscribe = subscribePluginCenterData(pluginApi, pluginCenterCwd, () => undefined)
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void) => number
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const prefetch = (): void => {
+      void prefetchPluginCenterData(pluginApi, pluginCenterCwd).catch(() => undefined)
+    }
+    let idleHandle: number | undefined
+    let timeoutHandle: number | undefined
+    if (idleWindow.requestIdleCallback) {
+      idleHandle = idleWindow.requestIdleCallback(prefetch)
+    } else {
+      timeoutHandle = window.setTimeout(prefetch, 50)
+    }
+
+    return () => {
+      if (idleHandle !== undefined) idleWindow.cancelIdleCallback?.(idleHandle)
+      if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
+      unsubscribe()
+    }
+  }, [pluginCenterCwd])
 
   return (
     <main
@@ -745,66 +805,87 @@ function App(): React.JSX.Element {
         conversationState={conversationState}
         conversationIndicators={conversationIndicators}
         onNewChat={handleStartNewConversation}
+        onOpenConversation={handleOpenConversation}
+        onOpenPlugins={() => setSurface({ kind: 'pluginCenter', page: 'browse', tab: 'plugins' })}
+        pluginsActive={surface.kind === 'pluginCenter'}
       />
-      <RightWorkspaceProvider
-        key={workspaceProjectScope}
-        projectScope={workspaceProjectScope}
-        fallbackProjectScopes={fallbackWorkspaceProjectScopes}
-      >
-        <GitRepositoryProvider
-          identity={gitRepositoryIdentity}
-          preSendProjectKey={preSendProjectKey}
+      {surface.kind === 'pluginCenter' ? (
+        <section
+          data-slot="app-main-section"
+          className={cn(
+            'relative flex min-w-0 flex-1 overflow-hidden',
+            nativeBackdrop && nativeBackdropSurfaceClass
+          )}
         >
-          <LocalGitReviewProvider>
-            <CommitOrPushControlProvider>
-              <section
-                data-slot="app-main-section"
-                className={cn(
-                  'relative flex min-w-0 flex-1 overflow-hidden',
-                  nativeBackdrop && nativeBackdropSurfaceClass
-                )}
-              >
-                <ConversationWorkspaceLayout
-                  target={gitRepositoryIdentity}
-                  workspaceId={`conversation:${workspaceProjectScope}`}
+          <PluginCenterPage
+            surface={surface}
+            onSurfaceChange={(nextSurface) => setSurface({ kind: 'pluginCenter', ...nextSurface })}
+            cwd={pluginCenterCwd}
+            threadId={activeConversation?.threadId ?? activeEntry.context.threadId}
+            onActivatePluginPrompt={handleActivatePluginPrompt}
+          />
+        </section>
+      ) : (
+        <RightWorkspaceProvider
+          key={workspaceProjectScope}
+          projectScope={workspaceProjectScope}
+          fallbackProjectScopes={fallbackWorkspaceProjectScopes}
+        >
+          <GitRepositoryProvider
+            identity={gitRepositoryIdentity}
+            preSendProjectKey={preSendProjectKey}
+          >
+            <LocalGitReviewProvider>
+              <CommitOrPushControlProvider>
+                <section
+                  data-slot="app-main-section"
+                  className={cn(
+                    'relative flex min-w-0 flex-1 overflow-hidden',
+                    nativeBackdrop && nativeBackdropSurfaceClass
+                  )}
                 >
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/50 bg-background shadow-[0_18px_60px_-48px_rgba(15,23,42,0.75)]">
-                    <ActiveConversationPane
-                      key={activeEntry.localId}
-                      activeConversation={activeConversation}
-                      entry={activeEntry}
-                      approvalRequests={visibleApprovalRequests}
-                      hasBlockingRequest={visibleApprovalRequests.length > 0}
-                      models={models}
-                      selectedModelId={selectedModelId}
-                      modelSelectionError={modelSelectionError}
-                      onDraftChange={setActiveDraft}
-                      onDraftAttachmentsChange={setActiveDraftAttachments}
-                      onComposerModeKindChange={setActiveComposerModeKind}
-                      onApprovalModeKindChange={setActiveApprovalModeKind}
-                      onGoalEditorActiveChange={setActiveGoalEditorActive}
-                      onThreadGoalChange={setActiveThreadGoal}
-                      onGoalOperationChange={setActiveGoalOperation}
-                      onRetryLoad={() => {
-                        void openConversation({ conversationId: activeEntry.localId })
-                      }}
-                      onOpenConversation={handleOpenConversation}
-                      onScrollSnapshotChange={setActiveScroll}
-                      onSelectedModelChange={handleSelectedModelChange}
-                      onCreateNewTask={handleStartNewConversation}
-                      onRejectApproval={rejectServerRequest}
-                      onSnoozeApproval={snoozeServerRequest}
-                      onRespondApproval={respondToServerRequest}
-                      projectState={projectState}
-                      sidebarCollapsed={sidebarCollapsed}
-                    />
-                  </div>
-                </ConversationWorkspaceLayout>
-              </section>
-            </CommitOrPushControlProvider>
-          </LocalGitReviewProvider>
-        </GitRepositoryProvider>
-      </RightWorkspaceProvider>
+                  <ConversationWorkspaceLayout
+                    target={gitRepositoryIdentity}
+                    workspaceId={`conversation:${workspaceProjectScope}`}
+                  >
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/50 bg-background shadow-[0_18px_60px_-48px_rgba(15,23,42,0.75)]">
+                      <ActiveConversationPane
+                        key={activeEntry.localId}
+                        activeConversation={activeConversation}
+                        entry={activeEntry}
+                        approvalRequests={visibleApprovalRequests}
+                        hasBlockingRequest={visibleApprovalRequests.length > 0}
+                        models={models}
+                        selectedModelId={selectedModelId}
+                        modelSelectionError={modelSelectionError}
+                        onDraftChange={setActiveDraft}
+                        onDraftAttachmentsChange={setActiveDraftAttachments}
+                        onComposerModeKindChange={setActiveComposerModeKind}
+                        onApprovalModeKindChange={setActiveApprovalModeKind}
+                        onGoalEditorActiveChange={setActiveGoalEditorActive}
+                        onThreadGoalChange={setActiveThreadGoal}
+                        onGoalOperationChange={setActiveGoalOperation}
+                        onRetryLoad={() => {
+                          void openConversation({ conversationId: activeEntry.localId })
+                        }}
+                        onOpenConversation={handleOpenConversation}
+                        onScrollSnapshotChange={setActiveScroll}
+                        onSelectedModelChange={handleSelectedModelChange}
+                        onCreateNewTask={handleStartNewConversation}
+                        onRejectApproval={rejectServerRequest}
+                        onSnoozeApproval={snoozeServerRequest}
+                        onRespondApproval={respondToServerRequest}
+                        projectState={projectState}
+                        sidebarCollapsed={sidebarCollapsed}
+                      />
+                    </div>
+                  </ConversationWorkspaceLayout>
+                </section>
+              </CommitOrPushControlProvider>
+            </LocalGitReviewProvider>
+          </GitRepositoryProvider>
+        </RightWorkspaceProvider>
+      )}
     </main>
   )
 }
@@ -1352,7 +1433,10 @@ const CodexSidebar = memo(function CodexSidebar({
   projectState,
   conversationState,
   conversationIndicators,
-  onNewChat
+  onNewChat,
+  onOpenConversation,
+  onOpenPlugins,
+  pluginsActive
 }: CodexSidebarProps): React.JSX.Element {
   return (
     <ConversationRuntimeIndicatorProvider store={conversationIndicators}>
@@ -1373,6 +1457,9 @@ const CodexSidebar = memo(function CodexSidebar({
             projectState={projectState}
             conversationState={conversationState}
             onNewChat={onNewChat}
+            onOpenConversation={onOpenConversation}
+            onOpenPlugins={onOpenPlugins}
+            pluginsActive={pluginsActive}
           />
         </div>
       </aside>
@@ -4206,6 +4293,33 @@ function resolveComposerCwd(
     return project?.defaultCwd ?? project?.writableRoots[0]
   }
   return projectState.state?.activeWorkspaceRoots?.[0]
+}
+
+function resolvePluginCenterLocalCwd(
+  activeConversation: ActiveConversationContext | undefined,
+  activeEntry: ConversationChatEntry,
+  projectState: ProjectState | null
+): string | undefined {
+  const selection = activeConversation?.projectSelection ?? activeEntry.context.projectSelection
+  const cwd = activeConversation?.cwd ?? activeEntry.context.cwd ?? undefined
+
+  if (selection?.projectKind === 'path') return selection.path
+  if (selection?.projectKind === 'local') {
+    const project = projectState?.localProjects[selection.projectId]
+    return cwd ?? project?.defaultCwd ?? project?.writableRoots[0]
+  }
+  if (selection) return undefined
+
+  if (activeConversation) return undefined
+
+  const activeSelection = projectState?.activeProjectSelection
+  if (activeSelection?.projectKind === 'path') return activeSelection.path
+  if (activeSelection?.projectKind === 'local') {
+    const project = projectState?.localProjects[activeSelection.projectId]
+    return project?.defaultCwd ?? project?.writableRoots[0]
+  }
+
+  return undefined
 }
 
 function composerContextSectionLabel(sectionId: string): string {

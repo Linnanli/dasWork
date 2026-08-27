@@ -12,7 +12,8 @@ export function SidebarChatsSection({
   showChronological,
   nativeBackdrop,
   conversationState,
-  onNewQuickChat
+  onNewQuickChat,
+  onOpenConversation
 }: {
   quickChats: SidebarConversationView[]
   chronologicalChats: SidebarConversationView[]
@@ -20,13 +21,20 @@ export function SidebarChatsSection({
   nativeBackdrop: boolean
   conversationState: ConversationStateController
   onNewQuickChat: () => void
+  onOpenConversation?: (conversationId: string) => void
 }): React.JSX.Element {
   const chats = showChronological ? chronologicalChats : quickChats
   const quickChatActionLabel = 'New quick chat'
   const { openConversation: openConversationInRuntime } = conversationState
   const openConversation = useCallback(
-    (conversationId: string) => void openConversationInRuntime({ conversationId }),
-    [openConversationInRuntime]
+    (conversationId: string) => {
+      if (onOpenConversation) {
+        onOpenConversation(conversationId)
+        return
+      }
+      void openConversationInRuntime({ conversationId })
+    },
+    [onOpenConversation, openConversationInRuntime]
   )
   return (
     <section

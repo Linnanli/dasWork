@@ -45,15 +45,23 @@ export type {
 export { CodexCommandClient, createCodexCommandClient } from './command-client'
 export type {
   CodexAppsListParams,
+  CodexAppsManagementPage,
   CodexAppsPage,
   CodexCatalogApp,
   CodexCatalogPlugin,
   CodexCatalogSkill,
+  CodexConfigWriteActionResult,
   CodexContextCatalogClientSettings,
   CodexContextCatalogJsonRpcClientLike,
   CodexFuzzyFileSearchSession,
+  CodexMcpConfigWriteActionResult,
+  CodexMcpManagementSnapshot,
   CodexMcpServerStatusListParams,
   CodexMcpServerStatusSummary,
+  CodexPluginCatalogDetailsParams,
+  CodexPluginCatalogListParams,
+  CodexPluginInstallRequest,
+  CodexSkillEnabledRequest,
   CodexTaskSearchResult
 } from './context-catalog-client'
 export {

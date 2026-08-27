@@ -1,5 +1,6 @@
 export * from './codexIpcApi'
 export * from './codexFollowUpApi'
 export * from './localGitApi'
+export * from './pluginCenterApi'
 export * from './projects/projectTypes'
 export * from './projects/projectSchemas'

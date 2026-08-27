@@ -9,6 +9,7 @@ import type {
 } from '../shared/codexIpcApi'
 import type { DesktopRightWorkspaceApi } from '../shared/rightWorkspaceApi'
 import type { DesktopNativeContextMenuApi } from '../shared/nativeContextMenuApi'
+import type { DesktopPluginCenterApi } from '../shared/pluginCenterApi'
 
 export type DesktopAppApi = {
   environment: {
@@ -17,6 +18,7 @@ export type DesktopAppApi = {
   codex: DesktopCodexApi
   chat: DesktopCodexChatApi
   composerContext: DesktopComposerContextApi
+  plugins: DesktopPluginCenterApi
   projects: DesktopProjectsApi
   conversations: DesktopConversationsApi
   followUps: DesktopCodexFollowUpApi

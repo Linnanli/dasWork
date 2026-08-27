@@ -155,6 +155,7 @@ describe('SidebarRoot', () => {
     expect(container.textContent).toContain('Projects')
     expect(navigationContainer?.textContent).toContain('Projects')
     expect(container.querySelector('button[aria-label="Open folder"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="插件"]')).toBeNull()
     expect(container.textContent).toContain('Desktop App')
     expect(container.textContent).toContain('Path Repo')
     const desktopProjectLabel = container.querySelector<HTMLButtonElement>(
@@ -332,6 +333,34 @@ describe('SidebarRoot', () => {
     root.unmount()
   })
 
+  it('routes project conversation clicks through the app callback when provided', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const onOpenConversation = vi.fn()
+    vi.mocked(conversationState.openConversation).mockClear()
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={conversationState}
+          onNewChat={onNewChat}
+          onOpenConversation={onOpenConversation}
+        />
+      )
+    })
+
+    const row = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('Local thread')
+    )
+    await act(async () => row?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(onOpenConversation).toHaveBeenCalledWith('thread-local')
+    expect(conversationState.openConversation).not.toHaveBeenCalled()
+    root.unmount()
+  })
+
   it('shows a spinning loading icon instead of an interrupt button for running conversations', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
@@ -400,6 +429,38 @@ describe('SidebarRoot', () => {
     await act(async () => button?.click())
 
     expect(onNewChat).toHaveBeenCalledOnce()
+    root.unmount()
+  })
+
+  it('opens the plugin center from the primary action without starting a chat', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const onOpenPlugins = vi.fn()
+    onNewChat.mockClear()
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={conversationState}
+          onNewChat={onNewChat}
+          onOpenPlugins={onOpenPlugins}
+          pluginsActive
+        />
+      )
+    })
+
+    const button = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === '插件'
+    )
+    await act(async () => button?.click())
+
+    expect(button?.getAttribute('aria-current')).toBe('page')
+    expect(button?.getAttribute('aria-label')).toBe('插件')
+    expect(button?.getAttribute('title')).toBe('插件')
+    expect(onOpenPlugins).toHaveBeenCalledOnce()
+    expect(onNewChat).not.toHaveBeenCalled()
     root.unmount()
   })
 

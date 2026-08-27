@@ -219,6 +219,536 @@ describe("CodexContextCatalogClient", () =>
         expect(mock.disconnectCount).toBe(1);
     });
 
+    it("keeps management plugin, skill, and app lists unfiltered", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "plugin/list")
+            {
+                return {
+                    marketplaceLoadErrors: [],
+                    featuredPluginIds: ["remote-plugin"],
+                    marketplaces: [{
+                        name: "remote-market",
+                        path: null,
+                        interface: null,
+                        plugins: [{
+                            id: "remote-plugin",
+                            remotePluginId: "remote-plugin",
+                            version: "1",
+                            localVersion: null,
+                            name: "remote-plugin",
+                            shareContext: null,
+                            source: { type: "remote" },
+                            installed: false,
+                            installedAt: null,
+                            enabled: false,
+                            installPolicy: "allowed",
+                            installPolicySource: null,
+                            mustShowInstallationInterstitial: null,
+                            authPolicy: "none",
+                            availability: { type: "available" },
+                            disabledReason: null,
+                            eligiblePlanTypes: null,
+                            interface: null,
+                            keywords: [],
+                        }],
+                    }],
+                };
+            }
+            if (method === "skills/list")
+            {
+                return {
+                    data: [{
+                        cwd: "/repo",
+                        errors: [],
+                        skills: [
+                            {
+                                name: "enabled",
+                                description: "Enabled",
+                                path: "/skills/enabled/SKILL.md",
+                                scope: "user",
+                                enabled: true,
+                            },
+                            {
+                                name: "disabled",
+                                description: "Disabled",
+                                path: "/skills/disabled/SKILL.md",
+                                scope: "user",
+                                enabled: false,
+                            },
+                        ],
+                    }],
+                };
+            }
+            if (method === "app/list")
+            {
+                return {
+                    data: [{
+                        id: "disabled-app",
+                        name: "Disabled App",
+                        description: null,
+                        logoUrl: null,
+                        logoUrlDark: null,
+                        iconAssets: null,
+                        iconDarkAssets: null,
+                        distributionChannel: null,
+                        branding: null,
+                        appMetadata: null,
+                        labels: null,
+                        installUrl: null,
+                        isEnabled: false,
+                        isAccessible: false,
+                        pluginDisplayNames: [],
+                    }],
+                    nextCursor: null,
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const catalog = await client.listPluginCatalog({ cwd: "/repo", forceRefetch: true });
+        const skills = await client.listSkillsForManagement({ cwd: "/repo" });
+        const apps = await client.listAppsForManagement();
+
+        expect(catalog.featuredPluginIds).toEqual(["remote-plugin"]);
+        expect(skills.map((skill) => [skill.name, skill.enabled])).toEqual([
+            ["enabled", true],
+            ["disabled", false],
+        ]);
+        expect(apps.map((app) => [app.id, app.isEnabled, app.isAccessible])).toEqual([
+            ["disabled-app", false, false],
+        ]);
+        expect(mock.requests.find(({ method }) => method === "plugin/list")?.params).toEqual({
+            cwds: ["/repo"],
+            forceRefetch: true,
+        });
+    });
+
+    it("writes fixed enabled config actions with quoted dynamic key segments", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "config/read")
+            {
+                return {
+                    config: {},
+                    origins: {},
+                    layers: [{
+                        name: { type: "user", file: "/user/config.toml", profile: null },
+                        version: "v1",
+                        config: {},
+                        disabledReason: null,
+                    }],
+                };
+            }
+            if (method === "config/batchWrite")
+            {
+                return {
+                    status: "ok",
+                    version: "v2",
+                    filePath: "/user/config.toml",
+                    overriddenMetadata: null,
+                };
+            }
+            if (method === "config/mcpServer/reload")
+            {
+                return {};
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await client.setPluginEnabled({ cwd: "/repo", pluginId: "market.plugin", enabled: false });
+        await client.setAppEnabled({ appId: "github.enterprise", enabled: true });
+        await client.setMcpServerEnabled({ serverName: "corp.mcp", enabled: false });
+        await client.setMcpServerEnabled({ serverName: 'corp."quoted"\\mcp', enabled: true });
+
+        expect(mock.requests
+            .filter(({ method }) => method === "config/batchWrite")
+            .map(({ params }) => (params as { edits: Array<{ keyPath: string; value: unknown }> }).edits[0]))
+            .toEqual([
+                { keyPath: 'plugins."market.plugin".enabled', value: false, mergeStrategy: "upsert" },
+                { keyPath: 'apps."github.enterprise".enabled', value: true, mergeStrategy: "upsert" },
+                { keyPath: 'mcp_servers."corp.mcp".enabled', value: false, mergeStrategy: "upsert" },
+                { keyPath: 'mcp_servers."corp.\\"quoted\\"\\\\mcp".enabled', value: true, mergeStrategy: "upsert" },
+            ]);
+        expect(mock.requests
+            .filter(({ method }) => method === "config/batchWrite")
+            .map(({ params }) => (params as { expectedVersion: string | null; reloadUserConfig: boolean }).expectedVersion))
+            .toEqual(["v1", "v1", "v1", "v1"]);
+        expect(mock.requests.filter(({ method }) => method === "config/mcpServer/reload")).toHaveLength(2);
+    });
+
+    it("reads management plugin details from the full catalog including uninstalled plugins", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method === "plugin/list")
+            {
+                expect(params).toEqual({ cwds: ["/repo"], forceRefetch: true });
+                return {
+                    marketplaceLoadErrors: [],
+                    featuredPluginIds: [],
+                    marketplaces: [{
+                        name: "official",
+                        path: null,
+                        interface: null,
+                        plugins: [{
+                            id: "github@official",
+                            name: "github",
+                            installed: false,
+                            enabled: false,
+                            source: { type: "remote" },
+                            interface: null,
+                        }],
+                    }],
+                };
+            }
+            if (method === "plugin/read")
+            {
+                expect(params).toEqual({
+                    remoteMarketplaceName: "official",
+                    pluginName: "github",
+                });
+                return {
+                    plugin: {
+                        marketplaceName: "official",
+                        marketplacePath: null,
+                        summary: { id: "github@official", name: "github", installed: false, enabled: false },
+                        shareUrl: null,
+                        description: null,
+                        skills: [{ name: "review", description: "Review", path: null, enabled: true }],
+                        hooks: [],
+                        apps: [{ id: "github", name: "GitHub", description: null, installUrl: null, category: null }],
+                        appTemplates: [],
+                        mcpServers: ["github-mcp"],
+                        scheduledTasks: null,
+                    },
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const details = await client.readPluginDetailsForManagement({ cwd: "/repo", forceRefetch: true });
+
+        expect(details[0]?.summary.id).toBe("github@official");
+        expect(details[0]?.skills).toHaveLength(1);
+    });
+
+    it("reads management plugin details with bounded concurrency", async () =>
+    {
+        const readResolvers: Array<() => void> = [];
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method === "plugin/list")
+            {
+                return {
+                    marketplaceLoadErrors: [],
+                    featuredPluginIds: [],
+                    marketplaces: [{
+                        name: "official",
+                        path: null,
+                        interface: null,
+                        plugins: Array.from({ length: 7 }, (_, index) => ({
+                            id: `plugin-${index + 1}@official`,
+                            name: `plugin-${index + 1}`,
+                            installed: true,
+                            enabled: true,
+                            source: { type: "remote" },
+                            interface: null,
+                        })),
+                    }],
+                };
+            }
+            if (method === "plugin/read")
+            {
+                const pluginName = (params as { pluginName: string }).pluginName;
+                return new Promise((resolve) =>
+                {
+                    readResolvers.push(() =>
+                        resolve({
+                            plugin: {
+                                marketplaceName: "official",
+                                marketplacePath: null,
+                                summary: {
+                                    id: `${pluginName}@official`,
+                                    name: pluginName,
+                                    installed: true,
+                                    enabled: true,
+                                },
+                                shareUrl: null,
+                                description: null,
+                                skills: [],
+                                hooks: [],
+                                apps: [],
+                                appTemplates: [],
+                                mcpServers: [],
+                                scheduledTasks: null,
+                            },
+                        }),
+                    );
+                });
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const detailsPromise = client.readPluginDetailsForManagement({ cwd: "/repo" });
+        await vi.waitFor(() =>
+        {
+            expect(mock.requests.filter(({ method }) => method === "plugin/read")).toHaveLength(6);
+        });
+        readResolvers.splice(0).forEach((resolve) => resolve());
+        await vi.waitFor(() =>
+        {
+            expect(mock.requests.filter(({ method }) => method === "plugin/read")).toHaveLength(7);
+        });
+        readResolvers.splice(0).forEach((resolve) => resolve());
+        await expect(detailsPromise).resolves.toHaveLength(7);
+    });
+
+    it("reads one resolved plugin detail without listing the catalog again", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method !== "plugin/read")
+            {
+                throw new Error(`unexpected method: ${method}`);
+            }
+            expect(params).toEqual({
+                remoteMarketplaceName: "official",
+                pluginName: "github",
+            });
+            return {
+                plugin: {
+                    marketplaceName: "official",
+                    marketplacePath: null,
+                    summary: { id: "github@official", name: "github", installed: false, enabled: false },
+                    shareUrl: null,
+                    description: "GitHub detail",
+                    skills: [],
+                    hooks: [],
+                    apps: [],
+                    appTemplates: [],
+                    mcpServers: [],
+                    scheduledTasks: null,
+                },
+            };
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.readPluginDetailForManagement({
+            remoteMarketplaceName: "official",
+            pluginName: "github",
+        })).resolves.toMatchObject({ description: "GitHub detail" });
+        expect(mock.requests.map(({ method }) => method)).toEqual(["initialize", "plugin/read"]);
+        await expect(client.readPluginDetailForManagement({
+            marketplacePath: "/plugins",
+            remoteMarketplaceName: "official",
+            pluginName: "github",
+        })).rejects.toThrow("exactly one marketplace locator");
+    });
+
+    it("returns a partial MCP action result when runtime reload fails after config write", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "config/read")
+            {
+                return {
+                    config: {},
+                    origins: {},
+                    layers: [{
+                        name: { type: "user", file: "/user/config.toml", profile: null },
+                        version: "v1",
+                        config: {},
+                        disabledReason: null,
+                    }],
+                };
+            }
+            if (method === "config/batchWrite")
+            {
+                return {
+                    status: "ok",
+                    version: "v2",
+                    filePath: "/user/config.toml",
+                    overriddenMetadata: null,
+                };
+            }
+            if (method === "config/mcpServer/reload")
+            {
+                throw new Error("reload failed with internal details");
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.setMcpServerEnabled({ serverName: "local", enabled: false }))
+            .resolves.toMatchObject({ reloadStatus: "failed", response: { status: "ok" } });
+    });
+
+    it("does not reload MCP servers after a version-conflict write failure", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "config/read")
+            {
+                return {
+                    config: {},
+                    origins: {},
+                    layers: [{
+                        name: { type: "user", file: "/user/config.toml", profile: null },
+                        version: "v1",
+                        config: {},
+                        disabledReason: null,
+                    }],
+                };
+            }
+            if (method === "config/batchWrite")
+            {
+                throw new Error("version conflict");
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.setMcpServerEnabled({ serverName: "local", enabled: false }))
+            .rejects.toThrow("version conflict");
+        expect(mock.requests.some(({ method }) => method === "config/mcpServer/reload")).toBe(false);
+    });
+
+    it("installs, uninstalls, writes skill config, and trims marketplace add params", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method === "plugin/install")
+            {
+                expect(params).toEqual({
+                    remoteMarketplaceName: "official",
+                    installAttemptId: "attempt-1",
+                    pluginName: "github",
+                });
+                return { authPolicy: "none", appsNeedingAuth: [] };
+            }
+            if (method === "plugin/uninstall")
+            {
+                expect(params).toEqual({ pluginId: "github@official" });
+                return {};
+            }
+            if (method === "skills/config/write")
+            {
+                expect(params).toEqual({
+                    path: "/skills/writer/SKILL.md",
+                    enabled: false,
+                });
+                return { effectiveEnabled: false };
+            }
+            if (method === "marketplace/add")
+            {
+                expect(params).toEqual({
+                    source: "owner/repo",
+                    refName: "main",
+                    sparsePaths: ["plugins", "skills"],
+                });
+                return {
+                    marketplaceName: "owner/repo",
+                    installedRoot: "/marketplaces/owner-repo",
+                    alreadyAdded: false,
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await client.installPlugin({
+            remoteMarketplaceName: "official",
+            installAttemptId: "attempt-1",
+            pluginName: "github",
+        });
+        await client.uninstallPlugin({ pluginId: "github@official" });
+        await client.setSkillEnabled({ path: "/skills/writer/SKILL.md", enabled: false });
+        await client.addMarketplace({
+            source: " owner/repo ",
+            refName: " main ",
+            sparsePaths: [" plugins ", "", "skills"],
+        });
+    });
+
+    it("reads MCP management snapshot with config, status summaries, and installed plugin details", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "config/read")
+            {
+                return { config: { mcp_servers: {} }, origins: {}, layers: null };
+            }
+            if (method === "mcpServerStatus/list")
+            {
+                return { data: [mcpStatus("plain")], nextCursor: null };
+            }
+            if (method === "plugin/installed")
+            {
+                return {
+                    marketplaceLoadErrors: [],
+                    marketplaces: [{
+                        name: "local",
+                        path: "/market/local",
+                        interface: null,
+                        plugins: [{
+                            id: "sample",
+                            name: "sample",
+                            installed: true,
+                            enabled: true,
+                            source: { type: "local", path: "/plugins/sample" },
+                            interface: null,
+                        }],
+                    }],
+                };
+            }
+            if (method === "plugin/read")
+            {
+                return {
+                    plugin: {
+                        marketplaceName: "local",
+                        marketplacePath: "/market/local",
+                        summary: { id: "sample", name: "sample", installed: true, enabled: true },
+                        shareUrl: null,
+                        description: null,
+                        skills: [],
+                        hooks: [],
+                        apps: [],
+                        appTemplates: [],
+                        mcpServers: ["plugin-server"],
+                        scheduledTasks: null,
+                    },
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const snapshot = await client.readMcpManagementSnapshot({ cwd: "/repo", threadId: "thread-1" });
+
+        expect(snapshot.servers).toEqual([{
+            name: "plain",
+            connected: true,
+            authStatus: "oAuth",
+            toolCount: 1,
+        }]);
+        expect(snapshot.pluginDetails.map((plugin) => plugin.mcpServers)).toEqual([["plugin-server"]]);
+        expect(mock.requests.find(({ method }) => method === "config/read")?.params).toEqual({
+            includeLayers: true,
+            cwd: "/repo",
+        });
+        expect(mock.requests.find(({ method }) => method === "plugin/read")?.params).toEqual({
+            marketplacePath: "/market/local",
+            pluginName: "sample",
+        });
+    });
+
     it("auto-pages apps and filters inaccessible or disabled entries", async () =>
     {
         const mock = new CatalogMockClient((method, params) =>
@@ -750,6 +1280,33 @@ describe("CodexContextCatalogClient", () =>
             "fuzzyFileSearch/sessionStop",
         ]);
         expect(mock.disconnectCount).toBe(1);
+    });
+
+    it("reads exact app metadata in app/read batches", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method !== "app/read")
+            {
+                throw new Error(`unexpected method: ${method}`);
+            }
+            const appIds = (params as { appIds: string[] }).appIds;
+            return {
+                apps: appIds.map((id) => ({ id, name: `App ${id}` })),
+            };
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+        const appIds = Array.from({ length: 101 }, (_, index) => `app-${index}`);
+
+        const apps = await client.readAppsForManagement({ appIds: [...appIds, "app-0"] });
+
+        expect(apps).toHaveLength(101);
+        expect(mock.requests.filter(({ method }) => method === "app/read").map(({ params }) => params))
+            .toEqual([
+                { appIds: appIds.slice(0, 100) },
+                { appIds: appIds.slice(100) },
+            ]);
+        await client.shutdown();
     });
 
     it("searches threads with the reference parameters and normalizes results", async () =>

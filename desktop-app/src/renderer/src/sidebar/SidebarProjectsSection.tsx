@@ -12,18 +12,26 @@ export function SidebarProjectsSection({
   nativeBackdrop,
   projectState,
   conversationState,
-  onNewChat
+  onNewChat,
+  onOpenConversation
 }: {
   groups: SidebarProjectGroup[]
   nativeBackdrop: boolean
   projectState: ProjectStateController
   conversationState: ConversationStateController
   onNewChat: () => void
+  onOpenConversation?: (conversationId: string) => void
 }): React.JSX.Element {
   const { openConversation: openConversationInRuntime } = conversationState
   const openConversation = useCallback(
-    (conversationId: string) => void openConversationInRuntime({ conversationId }),
-    [openConversationInRuntime]
+    (conversationId: string) => {
+      if (onOpenConversation) {
+        onOpenConversation(conversationId)
+        return
+      }
+      void openConversationInRuntime({ conversationId })
+    },
+    [onOpenConversation, openConversationInRuntime]
   )
   const startProjectConversation = async (group: SidebarProjectGroup): Promise<void> => {
     await projectState.selectProject(group.selection)

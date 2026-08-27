@@ -6,17 +6,38 @@ import { WebSocketTransport } from "./client/transport-websocket";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-info";
 import type { FuzzyFileSearchResponse } from "./protocol/app-server-protocol/FuzzyFileSearchResponse";
 import type { FuzzyFileSearchResult } from "./protocol/app-server-protocol/FuzzyFileSearchResult";
+import type { JsonValue } from "./protocol/app-server-protocol/serde_json/JsonValue";
 import type { AppInfo } from "./protocol/app-server-protocol/v2/AppInfo";
+import type { AppsListResponse } from "./protocol/app-server-protocol/v2/AppsListResponse";
+import type { ConfigBatchWriteParams } from "./protocol/app-server-protocol/v2/ConfigBatchWriteParams";
+import type { ConfigReadResponse } from "./protocol/app-server-protocol/v2/ConfigReadResponse";
+import type { ConfigWriteResponse } from "./protocol/app-server-protocol/v2/ConfigWriteResponse";
 import type { ListMcpServerStatusResponse } from "./protocol/app-server-protocol/v2/ListMcpServerStatusResponse";
+import type { MarketplaceAddParams } from "./protocol/app-server-protocol/v2/MarketplaceAddParams";
+import type { MarketplaceAddResponse } from "./protocol/app-server-protocol/v2/MarketplaceAddResponse";
 import type { McpAuthStatus } from "./protocol/app-server-protocol/v2/McpAuthStatus";
 import type { McpServerStatus } from "./protocol/app-server-protocol/v2/McpServerStatus";
+import type { PluginDetail } from "./protocol/app-server-protocol/v2/PluginDetail";
 import type { PluginInstalledResponse } from "./protocol/app-server-protocol/v2/PluginInstalledResponse";
+import type { PluginInstallParams } from "./protocol/app-server-protocol/v2/PluginInstallParams";
+import type { PluginInstallResponse } from "./protocol/app-server-protocol/v2/PluginInstallResponse";
+import type { PluginListParams } from "./protocol/app-server-protocol/v2/PluginListParams";
+import type { PluginListResponse } from "./protocol/app-server-protocol/v2/PluginListResponse";
+import type { PluginMarketplaceEntry } from "./protocol/app-server-protocol/v2/PluginMarketplaceEntry";
+import type { PluginReadResponse } from "./protocol/app-server-protocol/v2/PluginReadResponse";
+import type { PluginSummary } from "./protocol/app-server-protocol/v2/PluginSummary";
+import type { PluginUninstallParams } from "./protocol/app-server-protocol/v2/PluginUninstallParams";
+import type { PluginUninstallResponse } from "./protocol/app-server-protocol/v2/PluginUninstallResponse";
 import type { SkillMetadata } from "./protocol/app-server-protocol/v2/SkillMetadata";
+import type { SkillsConfigWriteParams } from "./protocol/app-server-protocol/v2/SkillsConfigWriteParams";
+import type { SkillsConfigWriteResponse } from "./protocol/app-server-protocol/v2/SkillsConfigWriteResponse";
 import type { SkillsListResponse } from "./protocol/app-server-protocol/v2/SkillsListResponse";
 import type { ThreadSearchResponse } from "./protocol/app-server-protocol/v2/ThreadSearchResponse";
 import type { CodexInitializeParams, CodexInitializeResult } from "./protocol/types";
 import type { CodexProviderSettings, TransportContext } from "./provider-settings";
 import { stripUndefined } from "./utils/object";
+
+const PLUGIN_DETAIL_READ_CONCURRENCY = 6;
 
 export interface CodexContextCatalogJsonRpcClientLike
 {
@@ -88,6 +109,17 @@ export interface CodexAppsPage
     nextCursor?: string;
 }
 
+export interface CodexAppsManagementPage
+{
+    data: AppInfo[];
+    nextCursor?: string;
+}
+
+interface AppReadResponse
+{
+    apps: AppInfo[];
+}
+
 export interface CodexFuzzyFileSearchSession
 {
     update(query: string): Promise<void>;
@@ -123,16 +155,63 @@ export interface CodexMcpServerStatusSummary
     toolCount: number;
 }
 
-interface AppsListResponse
-{
-    data: AppInfo[];
-    nextCursor: string | null;
-}
-
 interface McpServerStatusPage
 {
     data: CodexMcpServerStatusSummary[];
     nextCursor?: string;
+}
+
+export interface CodexPluginCatalogListParams
+{
+    cwd?: string;
+    forceRefetch?: boolean;
+    marketplaceKinds?: PluginListParams["marketplaceKinds"];
+}
+
+export interface CodexPluginCatalogDetailsParams extends CodexPluginCatalogListParams
+{
+    onlyInstalled?: boolean;
+}
+
+export interface CodexPluginInstallRequest
+{
+    marketplacePath?: string | null;
+    remoteMarketplaceName?: string | null;
+    installAttemptId?: string | null;
+    pluginName: string;
+}
+
+/** A fully resolved plugin/read target. Exactly one marketplace locator is required. */
+export interface CodexPluginDetailReadRequest
+{
+    marketplacePath?: string;
+    remoteMarketplaceName?: string;
+    pluginName: string;
+}
+
+export interface CodexSkillEnabledRequest
+{
+    path?: string | null;
+    name?: string | null;
+    enabled: boolean;
+}
+
+export interface CodexConfigWriteActionResult
+{
+    response: ConfigWriteResponse;
+    readback: ConfigReadResponse;
+}
+
+export interface CodexMcpConfigWriteActionResult extends CodexConfigWriteActionResult
+{
+    reloadStatus: "reloaded" | "failed";
+}
+
+export interface CodexMcpManagementSnapshot
+{
+    config: ConfigReadResponse;
+    servers: CodexMcpServerStatusSummary[];
+    pluginDetails: PluginDetail[];
 }
 
 export class CodexContextCatalogClient
@@ -193,6 +272,253 @@ export class CodexContextCatalogClient
                 }),
             );
         });
+    }
+
+    async listPluginCatalog(params: CodexPluginCatalogListParams = {}): Promise<PluginListResponse>
+    {
+        return this.withClient((client) => client.request<PluginListResponse>("plugin/list", stripUndefined({
+            cwds: params.cwd ? [params.cwd] : undefined,
+            forceRefetch: params.forceRefetch,
+            marketplaceKinds: params.marketplaceKinds,
+        })));
+    }
+
+    async readPluginDetailsForManagement(params: CodexPluginCatalogDetailsParams = {}): Promise<PluginDetail[]>
+    {
+        return this.withClient(async (client) =>
+        {
+            const catalog = await client.request<PluginListResponse>("plugin/list", stripUndefined({
+                cwds: params.cwd ? [params.cwd] : undefined,
+                forceRefetch: params.forceRefetch,
+                marketplaceKinds: params.marketplaceKinds,
+            }));
+            return this.readPluginDetailsFromCatalogWithClient(client, catalog, params.onlyInstalled === true);
+        });
+    }
+
+    /**
+     * Reads exactly one plugin detail after the desktop main process has
+     * resolved its marketplace. This intentionally does not issue plugin/list.
+     */
+    async readPluginDetailForManagement(params: CodexPluginDetailReadRequest): Promise<PluginDetail>
+    {
+        assertPluginDetailReadRequest(params);
+        return this.withClient(async (client) =>
+        {
+            const response = await client.request<PluginReadResponse>("plugin/read", stripUndefined({
+                ...(params.marketplacePath ? { marketplacePath: params.marketplacePath } : {}),
+                ...(params.remoteMarketplaceName ? { remoteMarketplaceName: params.remoteMarketplaceName } : {}),
+                pluginName: params.pluginName,
+            }));
+            return response.plugin;
+        });
+    }
+
+    async listInstalledPluginsForManagement(params: { cwd?: string } = {}): Promise<PluginInstalledResponse>
+    {
+        return this.withClient((client) => client.request<PluginInstalledResponse>("plugin/installed", {
+            cwds: params.cwd ? [params.cwd] : [],
+            installSuggestionPluginNames: [],
+        }));
+    }
+
+    async readInstalledPluginDetails(params: { cwd?: string } = {}): Promise<PluginDetail[]>
+    {
+        return this.withClient(async (client) =>
+        {
+            const response = await client.request<PluginInstalledResponse>("plugin/installed", {
+                cwds: params.cwd ? [params.cwd] : [],
+                installSuggestionPluginNames: [],
+            });
+
+            const installedPlugins = response.marketplaces.flatMap((marketplace) =>
+                marketplace.plugins
+                    .filter((plugin) => plugin.installed)
+                    .map((plugin) => ({
+                        marketplacePath: marketplace.path,
+                        remoteMarketplaceName: marketplace.path ? undefined : marketplace.name,
+                        pluginName: plugin.name,
+                    })),
+            );
+
+            const details: PluginDetail[] = [];
+            for (const plugin of installedPlugins)
+            {
+                const detail = await client.request<PluginReadResponse>("plugin/read", stripUndefined(plugin));
+                details.push(detail.plugin);
+            }
+            return details;
+        });
+    }
+
+    async listSkillsForManagement(params: { cwd?: string; forceReload?: boolean }): Promise<SkillMetadata[]>
+    {
+        return this.withClient(async (client) =>
+        {
+            const response = await client.request<SkillsListResponse>("skills/list", stripUndefined({
+                cwds: params.cwd ? [params.cwd] : [],
+                forceReload: params.forceReload,
+            }));
+
+            return response.data.flatMap((entry) => entry.skills);
+        });
+    }
+
+    async listAppsForManagement(params: CodexAppsListParams = {}): Promise<AppInfo[]>
+    {
+        return this.withClient(async (client) =>
+        {
+            const apps: AppInfo[] = [];
+            let cursor: string | undefined;
+
+            do
+            {
+                const response = await this.requestAppsManagementPage(client, params, cursor);
+                apps.push(...response.data);
+                cursor = nextCursor(response.nextCursor, cursor, "app/list");
+            }
+            while (cursor);
+
+            return apps;
+        });
+    }
+
+    async readAppsForManagement(params: { appIds: string[] }): Promise<AppInfo[]>
+    {
+        const appIds = [...new Set(params.appIds.filter(Boolean))];
+        if (appIds.length === 0)
+        {
+            return [];
+        }
+
+        return this.withClient(async (client) =>
+        {
+            const apps: AppInfo[] = [];
+            for (let start = 0; start < appIds.length; start += 100)
+            {
+                const response = await client.request<AppReadResponse>("app/read", {
+                    appIds: appIds.slice(start, start + 100),
+                });
+                apps.push(...response.apps);
+            }
+            return apps;
+        });
+    }
+
+    async listAppsManagementPage(
+        params: CodexAppsListParams & { cursor?: string } = {},
+    ): Promise<CodexAppsManagementPage>
+    {
+        return this.withClient((client) => this.requestAppsManagementPage(client, params, params.cursor));
+    }
+
+    async readMcpManagementSnapshot(params: { cwd?: string; threadId?: string | null } = {}): Promise<CodexMcpManagementSnapshot>
+    {
+        return this.withClient(async (client) =>
+        {
+            const [config, servers, pluginDetails] = await Promise.all([
+                this.readConfig(client, params.cwd),
+                this.listMcpServerStatusWithClient(client, stripUndefined({ threadId: params.threadId })),
+                this.readInstalledPluginDetailsWithClient(client, params.cwd),
+            ]);
+            return { config, servers, pluginDetails };
+        });
+    }
+
+    async installPlugin(params: CodexPluginInstallRequest): Promise<PluginInstallResponse>
+    {
+        const request = stripUndefined({
+            marketplacePath: params.marketplacePath,
+            remoteMarketplaceName: params.remoteMarketplaceName,
+            installAttemptId: params.installAttemptId,
+            pluginName: params.pluginName,
+        }) satisfies PluginInstallParams;
+        return this.withClient((client) => client.request<PluginInstallResponse>("plugin/install", request));
+    }
+
+    async uninstallPlugin(params: PluginUninstallParams): Promise<PluginUninstallResponse>
+    {
+        return this.withClient((client) => client.request<PluginUninstallResponse>("plugin/uninstall", params));
+    }
+
+    async setPluginEnabled(params: { cwd?: string; pluginId: string; enabled: boolean }): Promise<CodexConfigWriteActionResult>
+    {
+        return this.writeEnabledConfigValue(params.cwd, ["plugins", params.pluginId, "enabled"], params.enabled);
+    }
+
+    async setAppEnabled(params: { cwd?: string; appId: string; enabled: boolean }): Promise<CodexConfigWriteActionResult>
+    {
+        return this.writeEnabledConfigValue(params.cwd, ["apps", params.appId, "enabled"], params.enabled);
+    }
+
+    async setMcpServerEnabled(params: { cwd?: string; serverName: string; enabled: boolean }): Promise<CodexMcpConfigWriteActionResult>
+    {
+        return this.withClient(async (client) =>
+        {
+            const result = await this.writeConfigValueWithClient(
+                client,
+                params.cwd,
+                ["mcp_servers", params.serverName, "enabled"],
+                params.enabled,
+                "upsert",
+            );
+            return this.reloadMcpServersAfterWrite(client, result);
+        });
+    }
+
+    async upsertMcpServer(params: { cwd?: string; serverName: string; value: JsonValue }): Promise<CodexMcpConfigWriteActionResult>
+    {
+        return this.withClient(async (client) =>
+        {
+            const result = await this.writeConfigValueWithClient(
+                client,
+                params.cwd,
+                ["mcp_servers", params.serverName],
+                params.value,
+                "replace",
+            );
+            return this.reloadMcpServersAfterWrite(client, result);
+        });
+    }
+
+    async removeMcpServer(params: { cwd?: string; serverName: string }): Promise<CodexMcpConfigWriteActionResult>
+    {
+        return this.withClient(async (client) =>
+        {
+            const result = await this.writeConfigValueWithClient(
+                client,
+                params.cwd,
+                ["mcp_servers", params.serverName],
+                null,
+                "replace",
+            );
+            return this.reloadMcpServersAfterWrite(client, result);
+        });
+    }
+
+    async reloadMcpServers(): Promise<void>
+    {
+        await this.withClient((client) => client.request("config/mcpServer/reload"));
+    }
+
+    async setSkillEnabled(params: CodexSkillEnabledRequest): Promise<SkillsConfigWriteResponse>
+    {
+        const request = stripUndefined({
+            path: params.path,
+            name: params.name,
+            enabled: params.enabled,
+        }) satisfies SkillsConfigWriteParams;
+        return this.withClient((client) => client.request<SkillsConfigWriteResponse>("skills/config/write", request));
+    }
+
+    async addMarketplace(params: MarketplaceAddParams): Promise<MarketplaceAddResponse>
+    {
+        const sparsePaths = params.sparsePaths?.map((path) => path.trim()).filter(Boolean);
+        return this.withClient((client) => client.request<MarketplaceAddResponse>("marketplace/add", stripUndefined({
+            source: params.source.trim(),
+            refName: params.refName?.trim() || undefined,
+            sparsePaths: sparsePaths?.length ? sparsePaths : undefined,
+        })));
     }
 
     async listApps(params: CodexAppsListParams = {}): Promise<CodexCatalogApp[]>
@@ -447,6 +773,25 @@ export class CodexContextCatalogClient
         });
     }
 
+    private async requestAppsManagementPage(
+        client: CodexContextCatalogJsonRpcClientLike,
+        params: CodexAppsListParams,
+        cursor: string | undefined,
+    ): Promise<CodexAppsManagementPage>
+    {
+        const response = await client.request<AppsListResponse>("app/list", stripUndefined({
+            cursor,
+            limit: params.pageSize ?? 100,
+            threadId: params.threadId,
+            forceRefetch: params.forceRefetch,
+        }));
+
+        return stripUndefined({
+            data: response.data,
+            nextCursor: response.nextCursor ?? undefined,
+        });
+    }
+
     private async requestMcpServerStatusPage(
         client: CodexContextCatalogJsonRpcClientLike,
         params: CodexMcpServerStatusListParams,
@@ -464,6 +809,159 @@ export class CodexContextCatalogClient
             data: response.data.map(normalizeMcpServerStatus),
             nextCursor: response.nextCursor ?? undefined,
         });
+    }
+
+    private async listMcpServerStatusWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        params: CodexMcpServerStatusListParams = {},
+    ): Promise<CodexMcpServerStatusSummary[]>
+    {
+        const servers: CodexMcpServerStatusSummary[] = [];
+        let cursor: string | undefined;
+
+        do
+        {
+            const response = await this.requestMcpServerStatusPage(client, params, cursor);
+            servers.push(...response.data);
+            cursor = nextCursor(response.nextCursor, cursor, "mcpServerStatus/list");
+        }
+        while (cursor);
+
+        return servers;
+    }
+
+    private async readInstalledPluginDetailsWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        cwd: string | undefined,
+    ): Promise<PluginDetail[]>
+    {
+        const response = await client.request<PluginInstalledResponse>("plugin/installed", {
+            cwds: cwd ? [cwd] : [],
+            installSuggestionPluginNames: [],
+        });
+
+        return this.readPluginDetailsWithClient(
+            client,
+            response.marketplaces.flatMap((marketplace) =>
+                marketplace.plugins
+                    .filter((plugin) => plugin.installed)
+                    .map((plugin) => ({ marketplace, plugin })),
+            ),
+        );
+    }
+
+    private async readPluginDetailsFromCatalogWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        catalog: PluginListResponse,
+        onlyInstalled: boolean,
+    ): Promise<PluginDetail[]>
+    {
+        return this.readPluginDetailsWithClient(
+            client,
+            catalog.marketplaces.flatMap((marketplace) =>
+                marketplace.plugins
+                    .filter((plugin) => !onlyInstalled || plugin.installed)
+                    .map((plugin) => ({ marketplace, plugin })),
+            ),
+        );
+    }
+
+    private async readPluginDetailsWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        requests: Array<{ marketplace: PluginMarketplaceEntry; plugin: PluginSummary }>,
+    ): Promise<PluginDetail[]>
+    {
+        const details: PluginDetail[] = [];
+        for (let index = 0; index < requests.length; index += PLUGIN_DETAIL_READ_CONCURRENCY)
+        {
+            const batch = requests.slice(index, index + PLUGIN_DETAIL_READ_CONCURRENCY);
+            details.push(
+                ...(await Promise.all(
+                    batch.map(({ marketplace, plugin }) =>
+                        this.readPluginDetailWithClient(client, marketplace, plugin),
+                    ),
+                )),
+            );
+        }
+        return details;
+    }
+
+    private async readPluginDetailWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        marketplace: PluginMarketplaceEntry,
+        plugin: PluginSummary,
+    ): Promise<PluginDetail>
+    {
+        const detail = await client.request<PluginReadResponse>("plugin/read", stripUndefined({
+            marketplacePath: marketplace.path ?? undefined,
+            remoteMarketplaceName: marketplace.path ? undefined : marketplace.name,
+            pluginName: plugin.name,
+        }));
+        return detail.plugin;
+    }
+
+    private async writeEnabledConfigValue(
+        cwd: string | undefined,
+        keySegments: string[],
+        enabled: boolean,
+    ): Promise<CodexConfigWriteActionResult>
+    {
+        return this.withClient((client) => this.writeConfigValueWithClient(
+            client,
+            cwd,
+            keySegments,
+            enabled,
+            "upsert",
+        ));
+    }
+
+    private async writeConfigValueWithClient(
+        client: CodexContextCatalogJsonRpcClientLike,
+        cwd: string | undefined,
+        keySegments: string[],
+        value: JsonValue,
+        mergeStrategy: "replace" | "upsert",
+    ): Promise<CodexConfigWriteActionResult>
+    {
+        const before = await this.readConfig(client, cwd);
+        const response = await client.request<ConfigWriteResponse>("config/batchWrite", {
+            edits: [{
+                keyPath: configKeyPath(keySegments),
+                value,
+                mergeStrategy,
+            }],
+            expectedVersion: findUserConfigVersion(before),
+            reloadUserConfig: true,
+        } satisfies ConfigBatchWriteParams);
+        const readback = await this.readConfig(client, cwd);
+        return { response, readback };
+    }
+
+    private async readConfig(
+        client: CodexContextCatalogJsonRpcClientLike,
+        cwd: string | undefined,
+    ): Promise<ConfigReadResponse>
+    {
+        return client.request<ConfigReadResponse>("config/read", stripUndefined({
+            includeLayers: true,
+            cwd,
+        }));
+    }
+
+    private async reloadMcpServersAfterWrite(
+        client: CodexContextCatalogJsonRpcClientLike,
+        result: CodexConfigWriteActionResult,
+    ): Promise<CodexMcpConfigWriteActionResult>
+    {
+        try
+        {
+            await client.request("config/mcpServer/reload");
+            return { ...result, reloadStatus: "reloaded" };
+        }
+        catch
+        {
+            return { ...result, reloadStatus: "failed" };
+        }
     }
 
     private async withClient<T>(
@@ -725,6 +1223,20 @@ export function createCodexContextCatalogClient(
     return new CodexContextCatalogClient(settings);
 }
 
+function assertPluginDetailReadRequest(params: CodexPluginDetailReadRequest): void
+{
+    const hasMarketplacePath = Boolean(params.marketplacePath?.trim());
+    const hasRemoteMarketplaceName = Boolean(params.remoteMarketplaceName?.trim());
+    if (hasMarketplacePath === hasRemoteMarketplaceName)
+    {
+        throw new Error("plugin/read requires exactly one marketplace locator.");
+    }
+    if (!params.pluginName.trim())
+    {
+        throw new Error("plugin/read requires a plugin name.");
+    }
+}
+
 function normalizeSkill(skill: SkillMetadata): CodexCatalogSkill
 {
     return stripUndefined({
@@ -886,4 +1398,35 @@ function nextCursor(
         throw new Error(`${method} returned the same pagination cursor twice.`);
     }
     return next;
+}
+
+function findUserConfigVersion(response: ConfigReadResponse): string | null
+{
+    const userLayer = response.layers?.find((layer) => layer.name.type === "user");
+    return userLayer?.version ?? null;
+}
+
+function configKeyPath(segments: string[]): string
+{
+    if (segments.length === 0)
+    {
+        throw new Error("Config key path requires at least one segment.");
+    }
+
+    return segments
+        .map((segment, index) =>
+            index === 0 || isStaticLeafSegment(segment)
+                ? segment
+                : quoteConfigKeySegment(segment))
+        .join(".");
+}
+
+function isStaticLeafSegment(segment: string): boolean
+{
+    return segment === "enabled";
+}
+
+function quoteConfigKeySegment(segment: string): string
+{
+    return JSON.stringify(segment);
 }

@@ -75,6 +75,36 @@
     }
   }
   --animate-shimmer: shimmer-sweep var(--shimmer-duration, 1000ms) linear infinite both;
+
+  @keyframes plugin-brand-drift-one {
+    from {
+      transform: translate3d(-8%, -6%, 0) scale(0.94);
+    }
+    to {
+      transform: translate3d(22%, 12%, 0) scale(1.08);
+    }
+  }
+  --animate-plugin-brand-drift-one: plugin-brand-drift-one 10s ease-in-out infinite alternate;
+
+  @keyframes plugin-brand-drift-two {
+    from {
+      transform: translate3d(10%, 8%, 0) scale(1.04);
+    }
+    to {
+      transform: translate3d(-20%, -16%, 0) scale(0.9);
+    }
+  }
+  --animate-plugin-brand-drift-two: plugin-brand-drift-two 13s ease-in-out infinite alternate;
+
+  @keyframes plugin-brand-drift-three {
+    from {
+      transform: translate3d(-4%, 14%, 0) scale(0.9);
+    }
+    to {
+      transform: translate3d(12%, -18%, 0) scale(1.1);
+    }
+  }
+  --animate-plugin-brand-drift-three: plugin-brand-drift-three 16s ease-in-out infinite alternate;
 }
 
 :root {
