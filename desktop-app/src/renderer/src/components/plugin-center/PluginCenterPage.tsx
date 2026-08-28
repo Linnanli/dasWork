@@ -303,7 +303,7 @@ function resolveContentView({
     id: string,
     label: string,
     action: () => Promise<PluginCenterMutationResult>
-  ) => Promise<void>
+  ) => Promise<boolean>
   setMcpDialog: React.Dispatch<React.SetStateAction<McpDialogState>>
   setConfirm: React.Dispatch<React.SetStateAction<ConfirmState>>
   onManageInstalledPlugins: () => void
@@ -772,8 +772,8 @@ export function PluginCenterPage({
       id: string,
       label: string,
       action: () => Promise<PluginCenterMutationResult>
-    ): Promise<void> => {
-      if (!api) return
+    ): Promise<boolean> => {
+      if (!api) return false
       setMutation({ id, label })
       setActionError(null)
       try {
@@ -784,10 +784,12 @@ export function PluginCenterPage({
         } else {
           toast.success(result.message ?? `${label}完成`)
         }
+        return result.status === 'applied'
       } catch (nextError) {
         const message = nextError instanceof Error ? nextError.message : `${label}失败`
         setActionError(message)
         toast.error(message)
+        return false
       } finally {
         setMutation(null)
       }
@@ -795,32 +797,67 @@ export function PluginCenterPage({
     [api, applyMutationResult, setActionError, setMutation]
   )
 
-  const openExternal = React.useCallback((url: string): void => {
-    void window.desktopApp.codex.openExternalHttpUrl(url).catch((cause: unknown) => {
+  const openExternal = React.useCallback(async (url: string): Promise<boolean> => {
+    try {
+      await window.desktopApp.codex.openExternalHttpUrl(url)
+      return true
+    } catch (cause) {
       const message = cause instanceof Error ? cause.message : '无法打开安全外链'
       toast.error(message)
-    })
+      return false
+    }
   }, [])
 
-  const [awaitingAppConnection, setAwaitingAppConnection] = React.useState(false)
-  const connectApp = React.useCallback(
-    (app: { installUrl?: string }): void => {
+  type ConnectableApp = {
+    id: string
+    accessible: boolean
+    enabled: boolean
+    canToggle: boolean
+    installUrl?: string
+  }
+
+  const [awaitingAppConnectionId, setAwaitingAppConnectionId] = React.useState<string>()
+  const reconnectApp = React.useCallback(
+    async (app: ConnectableApp): Promise<void> => {
       if (!app.installUrl) return
-      setAwaitingAppConnection(true)
-      openExternal(app.installUrl)
+      setAwaitingAppConnectionId(app.id)
+      const opened = await openExternal(app.installUrl)
+      if (!opened) setAwaitingAppConnectionId(undefined)
     },
     [openExternal]
   )
 
+  const connectApp = React.useCallback(
+    async (app: ConnectableApp): Promise<void> => {
+      if (app.accessible) {
+        if (app.enabled || !app.canToggle) return
+        await runMutation(app.id, '启用应用', () =>
+          api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled: true })
+        )
+        return
+      }
+
+      if (!app.installUrl || (!app.enabled && !app.canToggle)) return
+      if (!app.enabled) {
+        const enabled = await runMutation(app.id, '启用应用', () =>
+          api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled: true })
+        )
+        if (!enabled) return
+      }
+      await reconnectApp(app)
+    },
+    [api, reconnectApp, requestContext, runMutation]
+  )
+
   React.useEffect(() => {
     const refreshAfterConnection = (): void => {
-      if (!awaitingAppConnection) return
-      setAwaitingAppConnection(false)
+      if (!awaitingAppConnectionId) return
+      setAwaitingAppConnectionId(undefined)
       void refresh(true)
     }
     window.addEventListener('focus', refreshAfterConnection)
     return () => window.removeEventListener('focus', refreshAfterConnection)
-  }, [awaitingAppConnection, refresh])
+  }, [awaitingAppConnectionId, refresh])
 
   const browseContext: PluginCenterBrowseContext =
     surface.page === 'browse'
@@ -1051,7 +1088,7 @@ export function PluginCenterPage({
               <PluginDetailPage
                 detail={readyDetail.detail}
                 pending={mutation?.id === readyDetail.detail.plugin.id}
-                pendingAppId={mutation?.id}
+                pendingAppId={mutation?.id ?? awaitingAppConnectionId}
                 pendingSkillId={mutation?.id}
                 onInstall={(plugin) =>
                   void runMutation(plugin.id, '安装插件', () =>
@@ -1066,11 +1103,6 @@ export function PluginCenterPage({
                     api!.setPluginEnabled({ ...requestContext, plugin: { id: plugin.id }, enabled })
                   )
                 }
-                onAppToggle={(app, enabled) =>
-                  void runMutation(app.id, enabled ? '启用应用' : '停用应用', () =>
-                    api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled })
-                  )
-                }
                 onSkillToggle={(skill, enabled) =>
                   void runMutation(skill.id, enabled ? '启用技能' : '停用技能', () =>
                     api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled })
@@ -1078,8 +1110,9 @@ export function PluginCenterPage({
                 }
                 onUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
                 onActivatePrompt={(prompt) => void ensurePluginReadyForPrompt(readyDetail, prompt)}
-                onConnectApp={connectApp}
-                onOpenExternal={openExternal}
+                onConnectApp={(app) => void connectApp(app)}
+                onReconnectApp={(app) => void reconnectApp(app)}
+                onOpenExternal={(url) => void openExternal(url)}
               />
             )}
           </div>
@@ -1266,13 +1299,13 @@ export function PluginCenterPage({
       <McpServerDialog
         state={mcpDialog}
         onOpenChange={(open) => setMcpDialog((current) => ({ ...current, open }))}
-        onSubmit={(serverId, displayName, server) =>
-          runMutation(
+        onSubmit={async (serverId, displayName, server) => {
+          await runMutation(
             serverId ?? displayName ?? 'new-mcp',
             serverId ? '保存 MCP' : '新增 MCP',
             () => api!.upsertMcpServer({ ...requestContext, serverId, displayName, server })
           )
-        }
+        }}
       />
       <ConfirmDialog
         state={confirm}

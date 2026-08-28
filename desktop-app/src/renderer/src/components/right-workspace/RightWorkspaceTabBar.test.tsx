@@ -91,9 +91,7 @@ describe('RightWorkspaceTabBar', () => {
     expect(document.activeElement?.textContent).toContain('Review')
     expect(onMenuVisibilityChange).toHaveBeenLastCalledWith(true)
 
-    await act(async () => {
-      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-    })
+    await clickButton('Open workspace tab')
     expect(document.querySelector('[role="menu"]')).toBeNull()
     expect(onMenuVisibilityChange).toHaveBeenLastCalledWith(false)
 
@@ -103,7 +101,16 @@ describe('RightWorkspaceTabBar', () => {
     expect(document.querySelector('[role="menu"]')).toBeNull()
 
     await clickButton('Open workspace tab')
-    expect(menuItemLabels()).toEqual(['Terminal⌘ T', 'Browser⌘ B', 'Files'])
+    expect(menuItemLabels()).toEqual([
+      'Task',
+      'Timeline',
+      'Outputs',
+      'Sources',
+      'Processes',
+      'Terminal⌘ T',
+      'Browser⌘ B',
+      'Files'
+    ])
 
     await clickButtonWithText('Files')
     expect(workspaceTabs().map((tab) => tab.textContent)).toEqual(['Review', 'Files'])

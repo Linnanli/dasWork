@@ -5,8 +5,11 @@ import type {
   LocalProject,
   ProjectSelection,
   ProjectState,
+  ProjectWorktree,
+  RemoteProject,
   WorkspaceRootOption
 } from '../../../shared/projects/projectTypes'
+import type { RemoteProjectInput } from './CreateRemoteProjectDialog'
 
 export type ProjectStateController = {
   state: ProjectState | null
@@ -16,6 +19,9 @@ export type ProjectStateController = {
   pickWorkspaceRoot: () => Promise<WorkspaceRootOption | null>
   createBlankProject: (name: string, operationId: string) => Promise<WorkspaceRootOption>
   createLocalProject: (input: { name?: string; sourceRoots: string[] }) => Promise<LocalProject>
+  createRemoteProject: (input: RemoteProjectInput) => Promise<RemoteProject>
+  listWorktrees: (source: ProjectSelection) => Promise<ProjectWorktree[]>
+  selectWorktree: (input: { source: ProjectSelection; path: string }) => Promise<void>
   selectProject: (selection: ProjectSelection) => Promise<void>
   renameProject: (input: ProjectRenamePayload) => Promise<void>
   removeProject: (selection: ProjectSelection) => Promise<void>
@@ -71,6 +77,28 @@ export function useProjectState(): ProjectStateController {
     [applyState]
   )
 
+  const createRemoteProject = useCallback(
+    async (input: RemoteProjectInput) => {
+      const project = await window.desktopApp.projects.createRemoteProject(input)
+      const nextState = await window.desktopApp.projects.getState()
+      applyState(nextState)
+      return project
+    },
+    [applyState]
+  )
+
+  const listWorktrees = useCallback(async (source: ProjectSelection) => {
+    return window.desktopApp.projects.listWorktrees({ source })
+  }, [])
+
+  const selectWorktree = useCallback(
+    async (input: { source: ProjectSelection; path: string }) => {
+      const nextState = await window.desktopApp.projects.selectWorktree(input)
+      applyState(nextState)
+    },
+    [applyState]
+  )
+
   const selectProject = useCallback(
     async (selection: ProjectSelection) => {
       const previousState = stateRef.current
@@ -121,17 +149,23 @@ export function useProjectState(): ProjectStateController {
       pickWorkspaceRoot,
       createBlankProject,
       createLocalProject,
+      createRemoteProject,
+      listWorktrees,
       selectProject,
+      selectWorktree,
       renameProject,
       removeProject
     }),
     [
       createBlankProject,
       createLocalProject,
+      createRemoteProject,
+      listWorktrees,
       pickWorkspaceRoot,
       removeProject,
       renameProject,
       selectProject,
+      selectWorktree,
       state,
       summary
     ]

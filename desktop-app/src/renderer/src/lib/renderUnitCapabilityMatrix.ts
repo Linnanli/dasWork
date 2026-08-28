@@ -31,6 +31,15 @@ export const RENDER_UNIT_CAPABILITY_MATRIX: Record<string, RenderUnitCapability>
       'Internal reasoning summaries are hidden; the visible analysis panel is built from commentary-phase assistant messages and process activity.',
     testOwner: 'assistantRenderUnits.test.ts'
   },
+  source: {
+    renderMode: 'custom',
+    priority: 'P1',
+    renderer: 'SourceReferenceCards',
+    fallbackLevel: 'none',
+    reason:
+      'AI SDK source-url and source-document parts are normalized into non-navigating source entries; only validated HTTP(S) URLs may use the host external-open bridge.',
+    testOwner: 'assistantRenderUnits.test.ts'
+  },
   'worked-for': {
     renderMode: 'fallback',
     priority: 'P3',

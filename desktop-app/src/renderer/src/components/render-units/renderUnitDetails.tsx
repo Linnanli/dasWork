@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react'
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
@@ -204,6 +204,8 @@ export function SpecialEntryRenderer({
   if (!item) return null
 
   switch (unit.itemType) {
+    case 'source':
+      return <SourceReferenceEntryUnit unit={unit} />
     case 'todoList':
       return <TodoListEntryUnit unit={unit} />
     case 'turnDiff':
@@ -244,6 +246,116 @@ export function SpecialEntryRenderer({
   }
 }
 
+export type SourceReference = {
+  id: string
+  sourceType: 'url' | 'document'
+  title: string
+  url?: string
+  mediaType?: string
+  filename?: string
+  usageCount?: number
+}
+
+function SourceReferenceEntryUnit({ unit }: { unit: EntryUnit }): React.JSX.Element | null {
+  const source = sourceReferenceFromItem(unit.item)
+  if (!source) return null
+  return (
+    <SourceReferenceCards
+      sources={[source]}
+      dataSlot="source-reference-entry"
+      containerAttributes={renderUnitAttributes(unit)}
+    />
+  )
+}
+
+/** Shared safe source cards for inline citations and the Sources workspace. */
+export function SourceReferenceCards({
+  sources,
+  dataSlot = 'source-reference-cards',
+  containerAttributes
+}: {
+  sources: readonly SourceReference[]
+  dataSlot?: string
+  containerAttributes?: Omit<HTMLAttributes<HTMLDivElement>, 'className'>
+}): React.JSX.Element | null {
+  if (sources.length === 0) return null
+
+  return (
+    <div data-slot={dataSlot} className="mt-3 space-y-2" {...containerAttributes}>
+      {sources.map((source) => {
+        const openUrl = externalHttpUrl(source.url)
+        const detail = sourceReferenceDetail(source, openUrl)
+        return (
+          <div
+            key={source.id}
+            data-slot="source-reference-card"
+            className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background/60 px-3 py-2"
+          >
+            {source.sourceType === 'document' ? (
+              <FileIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <LinkIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{source.title}</p>
+              <p className="truncate text-xs text-muted-foreground">{detail}</p>
+            </div>
+            {source.usageCount && source.usageCount > 1 ? (
+              <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                使用 {source.usageCount} 次
+              </span>
+            ) : null}
+            {openUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`打开来源：${source.title}`}
+                title="在系统浏览器中打开来源"
+                onClick={() => {
+                  void window.desktopApp.codex.openExternalHttpUrl(openUrl).catch(() => undefined)
+                }}
+              >
+                <ExternalLinkIcon aria-hidden className="size-3.5" />
+              </Button>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function sourceReferenceFromItem(item: AnyRecord | undefined): SourceReference | undefined {
+  const sourceType = stringValue(item?.sourceType)
+  if (sourceType !== 'url' && sourceType !== 'document') return undefined
+  const url = stringValue(item?.url)
+  const filename = stringValue(item?.filename)
+  const title =
+    stringValue(item?.title) ?? filename ?? (sourceType === 'url' ? '网页来源' : '文档来源')
+  return {
+    id: stringValue(item?.id) ?? `${sourceType}:${url ?? filename ?? title}`,
+    sourceType,
+    title,
+    ...(url ? { url } : {}),
+    ...(filename ? { filename } : {}),
+    ...(stringValue(item?.mediaType) ? { mediaType: stringValue(item?.mediaType) } : {})
+  }
+}
+
+function sourceReferenceDetail(source: SourceReference, openUrl: string | undefined): string {
+  if (source.sourceType === 'document') {
+    return source.mediaType ?? source.filename ?? '文档来源不含可打开地址'
+  }
+  if (!source.url) return '网页来源不含可打开地址'
+  if (!openUrl) return '链接无法安全打开'
+  try {
+    return new URL(openUrl).hostname
+  } catch {
+    return '网页来源'
+  }
+}
+
 export function UnknownPartRenderer({
   part,
   unit
@@ -251,7 +363,10 @@ export function UnknownPartRenderer({
   part: AnyRecord
   unit: Extract<AssistantRenderUnit, { type: 'unknown' }>
 }): React.JSX.Element | null {
-  if (part.type === 'file' && stringValue(part.mediaType)?.startsWith('image/')) {
+  if (
+    part.type === 'file' &&
+    (stringValue(part.mediaType) ?? stringValue(part.mimeType))?.startsWith('image/')
+  ) {
     return <GeneratedImageFileUnit part={part} unit={unit} />
   }
 
@@ -849,10 +964,31 @@ function EndResourceCardsUnit({
   workspaceCwd?: string
   canOpenLocalPaths: boolean
 }): React.JSX.Element | null {
-  const resources = useMemo(
-    () => arrayValue(unit.item?.resources ?? unit.item?.items).map(resourceCardData),
-    [unit.item]
+  return (
+    <EndResourceCards
+      resources={arrayValue(unit.item?.resources ?? unit.item?.items)}
+      workspaceCwd={workspaceCwd}
+      canOpenLocalPaths={canOpenLocalPaths}
+      containerAttributes={renderUnitAttributes(unit)}
+    />
   )
+}
+
+/** Reusable, safety-checked cards for completed files and external resources. */
+export function EndResourceCards({
+  resources: rawResources,
+  workspaceCwd,
+  canOpenLocalPaths,
+  dataSlot = 'end-resource-cards-unit',
+  containerAttributes
+}: {
+  resources: readonly unknown[]
+  workspaceCwd?: string
+  canOpenLocalPaths: boolean
+  dataSlot?: string
+  containerAttributes?: Omit<HTMLAttributes<HTMLDivElement>, 'className'>
+}): React.JSX.Element | null {
+  const resources = useMemo(() => rawResources.map(resourceCardData), [rawResources])
   const localPathCheck = useExistingLocalResourcePaths(resources)
   const displayableResources = resources.filter(
     (resource) =>
@@ -866,11 +1002,7 @@ function EndResourceCardsUnit({
   if (displayableResources.length === 0) return null
 
   return (
-    <div
-      data-slot="end-resource-cards-unit"
-      className="mt-6 space-y-3"
-      {...renderUnitAttributes(unit)}
-    >
+    <div data-slot={dataSlot} className="mt-6 space-y-3" {...containerAttributes}>
       {localPathCheckPending ? (
         <p className="mt-1 text-xs text-muted-foreground" role="status">
           正在确认本地资源是否可用…
@@ -1280,6 +1412,13 @@ function ResourceCard({
       })
       .catch(() => undefined)
   }
+  const startLocalPathDrag = (): void => {
+    if (!resource.openPath || actionsDisabled) return
+    window.desktopApp.codex.startLocalPathDrag({
+      path: resource.openPath,
+      ...(resource.cwd ? { cwd: resource.cwd } : {})
+    })
+  }
   const canOpen = !actionsDisabled && action !== undefined && action.type !== 'display-only'
   const canCopyLink = Boolean(resource.openUrl && navigator.clipboard?.writeText)
 
@@ -1368,6 +1507,23 @@ function ResourceCard({
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
+        ) : null}
+        {resource.openPath && !actionsDisabled ? (
+          <Button
+            aria-label={`拖动 ${resource.label} 到其他应用`}
+            className="h-auto px-0 py-1.5 text-xs text-muted-foreground hover:bg-transparent"
+            draggable
+            size="sm"
+            title="拖动到其他应用"
+            type="button"
+            variant="ghost"
+            onDragStart={(event) => {
+              event.preventDefault()
+              startLocalPathDrag()
+            }}
+          >
+            拖出
+          </Button>
         ) : null}
       </CardAction>
     </CardHeader>
@@ -1796,7 +1952,7 @@ function imageSourceFromPart(part: AnyRecord): string | undefined {
   const url = stringValue(part.url)
   if (url) return safeRenderableImageSrc(url)
   const data = stringValue(part.data)
-  const mediaType = stringValue(part.mediaType) ?? 'image/png'
+  const mediaType = stringValue(part.mediaType) ?? stringValue(part.mimeType) ?? 'image/png'
   if (!data) return undefined
   return data.startsWith('data:') ? data : `data:${mediaType};base64,${data}`
 }

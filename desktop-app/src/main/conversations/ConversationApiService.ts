@@ -4,6 +4,8 @@ import {
 } from '@janole/ai-sdk-provider-codex-asp'
 import type {
   SidebarConversationActionPayload,
+  SidebarConversationBatchDeletePayload,
+  SidebarConversationFeedbackPayload,
   SidebarConversationListState,
   SidebarConversationGoalSetPayload,
   SidebarConversationOpenResult,
@@ -15,6 +17,10 @@ import type {
 import type { ProjectState, ThreadProjectAssignment } from '../../shared/projects/projectTypes'
 import type { CodexExperimentalFeature } from '@janole/ai-sdk-provider-codex-asp'
 import type { AppServerThreadGoal, AppServerThreadRow } from './AppServerThreadClient'
+import {
+  ConversationPreferencesStore,
+  defaultConversationPreferences
+} from './ConversationPreferencesStore'
 import { normalizeLocalMediaUrls } from './localMediaUrls'
 
 export type ConversationThreadClientLike = {
@@ -26,7 +32,13 @@ export type ConversationThreadClientLike = {
   readThreadWithFullTurns(threadId: string): Promise<AppServerThreadRow>
   archiveThread(threadId: string): Promise<void>
   unarchiveThread(threadId: string): Promise<void>
+  deleteThread?(threadId: string): Promise<void>
   renameThread(threadId: string, name: string): Promise<void>
+  submitFeedback?(
+    threadId: string,
+    classification: SidebarConversationFeedbackPayload['classification'],
+    targetTurnId?: string
+  ): Promise<void>
   listExperimentalFeatures?(): Promise<CodexExperimentalFeature[]>
   getThreadGoal?(threadId: string): Promise<AppServerThreadGoal | null>
   setThreadGoal?(threadId: string, objective: string): Promise<AppServerThreadGoal>
@@ -35,13 +47,16 @@ export type ConversationThreadClientLike = {
 
 export type ConversationProjectStoreLike = {
   getState(): Promise<ProjectState>
+  setState?(state: ProjectState): Promise<void>
 }
 
 export type ConversationApiServiceOptions = {
   threadClient: ConversationThreadClientLike
   projectStore: ConversationProjectStoreLike
+  preferencesStore?: ConversationPreferencesStore
   waitForConversationSettlement?: (conversationId: string) => Promise<void>
   onConversationArchived?: (conversationId: string) => Promise<void> | void
+  onConversationDeleted?: (conversationId: string) => Promise<void> | void
 }
 
 export type ObservedStartedThread = {
@@ -54,12 +69,6 @@ export type ObservedStartedThread = {
   projectAssignment?: ThreadProjectAssignment
 }
 
-const defaultPreferences: SidebarPreferences = {
-  organizeMode: 'project',
-  sortKey: 'updated_at',
-  collapsedSectionIds: [],
-  collapsedGroupIds: []
-}
 const emptyProjectState: ProjectState = {
   workspaceRootOptions: [],
   localProjects: {},
@@ -76,7 +85,9 @@ const emptyProjectState: ProjectState = {
 }
 
 export class ConversationApiService {
-  private preferences: SidebarPreferences = defaultPreferences
+  private preferences: SidebarPreferences = defaultConversationPreferences
+  private preferencesLoaded = false
+  private preferencesLoadPromise: Promise<void> | undefined
   private authoritativeThreadRows: AppServerThreadRow[] = []
   private readonly observedStartedThreads = new Map<string, AppServerThreadRow>()
   private readonly observedStartedThreadAssignments = new Map<string, ThreadProjectAssignment>()
@@ -89,7 +100,11 @@ export class ConversationApiService {
   }
   private initialLoadPromise: Promise<SidebarConversationListState> | undefined
 
-  constructor(private readonly options: ConversationApiServiceOptions) {}
+  private readonly preferencesStore: ConversationPreferencesStore
+
+  constructor(private readonly options: ConversationApiServiceOptions) {
+    this.preferencesStore = options.preferencesStore ?? ConversationPreferencesStore.inMemory()
+  }
 
   observeStartedThreadSnapshot(input: ObservedStartedThread): SidebarConversationListState {
     this.storeObservedStartedThread(input)
@@ -110,6 +125,7 @@ export class ConversationApiService {
   }
 
   async getConversationList(): Promise<SidebarConversationListState> {
+    await this.ensurePreferencesLoaded()
     if (!this.lastState.loaded) return this.ensureConversationListLoaded()
     return this.refreshConversationList()
   }
@@ -144,6 +160,7 @@ export class ConversationApiService {
    * `thread/list` has caught up to a newly created thread.
    */
   async hasThreadInList(threadId: string): Promise<boolean> {
+    await this.ensurePreferencesLoaded()
     const threads = await this.options.threadClient.listThreads({
       includeArchived: false,
       sortKey: this.preferences.sortKey
@@ -169,17 +186,19 @@ export class ConversationApiService {
   async refreshConversationList(
     input: { ensureThreadIds?: string[] } = {}
   ): Promise<SidebarConversationListState> {
+    await this.ensurePreferencesLoaded()
     try {
-      const [projectState, threads] = await Promise.all([
+      const [projectState, activeThreads, archivedThreads] = await Promise.all([
         this.options.projectStore.getState(),
         this.options.threadClient.listThreads({
           includeArchived: false,
           sortKey: this.preferences.sortKey
-        })
+        }),
+        this.listArchivedThreads()
       ])
       this.lastProjectState = projectState
       this.authoritativeThreadRows = await this.includeRequiredThreads({
-        threads,
+        threads: mergeThreadRows(activeThreads, archivedThreads),
         requiredThreadIds: input.ensureThreadIds
       })
       return this.updateLastState({
@@ -259,6 +278,47 @@ export class ConversationApiService {
     return this.refreshConversationList()
   }
 
+  async deleteConversation(
+    input: SidebarConversationActionPayload
+  ): Promise<SidebarConversationListState> {
+    return this.deleteArchivedConversations({ conversationIds: [input.conversationId] })
+  }
+
+  async deleteArchivedConversations(
+    input: SidebarConversationBatchDeletePayload
+  ): Promise<SidebarConversationListState> {
+    const latestState = await this.refreshConversationList()
+    if (latestState.error) {
+      throw new Error('无法确认任务当前状态，因此未执行永久删除。')
+    }
+    if (!this.options.threadClient.deleteThread) {
+      throw new Error('当前 Codex 服务不支持永久删除任务。')
+    }
+
+    const conversationsById = new Map(
+      latestState.conversations.map((conversation) => [conversation.id, conversation])
+    )
+    for (const conversationId of input.conversationIds) {
+      const conversation = conversationsById.get(conversationId)
+      if (!conversation?.archived) {
+        throw new Error('只能永久删除已归档任务。')
+      }
+      if (conversation.running) {
+        throw new Error('任务仍在运行，无法永久删除。')
+      }
+    }
+
+    for (const conversationId of input.conversationIds) {
+      await this.options.threadClient.deleteThread(conversationId)
+      this.observedStartedThreads.delete(conversationId)
+      this.observedStartedThreadAssignments.delete(conversationId)
+      this.observedStartedThreadOrigins.delete(conversationId)
+      await this.clearDeletedConversationMetadata(conversationId)
+      await this.options.onConversationDeleted?.(conversationId)
+    }
+    return this.refreshConversationList()
+  }
+
   async renameConversation(
     input: SidebarConversationRenamePayload
   ): Promise<SidebarConversationListState> {
@@ -266,18 +326,67 @@ export class ConversationApiService {
     return this.refreshConversationList()
   }
 
-  getPreferences(): SidebarPreferences {
+  async submitConversationFeedback(input: SidebarConversationFeedbackPayload): Promise<void> {
+    if (!this.options.threadClient.submitFeedback) {
+      throw new Error('反馈功能暂不受当前服务支持')
+    }
+    await this.options.threadClient.submitFeedback(
+      input.conversationId,
+      input.classification,
+      input.targetTurnId
+    )
+  }
+
+  async getPreferences(): Promise<SidebarPreferences> {
+    await this.ensurePreferencesLoaded()
     return this.preferences
   }
 
-  setPreferences(input: Partial<SidebarPreferences>): SidebarPreferences {
+  async setPreferences(input: Partial<SidebarPreferences>): Promise<SidebarPreferences> {
+    await this.ensurePreferencesLoaded()
     this.preferences = {
       ...this.preferences,
       ...input,
       collapsedSectionIds: input.collapsedSectionIds ?? this.preferences.collapsedSectionIds,
-      collapsedGroupIds: input.collapsedGroupIds ?? this.preferences.collapsedGroupIds
+      collapsedGroupIds: input.collapsedGroupIds ?? this.preferences.collapsedGroupIds,
+      pinnedConversationIds: input.pinnedConversationIds ?? this.preferences.pinnedConversationIds
     }
+    await this.preferencesStore.set(this.preferences)
     return this.preferences
+  }
+
+  private async ensurePreferencesLoaded(): Promise<void> {
+    if (this.preferencesLoaded) return
+    if (!this.preferencesLoadPromise) {
+      this.preferencesLoadPromise = this.preferencesStore
+        .get()
+        .then((preferences) => {
+          this.preferences = preferences
+          this.preferencesLoaded = true
+        })
+        .finally(() => {
+          this.preferencesLoadPromise = undefined
+        })
+    }
+    await this.preferencesLoadPromise
+  }
+
+  private async clearDeletedConversationMetadata(conversationId: string): Promise<void> {
+    const projectState = await this.options.projectStore.getState()
+    const nextProjectState = withoutConversationProjectMetadata(projectState, conversationId)
+    this.lastProjectState = nextProjectState
+    if (this.options.projectStore.setState) {
+      await this.options.projectStore.setState(nextProjectState)
+    }
+
+    if (!this.preferences.pinnedConversationIds.includes(conversationId)) return
+    this.preferences = {
+      ...this.preferences,
+      pinnedConversationIds: this.preferences.pinnedConversationIds.filter(
+        (id) => id !== conversationId
+      )
+    }
+    await this.preferencesStore.set(this.preferences)
   }
 
   private async loadConversationGoal(conversationId: string): Promise<ThreadGoalLoadResult> {
@@ -353,6 +462,20 @@ export class ConversationApiService {
     return rows
   }
 
+  private async listArchivedThreads(): Promise<AppServerThreadRow[]> {
+    try {
+      return await this.options.threadClient.listThreads({
+        includeArchived: true,
+        sortKey: this.preferences.sortKey
+      })
+    } catch {
+      // Older app-server versions may not support the archived-only query.
+      // The active list remains authoritative, while restore is unavailable
+      // until the service supports archived threads.
+      return []
+    }
+  }
+
   private mergeObservedStartedThreads(threads: AppServerThreadRow[]): AppServerThreadRow[] {
     const rowsById = new Map(threads.map((thread) => [thread.id, thread]))
     for (const thread of threads) {
@@ -410,7 +533,8 @@ export class ConversationApiService {
         updatedAt: thread.updatedAt,
         archived: thread.archived,
         running: thread.running,
-        cwd: thread.cwd
+        cwd: thread.cwd,
+        ...(thread.threadSource ? { threadSource: thread.threadSource } : {})
       })),
       archivedConversationIds: threads
         .filter((thread) => thread.archived)
@@ -429,6 +553,51 @@ function compareIsoDescending(left: string | undefined, right: string | undefine
 
 function uniqueThreadIds(threadIds: (string | undefined)[]): string[] {
   return [...new Set(threadIds.filter((threadId): threadId is string => Boolean(threadId)))]
+}
+
+function withoutRecordKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) return record
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
+function withoutConversationProjectMetadata(
+  state: ProjectState,
+  conversationId: string
+): ProjectState {
+  const threadProjectAssignments = withoutRecordKey(state.threadProjectAssignments, conversationId)
+  const threadWritableRoots = withoutRecordKey(state.threadWritableRoots, conversationId)
+  const threadWorkspaceRootHints = withoutRecordKey(state.threadWorkspaceRootHints, conversationId)
+  const threadProjectlessOutputDirectories = withoutRecordKey(
+    state.threadProjectlessOutputDirectories,
+    conversationId
+  )
+  const projectlessHints = withoutRecordKey(state.projectlessHints, conversationId)
+
+  return {
+    ...state,
+    threadProjectAssignments,
+    threadWritableRoots,
+    threadWorkspaceRootHints,
+    threadProjectlessOutputDirectories,
+    projectlessThreadIds: state.projectlessThreadIds.filter((id) => id !== conversationId),
+    projectlessHints
+  }
+}
+
+function mergeThreadRows(
+  activeThreads: AppServerThreadRow[],
+  archivedThreads: AppServerThreadRow[]
+): AppServerThreadRow[] {
+  const mergedThreads = [...activeThreads]
+  const threadIds = new Set(activeThreads.map((thread) => thread.id))
+  for (const thread of archivedThreads) {
+    if (threadIds.has(thread.id)) continue
+    threadIds.add(thread.id)
+    mergedThreads.push(thread)
+  }
+  return mergedThreads
 }
 
 function conversationTitle(thread: AppServerThreadRow): string | null {

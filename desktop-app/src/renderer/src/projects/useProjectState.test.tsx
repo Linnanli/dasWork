@@ -99,6 +99,42 @@ describe('useProjectState', () => {
     expect(controller?.currentLabel).toBe('Projectless')
   })
 
+  it('loads and selects worktrees through the desktop project bridge', async () => {
+    const selectedState: ProjectState = {
+      ...emptyState,
+      activeProjectSelection: { projectKind: 'path', path: '/repo/feature' },
+      activeWorkspaceRoots: ['/repo/feature']
+    }
+    const listWorktrees = vi
+      .fn()
+      .mockResolvedValue([{ path: '/repo/feature', branch: 'feature/widget', isCurrent: false }])
+    const selectWorktree = vi.fn().mockResolvedValue(selectedState)
+    installDesktopProjects({ listWorktrees, selectWorktree })
+
+    await act(async () => {
+      root.render(<Probe onController={(nextController) => (controller = nextController)} />)
+    })
+
+    await expect(
+      controller?.listWorktrees({ projectKind: 'path', path: '/repo/main' })
+    ).resolves.toEqual([{ path: '/repo/feature', branch: 'feature/widget', isCurrent: false }])
+    await act(async () => {
+      await controller?.selectWorktree({
+        source: { projectKind: 'path', path: '/repo/main' },
+        path: '/repo/feature'
+      })
+    })
+
+    expect(listWorktrees).toHaveBeenCalledWith({
+      source: { projectKind: 'path', path: '/repo/main' }
+    })
+    expect(selectWorktree).toHaveBeenCalledWith({
+      source: { projectKind: 'path', path: '/repo/main' },
+      path: '/repo/feature'
+    })
+    expect(controller?.currentDetail).toBe('/repo/feature')
+  })
+
   it('creates a blank project and refreshes the selected workspace root', async () => {
     const option = {
       root: '/Documents/Demo',
@@ -241,6 +277,8 @@ function installDesktopProjects(overrides: Partial<DesktopProjectsApi>): void {
       createBlankProject: vi.fn(),
       createLocalProject: vi.fn(),
       createRemoteProject: vi.fn(),
+      listWorktrees: vi.fn().mockResolvedValue([]),
+      selectWorktree: vi.fn().mockResolvedValue(emptyState),
       selectProject: vi.fn(),
       removeProject: vi.fn(),
       renameProject: vi.fn(),

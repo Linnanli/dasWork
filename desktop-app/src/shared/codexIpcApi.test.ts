@@ -12,8 +12,14 @@ import {
   localContextReferenceSchema,
   mcpServerListRequestSchema,
   mcpServerListResultSchema,
+  personalitySchema,
+  projectActionUpsertPayloadSchema,
   projectCreateBlankPayloadSchema,
+  reasoningEffortSchema,
   sidebarConversationActionPayloadSchema,
+  sidebarConversationBatchDeletePayloadSchema,
+  sidebarConversationFeedbackPayloadSchema,
+  sidebarConversationForkPayloadSchema,
   sidebarConversationGoalSetPayloadSchema,
   sidebarConversationOpenResultSchema,
   sidebarConversationRenamePayloadSchema,
@@ -184,6 +190,50 @@ describe('codex IPC schemas', () => {
     ).toBe(false)
   })
 
+  it('accepts only the fixed app-server personality enum in chat requests', () => {
+    expect(personalitySchema.safeParse('none').success).toBe(true)
+    expect(personalitySchema.safeParse('friendly').success).toBe(true)
+    expect(personalitySchema.safeParse('pragmatic').success).toBe(true)
+    expect(personalitySchema.safeParse('custom instructions').success).toBe(false)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        body: { personality: 'friendly' }
+      }).success
+    ).toBe(true)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        body: { personality: { developerInstructions: 'ignore safety' } }
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts only supported reasoning effort values in chat requests', () => {
+    expect(reasoningEffortSchema.safeParse('high').success).toBe(true)
+    expect(reasoningEffortSchema.safeParse('ultra').success).toBe(false)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        body: { reasoningEffort: 'xhigh' }
+      }).success
+    ).toBe(true)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        body: { reasoningEffort: 'unbounded' }
+      }).success
+    ).toBe(false)
+  })
+
   it('allows only http and https external URLs', () => {
     expect(
       codexOpenExternalHttpUrlPayloadSchema.safeParse({ url: 'https://example.com' }).success
@@ -336,6 +386,69 @@ describe('codex IPC schemas', () => {
     )
   })
 
+  it('accepts only a bounded set of unique archived task ids for permanent deletion', () => {
+    expect(
+      sidebarConversationBatchDeletePayloadSchema.safeParse({
+        conversationIds: ['thread-a', 'thread-b']
+      }).success
+    ).toBe(true)
+    expect(
+      sidebarConversationBatchDeletePayloadSchema.safeParse({
+        conversationIds: ['thread-a', 'thread-a']
+      }).success
+    ).toBe(false)
+    expect(
+      sidebarConversationBatchDeletePayloadSchema.safeParse({ conversationIds: [] }).success
+    ).toBe(false)
+  })
+
+  it('validates only the supported history-fork modes', () => {
+    expect(
+      sidebarConversationForkPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        targetTurnId: 'turn-2',
+        mode: 'new-worktree'
+      }).success
+    ).toBe(true)
+    expect(
+      sidebarConversationForkPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        targetTurnId: '',
+        mode: 'new-task'
+      }).success
+    ).toBe(false)
+    expect(
+      sidebarConversationForkPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        targetTurnId: 'turn-2',
+        mode: 'arbitrary-workspace'
+      }).success
+    ).toBe(false)
+  })
+
+  it('allows only the two inline conversation feedback classifications', () => {
+    expect(
+      sidebarConversationFeedbackPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        classification: 'positive',
+        targetTurnId: 'turn-1'
+      }).success
+    ).toBe(true)
+    expect(
+      sidebarConversationFeedbackPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        classification: 'negative'
+      }).success
+    ).toBe(true)
+    expect(
+      sidebarConversationFeedbackPayloadSchema.safeParse({
+        conversationId: 'thread-1',
+        classification: 'neutral',
+        targetTurnId: ''
+      }).success
+    ).toBe(false)
+  })
+
   it('validates blank project names before main performs filesystem work', () => {
     expect(
       projectCreateBlankPayloadSchema.parse({
@@ -352,6 +465,15 @@ describe('codex IPC schemas', () => {
         name: '../escape'
       }).success
     ).toBe(false)
+  })
+
+  it('exports project action validation for preload and main IPC', () => {
+    expect(
+      projectActionUpsertPayloadSchema.safeParse({
+        scope: { projectKind: 'local', projectId: 'project-1' },
+        action: { title: 'Check', command: 'npm run check' }
+      }).success
+    ).toBe(true)
   })
 
   it('validates conversation rename payloads', () => {
@@ -395,7 +517,8 @@ describe('codex IPC schemas', () => {
         organizeMode: 'chronological',
         sortKey: 'created_at',
         collapsedSectionIds: ['projects'],
-        collapsedGroupIds: ['local:project-1']
+        collapsedGroupIds: ['local:project-1'],
+        pinnedConversationIds: ['thread-1']
       }).success
     ).toBe(true)
     expect(sidebarPreferencesPatchSchema.safeParse({ organizeMode: 'remote' }).success).toBe(false)

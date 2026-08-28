@@ -59,6 +59,9 @@ const projectState: ProjectStateController = {
   pickWorkspaceRoot: vi.fn(async () => null),
   createBlankProject: vi.fn(),
   createLocalProject: vi.fn(),
+  createRemoteProject: vi.fn(),
+  listWorktrees: vi.fn(async () => []),
+  selectWorktree: vi.fn(async () => undefined),
   selectProject: vi.fn(async () => undefined),
   renameProject: vi.fn(async () => undefined),
   removeProject: vi.fn(async () => undefined)
@@ -95,12 +98,15 @@ const conversationState: ConversationStateController = {
     organizeMode: 'project',
     sortKey: 'updated_at',
     collapsedSectionIds: [],
-    collapsedGroupIds: []
+    collapsedGroupIds: [],
+    pinnedConversationIds: []
   },
   refresh: vi.fn(async () => undefined),
   openConversation: vi.fn(async () => undefined),
   archiveConversation: vi.fn(async () => undefined),
   unarchiveConversation: vi.fn(async () => undefined),
+  deleteConversation: vi.fn(async () => undefined),
+  deleteArchivedConversations: vi.fn(async () => undefined),
   renameConversation: vi.fn(async () => undefined),
   interruptConversation: vi.fn(async () => undefined),
   setPreferences: vi.fn(async () => undefined)
@@ -486,6 +492,338 @@ describe('SidebarRoot', () => {
 
     expect(onNewChat).toHaveBeenCalledOnce()
     expect(projectState.selectProject).toHaveBeenCalledWith({ projectKind: 'projectless' })
+    root.unmount()
+  })
+
+  it('focuses task search when requested by the command palette', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={conversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    const taskSearch = container.querySelector<HTMLInputElement>('input[aria-label="搜索所有任务"]')
+    expect(taskSearch).not.toBeNull()
+
+    await act(async () => window.dispatchEvent(new Event('dascowork:focus-task-search')))
+
+    expect(document.activeElement).toBe(taskSearch)
+    root.unmount()
+    container.remove()
+  })
+
+  it('filters the archived task drawer without hiding its restore controls', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const archivedConversationState: ConversationStateController = {
+      ...conversationState,
+      state: {
+        ...conversationState.state,
+        archivedConversationIds: ['thread-archive-refactor', 'thread-archive-notes'],
+        conversations: [
+          ...conversationState.state.conversations,
+          {
+            id: 'thread-archive-refactor',
+            threadId: 'thread-archive-refactor',
+            title: 'Refactor archived workspace',
+            archived: true,
+            threadSource: 'automation',
+            projectAssignment: {
+              projectKind: 'local',
+              projectId: 'local',
+              cwd: '/repo/workspace'
+            },
+            cwd: '/repo/workspace'
+          },
+          {
+            id: 'thread-archive-notes',
+            title: 'Release notes',
+            archived: true,
+            projectAssignment: {
+              projectKind: 'projectless',
+              cwd: '/repo/notes',
+              workspaceRoot: '/repo/notes',
+              outputDirectory: '/repo/notes/out'
+            },
+            cwd: '/repo/notes'
+          }
+        ]
+      }
+    }
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={archivedConversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    const archivedDrawer = container.querySelector<HTMLElement>('[data-slot="archived-chats"]')
+    const search = archivedDrawer?.querySelector<HTMLInputElement>(
+      'input[aria-label="搜索已归档任务"]'
+    )
+    const projectFilter = archivedDrawer?.querySelector<HTMLSelectElement>(
+      'select[aria-label="筛选归档任务项目"]'
+    )
+    const typeFilter = archivedDrawer?.querySelector<HTMLSelectElement>(
+      'select[aria-label="筛选归档任务类型"]'
+    )
+    expect(archivedDrawer?.textContent).toContain('已归档任务 (2)')
+    expect(search).not.toBeNull()
+    expect(projectFilter).not.toBeNull()
+    expect(typeFilter).not.toBeNull()
+    expect(
+      [...((projectFilter?.options ?? []) as HTMLOptionsCollection)].map((option) => option.value)
+    ).toEqual(['all', 'local:local', 'projectless'])
+    expect(archivedDrawer?.textContent).toContain('Refactor archived workspace')
+    expect(archivedDrawer?.textContent).toContain('Release notes')
+    expect(archivedDrawer?.textContent).toContain('Desktop App (1)')
+    expect(archivedDrawer?.textContent).toContain('临时任务 (1)')
+
+    await act(async () => {
+      if (projectFilter) {
+        projectFilter.value = 'local:local'
+        projectFilter.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    })
+
+    expect(archivedDrawer?.textContent).toContain('Refactor archived workspace')
+    expect(archivedDrawer?.textContent).not.toContain('Release notes')
+
+    await act(async () => {
+      if (typeFilter) {
+        typeFilter.value = 'automation'
+        typeFilter.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    })
+
+    expect(archivedDrawer?.textContent).toContain('Refactor archived workspace')
+    expect(archivedDrawer?.textContent).not.toContain('Release notes')
+
+    await act(async () => {
+      if (search) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        setter?.call(search, 'workspace')
+        search.dispatchEvent(new Event('input', { bubbles: true }))
+        search.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    })
+
+    expect(archivedDrawer?.textContent).toContain('Refactor archived workspace')
+    expect(archivedDrawer?.textContent).not.toContain('Release notes')
+    root.unmount()
+  })
+
+  it('shows archived tasks in pages for a large project archive', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const archivedConversations = Array.from({ length: 51 }, (_, index) => ({
+      id: `thread-archive-large-${index}`,
+      title: `Archived large ${index}`,
+      archived: true,
+      projectAssignment: { projectKind: 'local' as const, projectId: 'local', cwd: '/repo/local' }
+    }))
+    const archivedConversationState: ConversationStateController = {
+      ...conversationState,
+      state: {
+        ...conversationState.state,
+        archivedConversationIds: archivedConversations.map((conversation) => conversation.id),
+        conversations: [...conversationState.state.conversations, ...archivedConversations]
+      }
+    }
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={archivedConversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    expect(container.querySelectorAll('button[aria-label^="Archived large"]').length).toBe(50)
+    const showMore = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="显示更多归档任务：Desktop App"]'
+    )
+    expect(showMore?.textContent).toContain('剩余 1')
+
+    await act(async () => showMore?.click())
+
+    expect(container.querySelectorAll('button[aria-label^="Archived large"]').length).toBe(51)
+    expect(container.querySelector('button[aria-label="显示更多归档任务：Desktop App"]')).toBeNull()
+    root.unmount()
+  })
+
+  it('confirms before permanently deleting every archived task in a project', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const deleteArchivedConversations = vi.fn(async () => undefined)
+    const archivedConversationState: ConversationStateController = {
+      ...conversationState,
+      deleteArchivedConversations,
+      state: {
+        ...conversationState.state,
+        archivedConversationIds: ['thread-archive-a', 'thread-archive-b'],
+        conversations: [
+          ...conversationState.state.conversations,
+          {
+            id: 'thread-archive-a',
+            title: 'Archived A',
+            archived: true,
+            projectAssignment: { projectKind: 'local', projectId: 'local', cwd: '/repo/local' }
+          },
+          {
+            id: 'thread-archive-b',
+            title: 'Archived B',
+            archived: true,
+            projectAssignment: { projectKind: 'local', projectId: 'local', cwd: '/repo/local' }
+          }
+        ]
+      }
+    }
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={archivedConversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    const clearProjectArchive = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === '清空项目归档'
+    )
+    act(() => clearProjectArchive?.click())
+
+    expect(document.body.textContent).toContain('此操作无法恢复')
+    const confirm = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent === '永久删除'
+    )
+    await act(async () => confirm?.click())
+
+    expect(deleteArchivedConversations).toHaveBeenCalledWith({
+      conversationIds: ['thread-archive-a', 'thread-archive-b']
+    })
+    root.unmount()
+  })
+
+  it('keeps the batch-delete confirmation open when deletion fails', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const archivedConversationState: ConversationStateController = {
+      ...conversationState,
+      deleteArchivedConversations: vi.fn(async () => {
+        throw new Error('任务仍在运行，无法永久删除。')
+      }),
+      state: {
+        ...conversationState.state,
+        archivedConversationIds: ['thread-archive-a'],
+        conversations: [
+          ...conversationState.state.conversations,
+          {
+            id: 'thread-archive-a',
+            title: 'Archived A',
+            archived: true,
+            projectAssignment: { projectKind: 'local', projectId: 'local', cwd: '/repo/local' }
+          }
+        ]
+      }
+    }
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={archivedConversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    const clearProjectArchive = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === '清空项目归档'
+    )
+    act(() => clearProjectArchive?.click())
+    const confirm = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent === '永久删除'
+    )
+    await act(async () => confirm?.click())
+
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toContain('任务仍在运行')
+    expect(document.body.textContent).toContain('永久删除项目归档任务？')
+    root.unmount()
+  })
+
+  it('searches tasks across projects and includes archived tasks', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const searchableConversationState: ConversationStateController = {
+      ...conversationState,
+      state: {
+        ...conversationState.state,
+        archivedConversationIds: ['thread-archive-notes'],
+        conversations: [
+          ...conversationState.state.conversations,
+          {
+            id: 'thread-archive-notes',
+            title: 'Release notes',
+            archived: true,
+            projectAssignment: {
+              projectKind: 'projectless',
+              cwd: '/tmp/release-notes',
+              workspaceRoot: '/tmp/release-notes',
+              outputDirectory: '/tmp/release-notes/out'
+            }
+          }
+        ]
+      }
+    }
+
+    await act(async () => {
+      root.render(
+        <SidebarRoot
+          nativeBackdrop={false}
+          projectState={projectState}
+          conversationState={searchableConversationState}
+          onNewChat={onNewChat}
+        />
+      )
+    })
+
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="搜索所有任务"]')
+    expect(search).not.toBeNull()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(search, 'release')
+      search?.dispatchEvent(new Event('input', { bubbles: true }))
+      search?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const results = container.querySelector<HTMLElement>(
+      '[data-slot="sidebar-task-search-results"]'
+    )
+    expect(results?.textContent).toContain('Release notes')
+    expect(results?.textContent).not.toContain('Local thread')
+    expect(results?.textContent).toContain('已归档临时任务')
     root.unmount()
   })
 })

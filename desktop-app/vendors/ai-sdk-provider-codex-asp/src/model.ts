@@ -1299,7 +1299,9 @@ export class CodexLanguageModel implements LanguageModelV3 {
 
             // Auto-enable experimentalApi when any dynamic tools are present
             const needsExperimentalApi =
-              this.config.providerSettings.experimentalApi === true || dynamicTools !== undefined
+              this.config.providerSettings.experimentalApi === true ||
+              dynamicTools !== undefined ||
+              callOptions?.remoteEnvironment !== undefined
 
             const initializeParams: CodexInitializeParams = stripUndefined({
               clientInfo: this.config.providerSettings.clientInfo ?? {
@@ -1311,6 +1313,20 @@ export class CodexLanguageModel implements LanguageModelV3 {
 
             await client.request<CodexInitializeResult>('initialize', initializeParams)
             await client.notification('initialized')
+
+            const remoteEnvironment = callOptions?.remoteEnvironment
+            const environments = remoteEnvironment
+              ? [{ environmentId: remoteEnvironment.environmentId, cwd: remoteEnvironment.cwd }]
+              : undefined
+            if (remoteEnvironment) {
+              const environmentAddParams = stripUndefined({
+                environmentId: remoteEnvironment.environmentId,
+                execServerUrl: remoteEnvironment.execServerUrl,
+                connectTimeoutMs: remoteEnvironment.connectTimeoutMs
+              })
+              debugLog?.('outbound', 'environment/add', environmentAddParams)
+              await client.request<Record<string, never>>('environment/add', environmentAddParams)
+            }
 
             if (resumeActiveTurn) {
               const customModelProviderSettings = resolveCustomModelProviderSettings(
@@ -1573,6 +1589,7 @@ export class CodexLanguageModel implements LanguageModelV3 {
                 runtimeWorkspaceRoots:
                   callOptions?.runtimeWorkspaceRoots ??
                   this.config.providerSettings.defaultThreadSettings?.runtimeWorkspaceRoots,
+                environments,
                 approvalPolicy:
                   callOptions?.approvalPolicy ??
                   this.config.providerSettings.defaultThreadSettings?.approvalPolicy,
@@ -1584,7 +1601,8 @@ export class CodexLanguageModel implements LanguageModelV3 {
                   this.config.providerSettings.defaultThreadSettings?.sandbox,
                 ephemeral:
                   callOptions?.ephemeral ??
-                  this.config.providerSettings.defaultThreadSettings?.ephemeral
+                  this.config.providerSettings.defaultThreadSettings?.ephemeral,
+                threadSource: callOptions?.threadSource
               })
               debugLog?.('outbound', 'thread/start', threadStartParams)
               const threadStartResult = await client.request<ThreadStartResultLike>(
@@ -1663,6 +1681,7 @@ export class CodexLanguageModel implements LanguageModelV3 {
               runtimeWorkspaceRoots:
                 callOptions?.runtimeWorkspaceRoots ??
                 this.config.providerSettings.defaultTurnSettings?.runtimeWorkspaceRoots,
+              environments,
               approvalPolicy:
                 callOptions?.approvalPolicy ??
                 this.config.providerSettings.defaultTurnSettings?.approvalPolicy,
@@ -1672,6 +1691,7 @@ export class CodexLanguageModel implements LanguageModelV3 {
               sandboxPolicy:
                 callOptions?.sandboxPolicy ??
                 this.config.providerSettings.defaultTurnSettings?.sandboxPolicy,
+              personality: callOptions?.personality,
               model: callOptions?.model ?? this.config.providerSettings.defaultTurnSettings?.model,
               effort:
                 callOptions?.effort ?? this.config.providerSettings.defaultTurnSettings?.effort,

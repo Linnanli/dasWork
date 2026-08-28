@@ -165,6 +165,18 @@ function toRightWorkspaceTab(
         title: tab.title,
         source: tab.props.source as LocalGitReviewSource | undefined
       }
+    case 'pull-request':
+      return { id: 'pull-request', type: 'pull-request', title: tab.title }
+    case 'task-summary':
+      return { id: 'task-summary', type: 'task-summary', title: tab.title }
+    case 'timeline':
+      return { id: 'timeline', type: 'timeline', title: tab.title }
+    case 'outputs':
+      return { id: 'outputs', type: 'outputs', title: tab.title }
+    case 'sources':
+      return { id: 'sources', type: 'sources', title: tab.title }
+    case 'processes':
+      return { id: 'processes', type: 'processes', title: tab.title }
     case 'file':
       return {
         id: tab.id,

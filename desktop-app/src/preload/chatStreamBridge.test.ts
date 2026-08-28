@@ -318,6 +318,39 @@ describe('createChatStreamBridge', () => {
     expect(callbacks.onFinish).not.toHaveBeenCalled()
   })
 
+  it('reports a transient-safe failure when port reattachment throws', async () => {
+    const startedPorts: MessagePort[] = []
+    const callbacks = createCallbacks()
+    const bridge = createChatStreamBridge({
+      createStreamId: () => 'recovering-stream',
+      createMessageChannel: createFakeMessageChannel,
+      postStart: (_request, _streamId, port) => startedPorts.push(port),
+      getActiveRun: async () => ({
+        runId: 'run-current',
+        conversationId: 'chat-1',
+        runKind: 'single-turn',
+        lastSequence: 1
+      }),
+      postAttach: () => {
+        throw new Error('electron IPC disconnected')
+      }
+    })
+
+    bridge.startChatStream(createRequest('chat-1'), callbacks)
+    startedPorts[0].postMessage({
+      runId: 'run-current',
+      sequence: 1,
+      event: { type: 'chunk', chunk: { type: 'text-start', id: 'text-1' } }
+    })
+    ;(startedPorts[0] as unknown as FakeMessagePort).peer?.onmessageerror?.({} as MessageEvent)
+    await Promise.resolve()
+
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      code: 'transport-unavailable',
+      message: '任务连接暂时中断，正在自动重连。'
+    })
+  })
+
   it('dispatches thread bindings and terminal events on their own message channels', () => {
     const startedPorts: MessagePort[] = []
     const controlMessages: unknown[] = []

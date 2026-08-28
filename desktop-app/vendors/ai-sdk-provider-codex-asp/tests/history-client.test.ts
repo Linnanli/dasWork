@@ -156,16 +156,59 @@ describe('CodexHistoryClient', () => {
     ])
   })
 
-  it('forwards thread mutations and fork through app-server methods', async () => {
+  it('reads an MCP resource through the fixed app-server request', async () => {
+    const response = {
+      contents: [
+        {
+          uri: 'ui://calendar/app.html',
+          mimeType: 'text/html;profile=mcp-app',
+          text: '<main>Calendar</main>'
+        }
+      ]
+    }
+    const mock = createMockClient([response])
+    const client = createCodexHistoryClient({ createClient: () => mock })
+
+    await expect(
+      client.readMcpResource({
+        threadId: 'thread_1',
+        server: 'calendar',
+        uri: 'ui://calendar/app.html'
+      })
+    ).resolves.toEqual(response)
+
+    expect(mock.requests).toEqual([
+      expect.objectContaining({ method: 'initialize' }),
+      {
+        method: 'mcpServer/resource/read',
+        params: {
+          threadId: 'thread_1',
+          server: 'calendar',
+          uri: 'ui://calendar/app.html'
+        }
+      }
+    ])
+  })
+
+  it('forwards thread mutations, fork, rollback, and metadata-only feedback through app-server methods', async () => {
     const forked = thread({ id: 'thread_fork' })
-    const mock = createMockClient([{}, {}, {}, {}, { thread: forked }])
+    const rolledBack = thread({ id: 'thread_fork' })
+    const mock = createMockClient([{}, {}, {}, {}, { thread: forked }, { thread: rolledBack }, {}])
     const client = createCodexHistoryClient({ createClient: () => mock })
 
     await client.renameThread('thread_1', 'Renamed')
     await client.archiveThread('thread_1')
     await client.unarchiveThread('thread_1')
     await client.deleteThread('thread_1')
-    await expect(client.forkThread('thread_1', { ephemeral: true })).resolves.toBe(forked)
+    await expect(
+      client.forkThread('thread_1', {
+        ephemeral: true,
+        cwd: '/repo/branch',
+        runtimeWorkspaceRoots: ['/repo/branch']
+      })
+    ).resolves.toBe(forked)
+    await expect(client.rollbackThread('thread_fork', 2)).resolves.toBe(rolledBack)
+    await client.submitFeedback('thread_1', 'positive', 'turn_1')
 
     expect(mock.requests).toEqual([
       expect.objectContaining({ method: 'initialize' }),
@@ -177,7 +220,30 @@ describe('CodexHistoryClient', () => {
       expect.objectContaining({ method: 'initialize' }),
       { method: 'thread/delete', params: { threadId: 'thread_1' } },
       expect.objectContaining({ method: 'initialize' }),
-      { method: 'thread/fork', params: { threadId: 'thread_1', ephemeral: true } }
+      {
+        method: 'thread/fork',
+        params: {
+          threadId: 'thread_1',
+          ephemeral: true,
+          cwd: '/repo/branch',
+          runtimeWorkspaceRoots: ['/repo/branch']
+        }
+      },
+      expect.objectContaining({ method: 'initialize' }),
+      { method: 'thread/rollback', params: { threadId: 'thread_fork', numTurns: 2 } },
+      expect.objectContaining({ method: 'initialize' }),
+      {
+        method: 'feedback/upload',
+        params: {
+          classification: 'positive',
+          threadId: 'thread_1',
+          includeLogs: false,
+          tags: {
+            surface: 'dascowork-assistant-message',
+            target_turn_id: 'turn_1'
+          }
+        }
+      }
     ])
   })
 

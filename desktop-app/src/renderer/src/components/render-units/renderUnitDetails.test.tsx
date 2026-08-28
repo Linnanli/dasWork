@@ -335,6 +335,23 @@ describe('SpecialEntryRenderer resource availability', () => {
     ).toBe('artifactDocument')
   })
 
+  it('starts a native drag for a confirmed local output through the preload bridge', async () => {
+    const listExistingLocalPaths = vi.fn(
+      async ({ paths }: { paths: { path: string; cwd?: string }[] }) => ({ existingPaths: paths })
+    )
+    const startLocalPathDrag = vi.fn()
+    window.desktopApp = { codex: { listExistingLocalPaths, startLocalPathDrag } } as never
+
+    await renderResources(resourcesUnit([{ type: 'file', path: '/tmp/market.csv', title: '市场数据' }]))
+
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="拖动 市场数据 到其他应用"]'
+    )
+    act(() => button?.dispatchEvent(new Event('dragstart', { bubbles: true, cancelable: true })))
+
+    expect(startLocalPathDrag).toHaveBeenCalledWith({ path: '/tmp/market.csv' })
+  })
+
   it('uses the reference file artwork for presentation and PDF resource cards', async () => {
     const listExistingLocalPaths = vi.fn(
       async ({ paths }: { paths: { path: string; cwd?: string }[] }) => ({ existingPaths: paths })
@@ -485,5 +502,82 @@ function resourcesUnit(
       status: 'completed',
       resources
     }
+  }
+}
+
+describe('SpecialEntryRenderer source references', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    window.desktopApp = {
+      codex: { openExternalHttpUrl: vi.fn(async () => undefined) }
+    } as never
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('opens only validated HTTP(S) sources through the host bridge', async () => {
+    await act(async () => {
+      root.render(
+        <SpecialEntryRenderer
+          unit={sourceUnit({
+            id: 'safe-source',
+            sourceType: 'url',
+            title: '安全来源',
+            url: 'https://example.test/docs'
+          })}
+        />
+      )
+    })
+
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="打开来源：安全来源"]')
+    expect(button).toBeTruthy()
+    act(() => button?.click())
+
+    expect(window.desktopApp.codex.openExternalHttpUrl).toHaveBeenCalledWith(
+      'https://example.test/docs'
+    )
+  })
+
+  it('degrades unsafe source URLs to a non-interactive card', async () => {
+    await act(async () => {
+      root.render(
+        <SpecialEntryRenderer
+          unit={sourceUnit({
+            id: 'unsafe-source',
+            sourceType: 'url',
+            title: '未知来源',
+            url: 'javascript:alert(1)'
+          })}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain('链接无法安全打开')
+    expect(container.querySelector('[aria-label^="打开来源"]')).toBeNull()
+    expect(window.desktopApp.codex.openExternalHttpUrl).not.toHaveBeenCalled()
+  })
+})
+
+function sourceUnit(
+  item: Record<string, unknown>
+): Extract<AssistantRenderUnit, { type: 'entry' }> {
+  return {
+    type: 'entry',
+    key: `source:${String(item.id)}`,
+    target: { id: `source:${String(item.id)}`, itemIds: [String(item.id)] },
+    partIndex: 0,
+    partIndices: [0],
+    part: { type: 'source' },
+    itemType: 'source',
+    renderMode: 'custom',
+    item
   }
 }

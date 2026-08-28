@@ -52,9 +52,61 @@ describe('createWorkspaceDescriptor', () => {
     })
   })
 
-  it('keeps review, terminal, and browser tabs pinned', () => {
+  it('keeps singleton and native workspace tabs pinned', () => {
     expect(createWorkspaceDescriptor({ type: 'review' }).isPreview).toBe(false)
+    expect(createWorkspaceDescriptor({ type: 'task-summary' })).toMatchObject({
+      id: 'task-summary',
+      kind: 'task-summary',
+      title: '任务',
+      isPreview: false
+    })
+    expect(createWorkspaceDescriptor({ type: 'timeline' })).toMatchObject({
+      id: 'timeline',
+      kind: 'timeline',
+      title: '时间线',
+      isPreview: false
+    })
+    expect(createWorkspaceDescriptor({ type: 'outputs' })).toMatchObject({
+      id: 'outputs',
+      kind: 'outputs',
+      title: 'Outputs',
+      isPreview: false
+    })
+    expect(createWorkspaceDescriptor({ type: 'sources' })).toMatchObject({
+      id: 'sources',
+      kind: 'sources',
+      title: 'Sources',
+      isPreview: false
+    })
+    expect(createWorkspaceDescriptor({ type: 'processes' })).toMatchObject({
+      id: 'processes',
+      kind: 'processes',
+      title: '进程',
+      isPreview: false
+    })
     expect(createWorkspaceDescriptor({ type: 'terminal', id: 'terminal:1' }).isPreview).toBe(false)
     expect(createWorkspaceDescriptor({ type: 'browser', id: 'browser:1' }).isPreview).toBe(false)
+  })
+
+  it('creates a task-scoped, stable MCP App workspace descriptor', () => {
+    expect(
+      createWorkspaceDescriptor({
+        type: 'mcp-app',
+        threadId: 'thread-1',
+        server: 'calendar',
+        resourceUri: 'ui://calendar/app.html',
+        title: 'Calendar'
+      })
+    ).toMatchObject({
+      id: 'mcp-app:thread-1:calendar:ui%3A%2F%2Fcalendar%2Fapp.html',
+      kind: 'mcp-app',
+      title: 'Calendar',
+      props: {
+        threadId: 'thread-1',
+        server: 'calendar',
+        resourceUri: 'ui://calendar/app.html'
+      },
+      isPreview: false
+    })
   })
 })

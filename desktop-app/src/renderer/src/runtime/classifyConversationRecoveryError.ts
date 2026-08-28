@@ -43,6 +43,7 @@ export function classifyConversationRecoveryError(
 
 function classifyRecoveryCode(code: string): ConversationRecoveryDiagnostic {
   switch (code) {
+    case 'transport-unavailable':
     case 'app_server_transport_closed':
     case 'app_server_transport_terminated':
       return diagnostic(

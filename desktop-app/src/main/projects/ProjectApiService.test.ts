@@ -4,6 +4,46 @@ import { ProjectApiService } from './ProjectApiService'
 import { ProjectStore, createDefaultProjectState } from './ProjectStore'
 
 describe('ProjectApiService', () => {
+  it('persists, updates, and removes actions for a registered path project', async () => {
+    const store = ProjectStore.inMemory({
+      ...createDefaultProjectState(),
+      workspaceRootOptions: [
+        {
+          root: '/workspace/app',
+          hostId: 'local',
+          addedAt: '2026-08-27T00:00:00.000Z',
+          lastOpenedAt: '2026-08-27T00:00:00.000Z'
+        }
+      ]
+    })
+    const service = new ProjectApiService({
+      store,
+      validateLocalRoot: async (path) => ({ realPath: path }),
+      pickWorkspaceRoot: vi.fn()
+    })
+
+    const created = await service.upsertProjectAction({
+      scope: { projectKind: 'path', path: '/workspace/app' },
+      action: { title: 'Test', command: 'npm test' }
+    })
+    const [action] = created.projectActions?.['path:/workspace/app'] ?? []
+    expect(action).toMatchObject({ title: 'Test', command: 'npm test' })
+
+    const updated = await service.upsertProjectAction({
+      scope: { projectKind: 'path', path: '/workspace/app' },
+      action: { id: action?.id, title: 'Unit tests', command: 'npm run test:unit' }
+    })
+    expect(updated.projectActions?.['path:/workspace/app']).toMatchObject([
+      { id: action?.id, title: 'Unit tests', command: 'npm run test:unit' }
+    ])
+
+    await service.removeProjectAction({
+      scope: { projectKind: 'path', path: '/workspace/app' },
+      actionId: action?.id ?? ''
+    })
+    await expect(store.getState()).resolves.toMatchObject({ projectActions: {} })
+  })
+
   it('creates, registers, and activates a blank project root', async () => {
     const store = ProjectStore.inMemory(createDefaultProjectState())
     const createBlankProjectRoot = vi.fn(async () => '/documents/New App')
@@ -254,6 +294,35 @@ describe('ProjectApiService', () => {
     })
   })
 
+  it('registers and activates a main-verified worktree', async () => {
+    const store = ProjectStore.inMemory(createDefaultProjectState())
+    const validateLocalRoot = vi.fn(async (path: string) => ({ realPath: `/real${path}` }))
+    const service = new ProjectApiService({
+      store,
+      validateLocalRoot,
+      pickWorkspaceRoot: vi.fn()
+    })
+
+    const state = await service.activateVerifiedWorktree({
+      path: '/repo/feature-worktree',
+      branch: 'feature/widget',
+      isCurrent: false
+    })
+
+    expect(validateLocalRoot).toHaveBeenCalledWith('/repo/feature-worktree')
+    expect(state).toMatchObject({
+      activeProjectSelection: { projectKind: 'path', path: '/real/repo/feature-worktree' },
+      activeWorkspaceRoots: ['/real/repo/feature-worktree'],
+      workspaceRootOptions: [
+        {
+          root: '/real/repo/feature-worktree',
+          label: 'feature-worktree (feature/widget)',
+          hostId: 'local'
+        }
+      ]
+    })
+  })
+
   it('rejects unregistered path selections from renderer-owned calls', async () => {
     const store = ProjectStore.inMemory(createDefaultProjectState())
     const service = new ProjectApiService({
@@ -280,7 +349,8 @@ describe('ProjectApiService', () => {
     const project = await service.createRemoteProject({
       hostId: 'ssh-devbox',
       label: 'Staging API',
-      remotePath: '/srv/staging-api'
+      remotePath: '/srv/staging-api',
+      execServerUrl: 'wss://exec.example.test/codex'
     })
 
     expect(validateRemoteRoot).toHaveBeenCalledWith('ssh-devbox', '/srv/staging-api')
@@ -288,7 +358,8 @@ describe('ProjectApiService', () => {
       kind: 'remote',
       hostId: 'ssh-devbox',
       label: 'Staging API',
-      remotePath: '/srv/staging-api'
+      remotePath: '/srv/staging-api',
+      execServerUrl: 'wss://exec.example.test/codex'
     })
     await expect(store.getState()).resolves.toMatchObject({
       activeRemoteProjectId: project.id,
@@ -315,7 +386,8 @@ describe('ProjectApiService', () => {
       service.createRemoteProject({
         hostId: 'ssh-devbox',
         label: 'Staging API',
-        remotePath: '../srv/staging-api'
+        remotePath: '../srv/staging-api',
+        execServerUrl: 'wss://exec.example.test/codex'
       })
     ).rejects.toThrow('must be an absolute POSIX path')
     expect(validateRemoteRoot).not.toHaveBeenCalled()

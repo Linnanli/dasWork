@@ -61,6 +61,10 @@ export type ModelOption = {
    * configurable reasoning.
    */
   efforts?: boolean | readonly ModelSelectorEffortOption[];
+  /** Default reasoning effort reported by the model catalog. */
+  defaultReasoningEffort?: string;
+  /** Whether the app-server reports support for response personality selection. */
+  supportsPersonality?: boolean;
 };
 
 function getModelEfforts(

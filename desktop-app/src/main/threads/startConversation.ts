@@ -18,6 +18,11 @@ export type ProjectStoreLike = Pick<ProjectStore, 'getState' | 'setState'>
 export type ConversationExecutionTarget = {
   cwd?: string
   runtimeWorkspaceRoots?: string[]
+  remoteEnvironment?: {
+    environmentId: string
+    cwd: string
+    execServerUrl: string
+  }
 }
 
 export type StartConversationResult = {
@@ -91,6 +96,9 @@ function toConversationExecutionTarget(
 ): ConversationExecutionTarget {
   return {
     ...(resolvedTarget.cwd ? { cwd: resolvedTarget.cwd } : {}),
+    ...(resolvedTarget.remoteEnvironment
+      ? { remoteEnvironment: resolvedTarget.remoteEnvironment }
+      : {}),
     ...(resolvedTarget.workspaceRoots.length > 0
       ? { runtimeWorkspaceRoots: resolvedTarget.workspaceRoots }
       : {})

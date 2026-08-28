@@ -13,7 +13,8 @@ export function buildSidebarViewModel(input: {
   conversations: SidebarConversationView[]
   preferences: SidebarPreferences
 }): SidebarViewModel {
-  const visibleConversations = input.conversations.filter((conversation) => !conversation.archived)
+  const conversations = markPinnedConversations(input.conversations, input.preferences)
+  const visibleConversations = conversations.filter((conversation) => !conversation.archived)
   const projectGroups = input.projectState
     ? buildProjectGroups(input.projectState, visibleConversations, input.preferences)
     : []
@@ -27,8 +28,23 @@ export function buildSidebarViewModel(input: {
       ),
       input.preferences.sortKey
     ),
-    chronologicalChats: sortConversations(visibleConversations, input.preferences.sortKey)
+    chronologicalChats: sortConversations(visibleConversations, input.preferences.sortKey),
+    archivedChats: sortConversations(
+      conversations.filter((conversation) => conversation.archived),
+      input.preferences.sortKey
+    )
   }
+}
+
+function markPinnedConversations(
+  conversations: SidebarConversationView[],
+  preferences: SidebarPreferences
+): SidebarConversationView[] {
+  const pinnedConversationIds = new Set(preferences.pinnedConversationIds)
+  return conversations.map((conversation) => ({
+    ...conversation,
+    pinned: !conversation.archived && pinnedConversationIds.has(conversation.id)
+  }))
 }
 
 function buildProjectGroups(
@@ -143,7 +159,10 @@ function sortConversations(
   sortKey: SidebarPreferences['sortKey']
 ): SidebarConversationView[] {
   const field = sortKey === 'created_at' ? 'createdAt' : 'updatedAt'
-  return [...conversations].sort((left, right) => timestamp(right[field]) - timestamp(left[field]))
+  return [...conversations].sort((left, right) => {
+    if (left.pinned !== right.pinned) return left.pinned ? -1 : 1
+    return timestamp(right[field]) - timestamp(left[field])
+  })
 }
 
 function latestActivity(group: SidebarProjectGroup): number {

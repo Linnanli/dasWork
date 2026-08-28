@@ -36,6 +36,20 @@ export {
 } from './WorkspaceContentRegistry'
 export { WorkspacePanelController } from './WorkspacePanelController'
 export { WorkspacePanelShell } from './WorkspacePanelShell'
+export { TaskWorkspace } from './TaskWorkspace'
+export { TimelineWorkspace } from './TimelineWorkspace'
+export { OutputsWorkspace } from './OutputsWorkspace'
+export { SourcesWorkspace } from './SourcesWorkspace'
+export { ProcessesWorkspace } from './ProcessesWorkspace'
+export { taskAgentsFromRenderUnits } from './taskWorkspaceSummary'
+export type {
+  WorkspaceTaskAgent,
+  WorkspaceOutputCreationKind,
+  WorkspaceOutputResource,
+  WorkspaceSource,
+  WorkspaceTaskSummary,
+  WorkspaceTimelineEvent
+} from './taskWorkspaceTypes'
 export { WorkspaceTabStrip } from './WorkspaceTabStrip'
 export {
   hasCrossedWorkspaceDragThreshold,

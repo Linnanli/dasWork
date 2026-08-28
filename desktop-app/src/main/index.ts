@@ -5,6 +5,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   nativeTheme,
   net,
   protocol,
@@ -20,6 +21,8 @@ import {
 } from '@janole/ai-sdk-provider-codex-asp'
 import icon from '../../resources/icon.png?asset'
 import { createBeforeQuitHandler } from './appShutdown'
+import { AutomationService } from './automations/AutomationService'
+import { AutomationStore } from './automations/AutomationStore'
 import { CodexChatRuntimeService } from './codexChatRuntimeService'
 import { createCodexAspSharedConnection, type CodexAspSharedConnection } from './codexAspProvider'
 import { resolveCodexAppServerLaunchOptions } from './codexAppServerLaunch'
@@ -30,12 +33,17 @@ import {
   ConversationApiService,
   type ObservedStartedThread
 } from './conversations/ConversationApiService'
+import { ConversationWindowRouter } from './conversations/ConversationWindowRouter'
+import { ConversationForkService } from './conversations/ConversationForkService'
+import { ManagedWorktreeService } from './conversations/ManagedWorktreeService'
+import { ConversationPreferencesStore } from './conversations/ConversationPreferencesStore'
 import { createNativeContextMenuHandler, installWindowContextMenu } from './contextMenu'
 import { createPickLocalContextHandler } from './localContextPicker'
 import { LocalImageCapabilityStore } from './localImageCapabilityStore'
 import { LocalPathCapabilityStore } from './localPathCapabilityStore'
 import { createListExistingLocalPathsHandler } from './localPathExistence'
 import { createOpenLocalPathHandler, createRevealLocalPathHandler } from './localPathOpen'
+import { createStartLocalPathDragHandler } from './localPathDrag'
 import { sendToActiveRenderer } from './rendererIpc'
 import {
   createAppRendererUrl,
@@ -65,15 +73,23 @@ import { steerQueuedFollowUp } from './followUps/steerQueuedFollowUp'
 import { validateQueuedLocalAttachments } from './followUps/validateQueuedLocalAttachments'
 import { McpServerStatusService } from './mcp/McpServerStatusService'
 import { createListMcpServersHandler } from './mcp/mcpServerStatusIpc'
+import { McpAppResourceService } from './mcp/McpAppResourceService'
+import { createReadMcpAppResourceHandler } from './mcp/mcpAppResourceIpc'
 import { PluginCenterService } from './pluginCenter/PluginCenterService'
 import { createPluginCenterIpcHandlers } from './pluginCenter/registerPluginCenterIpc'
 import type { ProjectApiService } from './projects/ProjectApiService'
 import type { ProjectService } from './projects/ProjectService'
+import { ProjectWorktreeService } from './projects/ProjectWorktreeService'
 import { createProjectRuntimeServices } from './projects/projectRuntimeServices'
 import type { WorkspaceRecoveryService } from './projects/WorkspaceRecoveryService'
+import type { ProjectStore } from './projects/ProjectStore'
 import { LocalGitService } from './localGit/LocalGitService'
 import { LocalCommitService } from './localGit/LocalCommitService'
 import { LocalPushService } from './localGit/LocalPushService'
+import { GithubPullRequestService } from './githubPullRequests/GithubPullRequestService'
+import { createGithubPullRequestIpcHandlers } from './githubPullRequests/githubPullRequestIpc'
+import { KeyboardShortcutService } from './keyboardShortcuts/KeyboardShortcutService'
+import { createKeyboardShortcutIpcHandlers } from './keyboardShortcuts/keyboardShortcutIpc'
 import { GitManager } from './localGit/GitManager'
 import { GitHostRegistry } from './localGit/GitHostRegistry'
 import { GitRepositoryTargetResolver } from './localGit/GitRepositoryTargetResolver'
@@ -88,6 +104,7 @@ import {
   type RightWorkspaceIpcRegistration
 } from './rightWorkspace/registerRightWorkspaceIpc'
 import { createMainWindowOptions } from './windowOptions'
+import { installApplicationMenu } from './applicationMenu'
 import {
   codexChatAttachPayloadSchema,
   codexChatPortDetachedPayloadSchema,
@@ -97,8 +114,12 @@ import {
   projectCreateBlankPayloadSchema,
   projectCreateLocalPayloadSchema,
   projectCreateRemotePayloadSchema,
+  projectActionRemovePayloadSchema,
+  projectActionUpsertPayloadSchema,
   projectRenamePayloadSchema,
   projectSelectPayloadSchema,
+  projectWorktreeListPayloadSchema,
+  projectWorktreeSelectPayloadSchema,
   workspaceRecoveryPayloadSchema,
   codexRespondApprovalPayloadSchema,
   codexSnoozeApprovalAutoResolutionPayloadSchema,
@@ -117,24 +138,42 @@ import {
   followUpSetDefaultModePayloadSchema,
   followUpSteerItemPayloadSchema,
   sidebarConversationActionPayloadSchema,
+  sidebarConversationBatchDeletePayloadSchema,
+  sidebarConversationFeedbackPayloadSchema,
+  sidebarConversationForkPayloadSchema,
   sidebarConversationGoalSetPayloadSchema,
   sidebarConversationRenamePayloadSchema,
   sidebarPreferencesPatchSchema
 } from '../shared/codexIpcApi'
 import { gitIpcChannels } from '../shared/localGitApi'
+import { githubPullRequestIpcChannels } from '../shared/githubPullRequestApi'
+import { keyboardShortcutIpcChannels } from '../shared/keyboardShortcutsApi'
+import {
+  automationActionRequestSchema,
+  automationCreateRequestSchema,
+  automationIpcChannels,
+  automationStatusRequestSchema,
+  automationUpdateRequestSchema
+} from '../shared/automationApi'
 import { nativeContextMenuIpcChannels } from '../shared/nativeContextMenuApi'
+import { parseConversationLink, type ConversationLink } from '../shared/conversationLink'
 import type { ProjectState } from '../shared/projects/projectTypes'
 
 let codexRuntime: CodexChatRuntimeService | undefined
 let projectApi: ProjectApiService | undefined
 let projectService: ProjectService | undefined
+let projectStore: ProjectStore | undefined
+let projectWorktrees: ProjectWorktreeService | undefined
 let workspaceRecovery: WorkspaceRecoveryService | undefined
+let automationService: AutomationService | undefined
 let conversationApi: ConversationApiService | undefined
+let conversationForkService: ConversationForkService | undefined
 let composerContextCatalog: ComposerContextCatalogService | undefined
 let composerContextSearch: ComposerContextSearchService | undefined
 let composerContextChanges: ComposerContextChangeBroker | undefined
 let composerContextClient: CodexContextCatalogClient | undefined
 let mcpServerStatus: McpServerStatusService | undefined
+let mcpAppResource: McpAppResourceService | undefined
 let pluginCenterService: PluginCenterService | undefined
 let codexAppServerConnection: CodexAspSharedConnection | undefined
 let followUpQueue: ConversationFollowUpQueueService | undefined
@@ -145,6 +184,26 @@ let rightWorkspaceIpc: RightWorkspaceIpcRegistration | undefined
 const localImageCapabilities = new LocalImageCapabilityStore()
 const localPathCapabilities = new LocalPathCapabilityStore()
 const convergingConversationThreadIds = new Set<string>()
+let pendingConversationLink: ConversationLink | undefined
+const pendingConversationLinksByWindowId = new Map<number, ConversationLink>()
+const conversationWindowRouter = new ConversationWindowRouter()
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    const link = commandLine
+      .map((argument) => parseConversationLink(argument))
+      .find((candidate): candidate is ConversationLink => Boolean(candidate))
+    if (link) openConversationLink(link)
+  })
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  const link = parseConversationLink(url)
+  if (link) openConversationLink(link)
+})
 
 const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
 if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
@@ -176,15 +235,41 @@ function createCodexRuntime(
   })
   projectApi = projectRuntimeServices.projectApi
   projectService = projectRuntimeServices.projectService
+  projectStore = projectRuntimeServices.projectStore
+  projectWorktrees = new ProjectWorktreeService({
+    projectService: projectRuntimeServices.projectService,
+    gitHost: hosts.get('local')
+  })
   workspaceRecovery = projectRuntimeServices.workspaceRecovery
   const threadClient = new AppServerThreadClient({ historyClient, turnDiffStore })
   conversationApi = new ConversationApiService({
     threadClient,
     projectStore: projectRuntimeServices.projectStore,
+    preferencesStore: ConversationPreferencesStore.onDisk(
+      join(app.getPath('userData'), 'conversations', 'preferences.json')
+    ),
     waitForConversationSettlement: (conversationId) =>
       codexRuntime?.waitForConversationSettlement(conversationId) ?? Promise.resolve(),
     onConversationArchived: (conversationId) =>
-      rightWorkspaceIpc?.terminalManager.closeForConversation(conversationId) ?? Promise.resolve()
+      rightWorkspaceIpc?.terminalManager.closeForConversation(conversationId) ?? Promise.resolve(),
+    onConversationDeleted: async (conversationId) => {
+      await Promise.all([
+        rightWorkspaceIpc?.terminalManager.closeForConversation(conversationId) ??
+          Promise.resolve(),
+        turnDiffStore.removeThread(conversationId),
+        automationService?.removeConversationReferences(conversationId) ?? Promise.resolve()
+      ])
+    }
+  })
+  conversationForkService = new ConversationForkService({
+    threadClient,
+    projectStore: projectRuntimeServices.projectStore,
+    managedWorktrees: new ManagedWorktreeService({
+      projectService: projectRuntimeServices.projectService,
+      gitHost: hosts.get('local'),
+      gitManager: manager,
+      worktreeRoot: join(app.getPath('userData'), 'worktrees')
+    })
   })
   const liveAgents = new LiveAgentRegistry(threadClient)
   const agentRoles = new LocalAgentRoleCatalog({
@@ -204,6 +289,7 @@ function createCodexRuntime(
   mcpServerStatus = new McpServerStatusService({
     provider: composerContextClient
   })
+  mcpAppResource = new McpAppResourceService({ provider: historyClient })
   pluginCenterService = new PluginCenterService({
     provider: composerContextClient,
     defaultCwd: () => undefined,
@@ -330,9 +416,29 @@ function requireProjectService(): ProjectService {
   return projectService
 }
 
+function requireProjectStore(): ProjectStore {
+  if (!projectStore) throw new Error('Project store is not initialized')
+  return projectStore
+}
+
+function requireProjectWorktrees(): ProjectWorktreeService {
+  if (!projectWorktrees) throw new Error('Project worktrees are not initialized')
+  return projectWorktrees
+}
+
+function requireAutomationService(): AutomationService {
+  if (!automationService) throw new Error('Automation service is not initialized')
+  return automationService
+}
+
 function requireConversationApi(): ConversationApiService {
   if (!conversationApi) throw new Error('Conversation API is not initialized')
   return conversationApi
+}
+
+function requireConversationForkService(): ConversationForkService {
+  if (!conversationForkService) throw new Error('Conversation fork service is not initialized')
+  return conversationForkService
 }
 
 function requireComposerContextCatalog(): ComposerContextCatalogService {
@@ -355,6 +461,11 @@ function requireMcpServerStatus(): McpServerStatusService {
   return mcpServerStatus
 }
 
+function requireMcpAppResource(): McpAppResourceService {
+  if (!mcpAppResource) throw new Error('MCP App resource service is not initialized')
+  return mcpAppResource
+}
+
 function requirePluginCenterService(): PluginCenterService {
   if (!pluginCenterService) throw new Error('Plugin Center service is not initialized')
   return pluginCenterService
@@ -363,6 +474,11 @@ function requirePluginCenterService(): PluginCenterService {
 function requireFollowUpQueue(): ConversationFollowUpQueueService {
   if (!followUpQueue) throw new Error('Follow-up queue is not initialized')
   return followUpQueue
+}
+
+function assertApprovalOwner(webContentsId: number, requestId: string): void {
+  if (conversationWindowRouter.ownsApproval(webContentsId, requestId)) return
+  throw new Error('该审批属于另一个窗口或已结束。')
 }
 
 function broadcastStatus(): void {
@@ -454,6 +570,26 @@ function sendConversationState(
   composerContextChanges?.notify({ sectionIds: ['chats'] })
 }
 
+function openConversationLink(link: ConversationLink): void {
+  const target =
+    BrowserWindow.getFocusedWindow() ??
+    BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())
+  if (!target) {
+    pendingConversationLink = link
+    return
+  }
+  deliverConversationLink(target, link)
+}
+
+function deliverConversationLink(window: BrowserWindow, link: ConversationLink): void {
+  if (window.isDestroyed()) return
+  pendingConversationLinksByWindowId.set(window.webContents.id, link)
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+  sendToActiveRenderer(window.webContents, 'codex:conversations:open-link', link)
+}
+
 function startConversationListConvergence(
   threadId: string,
   options: { discardStartedObservationOnFailure: boolean }
@@ -493,7 +629,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function createWindow(runtime: CodexChatRuntimeService): void {
+function createWindow(options: { conversationLink?: ConversationLink } = {}): BrowserWindow {
+  let initialConversationLink = options.conversationLink
   const mainWindow = new BrowserWindow(
     createMainWindowOptions({
       preloadPath: join(__dirname, '../preload/index.js'),
@@ -508,6 +645,17 @@ function createWindow(runtime: CodexChatRuntimeService): void {
   })
   mainWindow.webContents.on('did-finish-load', () => {
     if (!mainWindow.isDestroyed()) rightWorkspaceIpc?.attachWindow(mainWindow)
+    if (initialConversationLink) {
+      const link = initialConversationLink
+      initialConversationLink = undefined
+      deliverConversationLink(mainWindow, link)
+      return
+    }
+    if (pendingConversationLink) {
+      const link = pendingConversationLink
+      pendingConversationLink = undefined
+      deliverConversationLink(mainWindow, link)
+    }
   })
   mainWindow.webContents.on('render-process-gone', () => {
     rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
@@ -521,20 +669,9 @@ function createWindow(runtime: CodexChatRuntimeService): void {
     return { action: 'deny' }
   })
   installWindowContextMenu(mainWindow, Menu)
-
-  const unsubscribeApprovals = runtime.onApprovalRequest((request) => {
-    if (!mainWindow.isDestroyed()) {
-      sendToActiveRenderer(mainWindow.webContents, 'codex:approval-request', request)
-    }
-  })
-  const unsubscribeSettledApprovals = runtime.onApprovalSettled((requestId) => {
-    if (!mainWindow.isDestroyed()) {
-      sendToActiveRenderer(mainWindow.webContents, 'codex:approval-settled', requestId)
-    }
-  })
   mainWindow.on('closed', () => {
-    unsubscribeApprovals()
-    unsubscribeSettledApprovals()
+    pendingConversationLinksByWindowId.delete(ownerWebContentsId)
+    conversationWindowRouter.releaseWindow(ownerWebContentsId)
     rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
   })
   mainWindow.webContents.once('destroyed', () => {
@@ -546,9 +683,11 @@ function createWindow(runtime: CodexChatRuntimeService): void {
   } else {
     mainWindow.loadURL(createAppRendererUrl())
   }
+  return mainWindow
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (app.isPackaged) app.setAsDefaultProtocolClient('dascowork')
   registerAppProtocol({
     protocol,
     session: session.defaultSession,
@@ -570,6 +709,22 @@ app.whenReady().then(() => {
   const turnDiffStore = new TurnDiffStore(join(app.getPath('userData'), 'turn-diffs'))
   const runtime = createCodexRuntime(hosts, manager, turnDiffStore)
   codexRuntime = runtime
+  automationService = new AutomationService({
+    store: AutomationStore.onDisk(join(app.getPath('userData'), 'automations.json')),
+    projectStore: requireProjectStore(),
+    runtime,
+    onThreadStarted: async ({ sourceConversationId, thread }) => {
+      const ownerWebContentsId =
+        conversationWindowRouter.ownerForConversation(sourceConversationId) ??
+        BrowserWindow.getFocusedWindow()?.webContents.id ??
+        BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())?.webContents.id
+      if (ownerWebContentsId !== undefined) {
+        conversationWindowRouter.bindThread(thread.threadId, ownerWebContentsId)
+      }
+      broadcastStartedConversation(thread.threadId, thread)
+    }
+  })
+  await automationService.load()
   const targetResolver = new GitRepositoryTargetResolver({
     projectService: requireProjectService(),
     gitManager: manager,
@@ -588,6 +743,13 @@ app.whenReady().then(() => {
     pushes: new LocalPushService(localGit),
     watchBroker: localGitWatchBroker
   })
+  const githubPullRequestHandlers = createGithubPullRequestIpcHandlers(
+    new GithubPullRequestService({ localGit })
+  )
+  const keyboardShortcuts = KeyboardShortcutService.onDisk(
+    join(app.getPath('userData'), 'keyboard-shortcuts.json')
+  )
+  await keyboardShortcuts.load()
   rightWorkspaceIpc = registerRightWorkspaceIpc({
     ipcMain,
     projectService: requireProjectService(),
@@ -598,10 +760,51 @@ app.whenReady().then(() => {
 
   electronApp.setAppUserModelId('com.electron')
   nativeTheme.themeSource = 'system'
+  installApplicationMenu({
+    Menu,
+    isMac: process.platform === 'darwin',
+    onNewTask: () => {
+      const window = BrowserWindow.getFocusedWindow()
+      if (window && !window.isDestroyed()) {
+        sendToActiveRenderer(window.webContents, 'codex:new-task')
+      }
+    },
+    onOpenCommandPalette: () => {
+      const window = BrowserWindow.getFocusedWindow()
+      if (window && !window.isDestroyed()) {
+        sendToActiveRenderer(window.webContents, 'codex:command-palette')
+      }
+    }
+  })
 
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
   app.on('browser-window-blur', () => manager.handleAppEvent({ type: 'background' }))
   app.on('browser-window-focus', () => manager.handleAppEvent({ type: 'foreground' }))
+
+  runtime.onApprovalRequest((request) => {
+    let ownerWebContentsId = conversationWindowRouter.bindApproval(request)
+    if (ownerWebContentsId === undefined) {
+      const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+      if (windows.length === 1) {
+        ownerWebContentsId = windows[0]!.webContents.id
+        conversationWindowRouter.assignApproval(request.id, ownerWebContentsId)
+      }
+    }
+    const ownerWindow = BrowserWindow.getAllWindows().find(
+      (window) => window.webContents.id === ownerWebContentsId
+    )
+    if (!ownerWindow || ownerWindow.isDestroyed()) return
+    sendToActiveRenderer(ownerWindow.webContents, 'codex:approval-request', request)
+  })
+  runtime.onApprovalSettled((requestId) => {
+    const ownerWebContentsId = conversationWindowRouter.ownerForApproval(requestId)
+    conversationWindowRouter.releaseApproval(requestId)
+    const ownerWindow = BrowserWindow.getAllWindows().find(
+      (window) => window.webContents.id === ownerWebContentsId
+    )
+    if (!ownerWindow || ownerWindow.isDestroyed()) return
+    sendToActiveRenderer(ownerWindow.webContents, 'codex:approval-settled', requestId)
+  })
 
   ipcMain.handle('codex:get-status', () => runtime.getStatus())
   ipcMain.handle(
@@ -613,6 +816,10 @@ app.whenReady().then(() => {
   )
   ipcMain.handle('codex:list-models', () => runtime.listModels())
   ipcMain.handle('codex:list-mcp-servers', createListMcpServersHandler(requireMcpServerStatus()))
+  ipcMain.handle(
+    'codex:read-mcp-app-resource',
+    createReadMcpAppResourceHandler(requireMcpAppResource())
+  )
   for (const [channel, handler] of Object.entries(
     createPluginCenterIpcHandlers(requirePluginCenterService())
   )) {
@@ -622,13 +829,19 @@ app.whenReady().then(() => {
     const request = codexSetSelectedModelPayloadSchema.parse(payload)
     return runtime.setSelectedModel(request.modelId)
   })
-  ipcMain.handle('codex:list-pending-approvals', () => runtime.listPendingApprovals())
-  ipcMain.handle('codex:respond-approval', (_, payload: unknown) => {
+  ipcMain.handle('codex:list-pending-approvals', (event) =>
+    runtime
+      .listPendingApprovals()
+      .filter((request) => conversationWindowRouter.ownsApproval(event.sender.id, request.id))
+  )
+  ipcMain.handle('codex:respond-approval', (event, payload: unknown) => {
     const request = codexRespondApprovalPayloadSchema.parse(payload)
+    assertApprovalOwner(event.sender.id, request.requestId)
     return runtime.respondApproval(request.requestId, request.response)
   })
-  ipcMain.handle('codex:snooze-approval-auto-resolution', (_, payload: unknown) => {
+  ipcMain.handle('codex:snooze-approval-auto-resolution', (event, payload: unknown) => {
     const request = codexSnoozeApprovalAutoResolutionPayloadSchema.parse(payload)
+    assertApprovalOwner(event.sender.id, request.requestId)
     return runtime.snoozeApprovalAutoResolution(request.requestId)
   })
   ipcMain.handle('codex:open-external-http-url', (_, payload: unknown) => {
@@ -659,6 +872,38 @@ app.whenReady().then(() => {
   ipcMain.handle(gitIpcChannels.commitChanges, localGitHandlers.commitChanges)
   ipcMain.handle(gitIpcChannels.getPublishStatus, localGitHandlers.getPublishStatus)
   ipcMain.handle(gitIpcChannels.pushChanges, localGitHandlers.pushChanges)
+  ipcMain.handle(githubPullRequestIpcChannels.getStatus, githubPullRequestHandlers.getStatus)
+  ipcMain.handle(githubPullRequestIpcChannels.create, githubPullRequestHandlers.create)
+  ipcMain.handle(githubPullRequestIpcChannels.comment, githubPullRequestHandlers.comment)
+  ipcMain.handle(githubPullRequestIpcChannels.submitReview, githubPullRequestHandlers.submitReview)
+  ipcMain.handle(
+    githubPullRequestIpcChannels.requestReviewers,
+    githubPullRequestHandlers.requestReviewers
+  )
+  const keyboardShortcutHandlers = createKeyboardShortcutIpcHandlers(keyboardShortcuts)
+  ipcMain.handle(keyboardShortcutIpcChannels.get, keyboardShortcutHandlers.get)
+  ipcMain.handle(keyboardShortcutIpcChannels.update, async (event, payload) => {
+    return keyboardShortcutHandlers.update(event, payload)
+  })
+  ipcMain.handle(keyboardShortcutIpcChannels.reset, async () => {
+    return keyboardShortcutHandlers.reset()
+  })
+  ipcMain.handle(automationIpcChannels.list, () => requireAutomationService().list())
+  ipcMain.handle(automationIpcChannels.create, async (_event, payload: unknown) => {
+    return requireAutomationService().create(automationCreateRequestSchema.parse(payload))
+  })
+  ipcMain.handle(automationIpcChannels.update, async (_event, payload: unknown) => {
+    return requireAutomationService().update(automationUpdateRequestSchema.parse(payload))
+  })
+  ipcMain.handle(automationIpcChannels.setStatus, async (_event, payload: unknown) => {
+    return requireAutomationService().setStatus(automationStatusRequestSchema.parse(payload))
+  })
+  ipcMain.handle(automationIpcChannels.remove, async (_event, payload: unknown) => {
+    await requireAutomationService().remove(automationActionRequestSchema.parse(payload).id)
+  })
+  ipcMain.handle(automationIpcChannels.runNow, async (_event, payload: unknown) => {
+    return requireAutomationService().runNow(automationActionRequestSchema.parse(payload).id)
+  })
   ipcMain.on(localGitWatchControlChannels.subscribe, (event) => {
     localGitWatchBroker?.subscribe(event.sender)
   })
@@ -672,6 +917,11 @@ app.whenReady().then(() => {
   ipcMain.handle(
     'codex:reveal-local-path',
     createRevealLocalPathHandler((path) => shell.showItemInFolder(path))
+  )
+  ipcMain.on('codex:start-local-path-drag', (event, payload: unknown) =>
+    createStartLocalPathDragHandler((path) =>
+      event.sender.startDrag({ file: path, icon: nativeImage.createEmpty() })
+    )(payload)
   )
   ipcMain.handle('codex:list-existing-local-paths', createListExistingLocalPathsHandler({ stat }))
   ipcMain.handle(
@@ -827,6 +1077,17 @@ app.whenReady().then(() => {
     await broadcastProjectState()
     return project
   })
+  ipcMain.handle('codex:projects:list-worktrees', async (_event, payload: unknown) => {
+    const request = projectWorktreeListPayloadSchema.parse(payload)
+    return requireProjectWorktrees().list(request.source)
+  })
+  ipcMain.handle('codex:projects:select-worktree', async (_event, payload: unknown) => {
+    const request = projectWorktreeSelectPayloadSchema.parse(payload)
+    const worktree = await requireProjectWorktrees().resolve(request.source, request.path)
+    const state = await requireProjectApi().activateVerifiedWorktree(worktree)
+    await broadcastProjectState(state)
+    return state
+  })
   ipcMain.handle('codex:projects:select', async (_, payload: unknown) => {
     const request = projectSelectPayloadSchema.parse(payload)
     const state = await requireProjectApi().selectProject(request)
@@ -845,6 +1106,18 @@ app.whenReady().then(() => {
     await broadcastProjectState()
     return state
   })
+  ipcMain.handle('codex:projects:upsert-action', async (_, payload: unknown) => {
+    const request = projectActionUpsertPayloadSchema.parse(payload)
+    const state = await requireProjectApi().upsertProjectAction(request)
+    await broadcastProjectState(state)
+    return state
+  })
+  ipcMain.handle('codex:projects:remove-action', async (_, payload: unknown) => {
+    const request = projectActionRemovePayloadSchema.parse(payload)
+    const state = await requireProjectApi().removeProjectAction(request)
+    await broadcastProjectState(state)
+    return state
+  })
   ipcMain.handle('codex:projects:get-workspace-recovery', (_, payload: unknown) => {
     const request = workspaceRecoveryPayloadSchema.parse(payload)
     return requireWorkspaceRecovery().inspect(request)
@@ -858,6 +1131,11 @@ app.whenReady().then(() => {
   ipcMain.handle('codex:conversations:get-list', () =>
     requireConversationApi().getConversationList()
   )
+  ipcMain.handle('codex:conversations:consume-link', (event) => {
+    const link = pendingConversationLinksByWindowId.get(event.sender.id) ?? null
+    pendingConversationLinksByWindowId.delete(event.sender.id)
+    return link
+  })
   ipcMain.handle('codex:conversations:refresh-list', async () => {
     const state = await requireConversationApi().refreshConversationList()
     await broadcastConversationState()
@@ -866,6 +1144,15 @@ app.whenReady().then(() => {
   ipcMain.handle('codex:conversations:open', (_, payload: unknown) => {
     const request = sidebarConversationActionPayloadSchema.parse(payload)
     return requireConversationApi().openConversation(request)
+  })
+  ipcMain.handle('codex:conversations:open-in-new-window', async (_, payload: unknown) => {
+    const request = sidebarConversationActionPayloadSchema.parse(payload)
+    const conversation = await requireConversationApi().openConversation(request)
+    const window = createWindow({
+      conversationLink: { conversationId: conversation.conversationId }
+    })
+    conversationWindowRouter.bindConversation(conversation.conversationId, window.webContents.id)
+    conversationWindowRouter.bindThread(conversation.threadId, window.webContents.id)
   })
   ipcMain.handle('codex:conversations:get-goal', (_, payload: unknown) => {
     const request = sidebarConversationActionPayloadSchema.parse(payload)
@@ -902,11 +1189,58 @@ app.whenReady().then(() => {
     await broadcastConversationState()
     return state
   })
+  ipcMain.handle('codex:conversations:delete', async (_, payload: unknown) => {
+    const request = sidebarConversationActionPayloadSchema.parse(payload)
+    await requireFollowUpQueue().assertConversationCanBeDeleted(request.conversationId)
+    const state = await requireConversationApi().deleteConversation(request)
+    await requireFollowUpQueue().deleteConversation(request.conversationId)
+    await broadcastConversationState()
+    return state
+  })
+  ipcMain.handle('codex:conversations:delete-archived', async (_, payload: unknown) => {
+    const request = sidebarConversationBatchDeletePayloadSchema.parse(payload)
+    await Promise.all(
+      request.conversationIds.map((conversationId) =>
+        requireFollowUpQueue().assertConversationCanBeDeleted(conversationId)
+      )
+    )
+    const state = await requireConversationApi().deleteArchivedConversations(request)
+    await Promise.all(
+      request.conversationIds.map((conversationId) =>
+        requireFollowUpQueue().deleteConversation(conversationId)
+      )
+    )
+    await broadcastConversationState()
+    return state
+  })
   ipcMain.handle('codex:conversations:rename', async (_, payload: unknown) => {
     const request = sidebarConversationRenamePayloadSchema.parse(payload)
     const state = await requireConversationApi().renameConversation(request)
     await broadcastConversationState()
     return state
+  })
+  ipcMain.handle('codex:conversations:fork', async (_, payload: unknown) => {
+    const request = sidebarConversationForkPayloadSchema.parse(payload)
+    const forked = await requireConversationForkService().fork(request)
+    await requireConversationApi().observeStartedThread({
+      threadId: forked.thread.id,
+      originConversationId: request.conversationId,
+      title: forked.thread.title,
+      cwd: forked.thread.cwd,
+      createdAt: forked.thread.createdAt,
+      updatedAt: forked.thread.updatedAt,
+      projectAssignment: forked.projectAssignment
+    })
+    await broadcastProjectState()
+    await broadcastConversationState({
+      awaitThreadId: forked.thread.id,
+      discardStartedObservationOnConvergenceFailure: false
+    })
+    return requireConversationApi().openConversation({ conversationId: forked.thread.id })
+  })
+  ipcMain.handle('codex:conversations:submit-feedback', (_, payload: unknown) => {
+    const request = sidebarConversationFeedbackPayloadSchema.parse(payload)
+    return requireConversationApi().submitConversationFeedback(request)
   })
   ipcMain.handle('codex:conversations:interrupt', (_, payload: unknown) => {
     const request = sidebarConversationActionPayloadSchema.parse(payload)
@@ -915,7 +1249,7 @@ app.whenReady().then(() => {
   ipcMain.handle('codex:conversations:get-preferences', () =>
     requireConversationApi().getPreferences()
   )
-  ipcMain.handle('codex:conversations:set-preferences', (_, payload: unknown) => {
+  ipcMain.handle('codex:conversations:set-preferences', async (_, payload: unknown) => {
     const request = sidebarPreferencesPatchSchema.parse(payload)
     return requireConversationApi().setPreferences(request)
   })
@@ -928,6 +1262,7 @@ app.whenReady().then(() => {
     if (!port) return
     const { request, streamId } = codexChatStartPayloadSchema.parse(payload)
     rightWorkspaceIpc?.terminalManager.bindConversationOwner(request.chatId, event.sender.id)
+    conversationWindowRouter.bindConversation(request.chatId, event.sender.id)
     port.once('close', () => {
       runtime.handleChatStreamPortClosed(request.chatId, streamId)
     })
@@ -937,6 +1272,7 @@ app.whenReady().then(() => {
         port,
         {
           onThreadIdAvailable: async (threadId, thread) => {
+            conversationWindowRouter.bindThread(threadId, event.sender.id)
             if (thread?.originConversationId) {
               await requireFollowUpQueue().migrateConversationKey(
                 thread.originConversationId,
@@ -982,6 +1318,9 @@ app.whenReady().then(() => {
       runId,
       afterSequence
     )
+    if (attachResult.status === 'attached') {
+      conversationWindowRouter.claimThreadIfUnowned(conversationId, event.sender.id)
+    }
     if (attachResult.status !== 'attached') {
       port.start()
       port.postMessage({ type: 'error', error: chatAttachFailure(attachResult) })
@@ -1002,11 +1341,11 @@ app.whenReady().then(() => {
     return runtime.getActiveChatSnapshot(request.conversationId) ?? null
   })
 
-  createWindow(runtime)
+  createWindow()
   broadcastStatus()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow(runtime)
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
@@ -1038,6 +1377,7 @@ app.on(
       try {
         await composerContextSearch?.shutdown()
       } finally {
+        automationService?.stop()
         localGitWatchBroker?.dispose()
         rightWorkspaceIpc?.dispose()
         composerContextChanges?.dispose()

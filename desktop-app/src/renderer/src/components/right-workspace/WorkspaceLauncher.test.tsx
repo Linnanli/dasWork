@@ -36,7 +36,7 @@ describe('WorkspaceLauncher', () => {
     })
 
     const buttons = [...container.querySelectorAll<HTMLButtonElement>('button')]
-    expect(buttons).toHaveLength(4)
+    expect(buttons).toHaveLength(10)
     for (const button of buttons) {
       expect(button.dataset.slot).toBe('button')
       expect(button.dataset.variant).toBe('secondary')

@@ -23,6 +23,8 @@ class FakeBrowserView implements BrowserWorkspaceViewAdapter {
   private destroyed = false
   private finishLoad: (() => void) | null = null
   private failLoad: ((error?: string) => void) | null = null
+  private didNavigate: ((url: string) => void) | null = null
+  private didNavigateInPage: ((url: string) => void) | null = null
   private faviconUpdated: ((faviconUrls: string[]) => void) | null = null
 
   onDidFinishLoad(listener: () => void): void {
@@ -39,6 +41,22 @@ class FakeBrowserView implements BrowserWorkspaceViewAdapter {
 
   emitFailLoad(error: string): void {
     this.failLoad?.(error)
+  }
+
+  onDidNavigate(listener: (url: string) => void): void {
+    this.didNavigate = listener
+  }
+
+  emitNavigate(url: string): void {
+    this.didNavigate?.(url)
+  }
+
+  onDidNavigateInPage(listener: (url: string) => void): void {
+    this.didNavigateInPage = listener
+  }
+
+  emitNavigateInPage(url: string): void {
+    this.didNavigateInPage?.(url)
   }
 
   onFaviconUpdated(listener: (faviconUrls: string[]) => void): void {
@@ -217,6 +235,38 @@ describe('BrowserWorkspaceService', () => {
       ).toThrow()
     }
     expect(view.loadURL).toHaveBeenCalledTimes(3)
+  })
+
+  it('syncs document and in-page navigation into the browser snapshot', () => {
+    const view = new FakeBrowserView()
+    const service = new BrowserWorkspaceService({
+      host: createHost(view),
+      createId: () => 'browser-1',
+      now: () => new Date('2026-08-01T00:00:00.000Z')
+    })
+    service.create({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      workspaceId: 'workspace-1',
+      url: 'https://example.com/start',
+      bounds
+    })
+    view.emitFavicon(['https://example.com/favicon.ico'])
+
+    view.emitNavigate('https://example.com/article')
+    expect(service.list({ version: BROWSER_WORKSPACE_API_VERSION }).views[0]).toMatchObject({
+      url: 'https://example.com/article',
+      faviconUrl: undefined
+    })
+
+    view.emitNavigateInPage('https://example.com/article#summary')
+    expect(service.list({ version: BROWSER_WORKSPACE_API_VERSION }).views[0]?.url).toBe(
+      'https://example.com/article#summary'
+    )
+
+    view.emitNavigate('file:///etc/passwd')
+    expect(service.list({ version: BROWSER_WORKSPACE_API_VERSION }).views[0]?.url).toBe(
+      'https://example.com/article#summary'
+    )
   })
 
   it('supports hiding with zero-height bounds and restoring bounds on show', () => {

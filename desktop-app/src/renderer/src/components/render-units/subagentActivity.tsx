@@ -40,6 +40,11 @@ export function SubagentActivityGroup({
           <>
             <BotIcon aria-hidden className="size-3.5 shrink-0" />
             <span className="max-w-44 truncate">{agent.displayName}</span>
+            {agent.model ? (
+              <span className="max-w-28 truncate text-[11px] text-muted-foreground/80">
+                {agent.model}
+              </span>
+            ) : null}
             <span className="text-[11px] text-muted-foreground/80">
               {activityStatusLabel(agent.displayStatus)}
             </span>

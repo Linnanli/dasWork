@@ -12,6 +12,7 @@ import {
   cleanupTempDirs,
   closeApp,
   collectRendererLogs,
+  expectAppReady,
   launchApp
 } from './support/app'
 import {
@@ -95,6 +96,14 @@ test('uses one Composer panel for slash and @ commands without sending text', as
       '输入消息（@ 提及工具，/ 输入命令）'
     )
 
+    await composerInput.fill('/model')
+    await expect(
+      commandPanel.getByRole('option', { name: /模型.*选择用于下一轮任务的模型/ })
+    ).toBeVisible()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('[data-slot="model-selector-list"]')).toHaveCount(1)
+    await page.keyboard.press('Escape')
+
     await composerInput.fill('@')
     const contextPanel = page.getByRole('listbox', { name: '添加上下文' })
     await expect(
@@ -155,6 +164,67 @@ test('sends Plan as a real turn/start collaboration mode packet', async ({
     const turnStartPacket = logs.findLast((line) => line.includes('"debug":"turn/start"'))
     expect(turnStartPacket).toContain('"collaborationMode":{"mode":"plan"')
     expect(turnStartPacket).toContain('"developer_instructions":null')
+  } finally {
+    await attachDiagnostics(testInfo, logs, backend, app)
+    await closeApp(app)
+    await backend.close()
+  }
+})
+
+test('sends slash-selected reasoning effort in the default collaboration mode', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  const backend = await startMockBackend({
+    responses: [
+      assistantMessageResponse('reasoning-mode', 'reasoning-mode-message', 'Reasoned response')
+    ]
+  })
+  const logs: string[] = []
+  let app: ElectronApplication | undefined
+
+  try {
+    app = await launchApp(backend, logs)
+    const page = await app.firstWindow()
+    collectRendererLogs(page, logs)
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('codex:list-models')
+      ipcMain.handle('codex:list-models', () => ({
+        models: [
+          {
+            id: 'qwen3.7-plus',
+            displayName: 'qwen3.7-plus',
+            inputModalities: ['text'],
+            reasoningEfforts: [{ id: 'low' }, { id: 'high' }],
+            defaultReasoningEffort: 'high',
+            isDefault: true
+          }
+        ],
+        selectedModelId: 'qwen3.7-plus'
+      }))
+    })
+    await page.reload()
+    await expectAppReady(page)
+    await ensureLocalProjectSelected(page)
+
+    const composerInput = page.locator('.aui-lexical-input[contenteditable="true"]').last()
+    await composerInput.fill('/reasoning')
+    await expect(
+      page.getByRole('listbox', { name: '命令' }).getByRole('option', { name: /推理强度/ })
+    ).toBeVisible()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('[data-slot="model-selector-effort"]')).toHaveCount(1)
+    await page.getByRole('button', { name: 'low', exact: true }).click()
+    await page.keyboard.press('Escape')
+
+    await sendComposerMessage(page, '使用低推理强度回复。')
+    await expect(page.locator('[data-role="assistant"]')).toContainText('Reasoned response')
+    await expect
+      .poll(() => logs.some((line) => line.includes('"reasoning_effort":"low"')), {
+        timeout: 10_000
+      })
+      .toBe(true)
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)

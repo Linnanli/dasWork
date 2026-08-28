@@ -5,6 +5,7 @@ import { PACKAGE_NAME, PACKAGE_VERSION } from './package-info'
 import type { Thread } from './protocol/app-server-protocol/v2/Thread'
 import type { TurnItemsView } from './protocol/app-server-protocol/v2/TurnItemsView'
 import type { TurnsPage } from './protocol/app-server-protocol/v2/TurnsPage'
+import type { McpResourceReadResponse } from './protocol/app-server-protocol/v2/McpResourceReadResponse'
 import type {
   CodexInitializeParams,
   CodexInitializeResult,
@@ -58,12 +59,23 @@ export interface CodexThreadReadParams {
   includeTurns?: boolean
 }
 
+export interface CodexMcpResourceReadParams {
+  threadId?: string
+  server: string
+  uri: string
+}
+
 export interface CodexThreadForkParams {
   ephemeral?: boolean
   excludeTurns?: boolean
+  cwd?: string
+  runtimeWorkspaceRoots?: string[]
 }
 
 export type CodexThreadGoalSetParams = Omit<ThreadGoalSetParams, 'threadId'>
+
+/** The two ratings exposed by the desktop conversation UI. */
+export type CodexFeedbackClassification = 'positive' | 'negative'
 
 /** Stable, renderer-independent subset of experimentalFeature/list. */
 export interface CodexExperimentalFeature {
@@ -86,6 +98,10 @@ export interface CodexThreadReadResponse {
 }
 
 export interface CodexThreadForkResponse {
+  thread: Thread
+}
+
+export interface CodexThreadRollbackResponse {
   thread: Thread
 }
 
@@ -145,6 +161,19 @@ export class CodexHistoryClient {
     )
   }
 
+  async readMcpResource(input: CodexMcpResourceReadParams): Promise<McpResourceReadResponse> {
+    return this.withClient((client) =>
+      client.request<McpResourceReadResponse>(
+        'mcpServer/resource/read',
+        stripUndefined({
+          threadId: input.threadId,
+          server: input.server,
+          uri: input.uri
+        })
+      )
+    )
+  }
+
   async renameThread(threadId: string, name: string): Promise<void> {
     await this.withClient((client) => client.request('thread/name/set', { threadId, name }))
   }
@@ -168,9 +197,21 @@ export class CodexHistoryClient {
         stripUndefined({
           threadId,
           ephemeral: params.ephemeral,
-          excludeTurns: params.excludeTurns
+          excludeTurns: params.excludeTurns,
+          cwd: params.cwd,
+          runtimeWorkspaceRoots: params.runtimeWorkspaceRoots
         })
       )
+      return response.thread
+    })
+  }
+
+  async rollbackThread(threadId: string, numTurns: number): Promise<Thread> {
+    return this.withClient(async (client) => {
+      const response = await client.request<CodexThreadRollbackResponse>('thread/rollback', {
+        threadId,
+        numTurns
+      })
       return response.thread
     })
   }
@@ -230,6 +271,26 @@ export class CodexHistoryClient {
       })
       return response.cleared
     })
+  }
+
+  async submitFeedback(
+    threadId: string,
+    classification: CodexFeedbackClassification,
+    targetTurnId?: string
+  ): Promise<void> {
+    await this.withClient((client) =>
+      client.request('feedback/upload', {
+        classification,
+        threadId,
+        // Inline feedback is intentionally metadata-only. Do not attach
+        // rollouts, diagnostics, or files without a separate user choice.
+        includeLogs: false,
+        tags: {
+          surface: 'dascowork-assistant-message',
+          ...(targetTurnId ? { target_turn_id: targetTurnId } : {})
+        }
+      })
+    )
   }
 
   private async withClient<T>(

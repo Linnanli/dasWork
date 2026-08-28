@@ -21,7 +21,15 @@ function createHistoryClient(threads: HistoryThread[] = []): AppServerHistoryCli
     }),
     archiveThread: vi.fn(async () => undefined),
     unarchiveThread: vi.fn(async () => undefined),
-    renameThread: vi.fn(async () => undefined)
+    deleteThread: vi.fn(async () => undefined),
+    renameThread: vi.fn(async () => undefined),
+    forkThread: vi.fn(async () => {
+      throw new Error('unexpected fork')
+    }),
+    rollbackThread: vi.fn(async () => {
+      throw new Error('unexpected rollback')
+    }),
+    submitFeedback: vi.fn(async () => undefined)
   }
 }
 
@@ -35,7 +43,8 @@ describe('AppServerThreadClient', () => {
         createdAt: 1782777600,
         updatedAt: 1782777900,
         status: { type: 'idle' },
-        cwd: '/repo/app'
+        cwd: '/repo/app',
+        threadSource: 'automation'
       })
     ])
     const client = new AppServerThreadClient({ historyClient })
@@ -49,7 +58,8 @@ describe('AppServerThreadClient', () => {
         updatedAt: '2026-06-30T00:05:00.000Z',
         archived: false,
         running: false,
-        cwd: '/repo/app'
+        cwd: '/repo/app',
+        threadSource: 'automation'
       }
     ])
 
@@ -293,6 +303,43 @@ describe('AppServerThreadClient', () => {
     ])
   })
 
+  it('forks a clone and rolls back only the clone after the selected turn', async () => {
+    const turns = ['turn-1', 'turn-2', 'turn-3'].map((id) => ({
+      id,
+      items: [],
+      itemsView: 'full' as const,
+      status: 'completed' as const,
+      error: null,
+      startedAt: null,
+      completedAt: null,
+      durationMs: null
+    }))
+    const historyClient = createHistoryClient([historyThread({ id: 'source', turns })])
+    const forked = historyThread({ id: 'forked', turns })
+    const rolledBack = historyThread({ id: 'forked', turns: turns.slice(0, 2) })
+    vi.mocked(historyClient.forkThread).mockResolvedValue(forked)
+    vi.mocked(historyClient.rollbackThread).mockResolvedValue(rolledBack)
+    const client = new AppServerThreadClient({ historyClient })
+
+    await expect(
+      client.forkThread({
+        threadId: 'source',
+        targetTurnId: 'turn-2',
+        ephemeral: false
+      })
+    ).resolves.toMatchObject({
+      id: 'forked',
+      turns: [{ id: 'turn-1' }, { id: 'turn-2' }]
+    })
+
+    expect(historyClient.forkThread).toHaveBeenCalledWith('source', {
+      ephemeral: false,
+      cwd: undefined,
+      runtimeWorkspaceRoots: undefined
+    })
+    expect(historyClient.rollbackThread).toHaveBeenCalledWith('forked', 1)
+  })
+
   it('rejects turn pages that are not full item views', async () => {
     const historyClient = createHistoryClient([historyThread({ id: 'thread-1' })])
     vi.mocked(historyClient.listTurns).mockResolvedValue({
@@ -318,19 +365,30 @@ describe('AppServerThreadClient', () => {
     )
   })
 
-  it('forwards archive, unarchive, rename, and read requests', async () => {
+  it('forwards archive, unarchive, delete, rename, and read requests', async () => {
     const historyClient = createHistoryClient([historyThread({ id: 'thread-1', name: 'Renamed' })])
     const client = new AppServerThreadClient({ historyClient })
 
     await client.archiveThread('thread-1')
     await client.unarchiveThread('thread-1')
+    await client.deleteThread('thread-1')
     await client.renameThread('thread-1', 'Renamed')
     await client.readThread('thread-1')
 
     expect(historyClient.archiveThread).toHaveBeenCalledWith('thread-1')
     expect(historyClient.unarchiveThread).toHaveBeenCalledWith('thread-1')
+    expect(historyClient.deleteThread).toHaveBeenCalledWith('thread-1')
     expect(historyClient.renameThread).toHaveBeenCalledWith('thread-1', 'Renamed')
     expect(historyClient.readThread).toHaveBeenCalledWith('thread-1', { includeTurns: false })
+  })
+
+  it('forwards inline feedback through the provider history client', async () => {
+    const historyClient = createHistoryClient([historyThread({ id: 'thread-1' })])
+    const client = new AppServerThreadClient({ historyClient })
+
+    await client.submitFeedback('thread-1', 'negative', 'turn-1')
+
+    expect(historyClient.submitFeedback).toHaveBeenCalledWith('thread-1', 'negative', 'turn-1')
   })
 })
 

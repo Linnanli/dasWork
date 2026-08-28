@@ -4,6 +4,7 @@ import {
   ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
+  GitBranchIcon,
   LaptopIcon,
   PlusIcon,
   XIcon
@@ -20,8 +21,9 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import type { ProjectSelection } from '../../../shared/projects/projectTypes'
+import type { ProjectSelection, ProjectWorktree } from '../../../shared/projects/projectTypes'
 import { CreateBlankProjectDialog } from './CreateBlankProjectDialog'
+import { CreateRemoteProjectDialog, type RemoteProjectInput } from './CreateRemoteProjectDialog'
 import {
   buildProjectPickerOptions,
   describeProjectSelection,
@@ -30,7 +32,7 @@ import {
 } from './projectPickerModel'
 import type { ProjectStateController } from './useProjectState'
 
-type ProjectPickerPage = 'projects' | 'new-project'
+type ProjectPickerPage = 'projects' | 'new-project' | 'worktrees'
 
 const projectPickerGroupClassName =
   'py-1 px-0 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[11px]'
@@ -54,7 +56,9 @@ export function ComposerProjectCard({
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [worktrees, setWorktrees] = useState<ProjectWorktree[] | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createRemoteDialogOpen, setCreateRemoteDialogOpen] = useState(false)
   const state = projectState.state
   const selectionDescription = state
     ? describeProjectSelection(state, activeSelection)
@@ -77,6 +81,7 @@ export function ComposerProjectCard({
       setPage('projects')
       setQuery('')
       setError(null)
+      setWorktrees(null)
     }
   }
 
@@ -109,6 +114,30 @@ export function ComposerProjectCard({
     void runProjectAction(async () => Boolean(await projectState.pickWorkspaceRoot()))
   }
 
+  const openWorktreePicker = (): void => {
+    if (!activeSelection) return
+    setPending(true)
+    setError(null)
+    void projectState
+      .listWorktrees(activeSelection)
+      .then((nextWorktrees) => {
+        setWorktrees(nextWorktrees)
+        setPage('worktrees')
+      })
+      .catch((actionError: unknown) => {
+        setError(actionError instanceof Error ? actionError.message : String(actionError))
+      })
+      .finally(() => setPending(false))
+  }
+
+  const selectWorktree = (worktree: ProjectWorktree): void => {
+    if (!activeSelection) return
+    void runProjectAction(async () => {
+      await projectState.selectWorktree({ source: activeSelection, path: worktree.path })
+      return true
+    })
+  }
+
   const createBlankProject = async (name: string, operationId: string): Promise<void> => {
     await projectState.createBlankProject(name, operationId)
     finishProjectChange()
@@ -117,6 +146,16 @@ export function ComposerProjectCard({
   const openCreateDialog = (): void => {
     setOpen(false)
     setCreateDialogOpen(true)
+  }
+
+  const openCreateRemoteDialog = (): void => {
+    setOpen(false)
+    setCreateRemoteDialogOpen(true)
+  }
+
+  const createRemoteProject = async (input: RemoteProjectInput): Promise<void> => {
+    await projectState.createRemoteProject(input)
+    finishProjectChange()
   }
 
   const triggerLabel = isProjectless ? '选择项目' : `更改项目：${selectionDescription.label}`
@@ -213,6 +252,20 @@ export function ComposerProjectCard({
                           <span>不在项目中工作</span>
                         </CommandItem>
                       )}
+                      {activeSelection &&
+                      !isProjectless &&
+                      activeSelection.projectKind !== 'remote' ? (
+                        <CommandItem
+                          className={projectPickerItemClassName}
+                          disabled={pending}
+                          value="select-git-worktree"
+                          onSelect={openWorktreePicker}
+                        >
+                          <GitBranchIcon className="size-4" />
+                          <span>选择 Git worktree</span>
+                          <ChevronRightIcon className="ml-auto size-4" />
+                        </CommandItem>
+                      ) : null}
                       <CommandItem
                         className={projectPickerItemClassName}
                         disabled={pending}
@@ -234,7 +287,7 @@ export function ComposerProjectCard({
                     ) : null}
                   </CommandList>
                 </>
-              ) : (
+              ) : page === 'new-project' ? (
                 <CommandList className="max-h-none overflow-visible">
                   <div className="flex items-center gap-2 px-1.5 py-1">
                     <button
@@ -264,7 +317,69 @@ export function ComposerProjectCard({
                       <FolderOpenIcon className="size-4" />
                       <span>使用现有文件夹</span>
                     </CommandItem>
+                    <CommandItem
+                      className={projectPickerItemClassName}
+                      value="connect-remote-project"
+                      onSelect={openCreateRemoteDialog}
+                    >
+                      <LaptopIcon className="size-4" />
+                      <span>连接远程项目</span>
+                    </CommandItem>
                   </CommandGroup>
+                  {error ? (
+                    <p className="px-3 pb-3 text-sm text-destructive" role="alert">
+                      {error}
+                    </p>
+                  ) : null}
+                </CommandList>
+              ) : (
+                <CommandList className="max-h-none overflow-visible">
+                  <div className="flex items-center gap-2 px-1.5 py-1">
+                    <button
+                      aria-label="返回项目列表"
+                      className="grid size-8 place-items-center rounded-lg text-popover-foreground/75 outline-none transition-colors hover:bg-foreground/5 hover:text-popover-foreground focus-visible:bg-foreground/5 dark:hover:bg-foreground/8 dark:focus-visible:bg-foreground/8"
+                      type="button"
+                      onClick={() => setPage('projects')}
+                    >
+                      <ChevronLeftIcon className="size-4" />
+                    </button>
+                    <span className="text-sm font-normal">选择 Git worktree</span>
+                  </div>
+                  <CommandGroup
+                    className={projectPickerGroupClassName}
+                    heading="当前项目的 worktree"
+                  >
+                    {worktrees?.map((worktree) => (
+                      <CommandItem
+                        key={worktree.path}
+                        className={projectPickerItemClassName}
+                        disabled={pending}
+                        value={worktree.path}
+                        onSelect={() => selectWorktree(worktree)}
+                      >
+                        <GitBranchIcon className="size-4" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">
+                            {worktree.branch ?? 'Detached HEAD'}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {worktree.path}
+                          </span>
+                        </span>
+                        {worktree.isCurrent ? (
+                          <CheckIcon
+                            aria-label="当前 worktree"
+                            className="size-4 text-foreground"
+                          />
+                        ) : null}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                  {worktrees?.length === 0 ? (
+                    <CommandEmpty className="px-3 py-4 text-muted-foreground">
+                      当前项目没有可用的 Git worktree
+                    </CommandEmpty>
+                  ) : null}
                   {error ? (
                     <p className="px-3 pb-3 text-sm text-destructive" role="alert">
                       {error}
@@ -281,6 +396,11 @@ export function ComposerProjectCard({
         open={createDialogOpen}
         onCreate={createBlankProject}
         onOpenChange={setCreateDialogOpen}
+      />
+      <CreateRemoteProjectDialog
+        open={createRemoteDialogOpen}
+        onCreate={createRemoteProject}
+        onOpenChange={setCreateRemoteDialogOpen}
       />
     </>
   )

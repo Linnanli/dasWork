@@ -1,4 +1,13 @@
-import { FilesIcon, GitPullRequestIcon, GlobeIcon, TerminalIcon } from 'lucide-react'
+import {
+  Clock3Icon,
+  BoxIcon,
+  BookOpenTextIcon,
+  FilesIcon,
+  GitPullRequestIcon,
+  GlobeIcon,
+  ListTodoIcon,
+  TerminalIcon
+} from 'lucide-react'
 import type { ComponentType } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -18,6 +27,42 @@ const entries: Array<{
     shortcut: '⌘ R',
     icon: GitPullRequestIcon,
     target: { type: 'review' }
+  },
+  {
+    label: 'Pull Request',
+    shortcut: '',
+    icon: GitPullRequestIcon,
+    target: { type: 'pull-request' }
+  },
+  {
+    label: '任务',
+    shortcut: '',
+    icon: ListTodoIcon,
+    target: { type: 'task-summary' }
+  },
+  {
+    label: '时间线',
+    shortcut: '',
+    icon: Clock3Icon,
+    target: { type: 'timeline' }
+  },
+  {
+    label: '产物',
+    shortcut: '',
+    icon: BoxIcon,
+    target: { type: 'outputs' }
+  },
+  {
+    label: '来源',
+    shortcut: '',
+    icon: BookOpenTextIcon,
+    target: { type: 'sources' }
+  },
+  {
+    label: '进程',
+    shortcut: '',
+    icon: TerminalIcon,
+    target: { type: 'processes' }
   },
   {
     label: '终端',
@@ -81,5 +126,8 @@ function openWithRightWorkspace(
 ): void {
   if (target.type === 'review') return actions.openReview(target.source)
   if (target.type === 'file') return actions.openFile(target.relativePath, target.title)
+  // MCP Apps are task-bound and need a validated transcript resource, so they
+  // are opened from Sources in the workspace-container rather than this legacy launcher.
+  if (target.type === 'mcp-app') return
   actions.openTab(target.type)
 }

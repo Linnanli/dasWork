@@ -330,6 +330,34 @@ describe('FileWorkspace', () => {
     })
   })
 
+  it('explains when a selected file no longer exists', async () => {
+    window.desktopApp.workspace.files.readFile = vi.fn(async () => ({
+      version: 1 as const,
+      rootId: 'root-1',
+      path: 'preview.pdf',
+      unavailable: 'not-found' as const
+    }))
+    const selectedFileProps = baseProps()
+    selectedFileProps.tab = {
+      ...selectedFileProps.tab,
+      relativePath: 'preview.pdf',
+      title: 'preview.pdf'
+    }
+
+    await act(async () => {
+      root.render(<FileWorkspace {...selectedFileProps} />)
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+        '当前任务的项目中不存在“preview.pdf”。'
+      )
+    })
+  })
+
   it('renders code files with the Pierre file renderer', async () => {
     window.desktopApp.workspace.files.readFile = vi.fn(async () => ({
       version: 1 as const,

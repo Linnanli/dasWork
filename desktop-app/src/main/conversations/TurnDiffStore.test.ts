@@ -33,4 +33,19 @@ describe('TurnDiffStore', () => {
       new Map([['turn-1', '']])
     )
   })
+
+  it('removes every saved diff for a permanently deleted task', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'turn-diff-store-'))
+    temporaryRoots.push(root)
+    const store = new TurnDiffStore(root)
+
+    await store.save({ threadId: 'thread-delete', turnId: 'turn-a', diff: 'first' })
+    await store.save({ threadId: 'thread-delete', turnId: 'turn-b', diff: 'second' })
+    await store.save({ threadId: 'thread-keep', turnId: 'turn-c', diff: 'keep' })
+    await store.removeThread('thread-delete')
+
+    await expect(store.read('thread-delete', 'turn-a')).resolves.toBeUndefined()
+    await expect(store.read('thread-delete', 'turn-b')).resolves.toBeUndefined()
+    await expect(store.read('thread-keep', 'turn-c')).resolves.toBe('keep')
+  })
 })

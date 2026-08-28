@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-import type { ProjectSelection } from './projectTypes'
+import type { ProjectActionScope, ProjectSelection } from './projectTypes'
+import { normalizeRemoteExecServerUrl } from './remoteExecution'
 
 export const projectSelectionSchema = z.discriminatedUnion('projectKind', [
   z.object({ projectKind: z.literal('local'), projectId: z.string().min(1) }),
@@ -38,8 +39,8 @@ export const projectCreateBlankPayloadSchema = z.object({
 })
 
 export const projectCreateRemotePayloadSchema = z.object({
-  hostId: z.string().min(1),
-  label: z.string().trim().min(1),
+  hostId: z.string().trim().min(1).max(255),
+  label: z.string().trim().min(1).max(80),
   remotePath: z
     .string()
     .trim()
@@ -48,6 +49,17 @@ export const projectCreateRemotePayloadSchema = z.object({
       (path) => path.startsWith('/') && !path.includes('\0') && !/[\r\n]/u.test(path),
       'Remote project path must be an absolute POSIX path'
     ),
+  execServerUrl: z.string().transform((value, context) => {
+    try {
+      return normalizeRemoteExecServerUrl(value)
+    } catch (error) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return z.NEVER
+    }
+  }),
   terminalCommand: z
     .string()
     .trim()
@@ -82,3 +94,62 @@ export const projectRenamePayloadSchema = z.discriminatedUnion('projectKind', [
 ])
 
 export const projectSelectPayloadSchema = projectSelectionSchema
+
+const absoluteLocalPathSchema = z
+  .string()
+  .min(1)
+  .max(32_768)
+  .refine(
+    (path) =>
+      !path.includes('\0') &&
+      !/[\r\n]/u.test(path) &&
+      !path.startsWith('//') &&
+      !path.startsWith('\\\\') &&
+      (path.startsWith('/') || /^[A-Za-z]:[\\/]/u.test(path)),
+    'path must be an absolute local path'
+  )
+
+export const projectWorktreeListPayloadSchema = z
+  .object({ source: projectSelectionSchema })
+  .strict()
+
+export const projectWorktreeSelectPayloadSchema = projectWorktreeListPayloadSchema.extend({
+  path: absoluteLocalPathSchema
+})
+
+export const projectActionScopeSchema = z.discriminatedUnion('projectKind', [
+  z.object({ projectKind: z.literal('local'), projectId: z.string().min(1) }),
+  z.object({
+    projectKind: z.literal('remote'),
+    projectId: z.string().min(1),
+    hostId: z.string().min(1)
+  }),
+  z.object({
+    projectKind: z.literal('path'),
+    path: z.string().min(1),
+    hostId: z.literal('local').optional()
+  })
+]) satisfies z.ZodType<ProjectActionScope>
+
+const projectActionFieldsSchema = z.object({
+  title: z.string().trim().min(1).max(80),
+  command: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32_768)
+    .refine((command) => !command.includes('\0'), {
+      message: 'Action command cannot contain a NUL character'
+    })
+})
+
+export const projectActionUpsertPayloadSchema = z
+  .object({
+    scope: projectActionScopeSchema,
+    action: projectActionFieldsSchema.extend({ id: z.string().uuid().optional() })
+  })
+  .strict()
+
+export const projectActionRemovePayloadSchema = z
+  .object({ scope: projectActionScopeSchema, actionId: z.string().uuid() })
+  .strict()

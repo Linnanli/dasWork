@@ -1,9 +1,11 @@
 import type {
   ProjectSelection,
+  RemoteExecutionEnvironment,
   ResolvedExecutionTarget,
   ThreadProjectAssignment
 } from '../../shared/projects/projectTypes'
 import type { ProjectStore, ProjectState, LocalProject, RemoteProject } from './ProjectStore'
+import { normalizeRemoteExecServerUrl } from '../../shared/projects/remoteExecution'
 
 type LocalRootValidation = {
   realPath: string
@@ -209,6 +211,7 @@ export class ProjectService {
     return {
       hostId: project.hostId,
       cwd: project.remotePath,
+      remoteEnvironment: remoteExecutionEnvironmentForProject(project),
       ...(project.terminalCommand ? { terminalCommand: project.terminalCommand } : {}),
       workspaceRoots: [project.remotePath],
       workspaceKind: 'project',
@@ -251,16 +254,30 @@ export class ProjectService {
     state: ProjectState
   ): Promise<ResolvedExecutionTarget> {
     if (assignment.projectKind === 'remote') {
-      if (assignment.cwd) {
-        await this.dependencies.validateRemoteRoot(assignment.hostId, assignment.cwd)
+      const project =
+        state.remoteProjects.find(
+          (candidate) =>
+            candidate.id === assignment.projectId && candidate.hostId === assignment.hostId
+        ) ??
+        state.remoteProjects.find(
+          (candidate) =>
+            candidate.hostId === assignment.hostId && candidate.remotePath === assignment.cwd
+        )
+      if (!project) {
+        throw new Error(
+          'The remote project for this conversation is no longer configured. Reconnect the project before continuing.'
+        )
       }
+      const cwd = assignment.cwd ?? project.remotePath
+      await this.dependencies.validateRemoteRoot(assignment.hostId, cwd)
 
       return {
         hostId: assignment.hostId,
-        cwd: assignment.cwd,
-        workspaceRoots: assignment.cwd ? [assignment.cwd] : [],
+        cwd,
+        remoteEnvironment: remoteExecutionEnvironmentForProject(project, cwd),
+        workspaceRoots: [cwd],
         workspaceKind: 'project',
-        projectAssignment: assignment
+        projectAssignment: { ...assignment, cwd }
       }
     }
 
@@ -281,6 +298,10 @@ export class ProjectService {
     assignment: Extract<ThreadProjectAssignment, { projectKind: 'local' }>,
     state: ProjectState
   ): Promise<ResolvedExecutionTarget> {
+    if (assignment.managedWorktree) {
+      return this.resolveManagedWorktreeTarget(assignment)
+    }
+
     const project = state.localProjects[assignment.projectId]
 
     if (project) {
@@ -327,6 +348,41 @@ export class ProjectService {
     }
   }
 
+  private async resolveManagedWorktreeTarget(
+    assignment: Extract<ThreadProjectAssignment, { projectKind: 'local' }>
+  ): Promise<ResolvedExecutionTarget> {
+    const metadata = assignment.managedWorktree
+    if (
+      !metadata ||
+      metadata.workspaceKind !== 'managed-worktree' ||
+      metadata.managedByApp !== true ||
+      metadata.recoverable !== true ||
+      !assignment.cwd ||
+      assignment.cwd !== metadata.worktreePath ||
+      !isSafeManagedWorktreePath(metadata.worktreePath) ||
+      !isSafeManagedWorktreePath(metadata.repositoryRoot)
+    ) {
+      throw new Error('Managed worktree assignment is invalid')
+    }
+
+    const cwd = (await this.dependencies.validateLocalRoot(metadata.worktreePath)).realPath
+    if (cwd !== metadata.worktreePath) {
+      throw new Error('Managed worktree path no longer matches its saved location')
+    }
+
+    return {
+      hostId: 'local',
+      cwd,
+      workspaceRoots: [cwd],
+      workspaceKind: 'project',
+      projectAssignment: {
+        ...assignment,
+        cwd,
+        path: cwd
+      }
+    }
+  }
+
   private async resolveActiveProjectFallback(
     state: ProjectState
   ): Promise<ResolvedExecutionTarget | null> {
@@ -361,4 +417,25 @@ export class ProjectService {
 
     return null
   }
+}
+
+function remoteExecutionEnvironmentForProject(
+  project: RemoteProject,
+  cwd = project.remotePath
+): RemoteExecutionEnvironment {
+  if (!project.execServerUrl) {
+    throw new Error(
+      'This remote project has no Codex execution server. Reconnect it with a ws:// or wss:// execution server URL before starting a task.'
+    )
+  }
+
+  return {
+    environmentId: project.hostId,
+    cwd,
+    execServerUrl: normalizeRemoteExecServerUrl(project.execServerUrl)
+  }
+}
+
+function isSafeManagedWorktreePath(path: string): boolean {
+  return path.startsWith('/') && !path.includes('\0') && !path.split('/').includes('..')
 }

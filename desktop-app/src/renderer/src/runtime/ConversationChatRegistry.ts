@@ -8,6 +8,7 @@ import type {
   DesktopCodexChatApi,
   SidebarConversation,
   SidebarConversationOpenResult,
+  ReasoningEffort,
   ThreadGoalLoadResult,
   ThreadGoalSummary
 } from '../../../shared/codexIpcApi'
@@ -20,7 +21,8 @@ import {
   ConversationDraftStore,
   type ConversationApprovalModeKind,
   type ConversationComposerModeKind,
-  type ConversationDraftAttachment
+  type ConversationDraftAttachment,
+  type ConversationPersonality
 } from './ConversationDraftStore'
 import {
   ConversationTranscriptController,
@@ -50,11 +52,13 @@ export type ConversationChatEntry = {
   recoveryError?: Error
   selectedModelId?: string
   modelSelectionError?: string
+  reasoningEffort?: ReasoningEffort
   unread: boolean
   draft: string
   draftAttachments: readonly ConversationDraftAttachment[]
   composerModeKind: ConversationComposerModeKind
   approvalModeKind: ConversationApprovalModeKind
+  personality: ConversationPersonality
   goalEditorActive: boolean
   threadGoal: ThreadGoalSummary | null | undefined
   goalCapabilityStatus: GoalCapabilityStatus
@@ -298,6 +302,7 @@ export class ConversationChatRegistry {
     entry.draftAttachments = this.draftStore.getAttachments(threadId)
     entry.composerModeKind = this.draftStore.getComposerModeKind(threadId)
     entry.approvalModeKind = this.draftStore.getApprovalModeKind(threadId)
+    entry.personality = this.draftStore.getPersonality(threadId)
     this.transcriptRecoveryStore.migrate(previousDraftIdentity, threadId)
     entry.loaded = true
     this.emit()
@@ -389,6 +394,17 @@ export class ConversationChatRegistry {
     this.emit()
   }
 
+  setPersonality(
+    entryOrIdentity: ConversationChatEntry | string,
+    personality: ConversationPersonality
+  ): void {
+    const entry = this.internalEntry(entryOrIdentity)
+    if (entry.personality === personality) return
+    entry.personality = personality
+    this.draftStore.setPersonality(entry.context.threadId ?? entry.localId, personality)
+    this.emit()
+  }
+
   setGoalEditorActive(
     entryOrIdentity: ConversationChatEntry | string,
     goalEditorActive: boolean
@@ -439,6 +455,16 @@ export class ConversationChatRegistry {
     const entry = this.internalEntry(entryOrIdentity)
     entry.selectedModelId = modelId
     entry.modelSelectionError = undefined
+    this.emit()
+  }
+
+  setReasoningEffort(
+    entryOrIdentity: ConversationChatEntry | string,
+    reasoningEffort: ReasoningEffort | undefined
+  ): void {
+    const entry = this.internalEntry(entryOrIdentity)
+    if (entry.reasoningEffort === reasoningEffort) return
+    entry.reasoningEffort = reasoningEffort
     this.emit()
   }
 
@@ -584,6 +610,8 @@ export class ConversationChatRegistry {
       getProjectSelection: () => entry.context.projectSelection,
       getComposerModeKind: () => entry.composerModeKind,
       getApprovalModeKind: () => entry.approvalModeKind,
+      getPersonality: () => entry.personality,
+      getReasoningEffort: () => entry.reasoningEffort,
       getGoalEditorActive: () => entry.goalEditorActive,
       getGoalEditorObjective: () => entry.draft,
       getSelectedModelId: () => entry.selectedModelId ?? this.defaultSelectedModelId,
@@ -639,11 +667,13 @@ export class ConversationChatRegistry {
       context,
       status: input.status ?? 'ready',
       selectedModelId: this.defaultSelectedModelId,
+      reasoningEffort: undefined,
       unread: false,
       draft: this.draftStore.get(stableDraftIdentity),
       draftAttachments: this.draftStore.getAttachments(stableDraftIdentity),
       composerModeKind: this.draftStore.getComposerModeKind(stableDraftIdentity),
       approvalModeKind: this.draftStore.getApprovalModeKind(stableDraftIdentity),
+      personality: this.draftStore.getPersonality(stableDraftIdentity),
       goalEditorActive: false,
       threadGoal: undefined,
       goalCapabilityStatus: 'unknown',
@@ -854,6 +884,7 @@ export class ConversationChatRegistry {
     liveEntry.draftAttachments = this.draftStore.getAttachments(threadId)
     liveEntry.composerModeKind = this.draftStore.getComposerModeKind(threadId)
     liveEntry.approvalModeKind = this.draftStore.getApprovalModeKind(threadId)
+    liveEntry.personality = this.draftStore.getPersonality(threadId)
     this.transcriptRecoveryStore.migrate(previousDraftIdentity, threadId)
     liveEntry.scroll ??= placeholder.scroll
     liveEntry.loaded = true

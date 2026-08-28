@@ -33,7 +33,8 @@ const nativeHTMLElementFocus = HTMLElement.prototype.focus
 import type {
   CodexApprovalRequest,
   ComposerContextCatalogResult,
-  DesktopProjectsApi
+  DesktopProjectsApi,
+  ReasoningEffort
 } from '../../shared/codexIpcApi'
 import type { ProjectState } from '../../shared/projects/projectTypes'
 import type { ActiveConversationContext } from './lib/ElectronIpcChatTransport'
@@ -84,17 +85,23 @@ type MockMessagePart =
     }
   | {
       type: 'file'
-      mediaType: string
+      mediaType?: string
+      mimeType?: string
       data?: string
       url?: string
       name?: string
+      filename?: string
       providerMetadata?: unknown
       status?: MockPartStatus
     }
 
 type MockExternalMessage = {
   parts: { type: 'reasoning' | 'text'; providerMetadata?: unknown }[]
-  metadata?: { codexTurnDurationMs?: number }
+  metadata?: Record<string, unknown>
+}
+
+function imageMediaTypeForMockPart(part: Extract<MockMessagePart, { type: 'file' }>): string {
+  return part.mediaType ?? part.mimeType ?? 'application/octet-stream'
 }
 
 type MockThreadMessageState = {
@@ -148,6 +155,11 @@ const pluginCenterResourceState = vi.hoisted(() => ({
   subscribe: vi.fn(() => vi.fn())
 }))
 
+const dictationAdapterState = vi.hoisted(() => ({
+  options: [] as Array<{ continuous?: boolean; interimResults?: boolean } | undefined>,
+  supported: false
+}))
+
 const runtimeState = vi.hoisted<{
   activeEntry: {
     localId: string
@@ -184,10 +196,13 @@ const runtimeState = vi.hoisted<{
   respondToServerRequest: ReturnType<typeof vi.fn>
   serverRequests: CodexApprovalRequest[]
   selectedModelId: string | undefined
+  reasoningEffort: ReasoningEffort | undefined
   modelSelectionError: string | undefined
   setSelectedModelId: ReturnType<typeof vi.fn>
+  setActiveReasoningEffort: ReturnType<typeof vi.fn>
   setActiveProjectSelection: ReturnType<typeof vi.fn>
   startNewConversation: ReturnType<typeof vi.fn>
+  startNewConversationWithDraft: ReturnType<typeof vi.fn>
   prepareNewConversation: ReturnType<typeof vi.fn>
   activateConversation: ReturnType<typeof vi.fn>
   openConversation: ReturnType<typeof vi.fn>
@@ -237,10 +252,13 @@ const runtimeState = vi.hoisted<{
   respondToServerRequest: vi.fn(),
   serverRequests: [],
   selectedModelId: 'gpt-5-codex',
+  reasoningEffort: undefined,
   modelSelectionError: undefined,
   setSelectedModelId: vi.fn(),
+  setActiveReasoningEffort: vi.fn(),
   setActiveProjectSelection: vi.fn(),
   startNewConversation: vi.fn(),
+  startNewConversationWithDraft: vi.fn(),
   prepareNewConversation: vi.fn(),
   activateConversation: vi.fn(),
   openConversation: vi.fn(),
@@ -277,7 +295,9 @@ const modelContextState = vi.hoisted<{ tools?: Record<string, { description?: st
 
 const aiSdkRuntimeState = vi.hoisted<{
   options?: {
+    adapters?: { dictation?: unknown }
     isDisabled?: boolean
+    messages?: readonly unknown[]
     convertMessage?: (
       message: {
         renderId: string
@@ -312,7 +332,21 @@ const composerRuntimeState = vi.hoisted<{
   insertedContextItems: unknown[]
   sendCalls: number
   setTextCalls: string[]
-}>(() => ({ eventHandlers: {}, insertedContextItems: [], sendCalls: 0, setTextCalls: [] }))
+  suggestionController: {
+    openFromEditor: (input: {
+      trigger: '/'
+      source: 'typed-slash'
+      query: string
+      range: null
+    }) => void
+  } | null
+}>(() => ({
+  eventHandlers: {},
+  insertedContextItems: [],
+  sendCalls: 0,
+  setTextCalls: [],
+  suggestionController: null
+}))
 
 const assistantThreadState = vi.hoisted<{ isRunning: boolean }>(() => ({ isRunning: false }))
 
@@ -350,6 +384,9 @@ const projectHookState = vi.hoisted<{ controller: ProjectStateController }>(() =
     pickWorkspaceRoot: vi.fn(),
     createBlankProject: vi.fn(),
     createLocalProject: vi.fn(),
+    createRemoteProject: vi.fn(),
+    listWorktrees: vi.fn(),
+    selectWorktree: vi.fn(),
     selectProject: vi.fn(),
     renameProject: vi.fn(),
     removeProject: vi.fn()
@@ -371,16 +408,21 @@ function resetThreadMessageState(): void {
   pluginCenterResourceState.prefetch.mockResolvedValue(undefined)
   pluginCenterResourceState.subscribe.mockReset()
   pluginCenterResourceState.subscribe.mockReturnValue(vi.fn())
+  dictationAdapterState.options = []
+  dictationAdapterState.supported = false
   runtimeState.rejectServerRequest.mockReset()
   runtimeState.rejectServerRequest.mockResolvedValue(undefined)
   runtimeState.respondToServerRequest.mockReset()
   runtimeState.respondToServerRequest.mockResolvedValue(undefined)
   runtimeState.selectedModelId = 'gpt-5-codex'
+  runtimeState.reasoningEffort = undefined
   runtimeState.modelSelectionError = undefined
   runtimeState.setSelectedModelId.mockReset()
   runtimeState.setSelectedModelId.mockResolvedValue(undefined)
+  runtimeState.setActiveReasoningEffort.mockReset()
   runtimeState.setActiveProjectSelection.mockReset()
   runtimeState.startNewConversation.mockReset()
+  runtimeState.startNewConversationWithDraft.mockReset()
   runtimeState.prepareNewConversation.mockReset()
   runtimeState.activateConversation.mockReset()
   runtimeState.openConversation.mockReset()
@@ -391,6 +433,7 @@ function resetThreadMessageState(): void {
   runtimeState.activeEntry.context = { conversationId: 'local-test' }
   runtimeState.activeEntry.status = 'ready'
   delete runtimeState.activeEntry.error
+  delete (runtimeState.activeEntry as { threadGoal?: unknown }).threadGoal
   runtimeState.activeEntry.loaded = true
   runtimeState.activeEntry.messages = []
   runtimeState.activeEntry.draft = ''
@@ -437,7 +480,9 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
       openLocalPath: vi.fn(async () => undefined),
       revealLocalPath: vi.fn(async () => undefined),
       listExistingLocalPaths: vi.fn(async ({ paths }) => ({ existingPaths: paths })),
-      pickLocalContext: vi.fn(async () => [])
+      pickLocalContext: vi.fn(async () => []),
+      onNewTaskRequested: vi.fn(() => () => undefined),
+      onCommandPaletteRequested: vi.fn(() => () => undefined)
     },
     workspace: {
       dispose: vi.fn(async () => undefined),
@@ -610,6 +655,8 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
       createBlankProject: vi.fn(),
       createLocalProject: vi.fn(),
       createRemoteProject: vi.fn(),
+      listWorktrees: vi.fn(),
+      selectWorktree: vi.fn(),
       selectProject: vi.fn(),
       removeProject: vi.fn(),
       renameProject: vi.fn(),
@@ -645,25 +692,41 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
         archivedConversationIds: [],
         loaded: true
       })),
+      deleteConversation: vi.fn(async () => ({
+        conversations: [],
+        archivedConversationIds: [],
+        loaded: true
+      })),
       renameConversation: vi.fn(async () => ({
         conversations: [],
         archivedConversationIds: [],
         loaded: true
       })),
+      forkConversation: vi.fn(async () => ({
+        conversationId: 'forked-thread',
+        threadId: 'forked-thread',
+        title: 'Forked thread',
+        messages: []
+      })),
+      submitFeedback: vi.fn(async () => undefined),
       interruptConversation: vi.fn(async () => undefined),
       getPreferences: vi.fn(async () => ({
         organizeMode: 'project',
         sortKey: 'updated_at',
         collapsedSectionIds: [],
-        collapsedGroupIds: []
+        collapsedGroupIds: [],
+        pinnedConversationIds: []
       })),
       setPreferences: vi.fn(async (input) => ({
         organizeMode: input.organizeMode ?? 'project',
         sortKey: input.sortKey ?? 'updated_at',
         collapsedSectionIds: input.collapsedSectionIds ?? [],
-        collapsedGroupIds: input.collapsedGroupIds ?? []
+        collapsedGroupIds: input.collapsedGroupIds ?? [],
+        pinnedConversationIds: input.pinnedConversationIds ?? []
       })),
-      onConversationListChange: vi.fn(() => () => undefined)
+      onConversationListChange: vi.fn(() => () => undefined),
+      consumeConversationLink: vi.fn(async () => null),
+      onConversationLink: vi.fn(() => () => undefined)
     }
   })
 }
@@ -759,7 +822,12 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
       models: [
         {
           id: 'gpt-5-codex',
-          name: 'GPT-5 Codex'
+          name: 'GPT-5 Codex',
+          efforts: [
+            { id: 'low', name: 'Low' },
+            { id: 'xhigh', name: 'Extra high' }
+          ],
+          defaultReasoningEffort: 'low'
         },
         {
           id: 'gpt-5.5',
@@ -767,15 +835,18 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
         }
       ],
       selectedModelId: runtimeState.selectedModelId,
+      reasoningEffort: runtimeState.reasoningEffort,
       modelSelectionError: runtimeState.modelSelectionError,
       activeConversation: runtimeState.activeConversation,
       startNewConversation: runtimeState.startNewConversation,
+      startNewConversationWithDraft: runtimeState.startNewConversationWithDraft,
       prepareNewConversation: runtimeState.prepareNewConversation,
       activateConversation: runtimeState.activateConversation,
       openConversation: runtimeState.openConversation,
       restoreActiveConversation: runtimeState.restoreActiveConversation,
       restoreSingleActiveConversation: runtimeState.restoreSingleActiveConversation,
       setSelectedModelId: runtimeState.setSelectedModelId,
+      setActiveReasoningEffort: runtimeState.setActiveReasoningEffort,
       setActiveProjectSelection: runtimeState.setActiveProjectSelection,
       setActiveDraft: runtimeState.setActiveDraft,
       setActiveDraftAttachments: runtimeState.setActiveDraftAttachments,
@@ -843,33 +914,38 @@ vi.mock('@/composer/contextLexicalInput', async () => {
 
   const SuggestionAwareMockLexicalInput = (props: PrimitiveProps): React.JSX.Element => {
     const { controller } = useComposerSuggestion()
-    useMockEffect(
-      () =>
-        controller.registerEditorController({
-          dismiss: () => controller.closeFromEditor(),
-          insertContext: (reference) => {
-            composerRuntimeState.insertedContextItems.push(
-              composerContextReferenceToTriggerItem(reference)
-            )
-          },
-          insertTriggerItem: (item) => {
-            composerRuntimeState.insertedContextItems.push(item)
-          },
-          rangeMatches: () => true,
-          replaceRange: () => {},
-          togglePlus: () => {
-            if (controller.getSnapshot().open) controller.closeFromEditor()
-            else
-              controller.openFromEditor({
-                trigger: '+',
-                source: 'plus',
-                query: '',
-                range: null
-              })
-          }
-        }),
-      [controller]
-    )
+    useMockEffect(() => {
+      composerRuntimeState.suggestionController = controller
+      const unregister = controller.registerEditorController({
+        dismiss: () => controller.closeFromEditor(),
+        insertContext: (reference) => {
+          composerRuntimeState.insertedContextItems.push(
+            composerContextReferenceToTriggerItem(reference)
+          )
+        },
+        insertTriggerItem: (item) => {
+          composerRuntimeState.insertedContextItems.push(item)
+        },
+        rangeMatches: () => true,
+        replaceRange: () => {},
+        togglePlus: () => {
+          if (controller.getSnapshot().open) controller.closeFromEditor()
+          else
+            controller.openFromEditor({
+              trigger: '+',
+              source: 'plus',
+              query: '',
+              range: null
+            })
+        }
+      })
+      return () => {
+        unregister()
+        if (composerRuntimeState.suggestionController === controller) {
+          composerRuntimeState.suggestionController = null
+        }
+      }
+    }, [controller])
     return <MockLexicalInput {...props} />
   }
 
@@ -976,6 +1052,10 @@ vi.mock('@assistant-ui/react', () => {
     },
     thread: {
       ...assistantState.thread,
+      capabilities: {
+        ...assistantState.thread.capabilities,
+        dictation: Boolean(aiSdkRuntimeState.options?.adapters?.dictation)
+      },
       isRunning: assistantThreadState.isRunning,
       messages: threadMessagesState.messages
     }
@@ -1066,11 +1146,14 @@ vi.mock('@assistant-ui/react', () => {
         </div>
       ),
       Cancel: primitive('Composer.Cancel'),
+      Dictate: primitive('Composer.Dictate'),
+      DictationTranscript: primitive('Composer.DictationTranscript'),
       Input: (props: PrimitiveProps) => (
         <textarea data-testid="plain-composer-input" {...omitPrimitiveOnlyProps(props)} />
       ),
       Root: primitive('Composer.Root'),
-      Send: primitive('Composer.Send')
+      Send: primitive('Composer.Send'),
+      StopDictation: primitive('Composer.StopDictation')
     },
     ErrorPrimitive: {
       Message: primitive('Error.Message'),
@@ -1085,9 +1168,9 @@ vi.mock('@assistant-ui/react', () => {
                   (part): part is Extract<MockMessagePart, { type: 'file' }> => part.type === 'file'
                 )
                 .map((part) => ({
-                  type: part.mediaType.startsWith('image/') ? 'image' : 'file',
-                  name: part.name ?? 'file',
-                  content: part.mediaType.startsWith('image/')
+                  type: imageMediaTypeForMockPart(part).startsWith('image/') ? 'image' : 'file',
+                  name: part.name ?? part.filename ?? 'file',
+                  content: imageMediaTypeForMockPart(part).startsWith('image/')
                     ? [{ type: 'image' as const, image: part.url ?? part.data ?? '' }]
                     : []
                 }))
@@ -1219,10 +1302,10 @@ vi.mock('@assistant-ui/react', () => {
       const attachment = threadMessageState.message.content
         .filter((part): part is Extract<MockMessagePart, { type: 'file' }> => part.type === 'file')
         .map((part) => ({
-          type: part.mediaType.startsWith('image/') ? 'image' : 'file',
-          name: part.name ?? 'file',
+          type: imageMediaTypeForMockPart(part).startsWith('image/') ? 'image' : 'file',
+          name: part.name ?? part.filename ?? 'file',
           status: { type: 'complete' as const },
-          content: part.mediaType.startsWith('image/')
+          content: imageMediaTypeForMockPart(part).startsWith('image/')
             ? [{ type: 'image' as const, image: part.url ?? part.data ?? '' }]
             : []
         }))[0]
@@ -1239,6 +1322,15 @@ vi.mock('@assistant-ui/react', () => {
           custom: undefined
         }
       })
+    },
+    WebSpeechDictationAdapter: class {
+      static isSupported(): boolean {
+        return dictationAdapterState.supported
+      }
+
+      constructor(options?: { continuous?: boolean; interimResults?: boolean }) {
+        dictationAdapterState.options.push(options)
+      }
     }
   }
 })
@@ -1261,6 +1353,7 @@ describe('App composer', () => {
     composerRuntimeState.insertedContextItems = []
     composerRuntimeState.sendCalls = 0
     composerRuntimeState.setTextCalls = []
+    composerRuntimeState.suggestionController = null
     assistantThreadState.isRunning = false
     runtimeState.setActiveDraft.mockReset()
     runtimeState.setActiveDraftAttachments.mockReset()
@@ -1368,6 +1461,128 @@ describe('App composer', () => {
     expect(container.querySelector('[data-testid="composer-trigger-popover"]')).toBeNull()
   })
 
+  it('opens the task requested by a pending application deep link on startup', async () => {
+    vi.mocked(window.desktopApp.conversations.consumeConversationLink).mockResolvedValue({
+      conversationId: 'remote-task-link'
+    })
+
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(runtimeState.openConversation).toHaveBeenCalledWith({
+      conversationId: 'remote-task-link'
+    })
+  })
+
+  it('opens the command palette with the platform shortcut and starts a task', async () => {
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+      await Promise.resolve()
+    })
+
+    const newTask = [...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]')].find(
+      (item) => item.textContent?.includes('新建任务')
+    )
+    expect(newTask).not.toBeUndefined()
+
+    await act(async () => newTask?.click())
+
+    expect(runtimeState.startNewConversation).toHaveBeenCalledOnce()
+  })
+
+  it('routes native menu requests through the shared task and command handlers', async () => {
+    let requestNewTask: (() => void) | undefined
+    let requestCommandPalette: (() => void) | undefined
+    window.desktopApp.codex.onNewTaskRequested = vi.fn((callback) => {
+      requestNewTask = callback
+      return () => undefined
+    })
+    window.desktopApp.codex.onCommandPaletteRequested = vi.fn((callback) => {
+      requestCommandPalette = callback
+      return () => undefined
+    })
+
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      requestCommandPalette?.()
+      await Promise.resolve()
+    })
+    expect(
+      [...document.querySelectorAll<HTMLElement>('[data-slot="command-item"]')].some((item) =>
+        item.textContent?.includes('新建任务')
+      )
+    ).toBe(true)
+
+    await act(async () => {
+      requestNewTask?.()
+      await Promise.resolve()
+    })
+    expect(runtimeState.startNewConversation).toHaveBeenCalledOnce()
+  })
+
+  it('opens an editable output-creation task from the Outputs workspace', async () => {
+    window.localStorage.setItem(
+      'workspace-container:v2:local-test',
+      JSON.stringify({
+        version: 2,
+        panels: {
+          right: {
+            id: 'right',
+            isOpen: true,
+            isMaximized: false,
+            size: 560,
+            tabIds: ['outputs'],
+            activeTabId: 'outputs',
+            activationHistory: ['outputs']
+          },
+          bottom: {
+            id: 'bottom',
+            isOpen: false,
+            isMaximized: false,
+            size: 320,
+            tabIds: [],
+            activationHistory: []
+          }
+        },
+        tabs: {
+          outputs: {
+            id: 'outputs',
+            kind: 'outputs',
+            title: 'Outputs',
+            props: {},
+            isPreview: false,
+            isClosable: true
+          }
+        },
+        lastFocusedPanelId: 'right'
+      })
+    )
+
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="创建文档任务"]')?.click()
+      await Promise.resolve()
+    })
+
+    expect(runtimeState.startNewConversationWithDraft).toHaveBeenCalledWith(
+      '帮我创建一个文档。先确认所需内容、格式和保存位置；信息足够后再生成可打开的产物。'
+    )
+  })
+
   it('places the approval selector between the add-context control and mode indicator', () => {
     runtimeState.activeEntry.composerModeKind = 'plan'
     act(() => {
@@ -1402,6 +1617,21 @@ describe('App composer', () => {
           )
         : false
     ).toBe(true)
+  })
+
+  it('lets a completed plan explicitly enter implementation mode without sending a message', () => {
+    runtimeState.activeEntry.composerModeKind = 'plan'
+    act(() => {
+      root.render(<App />)
+    })
+
+    const implementationButton =
+      container.querySelector<HTMLButtonElement>('[aria-label="开始实施"]')
+    expect(implementationButton?.textContent).toContain('开始实施')
+    act(() => implementationButton?.click())
+
+    expect(runtimeState.setActiveComposerModeKind).toHaveBeenCalledWith('default')
+    expect(runtimeState.activeEntry.controller.sendMessage).not.toHaveBeenCalled()
   })
 
   it('attaches queued follow-ups to the Composer without a persistent mode toggle', async () => {
@@ -2044,7 +2274,7 @@ describe('App composer', () => {
     })
 
     await act(async () => {
-      buttonWithText('GPT-5 Codex')?.click()
+      container.querySelector<HTMLButtonElement>('[data-slot="model-selector-trigger"]')?.click()
     })
 
     await act(async () => {
@@ -2053,6 +2283,25 @@ describe('App composer', () => {
 
     expect(runtimeState.setSelectedModelId).toHaveBeenCalledWith('gpt-5.5')
     expect(container.textContent).toContain('model catalog unavailable')
+  })
+
+  it('passes an advertised reasoning effort to the active conversation', async () => {
+    act(() => {
+      root.render(<App />)
+    })
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-slot="model-selector-trigger"]')?.click()
+    })
+
+    const effortGroup = document.querySelector('[data-slot="model-selector-effort"]')
+    expect(effortGroup?.textContent).toContain('Thinking')
+
+    await act(async () => {
+      buttonWithText('Extra high')?.click()
+    })
+
+    expect(runtimeState.setActiveReasoningEffort).toHaveBeenCalledWith('xhigh')
   })
 
   it('renders split sidebar sections without delete actions', () => {
@@ -2161,6 +2410,37 @@ describe('App composer', () => {
     expect(pluginCenterPagePropsState.lastProps?.cwd).toBe('/repo')
     expect(runtimeState.startNewConversation).not.toHaveBeenCalled()
     expect(runtimeState.openConversation).not.toHaveBeenCalled()
+  })
+
+  it('opens the Skills tab from the /skills command', async () => {
+    act(() => {
+      root.render(<App />)
+    })
+    expect(composerRuntimeState.suggestionController).not.toBeNull()
+    await act(async () => {
+      composerRuntimeState.suggestionController?.openFromEditor({
+        trigger: '/',
+        source: 'typed-slash',
+        query: 'skills',
+        range: null
+      })
+      await Promise.resolve()
+    })
+
+    const skills = container.querySelector<HTMLButtonElement>('#composer-suggestion-option-skills')
+    expect(skills).not.toBeNull()
+
+    await act(async () => {
+      skills?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('插件中心')
+    expect(pluginCenterPagePropsState.lastProps?.surface).toMatchObject({
+      page: 'browse',
+      tab: 'skills'
+    })
+    expect(runtimeState.startNewConversation).not.toHaveBeenCalled()
   })
 
   it('does not pass a remote conversation cwd to the plugin center', async () => {
@@ -2351,6 +2631,48 @@ describe('App composer', () => {
 
     expect(secondaryActionSlot?.style.width).toBe('0px')
     expect(container.querySelectorAll('[data-slot="workspace-toggle"]')).toHaveLength(1)
+  })
+
+  it('opens a task summary tab with the active conversation goal', async () => {
+    runtimeState.activeConversation = {
+      conversationId: 'task-summary-conversation',
+      threadId: 'task-summary-thread',
+      title: 'Implement task workspace'
+    }
+    runtimeState.activeEntry.context = {
+      conversationId: 'task-summary-conversation',
+      threadId: 'task-summary-thread'
+    }
+    ;(runtimeState.activeEntry as { threadGoal?: unknown }).threadGoal = {
+      threadId: 'task-summary-thread',
+      objective: '完成任务工作台',
+      status: 'active',
+      tokenBudget: 100,
+      tokensUsed: 24,
+      timeUsedSeconds: 1,
+      createdAt: 1,
+      updatedAt: 1
+    }
+
+    await act(async () => {
+      root.render(<App />)
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="打开工作区"]')?.click()
+      await Promise.resolve()
+    })
+    const taskLauncher = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === '任务'
+    )
+    await act(async () => {
+      taskLauncher?.click()
+      await Promise.resolve()
+    })
+
+    const summary = container.querySelector<HTMLElement>('[data-slot="workspace-task-summary"]')
+    expect(summary?.textContent).toContain('Implement task workspace')
+    expect(summary?.textContent).toContain('完成任务工作台')
+    expect(summary?.textContent).toContain('消息：0')
   })
 
   it('opens a terminal tab when the empty bottom workspace is opened', async () => {
@@ -2809,6 +3131,32 @@ describe('App composer', () => {
     expect(container.textContent).not.toContain('How can I help you today?')
   })
 
+  it('progressively renders long history and expands it from an earlier navigation marker', async () => {
+    runtimeState.activeEntry.newConversation = false
+    runtimeState.activeEntry.messages = Array.from({ length: 121 }, (_, index) => ({
+      kind: 'message',
+      renderId: `history:${index}`,
+      sourceMessageId: `source:${index}`,
+      id: `history:${index}`,
+      role: 'user',
+      parts: [{ type: 'text', text: `historical request ${index}` }]
+    })) as never
+
+    await act(async () => {
+      root.render(<App />)
+    })
+
+    expect(aiSdkRuntimeState.options?.messages).toHaveLength(120)
+    const firstMarker = container.querySelector<HTMLButtonElement>(
+      '[data-slot="user-message-navigation-rail"] [aria-label^="跳转到消息 1"]'
+    )
+    expect(firstMarker).not.toBeNull()
+
+    await act(async () => firstMarker?.click())
+
+    expect(aiSdkRuntimeState.options?.messages).toHaveLength(121)
+  })
+
   it('shows only the welcome message in a blank new conversation', () => {
     act(() => {
       root.render(<App />)
@@ -2986,6 +3334,46 @@ describe('App composer', () => {
     expect(container.querySelector('[data-primitive="Message.Parts"]')).not.toBeNull()
     expect(container.querySelector('.aui-user-action-bar-wrapper')).not.toBeNull()
     expect(container.querySelector('.aui-user-action-bar-root')).not.toBeNull()
+    expect(
+      container
+        .querySelector('.aui-user-action-bar-root')
+        ?.querySelector('[data-primitive="ActionBar.Copy"]')
+    ).not.toBeNull()
+    expect(container.querySelector('button.aui-user-action-copy[aria-label="复制"]')).not.toBeNull()
+  })
+
+  it('renders the assistant reload action through the existing assistant-ui runtime primitive', () => {
+    act(() => {
+      root.render(<App />)
+    })
+
+    expect(container.querySelector('[data-primitive="ActionBar.Reload"]')).not.toBeNull()
+    expect(
+      container.querySelector('button.aui-assistant-action-reload[aria-label="重新生成"]')
+    ).not.toBeNull()
+  })
+
+  it('enables real-time dictation only when Web Speech is available', () => {
+    dictationAdapterState.supported = true
+
+    act(() => {
+      root.render(<App />)
+    })
+
+    expect(aiSdkRuntimeState.options?.adapters?.dictation).toBeDefined()
+    expect(dictationAdapterState.options).toEqual([{ continuous: true, interimResults: true }])
+    expect(
+      container.querySelector('button.aui-composer-dictation-start[aria-label="开始语音输入"]')
+    ).not.toBeNull()
+  })
+
+  it('hides dictation controls when Web Speech is unavailable', () => {
+    act(() => {
+      root.render(<App />)
+    })
+
+    expect(aiSdkRuntimeState.options?.adapters?.dictation).toBeUndefined()
+    expect(container.querySelector('.aui-composer-dictation-start')).toBeNull()
   })
 
   it('projects only the visible request from a complete user prompt', () => {
@@ -4803,7 +5191,7 @@ describe('App composer', () => {
     threadMessageState.message.content = [
       {
         type: 'file',
-        mediaType: 'image/png',
+        mimeType: 'image/png',
         data: 'iVBORw0KGgo=',
         providerMetadata: {
           '@janole/ai-sdk-provider-codex-asp': {
@@ -5638,6 +6026,95 @@ describe('App composer', () => {
 
     expect(container.textContent).not.toContain('正在思考')
     expect(container.querySelector('[data-slot="aui_assistant-message-footer"]')).not.toBeNull()
+  })
+
+  it('offers an independent task from a historical assistant turn', async () => {
+    runtimeState.activeConversation = {
+      conversationId: 'source-thread',
+      threadId: 'source-thread',
+      cwd: '/repo',
+      projectSelection: { projectKind: 'path', path: '/repo' }
+    }
+    runtimeState.activeEntry.context = runtimeState.activeConversation
+    threadMessageState.message.role = 'assistant'
+    threadMessageState.message.status = { type: 'complete' }
+    threadMessageState.message.content = [{ type: 'text', text: '历史回复' }]
+    threadMessageState.externalMessages = [
+      {
+        parts: [],
+        metadata: { codexSource: { turnId: 'turn-2' } }
+      }
+    ]
+
+    act(() => {
+      root.render(<App />)
+    })
+
+    const trigger = container.querySelector<HTMLButtonElement>('.aui-assistant-action-fork')
+    expect(trigger).not.toBeNull()
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+      await Promise.resolve()
+    })
+
+    const menuItem = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+      (item) => item.textContent?.includes('在当前工作区创建任务')
+    )
+    expect(menuItem).not.toBeUndefined()
+    await act(async () => {
+      menuItem?.click()
+      await Promise.resolve()
+    })
+
+    expect(window.desktopApp.conversations.forkConversation).toHaveBeenCalledWith({
+      conversationId: 'source-thread',
+      targetTurnId: 'turn-2',
+      mode: 'new-task'
+    })
+    expect(runtimeState.openConversation).toHaveBeenCalledWith({ conversationId: 'forked-thread' })
+  })
+
+  it('submits positive feedback for a completed assistant message without sending its text', async () => {
+    runtimeState.activeConversation = {
+      conversationId: 'feedback-thread',
+      threadId: 'feedback-thread',
+      cwd: '/repo',
+      projectSelection: { projectKind: 'path', path: '/repo' }
+    }
+    runtimeState.activeEntry.context = runtimeState.activeConversation
+    threadMessageState.message.role = 'assistant'
+    threadMessageState.message.status = { type: 'complete' }
+    threadMessageState.message.content = [{ type: 'text', text: '不应作为反馈参数发送的回复内容' }]
+    threadMessageState.externalMessages = [
+      {
+        parts: [],
+        metadata: { codexSource: { turnId: 'feedback-turn' } }
+      }
+    ]
+
+    act(() => {
+      root.render(<App />)
+    })
+
+    const positive = container.querySelector<HTMLButtonElement>(
+      '.aui-assistant-action-feedback-positive'
+    )
+    expect(positive).not.toBeNull()
+    await act(async () => {
+      positive?.click()
+      await Promise.resolve()
+    })
+
+    expect(window.desktopApp.conversations.submitFeedback).toHaveBeenCalledWith({
+      conversationId: 'feedback-thread',
+      classification: 'positive',
+      targetTurnId: 'feedback-turn'
+    })
+    expect(positive?.getAttribute('aria-pressed')).toBe('true')
+    expect(
+      container.querySelector<HTMLButtonElement>('.aui-assistant-action-feedback-negative')
+        ?.disabled
+    ).toBe(true)
   })
 
   it('does not render the server request panel when there is no queued request', () => {

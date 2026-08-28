@@ -30,6 +30,53 @@ describe('buildAssistantRenderUnits', () => {
     ).toMatchObject([{ type: 'text', streaming: false }])
   })
 
+  it('normalizes standard AI SDK URL and document sources into custom source entries', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      content: [
+        {
+          type: 'source-url',
+          sourceId: 'openai-docs',
+          url: 'https://platform.openai.com/docs',
+          title: 'OpenAI API documentation'
+        },
+        {
+          type: 'source-document',
+          sourceId: 'design-doc',
+          title: '设计说明',
+          filename: 'design.pdf',
+          mediaType: 'application/pdf'
+        }
+      ]
+    })
+
+    expect(model.units).toMatchObject([
+      {
+        type: 'entry',
+        itemType: 'source',
+        renderMode: 'custom',
+        item: {
+          id: 'openai-docs',
+          sourceType: 'url',
+          url: 'https://platform.openai.com/docs',
+          title: 'OpenAI API documentation'
+        }
+      },
+      {
+        type: 'entry',
+        itemType: 'source',
+        renderMode: 'custom',
+        item: {
+          id: 'design-doc',
+          sourceType: 'document',
+          title: '设计说明',
+          filename: 'design.pdf',
+          mediaType: 'application/pdf'
+        }
+      }
+    ])
+  })
+
   it.each(assistantRenderUnitFixtures)('$name', (fixture) => {
     const model = buildAssistantRenderUnits({
       status: fixture.status,
@@ -1567,6 +1614,29 @@ describe('buildAssistantRenderUnits', () => {
           displayStatus: 'active'
         }
       ]
+    })
+  })
+
+  it('associates a spawned agent model with its subsequent activity', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'running' },
+      content: [
+        collabAgentPart('spawn-review', {
+          tool: 'spawnAgent',
+          receiverThreadIds: ['thread-review'],
+          model: 'gpt-5.5'
+        }),
+        subagentActivityPart('review-started', 'started', 'thread-review', '/root/review')
+      ]
+    })
+    const units = model.units.flatMap((unit) =>
+      unit.type === 'reasoning-group' ? unit.children : [unit]
+    )
+    const activity = units.find((unit) => unit.type === 'subagent-activity-group')
+
+    expect(activity).toMatchObject({
+      type: 'subagent-activity-group',
+      agents: [{ threadId: 'thread-review', model: 'gpt-5.5' }]
     })
   })
 

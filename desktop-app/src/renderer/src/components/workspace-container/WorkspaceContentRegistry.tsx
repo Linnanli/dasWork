@@ -7,6 +7,14 @@ import { repositionBrowserWorkspaceView } from '../right-workspace/browser/brows
 import { FileWorkspace } from '../right-workspace/files/FileWorkspace'
 import { ReviewWorkspace } from '../right-workspace/review/ReviewWorkspace'
 import { TerminalWorkspace } from '../right-workspace/terminal/TerminalWorkspace'
+import { OutputsWorkspace } from './OutputsWorkspace'
+import { McpAppWorkspace, type McpAppWorkspaceProps } from './McpAppWorkspace'
+import { PullRequestWorkspace } from './PullRequestWorkspace'
+import { ProcessesWorkspace } from './ProcessesWorkspace'
+import { SourcesWorkspace } from './SourcesWorkspace'
+import { TaskWorkspace } from './TaskWorkspace'
+import { TimelineWorkspace } from './TimelineWorkspace'
+import type { WorkspaceOutputCreationKind, WorkspaceTaskSummary } from './taskWorkspaceTypes'
 import {
   closeTerminalSession,
   terminalSessionIdFromTabId
@@ -30,6 +38,10 @@ export type WorkspaceContentRenderContext = {
   panel: WorkspacePanelState
   workspaceId: string
   target?: GitConversationTarget
+  taskSummary?: WorkspaceTaskSummary
+  onOpenConversation?(conversationId: string): void
+  onPrepareTask(draft: string): void
+  onCreateOutput(kind: WorkspaceOutputCreationKind): void
   runtime: WorkspaceTabRuntime | undefined
   openTarget(target: WorkspaceOpenTarget, options?: WorkspaceOpenOptions): void
   setTabTitle(tabId: string, title: string): void
@@ -113,6 +125,85 @@ export function createWorkspaceContentRegistry(): WorkspaceContentRegistry {
     .register({
       kind: 'review',
       render: () => <ReviewWorkspace />
+    })
+    .register({
+      kind: 'task-summary',
+      render: (_tab, context) => (
+        <TaskWorkspace
+          summary={context.taskSummary}
+          target={context.target}
+          onOpenConversation={context.onOpenConversation}
+          onOpenTerminal={(session) =>
+            context.openTarget(
+              {
+                type: 'terminal',
+                ...(session ? { id: `terminal:${session.sessionId}`, title: session.title } : {})
+              },
+              { panelId: context.panelId }
+            )
+          }
+        />
+      )
+    })
+    .register({
+      kind: 'timeline',
+      render: (_tab, context) => <TimelineWorkspace events={context.taskSummary?.timeline ?? []} />
+    })
+    .register({
+      kind: 'outputs',
+      render: (_tab, context) => (
+        <OutputsWorkspace
+          resources={context.taskSummary?.outputs ?? []}
+          canOpenLocalPaths={context.taskSummary?.canOpenLocalPaths ?? false}
+          onCreateOutput={context.onCreateOutput}
+        />
+      )
+    })
+    .register({
+      kind: 'sources',
+      render: (_tab, context) => (
+        <SourcesWorkspace
+          sources={context.taskSummary?.sources ?? []}
+          onOpenMcpApp={(source) => {
+            const threadId = context.taskSummary?.threadId
+            if (!threadId || !source.mcpServer || !source.resourceUri?.startsWith('ui://')) return
+            context.openTarget(
+              {
+                type: 'mcp-app',
+                threadId,
+                server: source.mcpServer,
+                resourceUri: source.resourceUri,
+                title: source.title
+              },
+              { panelId: context.panelId }
+            )
+          }}
+        />
+      )
+    })
+    .register({
+      kind: 'pull-request',
+      render: (_tab, context) => <PullRequestWorkspace onPrepareRepairTask={context.onPrepareTask} />
+    })
+    .register({
+      kind: 'mcp-app',
+      render: (tab) => {
+        const app = asMcpAppTab(tab)
+        return app ? <McpAppWorkspace {...app} /> : <WorkspaceRestoreFailure title={tab.title} />
+      }
+    })
+    .register({
+      kind: 'processes',
+      render: (_tab, context) => (
+        <ProcessesWorkspace
+          onOpenTerminal={(session) =>
+            context.openTarget(
+              { type: 'terminal', id: `terminal:${session.sessionId}`, title: session.title },
+              { panelId: context.panelId }
+            )
+          }
+        />
+      )
     })
     .register({
       kind: 'file',
@@ -241,6 +332,14 @@ function asBrowserTab(
     initialUrl: typeof tab.props.url === 'string' ? tab.props.url : undefined,
     browserViewId: typeof runtime?.browserViewId === 'string' ? runtime.browserViewId : undefined
   }
+}
+
+function asMcpAppTab(tab: WorkspaceTabRecord): McpAppWorkspaceProps | undefined {
+  const threadId = typeof tab.props.threadId === 'string' ? tab.props.threadId : undefined
+  const server = typeof tab.props.server === 'string' ? tab.props.server : undefined
+  const resourceUri = typeof tab.props.resourceUri === 'string' ? tab.props.resourceUri : undefined
+  if (!threadId || !server || !resourceUri?.startsWith('ui://')) return undefined
+  return { threadId, server, resourceUri, title: tab.title }
 }
 
 function showBrowserView(viewId: unknown): Promise<void> | void {

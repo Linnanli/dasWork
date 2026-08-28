@@ -1,9 +1,14 @@
 import type { UIMessage, UIMessageChunk } from 'ai'
 import { z } from 'zod'
+import type { ConversationLink } from './conversationLink'
 
 export * from './composerContext'
 export * from './composerContextSearch'
 export * from './mcpServerStatus'
+export * from './mcpAppResource'
+export * from './githubPullRequestApi'
+export * from './keyboardShortcutsApi'
+export * from './automationApi'
 export * from './codexFollowUpApi'
 export * from './codexApprovalApi'
 export * from './localGitApi'
@@ -12,6 +17,7 @@ import type {
   LocalProject,
   ProjectSelection,
   ProjectState,
+  ProjectWorktree,
   RemoteProject,
   ThreadProjectAssignment,
   WorkspaceRecoveryStatus,
@@ -21,9 +27,13 @@ import {
   projectCreateBlankPayloadSchema,
   projectCreateLocalPayloadSchema,
   projectCreateRemotePayloadSchema,
+  projectActionRemovePayloadSchema,
+  projectActionUpsertPayloadSchema,
   projectRenamePayloadSchema,
   projectSelectPayloadSchema,
-  projectSelectionSchema
+  projectSelectionSchema,
+  projectWorktreeListPayloadSchema,
+  projectWorktreeSelectPayloadSchema
 } from './projects/projectSchemas'
 import { followUpTurnStartRequestSchema, type FollowUpTurnStartRequest } from './codexFollowUpApi'
 import {
@@ -32,6 +42,17 @@ import {
   type CodexApprovalResponse
 } from './codexApprovalApi'
 import type { McpServerListRequest, McpServerListResult } from './mcpServerStatus'
+import type { McpAppResourceReadRequest, McpAppResourceReadResult } from './mcpAppResource'
+import type {
+  GithubPullRequestCommentRequest,
+  GithubPullRequestCreateRequest,
+  GithubPullRequestMutationResult,
+  GithubPullRequestRequestReviewersRequest,
+  GithubPullRequestStatusRequest,
+  GithubPullRequestStatusResult,
+  GithubPullRequestSubmitReviewRequest
+} from './githubPullRequestApi'
+import type { KeyboardShortcutConfig, KeyboardShortcutUpdateRequest } from './keyboardShortcutsApi'
 import type {
   LocalBranchCheckoutResult,
   LocalBranchSearchResult,
@@ -89,7 +110,23 @@ export type CodexModel = {
   displayName: string
   description?: string
   inputModalities: string[]
+  reasoningEfforts?: CodexReasoningEffortOption[]
+  defaultReasoningEffort?: ReasoningEffort
+  supportsPersonality?: boolean
   isDefault: boolean
+}
+
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+
+export const reasoningEffortSchema = z.enum(['minimal', 'low', 'medium', 'high', 'xhigh'])
+
+export function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return reasoningEffortSchema.safeParse(value).success
+}
+
+export type CodexReasoningEffortOption = {
+  id: ReasoningEffort
+  description?: string
 }
 
 export type CodexModelList = {
@@ -110,6 +147,7 @@ export type SidebarConversation = {
   unread?: boolean
   running?: boolean
   cwd?: string | null
+  threadSource?: string
 }
 
 export type SidebarConversationListState = {
@@ -124,14 +162,33 @@ export type SidebarPreferences = {
   sortKey: 'updated_at' | 'created_at'
   collapsedSectionIds: string[]
   collapsedGroupIds: string[]
+  pinnedConversationIds: string[]
 }
 
 export type SidebarConversationActionPayload = {
   conversationId: string
 }
 
+export type SidebarConversationBatchDeletePayload = {
+  conversationIds: string[]
+}
+
 export type SidebarConversationRenamePayload = SidebarConversationActionPayload & {
   title: string
+}
+
+export type ConversationFeedbackClassification = 'positive' | 'negative'
+
+export type SidebarConversationFeedbackPayload = SidebarConversationActionPayload & {
+  classification: ConversationFeedbackClassification
+  targetTurnId?: string
+}
+
+export type ConversationForkMode = 'new-task' | 'side-task' | 'new-worktree'
+
+export type SidebarConversationForkPayload = SidebarConversationActionPayload & {
+  targetTurnId: string
+  mode: ConversationForkMode
 }
 
 export type SidebarConversationOpenResult = {
@@ -167,6 +224,14 @@ export const composerModeKindSchema = z.enum(['default', 'plan'])
 export type ApprovalModeKind = 'request-approval' | 'approve-for-me' | 'full-access'
 
 export const approvalModeKindSchema = z.enum(['request-approval', 'approve-for-me', 'full-access'])
+
+/**
+ * Renderer-safe personality intent. The main process forwards this fixed
+ * app-server enum; free-form instructions never cross the IPC boundary.
+ */
+export type Personality = 'none' | 'friendly' | 'pragmatic'
+
+export const personalitySchema = z.enum(['none', 'friendly', 'pragmatic'])
 
 export type ThreadGoalStatus =
   | 'active'
@@ -248,6 +313,8 @@ export type CodexChatRequestBody = {
   threadId?: string
   composerModeKind?: ComposerModeKind
   approvalModeKind?: ApprovalModeKind
+  personality?: Personality
+  reasoningEffort?: ReasoningEffort
   threadGoalDraft?: ThreadGoalDraft
   threadGoalControl?: ThreadGoalControl
   retryTerminalTurn?: boolean
@@ -262,6 +329,8 @@ export const codexChatRequestBodySchema = z
     threadId: z.string().min(1).optional(),
     composerModeKind: composerModeKindSchema.optional(),
     approvalModeKind: approvalModeKindSchema.optional(),
+    personality: personalitySchema.optional(),
+    reasoningEffort: reasoningEffortSchema.optional(),
     threadGoalDraft: threadGoalDraftSchema.optional(),
     threadGoalControl: threadGoalDraftSchema.optional(),
     retryTerminalTurn: z.literal(true).optional(),
@@ -300,6 +369,7 @@ export type CodexTurnLifecycleEvent =
  * display and must not be used to infer the recovery outcome.
  */
 export type CodexChatStreamFailureCode =
+  | 'transport-unavailable'
   | 'run-unavailable'
   | 'run-mismatch'
   | 'journal-unavailable'
@@ -470,6 +540,11 @@ export type CodexOpenLocalPathPayload = {
   cwd?: string
 }
 
+export type CodexStartLocalPathDragPayload = {
+  path: string
+  cwd?: string
+}
+
 export type CodexExistingLocalPathsPayload = {
   paths: CodexOpenLocalPathPayload[]
 }
@@ -603,6 +678,10 @@ export const codexOpenLocalPathPayloadSchema = z
     }
   }) satisfies z.ZodType<CodexOpenLocalPathPayload>
 
+export const codexStartLocalPathDragPayloadSchema = codexOpenLocalPathPayloadSchema.transform(
+  ({ path, cwd }) => ({ path, ...(cwd ? { cwd } : {}) })
+) satisfies z.ZodType<CodexStartLocalPathDragPayload>
+
 export const codexExistingLocalPathsPayloadSchema = z
   .object({
     paths: z.array(codexOpenLocalPathPayloadSchema).min(1).max(64)
@@ -642,11 +721,36 @@ export const sidebarConversationActionPayloadSchema = z.object({
   conversationId: z.string().min(1)
 })
 
+export const sidebarConversationBatchDeletePayloadSchema = z
+  .object({
+    conversationIds: z.array(z.string().min(1)).min(1).max(200)
+  })
+  .strict()
+  .superRefine(({ conversationIds }, context) => {
+    if (new Set(conversationIds).size === conversationIds.length) return
+    context.addIssue({
+      code: 'custom',
+      path: ['conversationIds'],
+      message: 'conversation IDs must be unique'
+    })
+  }) satisfies z.ZodType<SidebarConversationBatchDeletePayload>
+
 export const sidebarConversationRenamePayloadSchema = sidebarConversationActionPayloadSchema.extend(
   {
     title: z.string().trim().min(1).max(120)
   }
 )
+
+export const sidebarConversationFeedbackPayloadSchema =
+  sidebarConversationActionPayloadSchema.extend({
+    classification: z.enum(['positive', 'negative']),
+    targetTurnId: z.string().min(1).max(200).optional()
+  }) satisfies z.ZodType<SidebarConversationFeedbackPayload>
+
+export const sidebarConversationForkPayloadSchema = sidebarConversationActionPayloadSchema.extend({
+  targetTurnId: z.string().min(1),
+  mode: z.enum(['new-task', 'side-task', 'new-worktree'])
+})
 
 export const sidebarConversationOpenResultSchema = z.object({
   conversationId: z.string().min(1),
@@ -669,7 +773,8 @@ export const sidebarPreferencesSchema = z.object({
   organizeMode: z.enum(['project', 'recent-projects', 'chronological']),
   sortKey: z.enum(['updated_at', 'created_at']),
   collapsedSectionIds: z.array(z.string()),
-  collapsedGroupIds: z.array(z.string())
+  collapsedGroupIds: z.array(z.string()),
+  pinnedConversationIds: z.array(z.string())
 }) satisfies z.ZodType<SidebarPreferences>
 
 export const sidebarPreferencesPatchSchema = sidebarPreferencesSchema.partial()
@@ -678,6 +783,7 @@ export type DesktopCodexApi = {
   getStatus(): Promise<CodexStatus>
   listModels(): Promise<CodexModelList>
   listMcpServers(input: McpServerListRequest): Promise<McpServerListResult>
+  readMcpAppResource(input: McpAppResourceReadRequest): Promise<McpAppResourceReadResult>
   setSelectedModel(modelId: string): Promise<{ selectedModelId: string }>
   listPendingApprovals?(): Promise<CodexApprovalRequest[]>
   respondApproval(requestId: string, response: CodexApprovalResponse): Promise<void>
@@ -685,6 +791,7 @@ export type DesktopCodexApi = {
   openExternalHttpUrl(url: string): Promise<void>
   openLocalPath(input: CodexOpenLocalPathPayload): Promise<void>
   revealLocalPath(input: CodexOpenLocalPathPayload): Promise<void>
+  startLocalPathDrag(input: CodexStartLocalPathDragPayload): void
   listExistingLocalPaths(
     input: CodexExistingLocalPathsPayload
   ): Promise<CodexExistingLocalPathsResult>
@@ -692,6 +799,9 @@ export type DesktopCodexApi = {
   onStatusChange(callback: (status: CodexStatus) => void): () => void
   onApprovalRequest(callback: (request: CodexApprovalRequest) => void): () => void
   onApprovalSettled?(callback: (requestId: string) => void): () => void
+  onConversationFindRequested?(callback: () => void): () => void
+  onNewTaskRequested?(callback: () => void): () => void
+  onCommandPaletteRequested?(callback: () => void): () => void
 }
 
 export type DesktopCodexChatApi = {
@@ -710,6 +820,7 @@ export type DesktopConversationsApi = {
   getConversationList(): Promise<SidebarConversationListState>
   refreshConversationList(): Promise<SidebarConversationListState>
   openConversation(input: SidebarConversationActionPayload): Promise<SidebarConversationOpenResult>
+  openConversationInNewWindow(input: SidebarConversationActionPayload): Promise<void>
   getConversationGoal(input: SidebarConversationActionPayload): Promise<ThreadGoalLoadResult>
   setConversationGoal(input: SidebarConversationGoalSetPayload): Promise<ThreadGoalSummary>
   clearConversationGoal(input: SidebarConversationActionPayload): Promise<boolean>
@@ -719,17 +830,29 @@ export type DesktopConversationsApi = {
   unarchiveConversation(
     input: SidebarConversationActionPayload
   ): Promise<SidebarConversationListState>
+  deleteConversation(input: SidebarConversationActionPayload): Promise<SidebarConversationListState>
+  deleteArchivedConversations(
+    input: SidebarConversationBatchDeletePayload
+  ): Promise<SidebarConversationListState>
   renameConversation(input: SidebarConversationRenamePayload): Promise<SidebarConversationListState>
+  forkConversation(input: SidebarConversationForkPayload): Promise<SidebarConversationOpenResult>
+  submitFeedback(input: SidebarConversationFeedbackPayload): Promise<void>
   interruptConversation(input: SidebarConversationActionPayload): Promise<void>
   getPreferences(): Promise<SidebarPreferences>
   setPreferences(input: Partial<SidebarPreferences>): Promise<SidebarPreferences>
   onConversationListChange(callback: (state: SidebarConversationListState) => void): () => void
+  consumeConversationLink(): Promise<ConversationLink | null>
+  onConversationLink(callback: (link: ConversationLink) => void): () => void
 }
 
 export type ProjectCreateLocalPayload = z.infer<typeof projectCreateLocalPayloadSchema>
 export type ProjectCreateBlankPayload = z.infer<typeof projectCreateBlankPayloadSchema>
 export type ProjectCreateRemotePayload = z.infer<typeof projectCreateRemotePayloadSchema>
 export type ProjectRenamePayload = z.infer<typeof projectRenamePayloadSchema>
+export type ProjectActionUpsertPayload = z.infer<typeof projectActionUpsertPayloadSchema>
+export type ProjectActionRemovePayload = z.infer<typeof projectActionRemovePayloadSchema>
+export type ProjectWorktreeListPayload = z.infer<typeof projectWorktreeListPayloadSchema>
+export type ProjectWorktreeSelectPayload = z.infer<typeof projectWorktreeSelectPayloadSchema>
 
 export type ProjectCreateBlankResult = {
   option: WorkspaceRootOption
@@ -752,9 +875,13 @@ export type DesktopProjectsApi = {
   createBlankProject(input: ProjectCreateBlankPayload): Promise<ProjectCreateBlankResult>
   createLocalProject(input: ProjectCreateLocalPayload): Promise<LocalProject>
   createRemoteProject(input: ProjectCreateRemotePayload): Promise<RemoteProject>
+  listWorktrees(input: ProjectWorktreeListPayload): Promise<ProjectWorktree[]>
+  selectWorktree(input: ProjectWorktreeSelectPayload): Promise<ProjectState>
   selectProject(input: ProjectSelection): Promise<ProjectState>
   removeProject(input: ProjectSelection): Promise<ProjectState>
   renameProject(input: ProjectRenamePayload): Promise<ProjectState>
+  upsertAction?(input: ProjectActionUpsertPayload): Promise<ProjectState>
+  removeAction?(input: ProjectActionRemovePayload): Promise<ProjectState>
   getWorkspaceRecovery(input: WorkspaceRecoveryPayload): Promise<WorkspaceRecoveryStatus>
   restoreWorkspace(input: WorkspaceRecoveryPayload): Promise<WorkspaceRecoveryStatus>
   onStateChange(callback: (state: ProjectState) => void): () => void
@@ -795,12 +922,34 @@ export type DesktopGitApi = {
   subscribe(callback: (event: LocalGitChangeEvent) => void): () => void
 }
 
+export type DesktopGithubPullRequestApi = {
+  getStatus(input: GithubPullRequestStatusRequest): Promise<GithubPullRequestStatusResult>
+  create(input: GithubPullRequestCreateRequest): Promise<GithubPullRequestMutationResult>
+  comment(input: GithubPullRequestCommentRequest): Promise<GithubPullRequestMutationResult>
+  submitReview(
+    input: GithubPullRequestSubmitReviewRequest
+  ): Promise<GithubPullRequestMutationResult>
+  requestReviewers(
+    input: GithubPullRequestRequestReviewersRequest
+  ): Promise<GithubPullRequestMutationResult>
+}
+
+export type DesktopKeyboardShortcutsApi = {
+  get(): Promise<KeyboardShortcutConfig>
+  update(input: KeyboardShortcutUpdateRequest): Promise<KeyboardShortcutConfig>
+  reset(): Promise<KeyboardShortcutConfig>
+}
+
 export {
   projectCreateBlankPayloadSchema,
   projectCreateLocalPayloadSchema,
   projectCreateRemotePayloadSchema,
+  projectActionRemovePayloadSchema,
+  projectActionUpsertPayloadSchema,
   projectRenamePayloadSchema,
-  projectSelectPayloadSchema
+  projectSelectPayloadSchema,
+  projectWorktreeListPayloadSchema,
+  projectWorktreeSelectPayloadSchema
 }
 
 export function isExternalHttpUrl(value: string): boolean {

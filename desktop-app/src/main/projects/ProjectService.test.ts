@@ -174,6 +174,7 @@ describe('ProjectService', () => {
           hostId: 'ssh-prod',
           label: 'Prod',
           remotePath: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex',
           createdAt: now,
           updatedAt: now
         }
@@ -188,6 +189,11 @@ describe('ProjectService', () => {
     ).resolves.toEqual({
       hostId: 'ssh-prod',
       cwd: '/srv/app',
+      remoteEnvironment: {
+        environmentId: 'ssh-prod',
+        cwd: '/srv/app',
+        execServerUrl: 'wss://exec.example.test/codex'
+      },
       workspaceRoots: ['/srv/app'],
       workspaceKind: 'project',
       projectAssignment: {
@@ -312,6 +318,52 @@ describe('ProjectService', () => {
     })
     expect(readThread).not.toHaveBeenCalled()
     expect(validateLocalRoot).toHaveBeenCalledWith('/assigned/cwd')
+  })
+
+  it('uses only its own directory for an app-managed worktree assignment', async () => {
+    const { service, validateLocalRoot } = makeProjectService({
+      localProjects: {
+        p1: {
+          id: 'p1',
+          kind: 'local',
+          name: 'App',
+          hostId: 'local',
+          createdAt: now,
+          updatedAt: now,
+          writableRoots: ['/repo']
+        }
+      },
+      threadProjectAssignments: {
+        forked: {
+          projectKind: 'local',
+          projectId: 'p1',
+          cwd: '/app-data/worktrees/fork-1',
+          path: '/app-data/worktrees/fork-1',
+          managedWorktree: {
+            workspaceKind: 'managed-worktree',
+            managedByApp: true,
+            repositoryRoot: '/repo',
+            worktreePath: '/app-data/worktrees/fork-1',
+            branch: 'codex/fork-1',
+            ref: 'abc123',
+            createdFrom: 'conversation-fork',
+            recoverable: true
+          }
+        }
+      }
+    })
+
+    await expect(
+      service.resolveExistingThreadTarget({
+        conversationId: 'forked',
+        threadId: 'forked'
+      })
+    ).resolves.toMatchObject({
+      hostId: 'local',
+      cwd: '/app-data/worktrees/fork-1',
+      workspaceRoots: ['/app-data/worktrees/fork-1']
+    })
+    expect(validateLocalRoot).toHaveBeenCalledWith('/app-data/worktrees/fork-1')
   })
 
   it('prefers stored assignment keyed by app-server thread id over conversation id', async () => {
@@ -441,6 +493,18 @@ describe('ProjectService', () => {
 
   it('validates remote assignments for existing threads', async () => {
     const { service, validateRemoteRoot } = makeProjectService({
+      remoteProjects: [
+        {
+          id: 'r1',
+          kind: 'remote',
+          hostId: 'ssh-prod',
+          label: 'Prod',
+          remotePath: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex',
+          createdAt: now,
+          updatedAt: now
+        }
+      ],
       threadProjectAssignments: {
         c1: {
           projectKind: 'remote',
@@ -459,10 +523,73 @@ describe('ProjectService', () => {
     ).resolves.toMatchObject({
       hostId: 'ssh-prod',
       cwd: '/srv/app',
+      remoteEnvironment: {
+        environmentId: 'ssh-prod',
+        cwd: '/srv/app',
+        execServerUrl: 'wss://exec.example.test/codex'
+      },
       workspaceRoots: ['/srv/app'],
       workspaceKind: 'project'
     })
     expect(validateRemoteRoot).toHaveBeenCalledWith('ssh-prod', '/srv/app')
+  })
+
+  it('blocks legacy remote projects that have no execution server configuration', async () => {
+    const { service } = makeProjectService({
+      remoteProjects: [
+        {
+          id: 'r1',
+          kind: 'remote',
+          hostId: 'ssh-prod',
+          label: 'Prod',
+          remotePath: '/srv/app',
+          createdAt: now,
+          updatedAt: now
+        }
+      ]
+    })
+
+    await expect(
+      service.resolveNewThreadTarget({
+        selection: { projectKind: 'remote', projectId: 'r1', hostId: 'ssh-prod' },
+        prompt: 'inspect logs'
+      })
+    ).rejects.toThrow('no Codex execution server')
+  })
+
+  it('reconnects an existing remote assignment through a replacement project at the same host and path', async () => {
+    const { service } = makeProjectService({
+      remoteProjects: [
+        {
+          id: 'r2',
+          kind: 'remote',
+          hostId: 'ssh-prod',
+          label: 'Reconnected Prod',
+          remotePath: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex',
+          createdAt: now,
+          updatedAt: now
+        }
+      ],
+      threadProjectAssignments: {
+        c1: {
+          projectKind: 'remote',
+          projectId: 'r1',
+          hostId: 'ssh-prod',
+          cwd: '/srv/app'
+        }
+      }
+    })
+
+    await expect(
+      service.resolveExistingThreadTarget({ conversationId: 'c1', threadId: 't1' })
+    ).resolves.toMatchObject({
+      remoteEnvironment: {
+        environmentId: 'ssh-prod',
+        cwd: '/srv/app',
+        execServerUrl: 'wss://exec.example.test/codex'
+      }
+    })
   })
 
   it('falls back to app-server thread cwd for existing threads', async () => {

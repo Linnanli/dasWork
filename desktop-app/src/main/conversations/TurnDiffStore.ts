@@ -24,8 +24,12 @@ export type TurnDiffStoreWriter = {
   save(turnDiff: PersistedTurnDiff): Promise<void>
 }
 
+export type TurnDiffStoreRemover = {
+  removeThread(threadId: string): Promise<void>
+}
+
 export class TurnDiffStore
-  implements TurnDiffStoreLookup, TurnDiffStoreReader, TurnDiffStoreWriter
+  implements TurnDiffStoreLookup, TurnDiffStoreReader, TurnDiffStoreWriter, TurnDiffStoreRemover
 {
   constructor(private readonly rootPath: string) {}
 
@@ -55,6 +59,10 @@ export class TurnDiffStore
       if (isFileNotFoundError(error) || error instanceof SyntaxError) return undefined
       throw error
     }
+  }
+
+  async removeThread(threadId: string): Promise<void> {
+    await rm(join(this.rootPath, stableId(threadId)), { recursive: true, force: true })
   }
 
   private filePath(threadId: string, turnId: string): string {

@@ -8,7 +8,8 @@ const preferences: SidebarPreferences = {
   organizeMode: 'project',
   sortKey: 'updated_at',
   collapsedSectionIds: [],
-  collapsedGroupIds: ['local:collapsed']
+  collapsedGroupIds: ['local:collapsed'],
+  pinnedConversationIds: []
 }
 
 const projectState: ProjectState = {
@@ -163,20 +164,27 @@ describe('buildSidebarViewModel', () => {
     expect(model.quickChats.map((chat) => chat.id)).toEqual(['thread-quick'])
   })
 
-  it('orders chronological chats by selected sort key and hides archived rows', () => {
+  it('prioritizes pinned chats and keeps archived rows in their recoverable section', () => {
     const model = buildSidebarViewModel({
       projectState,
       conversations,
-      preferences: { ...preferences, organizeMode: 'chronological', sortKey: 'created_at' }
+      preferences: {
+        ...preferences,
+        organizeMode: 'chronological',
+        sortKey: 'created_at',
+        pinnedConversationIds: ['thread-local']
+      }
     })
 
     expect(model.chronologicalChats.map((chat) => chat.id)).toEqual([
+      'thread-local',
       'thread-quick',
       'thread-remote',
-      'thread-path',
-      'thread-local'
+      'thread-path'
     ])
     expect(model.chronologicalChats.map((chat) => chat.id)).not.toContain('thread-archived')
+    expect(model.chronologicalChats[0]).toMatchObject({ id: 'thread-local', pinned: true })
+    expect(model.archivedChats).toMatchObject([{ id: 'thread-archived', archived: true }])
   })
 
   it('orders recent projects by latest conversation activity', () => {

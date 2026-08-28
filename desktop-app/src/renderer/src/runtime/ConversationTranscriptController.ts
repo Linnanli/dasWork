@@ -1068,8 +1068,15 @@ function toRegularTranscriptMessage(
 ): ConversationTranscriptRegularMessage {
   const sourceMessageId = identity.sourceMessageId ?? message.id
   const renderId = regularMessageRenderId(sourceMessageId)
+  const metadata = identity.turnId
+    ? {
+        ...(isRecord(message.metadata) ? message.metadata : {}),
+        codexSource: { turnId: identity.turnId }
+      }
+    : message.metadata
   return {
     ...message,
+    ...(metadata === undefined ? {} : { metadata }),
     id: renderId,
     kind: 'message',
     renderId,

@@ -562,8 +562,26 @@ describe('PluginCenterPage', () => {
     })
   })
 
-  it('writes the included app enabled state from plugin details', async () => {
+  it('enables an accessible but disabled included app through its connect action', async () => {
+    const openExternalHttpUrl = vi.fn(async () => undefined)
+    vi.stubGlobal('desktopApp', { codex: { openExternalHttpUrl } })
     const api = pluginApiMock(baseSnapshot)
+    const detail = pluginDetailResult({
+      ...baseSnapshot.plugins[0],
+      installed: true,
+      enabled: true
+    })
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps = [
+      {
+        ...detail.detail.apps[0],
+        enabled: false,
+        accessible: true,
+        canToggle: true,
+        installUrl: 'https://example.test/connect-github'
+      }
+    ]
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
     const container = await renderPluginCenter(api, vi.fn(), {
       page: 'detail',
       pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
@@ -572,13 +590,15 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-slot="plugin-detail-app"] button[aria-label="GitHub App 停用"]'
+    const connect = container.querySelector<HTMLButtonElement>(
+      '[data-slot="plugin-detail-app"] button[aria-label="连接 GitHub App"]'
     )
-    expect(toggle?.getAttribute('data-state')).toBe('checked')
+    expect(connect?.textContent).toContain('连接')
+    expect(container.querySelector('[data-slot="plugin-detail-app"] [role="switch"]')).toBeNull()
 
     await act(async () => {
-      toggle?.click()
+      connect?.click()
+      await Promise.resolve()
     })
 
     expect(api.setAppEnabled).toHaveBeenCalledWith({
@@ -586,8 +606,83 @@ describe('PluginCenterPage', () => {
       cwd: undefined,
       threadId: undefined,
       app: { id: 'github-app' },
-      enabled: false
+      enabled: true
     })
+    expect(openExternalHttpUrl).not.toHaveBeenCalled()
+  })
+
+  it('shows a connected menu instead of a switch or a standalone external link', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const detail = pluginDetailResult({
+      ...baseSnapshot.plugins[0],
+      installed: true,
+      enabled: true
+    })
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps = [
+      {
+        ...detail.detail.apps[0],
+        enabled: true,
+        accessible: true,
+        canToggle: true,
+        installUrl: 'https://example.test/connect-github'
+      }
+    ]
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    const connected = app?.querySelector<HTMLButtonElement>(
+      'button[aria-label="GitHub App 已连接"]'
+    )
+
+    expect(connected?.textContent).toContain('已连接')
+    expect(app?.querySelector('[role="switch"]')).toBeNull()
+    expect(app?.querySelector('button[aria-label="打开 GitHub App"]')).toBeNull()
+  })
+
+  it('keeps application actions hidden until its plugin is installed', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    expect(app?.querySelector('button')).toBeNull()
+    expect(app?.textContent).not.toContain('已连接')
+    expect(app?.textContent).not.toContain('不可用')
+  })
+
+  it('shows a non-interactive locked status when an inaccessible app cannot be enabled', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const detail = pluginDetailResult({
+      ...baseSnapshot.plugins[0],
+      installed: true,
+      enabled: true
+    })
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps = [
+      {
+        ...detail.detail.apps[0],
+        enabled: false,
+        accessible: false,
+        canToggle: false,
+        restriction: { code: 'policy', message: '管理员禁止连接此应用' }
+      }
+    ]
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    expect(app?.querySelector('button')).toBeNull()
+    expect(app?.querySelector('[aria-label="GitHub App 不可用"]')).not.toBeNull()
   })
 
   it('keeps an inaccessible app description and shows the reference connect action', async () => {

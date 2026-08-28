@@ -3,7 +3,7 @@ import { AlertTriangleIcon, ChevronDownIcon, FolderIcon, PencilIcon, TrashIcon }
 
 import { Button } from '../components/ui/button'
 import { cn } from '../lib/utils'
-import { ConversationRow } from './ConversationRow'
+import { ConversationRow, type ConversationRowActions } from './ConversationRow'
 import type { SidebarProjectGroup } from './sidebarTypes'
 
 const collapseTransitionMs = 200
@@ -11,6 +11,7 @@ const collapseTransitionMs = 200
 export function ProjectGroupRow({
   group,
   nativeBackdrop,
+  conversationActions,
   onSelectProject,
   onToggleCollapsed,
   onNewChat,
@@ -19,6 +20,7 @@ export function ProjectGroupRow({
 }: {
   group: SidebarProjectGroup
   nativeBackdrop: boolean
+  conversationActions: ConversationRowActions
   onSelectProject: () => void
   onToggleCollapsed: () => void
   onNewChat: () => void
@@ -95,6 +97,7 @@ export function ProjectGroupRow({
         collapsed={group.collapsed}
         group={group}
         nativeBackdrop={nativeBackdrop}
+        conversationActions={conversationActions}
         onOpenConversation={onOpenConversation}
       />
     </div>
@@ -105,11 +108,13 @@ function ProjectGroupConversations({
   collapsed,
   group,
   nativeBackdrop,
+  conversationActions,
   onOpenConversation
 }: {
   collapsed: boolean
   group: SidebarProjectGroup
   nativeBackdrop: boolean
+  conversationActions: ConversationRowActions
   onOpenConversation: (conversationId: string) => void
 }): React.JSX.Element | null {
   const [shouldRender, setShouldRender] = useState(!collapsed)
@@ -187,6 +192,7 @@ function ProjectGroupConversations({
                 conversation={conversation}
                 nativeBackdrop={nativeBackdrop}
                 onOpenConversation={onOpenConversation}
+                actions={conversationActions}
               />
             ))
           )}

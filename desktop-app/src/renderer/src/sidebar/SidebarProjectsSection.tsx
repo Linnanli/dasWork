@@ -3,6 +3,7 @@ import { PlusIcon } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import type { ProjectStateController } from '../projects/useProjectState'
+import type { ConversationRowActions } from './ConversationRow'
 import { ProjectGroupRow } from './ProjectGroupRow'
 import type { SidebarProjectGroup } from './sidebarTypes'
 import type { ConversationStateController } from './useConversationState'
@@ -12,6 +13,7 @@ export function SidebarProjectsSection({
   nativeBackdrop,
   projectState,
   conversationState,
+  conversationActions,
   onNewChat,
   onOpenConversation
 }: {
@@ -19,6 +21,7 @@ export function SidebarProjectsSection({
   nativeBackdrop: boolean
   projectState: ProjectStateController
   conversationState: ConversationStateController
+  conversationActions: ConversationRowActions
   onNewChat: () => void
   onOpenConversation?: (conversationId: string) => void
 }): React.JSX.Element {
@@ -79,6 +82,7 @@ export function SidebarProjectsSection({
               key={group.id}
               group={group}
               nativeBackdrop={nativeBackdrop}
+              conversationActions={conversationActions}
               onSelectProject={() => void startProjectConversation(group)}
               onToggleCollapsed={() => toggleGroupCollapsed(group)}
               onNewChat={() => void startProjectConversation(group)}

@@ -5,6 +5,7 @@ import {
   conversationDraftStorageKey,
   legacyConversationDraftStorageKey,
   previousConversationDraftStorageKey,
+  v3ConversationDraftStorageKey,
   v2ConversationDraftStorageKey
 } from './ConversationDraftStore'
 
@@ -53,7 +54,7 @@ describe('ConversationDraftStore', () => {
     expect(storage.getItem(conversationDraftStorageKey)).not.toContain('file contents')
   })
 
-  it('migrates legacy text-only drafts into the v4 in-memory shape with safe approval mode', () => {
+  it('migrates legacy text-only drafts into the current in-memory shape with safe settings', () => {
     const storage = new MemoryStorage()
     storage.setItem(
       legacyConversationDraftStorageKey,
@@ -65,6 +66,7 @@ describe('ConversationDraftStore', () => {
     expect(store.getAttachments('thread-a')).toEqual([])
     expect(store.getComposerModeKind('thread-a')).toBe('default')
     expect(store.getApprovalModeKind('thread-a')).toBe('request-approval')
+    expect(store.getPersonality('thread-a')).toBe('none')
   })
 
   it('migrates v2 drafts with default composer and approval modes', () => {
@@ -87,12 +89,13 @@ describe('ConversationDraftStore', () => {
     expect(store.get('thread-a')).toBe('existing draft')
     expect(store.getComposerModeKind('thread-a')).toBe('default')
     expect(store.getApprovalModeKind('thread-a')).toBe('request-approval')
+    expect(store.getPersonality('thread-a')).toBe('none')
   })
 
   it('migrates v3 drafts with a safe approval mode', () => {
     const storage = new MemoryStorage()
     storage.setItem(
-      previousConversationDraftStorageKey,
+      v3ConversationDraftStorageKey,
       JSON.stringify({
         version: 3,
         drafts: {
@@ -110,6 +113,30 @@ describe('ConversationDraftStore', () => {
     expect(store.get('thread-a')).toBe('existing draft')
     expect(store.getComposerModeKind('thread-a')).toBe('plan')
     expect(store.getApprovalModeKind('thread-a')).toBe('request-approval')
+    expect(store.getPersonality('thread-a')).toBe('none')
+  })
+
+  it('migrates v4 drafts with their approval mode and a default personality', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(
+      previousConversationDraftStorageKey,
+      JSON.stringify({
+        version: 4,
+        drafts: {
+          'thread-a': {
+            text: 'existing draft',
+            attachments: [],
+            composerModeKind: 'plan',
+            approvalModeKind: 'approve-for-me'
+          }
+        }
+      })
+    )
+
+    const store = new ConversationDraftStore(storage)
+
+    expect(store.getApprovalModeKind('thread-a')).toBe('approve-for-me')
+    expect(store.getPersonality('thread-a')).toBe('none')
   })
 
   it('persists plan mode even when the draft is empty', () => {
@@ -134,6 +161,17 @@ describe('ConversationDraftStore', () => {
     expect(storage.getItem(conversationDraftStorageKey)).not.toContain('thread-a')
   })
 
+  it('persists a non-default personality even when the draft is empty', () => {
+    const storage = new MemoryStorage()
+    const store = new ConversationDraftStore(storage)
+    store.setPersonality('thread-a', 'friendly')
+
+    expect(new ConversationDraftStore(storage).getPersonality('thread-a')).toBe('friendly')
+
+    store.setPersonality('thread-a', 'none')
+    expect(storage.getItem(conversationDraftStorageKey)).not.toContain('thread-a')
+  })
+
   it('preserves draft, attachments, composer mode, and approval mode independently', () => {
     const storage = new MemoryStorage()
     const store = new ConversationDraftStore(storage)
@@ -148,12 +186,14 @@ describe('ConversationDraftStore', () => {
     ])
     store.setComposerModeKind('thread-a', 'plan')
     store.setApprovalModeKind('thread-a', 'approve-for-me')
+    store.setPersonality('thread-a', 'pragmatic')
 
     const restored = new ConversationDraftStore(storage)
     expect(restored.get('thread-a')).toBe('draft A')
     expect(restored.getAttachments('thread-a')).toHaveLength(1)
     expect(restored.getComposerModeKind('thread-a')).toBe('plan')
     expect(restored.getApprovalModeKind('thread-a')).toBe('approve-for-me')
+    expect(restored.getPersonality('thread-a')).toBe('pragmatic')
   })
 
   it('falls back to request approval for unknown stored approval values', () => {
@@ -161,13 +201,14 @@ describe('ConversationDraftStore', () => {
     storage.setItem(
       conversationDraftStorageKey,
       JSON.stringify({
-        version: 4,
+        version: 5,
         drafts: {
           'thread-a': {
             text: '',
             attachments: [],
             composerModeKind: 'default',
-            approvalModeKind: 'fullAccess'
+            approvalModeKind: 'fullAccess',
+            personality: 'enthusiastic'
           }
         }
       })
@@ -176,6 +217,7 @@ describe('ConversationDraftStore', () => {
     expect(new ConversationDraftStore(storage).getApprovalModeKind('thread-a')).toBe(
       'request-approval'
     )
+    expect(new ConversationDraftStore(storage).getPersonality('thread-a')).toBe('none')
   })
 
   it('migrates a local draft to the bound thread and removes the local key', () => {
@@ -196,6 +238,16 @@ describe('ConversationDraftStore', () => {
     expect(store.migrate('local-a', 'thread-a')).toBe('')
     expect(store.getApprovalModeKind('local-a')).toBe('request-approval')
     expect(store.getApprovalModeKind('thread-a')).toBe('full-access')
+  })
+
+  it('migrates personality from the local draft to the bound thread', () => {
+    const storage = new MemoryStorage()
+    const store = new ConversationDraftStore(storage)
+    store.setPersonality('local-a', 'friendly')
+
+    expect(store.migrate('local-a', 'thread-a')).toBe('')
+    expect(store.getPersonality('local-a')).toBe('none')
+    expect(store.getPersonality('thread-a')).toBe('friendly')
   })
 
   it('keeps an existing stable-thread draft when migration keys conflict', () => {

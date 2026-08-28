@@ -267,7 +267,9 @@ describe('ElectronIpcChatTransport', () => {
     const transport = new ElectronIpcChatTransport({
       chatBridge: bridge,
       getProjectSelection: () => ({ projectKind: 'path', path: '/repo' }),
-      getSelectedModelId: () => 'gpt-test'
+      getSelectedModelId: () => 'gpt-test',
+      getReasoningEffort: () => 'high',
+      getPersonality: () => 'friendly'
     })
 
     await transport.sendMessages({
@@ -281,7 +283,9 @@ describe('ElectronIpcChatTransport', () => {
         threadId: 'thread-1',
         cwd: '/renderer/cwd',
         projectSelection: { projectKind: 'path', path: '/renderer/project' },
-        runtimeWorkspaceRoots: ['/renderer/root']
+        runtimeWorkspaceRoots: ['/renderer/root'],
+        reasoningEffort: 'unbounded',
+        personality: 'pragmatic'
       }
     })
 
@@ -290,6 +294,8 @@ describe('ElectronIpcChatTransport', () => {
         body: {
           approvalModeKind: 'request-approval',
           composerModeKind: 'default',
+          personality: 'friendly',
+          reasoningEffort: 'high',
           projectSelection: { projectKind: 'path', path: '/repo' }
         }
       }),
@@ -304,6 +310,8 @@ describe('ElectronIpcChatTransport', () => {
       expect(request.body).toEqual({
         approvalModeKind: 'request-approval',
         composerModeKind: 'default',
+        personality: 'friendly',
+        reasoningEffort: 'high',
         projectSelection: { projectKind: 'path', path: '/repo' }
       })
     })
@@ -341,7 +349,8 @@ describe('ElectronIpcChatTransport', () => {
     const request = vi.mocked(bridge.startChatStream).mock.calls[0][0]
     expect(request.body).toEqual({
       approvalModeKind: 'full-access',
-      composerModeKind: 'default'
+      composerModeKind: 'default',
+      personality: 'none'
     })
     expect(request.body).not.toHaveProperty('approvalMode')
     expect(request.body).not.toHaveProperty('approvalPolicy')
@@ -374,7 +383,8 @@ describe('ElectronIpcChatTransport', () => {
 
     expect(vi.mocked(bridge.startChatStream).mock.calls[0][0].body).toEqual({
       approvalModeKind: 'request-approval',
-      composerModeKind: 'default'
+      composerModeKind: 'default',
+      personality: 'none'
     })
   })
 
@@ -399,7 +409,8 @@ describe('ElectronIpcChatTransport', () => {
 
     expect(vi.mocked(bridge.startChatStream).mock.calls[0][0].body).toEqual({
       approvalModeKind: 'request-approval',
-      composerModeKind: 'default'
+      composerModeKind: 'default',
+      personality: 'none'
     })
   })
 
@@ -425,7 +436,8 @@ describe('ElectronIpcChatTransport', () => {
 
     expect(vi.mocked(bridge.startChatStream).mock.calls[0][0].body).toEqual({
       approvalModeKind: 'request-approval',
-      composerModeKind: 'plan'
+      composerModeKind: 'plan',
+      personality: 'none'
     })
   })
 
@@ -461,6 +473,7 @@ describe('ElectronIpcChatTransport', () => {
     expect(vi.mocked(bridge.startChatStream).mock.calls[0][0].body).toEqual({
       approvalModeKind: 'request-approval',
       composerModeKind: 'default',
+      personality: 'none',
       threadGoalDraft: { objective: '完成参考实现的功能对齐' }
     })
   })
@@ -497,6 +510,7 @@ describe('ElectronIpcChatTransport', () => {
     expect(vi.mocked(bridge.startChatStream).mock.calls[0][0].body).toEqual({
       approvalModeKind: 'request-approval',
       composerModeKind: 'default',
+      personality: 'none',
       conversationId: 'conversation-existing-goal',
       threadId: 'thread-existing-goal',
       threadGoalControl: { objective: '继续完成遗留任务' }
@@ -536,7 +550,8 @@ describe('ElectronIpcChatTransport', () => {
           conversationId: 'conversation-1',
           threadId: 'thread-1',
           projectSelection: { projectKind: 'path', path: '/repo' },
-          composerModeKind: 'default'
+          composerModeKind: 'default',
+          personality: 'none'
         }
       }),
       expect.any(Object)
@@ -578,7 +593,8 @@ describe('ElectronIpcChatTransport', () => {
             projectId: 'remote-app',
             hostId: 'ssh-dev'
           },
-          composerModeKind: 'default'
+          composerModeKind: 'default',
+          personality: 'none'
         }
       }),
       expect.any(Object)

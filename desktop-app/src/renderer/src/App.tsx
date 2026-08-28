@@ -11,6 +11,7 @@ import {
   type TextMessagePartProps,
   type ToolCallMessagePartStatus,
   type Unstable_TriggerItem,
+  WebSpeechDictationAdapter,
   getExternalStoreMessages,
   useExternalStoreRuntime,
   useAui,
@@ -31,6 +32,7 @@ import { MessageTiming } from '@/components/assistant-ui/message-timing'
 import { ComposerAttachments, UserMessageAttachments } from '@/components/assistant-ui/attachment'
 import { ComposerAddContextPopover } from '@/components/assistant-ui/composer-add-context-popover'
 import { ComposerApprovalModeSelector } from '@/components/assistant-ui/composer-approval-mode-selector'
+import { ComposerPersonalitySelector } from '@/components/assistant-ui/composer-personality-selector'
 import type { ComposerReviewSelection } from '@/components/assistant-ui/composer-code-review-command-content'
 import {
   ComposerModeIndicatorBar,
@@ -64,12 +66,22 @@ import {
   WorkspacePanelShell,
   type WorkspaceOpenOptions,
   type WorkspaceOpenTarget,
+  type WorkspaceOutputCreationKind,
   type WorkspacePanelId,
+  type WorkspaceTaskSummary,
   type WorkspaceTabRecord
 } from '@/components/workspace-container'
 import { ConversationTurnErrorBoundary } from '@/components/conversation/ConversationTurnErrorBoundary'
+import { ConversationFindBar } from '@/components/conversation/ConversationFindBar'
 import { ConversationRecoveryStatus } from '@/components/conversation/ConversationRecoveryStatus'
+import {
+  UserMessageNavigationRail,
+  type UserMessageNavigationItem
+} from '@/components/conversation/UserMessageNavigationRail'
 import { WorkspaceRecoveryBanner } from '@/components/conversation/WorkspaceRecoveryBanner'
+import { AppCommandPalette } from '@/components/command-palette/AppCommandPalette'
+import { KeyboardShortcutDialog } from '@/components/keyboard-shortcuts/KeyboardShortcutDialog'
+import { keyboardShortcutCommandForEvent } from '@/components/keyboard-shortcuts/keyboardShortcutRuntime'
 import { ContextLexicalInput } from '@/composer/contextLexicalInput'
 import {
   ComposerSuggestionProvider,
@@ -109,12 +121,16 @@ import {
   BotIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CopyIcon,
   FileIcon,
   FolderIcon,
+  GitForkIcon,
   LightbulbIcon,
   MessageSquareIcon,
   Maximize2Icon,
+  MicIcon,
   Minimize2Icon,
   PackageIcon,
   PanelLeftIcon,
@@ -125,8 +141,11 @@ import {
   PencilIcon,
   PuzzleIcon,
   QuoteIcon,
+  RotateCcwIcon,
   SparklesIcon,
   SquareIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
   TargetIcon,
   WrenchIcon
 } from 'lucide-react'
@@ -155,11 +174,18 @@ import {
   PluginCenterPage,
   prefetchPluginCenterData,
   subscribePluginCenterData,
+  type PluginCenterBrowseTab,
   type PluginCenterSurface
 } from './components/plugin-center'
 import { serializeComposerContextReference } from './composer/composerContextDirectiveFormatter'
 import { Button } from './components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './components/ui/collapsible'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from './components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -171,6 +197,7 @@ import {
 import { ComposerProjectCard } from './projects/ComposerProjectCard'
 import { useProjectState, type ProjectStateController } from './projects/useProjectState'
 import { SidebarRoot } from './sidebar/SidebarRoot'
+import { taskNavigationForConversation } from './sidebar/taskNavigation'
 import { ConversationRuntimeIndicatorProvider } from './sidebar/ConversationRuntimeIndicatorProvider'
 import {
   useConversationState,
@@ -187,6 +214,7 @@ import {
   type InlineReferenceAction
 } from './lib/referenceInlineAction'
 import { blockedAssistantMessageText, pendingAssistantMessageText } from './lib/assistantMessages'
+import { createTaskWorkspaceSummary } from './lib/taskWorkspaceSummary'
 import {
   buildAssistantRenderUnits,
   type AssistantMessagePhase,
@@ -229,10 +257,21 @@ import {
 import { createQueuedFollowUpSnapshot } from './runtime/queuedFollowUpSnapshot'
 import { restoreQueuedFollowUpToComposerDraft } from './runtime/restoreQueuedFollowUpToComposer'
 import type {
+  ConversationFeedbackClassification,
+  ConversationForkMode,
   CodexApprovalRequest,
   CodexApprovalResponse,
-  LocalContextPickerKind
+  LocalContextPickerKind,
+  ReasoningEffort
 } from '../../shared/codexIpcApi'
+import { isReasoningEffort } from '../../shared/codexIpcApi'
+import {
+  defaultKeyboardShortcutConfig,
+  type KeyboardShortcutBinding,
+  type KeyboardShortcutCommand,
+  type KeyboardShortcutConfig
+} from '../../shared/keyboardShortcutsApi'
+import { toast } from 'sonner'
 import type {
   FollowUpMode,
   MaterializedQueuedUserMessage,
@@ -243,7 +282,7 @@ import type {
 import type { ProjectSelection, ProjectState } from '../../shared/projects/projectTypes'
 import type { GitConversationTarget } from '../../shared/localGitApi'
 import { extractVisibleUserRequest } from '../../shared/userRequestEnvelope'
-import type { ModelOption } from './components/assistant-ui'
+import { resolveModelEffort, type ModelOption } from './components/assistant-ui'
 import {
   composerContextDirectiveFormatter,
   parseComposerContextReferences
@@ -274,6 +313,7 @@ type CodexSidebarProps = {
   conversationState: ConversationStateController
   conversationIndicators: ConversationRuntimeIndicatorStore
   onNewChat: () => void
+  onOpenCommandPalette: () => void
   onOpenConversation: (conversationId: string) => void
   onOpenPlugins: () => void
   pluginsActive: boolean
@@ -283,6 +323,8 @@ type AppSurface = { kind: 'conversation' } | ({ kind: 'pluginCenter' } & PluginC
 
 type HeaderProps = {
   activeConversation?: ActiveConversationContext
+  conversationState: ConversationStateController
+  onOpenConversation: (conversationId: string) => void
   sidebarCollapsed: boolean
 }
 
@@ -295,6 +337,7 @@ type ComposerProps = {
   activeConversation?: ActiveConversationContext
   composerModeKind: ConversationChatEntry['composerModeKind']
   approvalModeKind: ConversationChatEntry['approvalModeKind']
+  personality: ConversationChatEntry['personality']
   goalEditorActive: boolean
   threadGoal: ConversationChatEntry['threadGoal']
   goalCapabilityStatus: ConversationChatEntry['goalCapabilityStatus']
@@ -302,8 +345,10 @@ type ComposerProps = {
   goalError?: string
   models: readonly ModelOption[]
   selectedModelId: string | undefined
+  reasoningEffort: ReasoningEffort | undefined
   modelSelectionError?: string
   onSelectedModelChange: (modelId: string) => void
+  onReasoningEffortChange: (reasoningEffort: ReasoningEffort) => void
   projectState: ProjectStateController
   disabled?: boolean
   followUps: ConversationFollowUpsController
@@ -316,8 +361,10 @@ type ComposerProps = {
   ) => Promise<void>
   onStartCodeReview: (prompt: string) => Promise<void>
   onCreateNewTask: () => void
+  onOpenSkills: () => void
   onComposerModeKindChange: (composerModeKind: ConversationChatEntry['composerModeKind']) => void
   onApprovalModeKindChange: (approvalModeKind: ConversationChatEntry['approvalModeKind']) => void
+  onPersonalityChange: (personality: ConversationChatEntry['personality']) => void
   onGoalEditorActiveChange: (goalEditorActive: boolean) => void
   onThreadGoalChange: (threadGoal: ConversationChatEntry['threadGoal']) => void
   onGoalOperationChange: (
@@ -342,9 +389,13 @@ type ChatThreadProps = ComposerProps & {
   onOpenConversation: OpenSubagentConversation
   scrollSnapshot?: ConversationScrollSnapshot
   onScrollSnapshotChange: (snapshot: ConversationScrollSnapshot) => void
+  navigationItems: readonly UserMessageNavigationItem[]
+  onRevealUserMessage: (messageId: string) => void
+  onRevealAllMessages: () => void
   recoveryPhase: ConversationChatEntry['recoveryPhase']
   recoveryError?: Error
   onCreateNewTask: () => void
+  onForkConversation: (targetTurnId: string, mode: ConversationForkMode) => Promise<void>
 }
 
 type ComposerComponentProps = ComposerProps & {
@@ -555,8 +606,10 @@ function App(): React.JSX.Element {
     snoozeServerRequest,
     models,
     selectedModelId,
+    reasoningEffort,
     modelSelectionError,
     setSelectedModelId,
+    setActiveReasoningEffort,
     activeConversation,
     startNewConversation,
     startNewConversationWithDraft,
@@ -568,6 +621,7 @@ function App(): React.JSX.Element {
     setActiveDraftAttachments,
     setActiveComposerModeKind,
     setActiveApprovalModeKind,
+    setActivePersonality,
     setActiveGoalEditorActive,
     setActiveThreadGoal,
     setActiveGoalOperation,
@@ -611,7 +665,13 @@ function App(): React.JSX.Element {
   })
   const restoredActiveConversation = useRef(false)
   const restoringActiveConversation = useRef(false)
+  const lastHandledConversationLinkId = useRef<string | undefined>(undefined)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false)
+  const [keyboardShortcutConfig, setKeyboardShortcutConfig] = useState<KeyboardShortcutConfig>(
+    defaultKeyboardShortcutConfig
+  )
   const [surface, setSurface] = useState<AppSurface>({ kind: 'conversation' })
   const nativeBackdrop = useNativeBackdrop()
 
@@ -703,17 +763,49 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('codex:scroll-render-target', handleRenderTargetScroll)
   }, [])
 
-  const toggleSidebar = (): void => {
+  const toggleSidebar = useCallback((): void => {
     setSidebarCollapsed((collapsed) => !collapsed)
-  }
+  }, [])
+  const focusTaskSearch = useCallback((): void => {
+    window.dispatchEvent(new Event('dascowork:focus-task-search'))
+  }, [])
+  const openPluginCenter = useCallback((tab: PluginCenterBrowseTab = 'plugins'): void => {
+    setSurface({ kind: 'pluginCenter', page: 'browse', tab })
+  }, [])
+  const openSkillCenter = useCallback((): void => {
+    openPluginCenter('skills')
+  }, [openPluginCenter])
+  useEffect(() => {
+    return window.desktopApp.codex.onCommandPaletteRequested?.(() => setCommandPaletteOpen(true))
+  }, [])
   const handleSelectedModelChange = (modelId: string): void => {
-    void setSelectedModelId(modelId).catch(() => undefined)
+    void setSelectedModelId(modelId)
+      .then(() => {
+        if (reasoningEffort && !resolveModelEffort(models, modelId, reasoningEffort)) {
+          setActiveReasoningEffort(undefined)
+        }
+      })
+      .catch(() => undefined)
+  }
+  const handleReasoningEffortChange = (nextReasoningEffort: ReasoningEffort): void => {
+    setActiveReasoningEffort(nextReasoningEffort)
   }
   const handleStartNewConversation = useCallback((): void => {
     setSurface({ kind: 'conversation' })
     clearActiveConversationId()
     startNewConversation()
   }, [startNewConversation])
+  useEffect(() => {
+    return window.desktopApp.codex.onNewTaskRequested?.(handleStartNewConversation)
+  }, [handleStartNewConversation])
+  const startTaskWithDraft = useCallback(
+    (draft: string): void => {
+      setSurface({ kind: 'conversation' })
+      clearActiveConversationId()
+      startNewConversationWithDraft(draft)
+    },
+    [startNewConversationWithDraft]
+  )
   const handleActivatePluginPrompt = useCallback(
     ({ mention, prompt }: { mention: { path: string; name: string }; prompt: string }): void => {
       const directive = serializeComposerContextReference({
@@ -722,12 +814,76 @@ function App(): React.JSX.Element {
         label: mention.name,
         mentionName: mention.name
       })
-      setSurface({ kind: 'conversation' })
-      clearActiveConversationId()
-      startNewConversationWithDraft(`${directive} ${prompt}`)
+      startTaskWithDraft(`${directive} ${prompt}`)
     },
-    [startNewConversationWithDraft]
+    [startTaskWithDraft]
   )
+  const handleCreateOutput = useCallback(
+    (kind: WorkspaceOutputCreationKind): void => {
+      startTaskWithDraft(outputCreationPrompt(kind))
+    },
+    [startTaskWithDraft]
+  )
+  const handlePrepareTask = startTaskWithDraft
+  const openKeyboardShortcuts = useCallback((): void => {
+    setKeyboardShortcutsOpen(true)
+  }, [])
+  const updateKeyboardShortcut = useCallback(
+    async (command: KeyboardShortcutCommand, binding: KeyboardShortcutBinding): Promise<void> => {
+      const config = await window.desktopApp.keyboardShortcuts.update({ command, binding })
+      setKeyboardShortcutConfig(config)
+    },
+    []
+  )
+  const resetKeyboardShortcuts = useCallback(async (): Promise<void> => {
+    const config = await window.desktopApp.keyboardShortcuts.reset()
+    setKeyboardShortcutConfig(config)
+  }, [])
+  const runKeyboardShortcut = useCallback(
+    (command: KeyboardShortcutCommand): void => {
+      switch (command) {
+        case 'new-task':
+          handleStartNewConversation()
+          return
+        case 'command-palette':
+          setCommandPaletteOpen((open) => !open)
+          return
+        case 'find-conversation':
+          window.dispatchEvent(new Event('dascowork:conversation-find'))
+          return
+        case 'toggle-sidebar':
+          toggleSidebar()
+          return
+        case 'focus-task-search':
+          focusTaskSearch()
+      }
+    },
+    [focusTaskSearch, handleStartNewConversation, toggleSidebar]
+  )
+  useEffect(() => {
+    let active = true
+    const shortcutsApi = window.desktopApp.keyboardShortcuts
+    if (!shortcutsApi) return undefined
+    void shortcutsApi.get().then(
+      (config) => {
+        if (active) setKeyboardShortcutConfig(config)
+      },
+      () => undefined
+    )
+    return () => {
+      active = false
+    }
+  }, [])
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const command = keyboardShortcutCommandForEvent(keyboardShortcutConfig, event)
+      if (!command) return
+      event.preventDefault()
+      runKeyboardShortcut(command)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [keyboardShortcutConfig, runKeyboardShortcut])
   const handleOpenConversation = useCallback<OpenSubagentConversation>(
     (conversationId) => {
       setSurface({ kind: 'conversation' })
@@ -735,6 +891,37 @@ function App(): React.JSX.Element {
     },
     [openConversation]
   )
+  const handleForkConversation = useCallback(
+    async (targetTurnId: string, mode: ConversationForkMode): Promise<void> => {
+      const conversationId = activeConversation?.threadId ?? activeEntry.context.threadId
+      if (!conversationId) {
+        throw new Error('当前任务尚未创建，无法从历史步骤继续。')
+      }
+
+      setSurface({ kind: 'conversation' })
+      const forked = await window.desktopApp.conversations.forkConversation({
+        conversationId,
+        targetTurnId,
+        mode
+      })
+      await openConversation({ conversationId: forked.conversationId })
+    },
+    [activeConversation?.threadId, activeEntry.context.threadId, openConversation]
+  )
+  useEffect(() => {
+    const openLinkedConversation = ({ conversationId }: { conversationId: string }): void => {
+      if (lastHandledConversationLinkId.current === conversationId) return
+      lastHandledConversationLinkId.current = conversationId
+      handleOpenConversation(conversationId)
+    }
+    const removeListener =
+      window.desktopApp.conversations.onConversationLink(openLinkedConversation)
+    void window.desktopApp.conversations
+      .consumeConversationLink()
+      .then((link) => link && openLinkedConversation(link))
+      .catch(() => undefined)
+    return removeListener
+  }, [handleOpenConversation])
   const gitRepositoryIdentity = useMemo(
     () => ({
       conversationId: activeConversation?.conversationId ?? activeEntry.context.conversationId,
@@ -759,6 +946,7 @@ function App(): React.JSX.Element {
     activeConversation,
     workspaceProjectScope
   )
+  const workspaceTaskSummary = createTaskWorkspaceSummary(activeEntry, activeConversation)
   const pluginCenterCwd = resolvePluginCenterLocalCwd(
     activeConversation,
     activeEntry,
@@ -805,8 +993,9 @@ function App(): React.JSX.Element {
         conversationState={conversationState}
         conversationIndicators={conversationIndicators}
         onNewChat={handleStartNewConversation}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         onOpenConversation={handleOpenConversation}
-        onOpenPlugins={() => setSurface({ kind: 'pluginCenter', page: 'browse', tab: 'plugins' })}
+        onOpenPlugins={openPluginCenter}
         pluginsActive={surface.kind === 'pluginCenter'}
       />
       {surface.kind === 'pluginCenter' ? (
@@ -847,21 +1036,27 @@ function App(): React.JSX.Element {
                   <ConversationWorkspaceLayout
                     target={gitRepositoryIdentity}
                     workspaceId={`conversation:${workspaceProjectScope}`}
+                    taskSummary={workspaceTaskSummary}
+                    onCreateOutput={handleCreateOutput}
+                    onPrepareTask={handlePrepareTask}
+                    onOpenConversation={handleOpenConversation}
                   >
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/50 bg-background shadow-[0_18px_60px_-48px_rgba(15,23,42,0.75)]">
                       <ActiveConversationPane
-                        key={activeEntry.localId}
+                        key={`${activeEntry.localId}:${activeEntry.loaded ? 'loaded' : 'loading'}`}
                         activeConversation={activeConversation}
                         entry={activeEntry}
                         approvalRequests={visibleApprovalRequests}
                         hasBlockingRequest={visibleApprovalRequests.length > 0}
                         models={models}
                         selectedModelId={selectedModelId}
+                        reasoningEffort={reasoningEffort}
                         modelSelectionError={modelSelectionError}
                         onDraftChange={setActiveDraft}
                         onDraftAttachmentsChange={setActiveDraftAttachments}
                         onComposerModeKindChange={setActiveComposerModeKind}
                         onApprovalModeKindChange={setActiveApprovalModeKind}
+                        onPersonalityChange={setActivePersonality}
                         onGoalEditorActiveChange={setActiveGoalEditorActive}
                         onThreadGoalChange={setActiveThreadGoal}
                         onGoalOperationChange={setActiveGoalOperation}
@@ -871,10 +1066,14 @@ function App(): React.JSX.Element {
                         onOpenConversation={handleOpenConversation}
                         onScrollSnapshotChange={setActiveScroll}
                         onSelectedModelChange={handleSelectedModelChange}
+                        onReasoningEffortChange={handleReasoningEffortChange}
                         onCreateNewTask={handleStartNewConversation}
+                        onOpenSkills={openSkillCenter}
+                        onForkConversation={handleForkConversation}
                         onRejectApproval={rejectServerRequest}
                         onSnoozeApproval={snoozeServerRequest}
                         onRespondApproval={respondToServerRequest}
+                        conversationState={conversationState}
                         projectState={projectState}
                         sidebarCollapsed={sidebarCollapsed}
                       />
@@ -886,6 +1085,23 @@ function App(): React.JSX.Element {
           </GitRepositoryProvider>
         </RightWorkspaceProvider>
       )}
+      <AppCommandPalette
+        open={commandPaletteOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        onFocusTaskSearch={focusTaskSearch}
+        onNewConversation={handleStartNewConversation}
+        onOpenChange={setCommandPaletteOpen}
+        onOpenKeyboardShortcuts={openKeyboardShortcuts}
+        onOpenPlugins={openPluginCenter}
+        onToggleSidebar={toggleSidebar}
+      />
+      <KeyboardShortcutDialog
+        config={keyboardShortcutConfig}
+        open={keyboardShortcutsOpen}
+        onOpenChange={setKeyboardShortcutsOpen}
+        onReset={resetKeyboardShortcuts}
+        onUpdate={updateKeyboardShortcut}
+      />
     </main>
   )
 }
@@ -897,11 +1113,13 @@ function ActiveConversationPane({
   hasBlockingRequest,
   models,
   selectedModelId,
+  reasoningEffort,
   modelSelectionError,
   onDraftChange,
   onDraftAttachmentsChange,
   onComposerModeKindChange,
   onApprovalModeKindChange,
+  onPersonalityChange,
   onGoalEditorActiveChange,
   onThreadGoalChange,
   onGoalOperationChange,
@@ -909,10 +1127,14 @@ function ActiveConversationPane({
   onOpenConversation,
   onScrollSnapshotChange,
   onSelectedModelChange,
+  onReasoningEffortChange,
   onCreateNewTask,
+  onOpenSkills,
+  onForkConversation,
   onRejectApproval,
   onSnoozeApproval,
   onRespondApproval,
+  conversationState,
   projectState,
   sidebarCollapsed
 }: {
@@ -922,11 +1144,13 @@ function ActiveConversationPane({
   hasBlockingRequest: boolean
   models: readonly ModelOption[]
   selectedModelId: string | undefined
+  reasoningEffort: ReasoningEffort | undefined
   modelSelectionError?: string
   onDraftChange: (draft: string) => void
   onDraftAttachmentsChange: (attachments: readonly ConversationDraftAttachment[]) => void
   onComposerModeKindChange: (composerModeKind: ConversationChatEntry['composerModeKind']) => void
   onApprovalModeKindChange: (approvalModeKind: ConversationChatEntry['approvalModeKind']) => void
+  onPersonalityChange: (personality: ConversationChatEntry['personality']) => void
   onGoalEditorActiveChange: (goalEditorActive: boolean) => void
   onThreadGoalChange: (threadGoal: ConversationChatEntry['threadGoal']) => void
   onGoalOperationChange: (
@@ -937,13 +1161,17 @@ function ActiveConversationPane({
   onOpenConversation: OpenSubagentConversation
   onScrollSnapshotChange: (snapshot: ConversationScrollSnapshot) => void
   onSelectedModelChange: (modelId: string) => void
+  onReasoningEffortChange: (reasoningEffort: ReasoningEffort) => void
   onCreateNewTask: () => void
+  onOpenSkills: () => void
+  onForkConversation: (targetTurnId: string, mode: ConversationForkMode) => Promise<void>
   onRejectApproval: (request: CodexApprovalRequest) => Promise<void>
   onSnoozeApproval: (request: CodexApprovalRequest) => Promise<void>
   onRespondApproval: (
     request: CodexApprovalRequest,
     response: CodexApprovalResponse
   ) => Promise<void>
+  conversationState: ConversationStateController
   projectState: ProjectStateController
   sidebarCollapsed: boolean
 }): React.JSX.Element {
@@ -952,6 +1180,15 @@ function ActiveConversationPane({
     entry.controller.subscribe,
     entry.controller.getSnapshot,
     entry.controller.getSnapshot
+  )
+  const progressiveHistory = useProgressiveConversationHistory(
+    transcriptSnapshot.messages,
+    entry.loaded
+  )
+  const renderedMessages = transcriptSnapshot.messages.slice(progressiveHistory.start)
+  const navigationItems = useMemo(
+    () => userMessageNavigationItems(transcriptSnapshot.messages),
+    [transcriptSnapshot.messages]
   )
   useLayoutEffect(() => {
     markConversationStreamCommit(entry.controller.id, transcriptSnapshot.version)
@@ -1016,15 +1253,25 @@ function ActiveConversationPane({
   )
   const isRunning =
     transcriptSnapshot.status === 'submitted' || transcriptSnapshot.status === 'streaming'
-  const messageCount = transcriptSnapshot.messages.length
+  const dictationAdapter = useMemo(
+    () =>
+      WebSpeechDictationAdapter.isSupported()
+        ? new WebSpeechDictationAdapter({ continuous: true, interimResults: true })
+        : undefined,
+    []
+  )
+  const renderedMessageCount = renderedMessages.length
   const runtime = useExternalStoreRuntime<ConversationTranscriptMessage>({
-    messages: transcriptSnapshot.messages,
+    messages: renderedMessages,
     isRunning,
     isDisabled: !entry.loaded,
     convertMessage: useCallback(
       (message, index) =>
-        transcriptMessageToThreadMessageLike(message, index === messageCount - 1 && isRunning),
-      [isRunning, messageCount]
+        transcriptMessageToThreadMessageLike(
+          message,
+          index === renderedMessageCount - 1 && isRunning
+        ),
+      [isRunning, renderedMessageCount]
     ),
     onNew: async (message) => {
       const submittedMessage = appendMessageToUIMessage(message)
@@ -1071,7 +1318,10 @@ function ActiveConversationPane({
       }
     },
     onCancel: () => entry.controller.stop(),
-    adapters: { attachments: imageAttachmentAdapter }
+    adapters: {
+      attachments: imageAttachmentAdapter,
+      ...(dictationAdapter ? { dictation: dictationAdapter } : {})
+    }
   })
   const conversationKey = entry.context.threadId ?? entry.context.conversationId
   const followUps = useConversationFollowUps({
@@ -1109,6 +1359,8 @@ function ActiveConversationPane({
       <ConversationFocusBridge entryId={entry.localId} />
       <Header
         activeConversation={activeConversation}
+        conversationState={conversationState}
+        onOpenConversation={onOpenConversation}
         projectState={projectState}
         sidebarCollapsed={sidebarCollapsed}
       />
@@ -1122,16 +1374,24 @@ function ActiveConversationPane({
         loadError={!entry.loaded ? entry.error : undefined}
         models={models}
         selectedModelId={selectedModelId}
+        reasoningEffort={reasoningEffort}
         modelSelectionError={modelSelectionError}
         onSteerFollowUp={steerFollowUp}
         onRetryLoad={onRetryLoad}
         onOpenConversation={onOpenConversation}
         onScrollSnapshotChange={onScrollSnapshotChange}
+        navigationItems={navigationItems}
+        onRevealUserMessage={progressiveHistory.revealMessage}
+        onRevealAllMessages={progressiveHistory.revealAll}
         onSelectedModelChange={onSelectedModelChange}
+        onReasoningEffortChange={onReasoningEffortChange}
         onCreateNewTask={onCreateNewTask}
+        onOpenSkills={onOpenSkills}
+        onForkConversation={onForkConversation}
         onStartCodeReview={startCodeReview}
         composerModeKind={entry.composerModeKind}
         approvalModeKind={entry.approvalModeKind}
+        personality={entry.personality}
         goalEditorActive={entry.goalEditorActive}
         threadGoal={entry.threadGoal}
         goalCapabilityStatus={entry.goalCapabilityStatus}
@@ -1139,6 +1399,7 @@ function ActiveConversationPane({
         goalError={entry.goalError}
         onComposerModeKindChange={onComposerModeKindChange}
         onApprovalModeKindChange={onApprovalModeKindChange}
+        onPersonalityChange={onPersonalityChange}
         onGoalEditorActiveChange={onGoalEditorActiveChange}
         onThreadGoalChange={onThreadGoalChange}
         onGoalOperationChange={onGoalOperationChange}
@@ -1158,11 +1419,19 @@ function ActiveConversationPane({
 function ConversationWorkspaceLayout({
   children,
   target,
-  workspaceId
+  workspaceId,
+  taskSummary,
+  onCreateOutput,
+  onPrepareTask,
+  onOpenConversation
 }: {
   children: ReactNode
   target: GitConversationTarget
   workspaceId: string
+  taskSummary: WorkspaceTaskSummary
+  onCreateOutput: (kind: WorkspaceOutputCreationKind) => void
+  onPrepareTask: (draft: string) => void
+  onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
   countConversationStreamPerformance('conversationWorkspaceLayout')
   const container = useWorkspaceContainer()
@@ -1228,6 +1497,10 @@ function ConversationWorkspaceLayout({
                 panel,
                 workspaceId,
                 target,
+                taskSummary,
+                onCreateOutput,
+                onPrepareTask,
+                onOpenConversation,
                 runtime: container.tabRuntime(tab.id),
                 openTarget: (openTarget: WorkspaceOpenTarget, options: WorkspaceOpenOptions = {}) =>
                   void controller.open(openTarget, { ...options, panelId }),
@@ -1280,6 +1553,16 @@ function ConversationWorkspaceLayout({
       />
     </WorkspaceHeaderActionSlotContext.Provider>
   )
+}
+
+function outputCreationPrompt(kind: WorkspaceOutputCreationKind): string {
+  const artifact = {
+    document: '文档',
+    presentation: '演示文稿',
+    spreadsheet: '电子表格',
+    website: '网站'
+  }[kind]
+  return `帮我创建一个${artifact}。先确认所需内容、格式和保存位置；信息足够后再生成可打开的产物。`
 }
 
 function useWorkspaceShortcuts(
@@ -1434,6 +1717,7 @@ const CodexSidebar = memo(function CodexSidebar({
   conversationState,
   conversationIndicators,
   onNewChat,
+  onOpenCommandPalette,
   onOpenConversation,
   onOpenPlugins,
   pluginsActive
@@ -1457,6 +1741,7 @@ const CodexSidebar = memo(function CodexSidebar({
             projectState={projectState}
             conversationState={conversationState}
             onNewChat={onNewChat}
+            onOpenCommandPalette={onOpenCommandPalette}
             onOpenConversation={onOpenConversation}
             onOpenPlugins={onOpenPlugins}
             pluginsActive={pluginsActive}
@@ -1521,6 +1806,8 @@ function BrandMark(): React.JSX.Element {
 
 function Header({
   activeConversation,
+  conversationState,
+  onOpenConversation,
   projectState,
   sidebarCollapsed
 }: HeaderProps & { projectState: ProjectStateController }): React.JSX.Element {
@@ -1528,6 +1815,20 @@ function Header({
   const { width: workspaceHeaderActionWidth } = useContext(WorkspaceHeaderActionSlotContext)
   const workspaceHeaderActionSpace =
     workspaceHeaderActionWidth || workspaceHeaderActionFallbackWidth
+  const navigation = useMemo(
+    () =>
+      taskNavigationForConversation({
+        conversationId: activeConversation?.threadId ?? activeConversation?.conversationId,
+        conversations: conversationState.state.conversations,
+        preferences: conversationState.preferences
+      }),
+    [
+      activeConversation?.conversationId,
+      activeConversation?.threadId,
+      conversationState.preferences,
+      conversationState.state.conversations
+    ]
+  )
 
   return (
     <header
@@ -1547,6 +1848,31 @@ function Header({
       <ConversationContextText activeConversation={activeConversation} />
       {!activeConversation ? <ThreadTitle /> : null}
       <div className="ml-auto flex shrink-0 items-center">
+        {activeConversation ? (
+          <div className="mr-1 flex items-center">
+            <IconButton
+              disabled={!navigation.previousConversationId}
+              label="上一任务"
+              title="上一任务"
+              onClick={() =>
+                navigation.previousConversationId &&
+                onOpenConversation(navigation.previousConversationId)
+              }
+            >
+              <ChevronLeftIcon className="size-4" />
+            </IconButton>
+            <IconButton
+              disabled={!navigation.nextConversationId}
+              label="下一任务"
+              title="下一任务"
+              onClick={() =>
+                navigation.nextConversationId && onOpenConversation(navigation.nextConversationId)
+              }
+            >
+              <ChevronRightIcon className="size-4" />
+            </IconButton>
+          </div>
+        ) : null}
         <ConversationPinnedSummary
           selection={
             activeConversation?.projectSelection ?? projectState.state?.activeProjectSelection
@@ -1693,6 +2019,54 @@ function latestRunningAssistantMessage(
   )
 }
 
+const initialRenderedHistoryMessageCount = 120
+
+function useProgressiveConversationHistory(
+  messages: readonly ConversationTranscriptMessage[],
+  historyLoaded: boolean
+): {
+  start: number
+  revealMessage: (messageId: string) => void
+  revealAll: () => void
+} {
+  const [historyStart, setHistoryStart] = useState(() =>
+    initialRenderedHistoryStart(messages.length, historyLoaded)
+  )
+  const start = Math.min(historyStart, Math.max(0, messages.length - 1))
+  const revealMessage = useCallback(
+    (messageId: string): void => {
+      const messageIndex = messages.findIndex((message) => message.renderId === messageId)
+      if (messageIndex < 0) return
+      setHistoryStart((currentStart) => Math.min(currentStart, Math.max(0, messageIndex - 1)))
+    },
+    [messages]
+  )
+  const revealAll = useCallback((): void => setHistoryStart(0), [])
+
+  return { start, revealMessage, revealAll }
+}
+
+function initialRenderedHistoryStart(messageCount: number, historyLoaded: boolean): number {
+  if (!historyLoaded) return 0
+  return Math.max(0, messageCount - initialRenderedHistoryMessageCount)
+}
+
+function userMessageNavigationItems(
+  messages: readonly ConversationTranscriptMessage[]
+): readonly UserMessageNavigationItem[] {
+  return messages.flatMap((message) => {
+    if (message.role !== 'user') return []
+    const visibleText = extractVisibleUserRequest(
+      message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('\n')
+    )
+    const label = visibleText.replace(/\s+/gu, ' ').trim().slice(0, 80) || '附件或上下文'
+    return [{ id: message.renderId, label }]
+  })
+}
+
 function ChatThread({
   activeConversation,
   approvalRequests,
@@ -1703,10 +2077,15 @@ function ChatThread({
   loadError,
   models,
   selectedModelId,
+  reasoningEffort,
   modelSelectionError,
   onRetryLoad,
   onOpenConversation,
   onSelectedModelChange,
+  onReasoningEffortChange,
+  navigationItems,
+  onRevealUserMessage,
+  onRevealAllMessages,
   onSteerFollowUp,
   onStartCodeReview,
   projectState,
@@ -1715,8 +2094,11 @@ function ChatThread({
   recoveryPhase,
   recoveryError,
   onCreateNewTask,
+  onOpenSkills,
+  onForkConversation,
   composerModeKind,
   approvalModeKind,
+  personality,
   goalEditorActive,
   threadGoal,
   goalCapabilityStatus,
@@ -1724,6 +2106,7 @@ function ChatThread({
   goalError,
   onComposerModeKindChange,
   onApprovalModeKindChange,
+  onPersonalityChange,
   onGoalEditorActiveChange,
   onThreadGoalChange,
   onGoalOperationChange,
@@ -1834,6 +2217,12 @@ function ChatThread({
           data-slot="aui_thread-viewport"
           className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
         >
+          <ConversationFindBar viewportRef={viewportRef} onOpen={onRevealAllMessages} />
+          <UserMessageNavigationRail
+            viewportRef={viewportRef}
+            items={navigationItems}
+            onRevealItem={onRevealUserMessage}
+          />
           {loadError ? (
             <div
               data-slot="conversation-load-error"
@@ -1854,12 +2243,14 @@ function ChatThread({
                 if (message.role === 'user') return <UserMessage />
                 return (
                   <AssistantMessage
+                    conversationId={activeConversation?.threadId}
                     hasBlockingRequest={hasBlockingRequest}
                     workspaceCwd={activeConversation?.cwd ?? undefined}
                     canOpenLocalPaths={
                       activeConversation?.projectSelection?.projectKind !== 'remote'
                     }
                     onOpenConversation={onOpenConversation}
+                    onForkConversation={onForkConversation}
                   />
                 )
               }}
@@ -1960,13 +2351,17 @@ function ChatThread({
                   followUps={followUps}
                   models={models}
                   selectedModelId={selectedModelId}
+                  reasoningEffort={reasoningEffort}
                   modelSelectionError={modelSelectionError}
                   onSelectedModelChange={onSelectedModelChange}
+                  onReasoningEffortChange={onReasoningEffortChange}
                   onSteerFollowUp={onSteerFollowUp}
                   onStartCodeReview={onStartCodeReview}
                   onCreateNewTask={onCreateNewTask}
+                  onOpenSkills={onOpenSkills}
                   composerModeKind={composerModeKind}
                   approvalModeKind={approvalModeKind}
+                  personality={personality}
                   goalEditorActive={goalEditorActive}
                   threadGoal={threadGoal}
                   goalCapabilityStatus={goalCapabilityStatus}
@@ -1974,6 +2369,7 @@ function ChatThread({
                   goalError={goalError}
                   onComposerModeKindChange={onComposerModeKindChange}
                   onApprovalModeKindChange={onApprovalModeKindChange}
+                  onPersonalityChange={onPersonalityChange}
                   onGoalEditorActiveChange={onGoalEditorActiveChange}
                   onThreadGoalChange={onThreadGoalChange}
                   onGoalOperationChange={onGoalOperationChange}
@@ -2236,21 +2632,26 @@ function ThreadScrollToBottom(): React.JSX.Element {
 }
 
 function AssistantMessage({
+  conversationId,
   hasBlockingRequest,
   workspaceCwd,
   canOpenLocalPaths,
-  onOpenConversation
+  onOpenConversation,
+  onForkConversation
 }: {
+  conversationId?: string
   hasBlockingRequest: boolean
   workspaceCwd?: string
   canOpenLocalPaths: boolean
   onOpenConversation: OpenSubagentConversation
+  onForkConversation: (targetTurnId: string, mode: ConversationForkMode) => Promise<void>
 }): React.JSX.Element {
   countConversationStreamPerformance('assistantMessage')
   const message = useAuiState((state) => state.message)
   const isThreadRunning = useAuiState((state) => state.thread.isRunning)
   const textPartMetadata = useMemo(() => codexTextPartMetadataFor(message), [message])
   const turnDurationMs = useMemo(() => codexTurnDurationFor(message), [message])
+  const turnId = useMemo(() => codexSourceTurnIdFor(message), [message])
   const renderModel = useMemo(
     () =>
       buildAssistantRenderUnits({
@@ -2346,7 +2747,11 @@ function AssistantMessage({
           data-slot="aui_assistant-message-footer"
           className="ml-2 mt-1.5 flex h-8 items-center -mb-8"
         >
-          <AssistantActionBar />
+          <AssistantActionBar
+            conversationId={conversationId}
+            turnId={turnId}
+            onForkConversation={onForkConversation}
+          />
         </div>
       )}
     </MessagePrimitive.Root>
@@ -2491,7 +2896,8 @@ function transcriptMessageToThreadMessageLike(
               type: 'file',
               data: part.url,
               mimeType: part.mediaType,
-              ...(part.filename ? { filename: part.filename } : {})
+              ...(part.filename ? { filename: part.filename } : {}),
+              ...(part.providerMetadata ? { providerMetadata: part.providerMetadata } : {})
             }
           ]
     }
@@ -2640,6 +3046,21 @@ function codexTurnDurationFor(message: ThreadMessage): number | undefined {
     )
 }
 
+function codexSourceTurnIdFor(message: ThreadMessage): string | undefined {
+  return getExternalStoreMessages<ExternalAISDKMessage>(message)
+    .map((externalMessage) => externalMessage.metadata)
+    .map((metadata) => {
+      if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined
+      const codexSource = (metadata as Record<string, unknown>).codexSource
+      if (!codexSource || typeof codexSource !== 'object' || Array.isArray(codexSource)) {
+        return undefined
+      }
+      const turnId = (codexSource as Record<string, unknown>).turnId
+      return typeof turnId === 'string' && turnId.length > 0 ? turnId : undefined
+    })
+    .find((turnId): turnId is string => turnId !== undefined)
+}
+
 function messageMetadataFromProviderMetadata(providerMetadata: unknown): CodexTextPartMetadata {
   if (!providerMetadata || typeof providerMetadata !== 'object') return {}
   const codexMetadata = (providerMetadata as Record<string, unknown>)[CODEX_PROVIDER_ID]
@@ -2656,10 +3077,12 @@ function messageMetadataFromProviderMetadata(providerMetadata: unknown): CodexTe
 }
 
 function UserMessage(): React.JSX.Element {
+  const message = useAuiState((state) => state.message)
   return (
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
       data-role="user"
+      data-message-id={message.id}
       className="mx-auto grid w-full max-w-(--thread-max-width) auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 animate-in fade-in slide-in-from-bottom-1 [&:where(>*)]:col-start-2"
     >
       <UserMessageAttachments />
@@ -3173,7 +3596,8 @@ function UnknownUnit({
 }
 
 function isRenderableUnknownPart(part: Record<string, unknown>): boolean {
-  return part.type === 'file' && stringRecordValue(part, 'mediaType')?.startsWith('image/') === true
+  const mediaType = stringRecordValue(part, 'mediaType') ?? stringRecordValue(part, 'mimeType')
+  return part.type === 'file' && mediaType?.startsWith('image/') === true
 }
 
 function entryText(unit: Extract<AssistantRenderUnit, { type: 'entry' }>): string | undefined {
@@ -3273,6 +3697,21 @@ function UserActionBar(): React.JSX.Element {
       autohide="not-last"
       className="aui-user-action-bar-root flex flex-col items-end"
     >
+      <ActionBarPrimitive.Reload asChild>
+        <IconButton className="aui-assistant-action-reload" label="重新生成" title="重新生成">
+          <RotateCcwIcon className="size-4" />
+        </IconButton>
+      </ActionBarPrimitive.Reload>
+      <ActionBarPrimitive.Copy asChild>
+        <IconButton className="aui-user-action-copy" label="复制" title="复制">
+          <AuiIf condition={(state) => state.message.isCopied}>
+            <CheckIcon className="size-4" />
+          </AuiIf>
+          <AuiIf condition={(state) => !state.message.isCopied}>
+            <CopyIcon className="size-4" />
+          </AuiIf>
+        </IconButton>
+      </ActionBarPrimitive.Copy>
       <ActionBarPrimitive.Edit asChild>
         <IconButton className="aui-user-action-edit" label="编辑" title="编辑">
           <PencilIcon className="size-4" />
@@ -3319,7 +3758,15 @@ function EditComposer(): React.JSX.Element {
   )
 }
 
-function AssistantActionBar(): React.JSX.Element {
+function AssistantActionBar({
+  conversationId,
+  turnId,
+  onForkConversation
+}: {
+  conversationId?: string
+  turnId?: string
+  onForkConversation: (targetTurnId: string, mode: ConversationForkMode) => Promise<void>
+}): React.JSX.Element {
   return (
     <ActionBarPrimitive.Root
       className="flex items-center gap-1 text-muted-foreground duration-200 animate-in fade-in"
@@ -3336,8 +3783,121 @@ function AssistantActionBar(): React.JSX.Element {
           </AuiIf>
         </IconButton>
       </ActionBarPrimitive.Copy>
+      {conversationId ? (
+        <AssistantMessageFeedbackAction conversationId={conversationId} turnId={turnId} />
+      ) : null}
+      {turnId ? (
+        <ConversationForkAction turnId={turnId} onForkConversation={onForkConversation} />
+      ) : null}
       <MessageTiming />
     </ActionBarPrimitive.Root>
+  )
+}
+
+function AssistantMessageFeedbackAction({
+  conversationId,
+  turnId
+}: {
+  conversationId: string
+  turnId?: string
+}): React.JSX.Element {
+  const [pending, setPending] = useState(false)
+  const [selection, setSelection] = useState<ConversationFeedbackClassification | null>(null)
+  const submitFeedback = useCallback(
+    async (classification: ConversationFeedbackClassification): Promise<void> => {
+      if (pending || selection) return
+
+      setPending(true)
+      try {
+        await window.desktopApp.conversations.submitFeedback({
+          conversationId,
+          classification,
+          ...(turnId ? { targetTurnId: turnId } : {})
+        })
+        setSelection(classification)
+        toast.success('感谢你的反馈')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '反馈未能发送')
+      } finally {
+        setPending(false)
+      }
+    },
+    [conversationId, pending, selection, turnId]
+  )
+
+  return (
+    <>
+      <IconButton
+        aria-pressed={selection === 'positive'}
+        className="aui-assistant-action-feedback-positive"
+        disabled={pending || selection !== null}
+        label="这条回复有帮助"
+        title="这条回复有帮助"
+        onClick={() => void submitFeedback('positive')}
+      >
+        <ThumbsUpIcon className="size-4" />
+      </IconButton>
+      <IconButton
+        aria-pressed={selection === 'negative'}
+        className="aui-assistant-action-feedback-negative"
+        disabled={pending || selection !== null}
+        label="这条回复没有帮助"
+        title="这条回复没有帮助"
+        onClick={() => void submitFeedback('negative')}
+      >
+        <ThumbsDownIcon className="size-4" />
+      </IconButton>
+    </>
+  )
+}
+
+function ConversationForkAction({
+  turnId,
+  onForkConversation
+}: {
+  turnId: string
+  onForkConversation: (targetTurnId: string, mode: ConversationForkMode) => Promise<void>
+}): React.JSX.Element {
+  const [pending, setPending] = useState(false)
+  const fork = useCallback(
+    async (mode: ConversationForkMode): Promise<void> => {
+      setPending(true)
+      try {
+        await onForkConversation(turnId, mode)
+        toast.success(mode === 'side-task' ? '已创建独立 Side task' : '已从这里创建新任务')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '无法从此处创建任务')
+      } finally {
+        setPending(false)
+      }
+    },
+    [onForkConversation, turnId]
+  )
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton
+          className="aui-assistant-action-fork"
+          disabled={pending}
+          label="从这里继续"
+          title="从这里继续"
+        >
+          <GitForkIcon className="size-4" />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onSelect={() => void fork('new-task')}>
+          在当前工作区创建任务
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void fork('side-task')}>
+          创建独立 Side task
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void fork('new-worktree')}>
+          在新的 Git worktree 中创建任务
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -3379,10 +3939,67 @@ function Composer(props: ComposerComponentProps): React.JSX.Element {
   )
 }
 
+function ComposerDictationControl({ disabled }: { disabled: boolean }): React.JSX.Element | null {
+  const dictationSupported = useAuiState((state) => state.thread.capabilities.dictation)
+  const dictation = useAuiState((state) => state.composer.dictation)
+
+  if (!dictationSupported) return null
+
+  if (dictation) {
+    return (
+      <>
+        <ComposerPrimitive.StopDictation asChild>
+          <IconButton
+            className="aui-composer-dictation-stop size-7 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground"
+            label="结束语音输入"
+            title="结束语音输入"
+          >
+            <SquareIcon className="size-3 fill-current" />
+          </IconButton>
+        </ComposerPrimitive.StopDictation>
+        <span
+          aria-live="polite"
+          className="aui-composer-dictation-status max-w-48 truncate text-xs text-muted-foreground"
+          data-slot="composer-dictation-status"
+          role="status"
+        >
+          {dictationStatusLabel(dictation.status.type)}
+          <ComposerPrimitive.DictationTranscript className="ml-1" />
+        </span>
+      </>
+    )
+  }
+
+  return (
+    <ComposerPrimitive.Dictate asChild>
+      <IconButton
+        className="aui-composer-dictation-start size-7 rounded-full bg-transparent hover:bg-muted"
+        disabled={disabled}
+        label="开始语音输入"
+        title="开始语音输入（将请求麦克风权限并实时转写）"
+      >
+        <MicIcon className="size-3.5" />
+      </IconButton>
+    </ComposerPrimitive.Dictate>
+  )
+}
+
+function dictationStatusLabel(status: 'starting' | 'running' | 'ended'): string {
+  switch (status) {
+    case 'starting':
+      return '正在请求麦克风权限…'
+    case 'running':
+      return '正在听写…'
+    case 'ended':
+      return '听写已结束'
+  }
+}
+
 function ComposerBody({
   activeConversation,
   composerModeKind,
   approvalModeKind,
+  personality,
   goalEditorActive,
   threadGoal,
   goalCapabilityStatus,
@@ -3393,13 +4010,17 @@ function ComposerBody({
   followUps,
   models,
   selectedModelId,
+  reasoningEffort,
   modelSelectionError,
   onSelectedModelChange,
+  onReasoningEffortChange,
   onSteerFollowUp,
   onStartCodeReview,
   onCreateNewTask,
+  onOpenSkills,
   onComposerModeKindChange,
   onApprovalModeKindChange,
+  onPersonalityChange,
   onGoalEditorActiveChange,
   onThreadGoalChange,
   onGoalOperationChange,
@@ -3430,6 +4051,7 @@ function ComposerBody({
     mode: FollowUpMode
     snapshot: QueuedUserMessageSnapshotInput
   } | null>(null)
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
   const [goalEditDialogOpen, setGoalEditDialogOpen] = useState(false)
   const [goalEditObjective, setGoalEditObjective] = useState('')
   const goalBusy = goalOperation !== 'idle'
@@ -3584,6 +4206,8 @@ function ComposerBody({
   }, [aui])
   const selectedModel = models.find((model) => model.id === selectedModelId)
   const selectedModelSupportsImages = selectedModel?.inputModalities?.includes('image') ?? true
+  const selectedModelSupportsReasoning = Boolean(selectedModel?.efforts)
+  const selectedModelSupportsPersonality = Boolean(selectedModel?.supportsPersonality)
   const cannotSendImages = hasImageAttachments && !selectedModelSupportsImages
   const pickLocalContext = useCallback(
     async (kind: LocalContextPickerKind): Promise<boolean> => {
@@ -3763,6 +4387,36 @@ function ComposerBody({
       type: 'action',
       run: composerModeKind === 'plan' ? exitPlanMode : enterPlanMode
     }
+  })
+  useRegisterComposerCommand({
+    id: 'model',
+    title: '模型',
+    description: '选择用于下一轮任务的模型',
+    group: 'General',
+    searchAliases: ['model', '模型'],
+    triggers: ['/'],
+    enabled: !editingFollowUp,
+    selection: { type: 'action', run: () => setModelSelectorOpen(true) }
+  })
+  useRegisterComposerCommand({
+    id: 'reasoning',
+    title: '推理强度',
+    description: '调整模型的推理强度',
+    group: 'General',
+    searchAliases: ['reasoning', 'effort', '推理'],
+    triggers: ['/'],
+    enabled: !editingFollowUp && selectedModelSupportsReasoning,
+    selection: { type: 'action', run: () => setModelSelectorOpen(true) }
+  })
+  useRegisterComposerCommand({
+    id: 'skills',
+    title: '技能',
+    description: '浏览和管理可用技能',
+    group: 'Development',
+    searchAliases: ['skill', 'skills', '技能'],
+    triggers: ['/'],
+    enabled: !editingFollowUp,
+    selection: { type: 'action', run: onOpenSkills }
   })
   useRegisterComposerCommand({
     id: 'code-review',
@@ -4079,12 +4733,31 @@ function ComposerBody({
           <div className="aui-composer-action-wrapper flex items-center justify-between">
             <div className="flex min-w-0 items-center gap-1">
               <ComposerAddContextPopover />
+              <ComposerDictationControl disabled={disabled || Boolean(editingFollowUp)} />
               <ComposerApprovalModeSelector
                 approvalModeKind={approvalModeKind}
                 disabled={disabled || isThreadRunning}
                 onApprovalModeKindChange={onApprovalModeKindChange}
               />
+              {selectedModelSupportsPersonality ? (
+                <ComposerPersonalitySelector
+                  personality={personality}
+                  disabled={disabled || isThreadRunning}
+                  onPersonalityChange={onPersonalityChange}
+                />
+              ) : null}
               <ComposerModeIndicatorBar presentations={modePresentations} />
+              {composerModeKind === 'plan' && !isThreadRunning && !editingFollowUp ? (
+                <Button
+                  aria-label="开始实施"
+                  size="xs"
+                  type="button"
+                  variant="secondary"
+                  onClick={exitPlanMode}
+                >
+                  开始实施
+                </Button>
+              ) : null}
               {threadGoal ? (
                 <IconButton
                   className="size-7 rounded-full bg-transparent hover:bg-muted"
@@ -4154,9 +4827,18 @@ function ComposerBody({
             </div>
             <div className="flex items-center gap-1.5">
               <ModelSelector
+                key={selectedModelId ?? 'no-selected-model'}
                 models={models}
                 value={selectedModelId}
+                effort={reasoningEffort}
+                defaultEffort={selectedModel?.defaultReasoningEffort}
+                open={modelSelectorOpen}
+                onOpenChange={setModelSelectorOpen}
                 onValueChange={onSelectedModelChange}
+                onEffortChange={(effort) => {
+                  const resolvedEffort = resolveModelEffort(models, selectedModelId, effort)
+                  if (isReasoningEffort(resolvedEffort)) onReasoningEffortChange(resolvedEffort)
+                }}
                 variant="ghost"
                 size="sm"
               />

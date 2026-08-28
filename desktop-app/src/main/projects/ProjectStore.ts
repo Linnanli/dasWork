@@ -24,6 +24,7 @@ export function createDefaultProjectState(): ProjectState {
     remoteProjects: [],
     projectOrder: [],
     pinnedProjectIds: [],
+    projectActions: {},
     projectWritableRoots: {},
     threadProjectAssignments: {},
     threadWritableRoots: {},
@@ -35,7 +36,12 @@ export function createDefaultProjectState(): ProjectState {
 }
 
 function cloneState(state: ProjectState): ProjectState {
-  return JSON.parse(JSON.stringify(state)) as ProjectState
+  const cloned = JSON.parse(JSON.stringify(state)) as Partial<ProjectState>
+  return {
+    ...createDefaultProjectState(),
+    ...cloned,
+    projectActions: cloned.projectActions ?? {}
+  }
 }
 
 export class ProjectStore {

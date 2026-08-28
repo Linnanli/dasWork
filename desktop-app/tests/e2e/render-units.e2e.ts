@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import type { ElectronApplication } from '@playwright/test'
 import {
+  appRoot,
   attachDiagnostics,
   closeApp,
   cleanupTempDirs,
@@ -21,6 +22,109 @@ import {
   webSearchResponse
 } from './support/mockBackend'
 import { writeFakeChatGptAuth, writeStandaloneWebSearchConfig } from './support/authFixtures'
+
+test('renders app-server image generation output through the full chat stream', async (
+  { browserName },
+  testInfo
+) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  const backend = await startMockBackend({ responses: [] })
+  const logs: string[] = []
+  let app: ElectronApplication | undefined
+
+  try {
+    app = await launchApp(backend, logs, {
+      environment: {
+        CODEX_APP_SERVER_BIN: join(appRoot, 'tests/e2e/support/image-generation-app-server.mjs')
+      }
+    })
+    const page = await app.firstWindow()
+    collectRendererLogs(page, logs)
+
+    await sendMessage(page, '请生成一张测试图片。')
+
+    const imageCard = page.locator('[data-slot="generated-image-file-unit"]')
+    await expect(imageCard).toBeVisible()
+    await expect(imageCard).toContainText('已生成图片')
+    await expect(imageCard.getByRole('img', { name: 'a one-pixel blue test image' })).toHaveAttribute(
+      'src',
+      /^data:image\/png;base64,/u
+    )
+  } finally {
+    await attachDiagnostics(testInfo, logs, backend, app)
+    await closeApp(app)
+    await backend.close()
+  }
+})
+
+test('keeps Outputs safe when local artifacts disappear and opens remote artifacts in the workspace browser', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  const projectRoot = await mkdtemp(join(tmpdir(), 'dascowork-e2e-output-resources-'))
+  const previewPath = join(projectRoot, 'preview.pdf')
+  await writeFile(previewPath, '%PDF-1.4\n', 'utf8')
+  const backend = await startMockBackend({
+    responses: [
+      assistantMessageResponse(
+        'output-resources-thread',
+        'output-resources-message',
+        [
+          '已生成以下产物：',
+          '[本地预览](preview.pdf)',
+          '[远程部署](https://example.test/outputs)',
+          '[缺失报告](missing-report.pdf)'
+        ].join('\n\n')
+      )
+    ]
+  })
+  const logs: string[] = []
+  let app: ElectronApplication | undefined
+
+  try {
+    app = await launchApp(backend, logs)
+    const page = await app.firstWindow()
+    collectRendererLogs(page, logs)
+    await createLocalProject(page, `Output resources ${Date.now().toString(36)}`, projectRoot)
+    await sendComposerMessage(page, '生成 Outputs 回归所需的产物。')
+    await expect(page.locator('[data-role="assistant"]')).toContainText('已生成以下产物')
+
+    await page.getByRole('button', { name: '打开工作区', exact: true }).click()
+    const workspaceMenu = page.getByRole('button', { name: 'Open workspace tab', exact: true })
+    if (await workspaceMenu.isVisible().catch(() => false)) {
+      await workspaceMenu.click()
+      await page.getByRole('menuitem', { name: /^Outputs/ }).click()
+    } else {
+      await page.getByRole('button', { name: /^产物/ }).click()
+    }
+
+    const outputs = page.locator('[data-slot="workspace-outputs"]')
+    await expect(outputs).toBeVisible()
+    const cards = outputs.locator('[data-slot="end-resource-card-unit"]')
+    await expect(cards).toHaveCount(2)
+    await expect(outputs.getByRole('button', { name: '打开 本地预览' })).toBeEnabled()
+    await expect(outputs.getByRole('button', { name: '打开 example.test' })).toBeEnabled()
+    await expect(outputs).not.toContainText('缺失报告')
+
+    await outputs.getByRole('button', { name: '打开 example.test' }).click()
+    await expect(page.getByRole('textbox', { name: 'Browser address' })).toHaveValue(
+      'https://example.test/outputs'
+    )
+
+    await unlink(previewPath)
+    await page.getByRole('tab', { name: 'Outputs', exact: true }).click()
+    await expect(outputs).toBeVisible()
+    await expect(cards).toHaveCount(1)
+    await expect(outputs).not.toContainText('本地预览')
+  } finally {
+    await attachDiagnostics(testInfo, logs, backend, app)
+    await closeApp(app)
+    await backend.close()
+    await cleanupTempDirs([projectRoot])
+  }
+})
 
 test('renders completed code-comment directives as one expandable review card', async ({
   browserName

@@ -48,47 +48,100 @@ const baseProjectState: ProjectState = {
 
 function createClient(): ConversationThreadClientLike {
   return {
-    listThreads: vi.fn(async () => [
-      {
-        id: 'thread-local',
-        title: 'Local project thread',
-        preview: 'Local project thread',
-        createdAt: '2026-06-30T01:00:00.000Z',
-        updatedAt: '2026-06-30T01:05:00.000Z',
-        archived: false,
-        running: false,
-        cwd: '/repo/desktop-app'
-      },
-      {
-        id: 'thread-path',
-        title: 'Path workspace thread',
-        preview: 'Path workspace thread',
-        createdAt: '2026-06-30T02:00:00.000Z',
-        updatedAt: '2026-06-30T02:05:00.000Z',
-        archived: false,
-        running: true,
-        cwd: '/repo/cli'
-      },
-      {
-        id: 'thread-quick',
-        title: null,
-        preview: 'Scratch prompt',
-        createdAt: '2026-06-30T03:00:00.000Z',
-        updatedAt: '2026-06-30T03:05:00.000Z',
-        archived: false,
-        running: false,
-        cwd: '/tmp/dascowork/thread-quick'
-      }
-    ]),
+    listThreads: vi.fn(async ({ includeArchived }) =>
+      includeArchived
+        ? []
+        : [
+            {
+              id: 'thread-local',
+              title: 'Local project thread',
+              preview: 'Local project thread',
+              createdAt: '2026-06-30T01:00:00.000Z',
+              updatedAt: '2026-06-30T01:05:00.000Z',
+              archived: false,
+              running: false,
+              cwd: '/repo/desktop-app'
+            },
+            {
+              id: 'thread-path',
+              title: 'Path workspace thread',
+              preview: 'Path workspace thread',
+              createdAt: '2026-06-30T02:00:00.000Z',
+              updatedAt: '2026-06-30T02:05:00.000Z',
+              archived: false,
+              running: true,
+              cwd: '/repo/cli'
+            },
+            {
+              id: 'thread-quick',
+              title: null,
+              preview: 'Scratch prompt',
+              createdAt: '2026-06-30T03:00:00.000Z',
+              updatedAt: '2026-06-30T03:05:00.000Z',
+              archived: false,
+              running: false,
+              cwd: '/tmp/dascowork/thread-quick'
+            }
+          ]
+    ),
     readThread: vi.fn(),
     readThreadWithFullTurns: vi.fn(),
     archiveThread: vi.fn(async () => undefined),
     unarchiveThread: vi.fn(async () => undefined),
-    renameThread: vi.fn(async () => undefined)
+    deleteThread: vi.fn(async () => undefined),
+    renameThread: vi.fn(async () => undefined),
+    submitFeedback: vi.fn(async () => undefined)
   }
 }
 
 describe('ConversationApiService', () => {
+  it('preserves the automation thread source for sidebar rendering', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockResolvedValue([
+      {
+        id: 'automation-thread',
+        title: 'Daily status',
+        preview: 'Daily status',
+        createdAt: '2026-06-30T01:00:00.000Z',
+        updatedAt: '2026-06-30T01:05:00.000Z',
+        archived: false,
+        running: false,
+        cwd: '/repo/desktop-app',
+        threadSource: 'automation'
+      }
+    ])
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    const snapshot = await service.getConversationList()
+
+    expect(snapshot.conversations).toEqual([
+      expect.objectContaining({ id: 'automation-thread', threadSource: 'automation' })
+    ])
+  })
+
+  it('forwards inline feedback to the persisted task', async () => {
+    const threadClient = createClient()
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await service.submitConversationFeedback({
+      conversationId: 'thread-local',
+      classification: 'positive',
+      targetTurnId: 'turn-local'
+    })
+
+    expect(threadClient.submitFeedback).toHaveBeenCalledWith(
+      'thread-local',
+      'positive',
+      'turn-local'
+    )
+  })
+
   it('deduplicates the initial load and then serves the snapshot without another list request', async () => {
     const threadClient = createClient()
     const service = new ConversationApiService({
@@ -105,7 +158,7 @@ describe('ConversationApiService', () => {
     await Promise.all([first, second, sidebarLoad])
     expect(service.getConversationSnapshot().loaded).toBe(true)
     await service.ensureConversationListLoaded()
-    expect(threadClient.listThreads).toHaveBeenCalledTimes(1)
+    expect(threadClient.listThreads).toHaveBeenCalledTimes(2)
   })
 
   it('reprojects the loaded snapshot for project-state changes without listing threads again', async () => {
@@ -179,6 +232,67 @@ describe('ConversationApiService', () => {
     })
   })
 
+  it('keeps archived threads in the sidebar state so they can be restored', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) =>
+      includeArchived
+        ? [
+            {
+              id: 'thread-archived',
+              title: 'Archived thread',
+              preview: 'Archived thread',
+              createdAt: '2026-06-30T01:00:00.000Z',
+              updatedAt: '2026-06-30T01:05:00.000Z',
+              archived: true,
+              running: false,
+              cwd: '/repo/desktop-app'
+            }
+          ]
+        : []
+    )
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await expect(service.getConversationList()).resolves.toMatchObject({
+      archivedConversationIds: ['thread-archived'],
+      conversations: [{ id: 'thread-archived', archived: true }]
+    })
+    expect(threadClient.listThreads).toHaveBeenCalledWith({
+      includeArchived: true,
+      sortKey: 'updated_at'
+    })
+  })
+
+  it('keeps the active sidebar usable when archived thread queries are unsupported', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) => {
+      if (includeArchived) throw new Error('archived threads are unsupported')
+      return [
+        {
+          id: 'thread-active',
+          title: 'Active thread',
+          preview: 'Active thread',
+          createdAt: '2026-06-30T01:00:00.000Z',
+          updatedAt: '2026-06-30T01:05:00.000Z',
+          archived: false,
+          running: false,
+          cwd: '/repo/desktop-app'
+        }
+      ]
+    })
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await expect(service.getConversationList()).resolves.toMatchObject({
+      archivedConversationIds: [],
+      conversations: [{ id: 'thread-active', archived: false }]
+    })
+  })
+
   it('refreshes after archive, unarchive, and rename actions', async () => {
     const threadClient = createClient()
     const onConversationArchived = vi.fn()
@@ -196,7 +310,153 @@ describe('ConversationApiService', () => {
     expect(onConversationArchived).toHaveBeenCalledWith('thread-local')
     expect(threadClient.unarchiveThread).toHaveBeenCalledWith('thread-local')
     expect(threadClient.renameThread).toHaveBeenCalledWith('thread-local', 'New name')
-    expect(threadClient.listThreads).toHaveBeenCalledTimes(3)
+    expect(threadClient.listThreads).toHaveBeenCalledTimes(6)
+  })
+
+  it('permanently deletes only an archived task and clears its local task metadata', async () => {
+    const threadClient = createClient()
+    let deleted = false
+    let projectState = structuredClone(baseProjectState)
+    const setProjectState = vi.fn(async (nextState: ProjectState) => {
+      projectState = nextState
+    })
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) => {
+      if (!includeArchived || deleted) return []
+      return [
+        {
+          id: 'thread-quick',
+          title: 'Scratch prompt',
+          preview: 'Scratch prompt',
+          createdAt: '2026-06-30T03:00:00.000Z',
+          updatedAt: '2026-06-30T03:05:00.000Z',
+          archived: true,
+          running: false,
+          cwd: '/tmp/dascowork/thread-quick'
+        }
+      ]
+    })
+    if (!threadClient.deleteThread) throw new Error('expected delete thread client')
+    vi.mocked(threadClient.deleteThread).mockImplementation(async () => {
+      deleted = true
+    })
+    const onConversationDeleted = vi.fn()
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: {
+        getState: async () => projectState,
+        setState: setProjectState
+      },
+      onConversationDeleted
+    })
+
+    await expect(
+      service.deleteConversation({ conversationId: 'thread-quick' })
+    ).resolves.toMatchObject({
+      conversations: [],
+      archivedConversationIds: []
+    })
+
+    expect(threadClient.deleteThread).toHaveBeenCalledWith('thread-quick')
+    expect(onConversationDeleted).toHaveBeenCalledWith('thread-quick')
+    expect(setProjectState).toHaveBeenCalledOnce()
+    expect(projectState.threadProjectAssignments['thread-quick']).toBeUndefined()
+    expect(projectState.threadProjectlessOutputDirectories['thread-quick']).toBeUndefined()
+    expect(projectState.projectlessThreadIds).not.toContain('thread-quick')
+  })
+
+  it('preflights and permanently deletes an archived project group', async () => {
+    const threadClient = createClient()
+    const deletedConversationIds = new Set<string>()
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) => {
+      if (!includeArchived) return []
+      return ['thread-archive-a', 'thread-archive-b']
+        .filter((conversationId) => !deletedConversationIds.has(conversationId))
+        .map((id) => ({
+          id,
+          title: id,
+          preview: id,
+          createdAt: '2026-06-30T03:00:00.000Z',
+          updatedAt: '2026-06-30T03:05:00.000Z',
+          archived: true,
+          running: false,
+          cwd: '/repo'
+        }))
+    })
+    if (!threadClient.deleteThread) throw new Error('expected delete thread client')
+    vi.mocked(threadClient.deleteThread).mockImplementation(async (conversationId) => {
+      deletedConversationIds.add(conversationId)
+    })
+    const onConversationDeleted = vi.fn()
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => structuredClone(baseProjectState) },
+      onConversationDeleted
+    })
+
+    await expect(
+      service.deleteArchivedConversations({
+        conversationIds: ['thread-archive-a', 'thread-archive-b']
+      })
+    ).resolves.toMatchObject({ conversations: [], archivedConversationIds: [] })
+
+    expect(threadClient.deleteThread).toHaveBeenNthCalledWith(1, 'thread-archive-a')
+    expect(threadClient.deleteThread).toHaveBeenNthCalledWith(2, 'thread-archive-b')
+    expect(onConversationDeleted).toHaveBeenNthCalledWith(1, 'thread-archive-a')
+    expect(onConversationDeleted).toHaveBeenNthCalledWith(2, 'thread-archive-b')
+  })
+
+  it('does not partially delete a project group when one task is no longer archived', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) => {
+      if (!includeArchived) return []
+      return [
+        {
+          id: 'thread-archive-a',
+          title: 'Archived',
+          preview: 'Archived',
+          createdAt: '2026-06-30T03:00:00.000Z',
+          updatedAt: '2026-06-30T03:05:00.000Z',
+          archived: true,
+          running: false,
+          cwd: '/repo'
+        },
+        {
+          id: 'thread-running',
+          title: 'Running',
+          preview: 'Running',
+          createdAt: '2026-06-30T03:00:00.000Z',
+          updatedAt: '2026-06-30T03:05:00.000Z',
+          archived: false,
+          running: true,
+          cwd: '/repo'
+        }
+      ]
+    })
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await expect(
+      service.deleteArchivedConversations({
+        conversationIds: ['thread-archive-a', 'thread-running']
+      })
+    ).rejects.toThrow('只能永久删除已归档任务。')
+
+    expect(threadClient.deleteThread).not.toHaveBeenCalled()
+  })
+
+  it('refuses to permanently delete a task that is not archived', async () => {
+    const threadClient = createClient()
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await expect(service.deleteConversation({ conversationId: 'thread-local' })).rejects.toThrow(
+      '只能永久删除已归档任务'
+    )
+    expect(threadClient.deleteThread).not.toHaveBeenCalled()
   })
 
   it('ensures a just-finished app-server thread is visible when thread/list lags', async () => {
@@ -639,20 +899,22 @@ describe('ConversationApiService', () => {
 
   it('does not reinsert a stale row after archive when thread/read can still return it', async () => {
     const threadClient = createClient()
-    vi.mocked(threadClient.listThreads)
-      .mockResolvedValueOnce([
-        {
-          id: 'thread-local',
-          title: 'Initial sidebar prompt',
-          preview: 'Initial sidebar prompt',
-          createdAt: '2026-06-30T04:00:00.000Z',
-          updatedAt: '2026-06-30T04:05:00.000Z',
-          archived: false,
-          running: false,
-          cwd: '/repo/desktop-app'
-        }
-      ])
-      .mockResolvedValueOnce([])
+    vi.mocked(threadClient.listThreads).mockImplementation(async ({ includeArchived }) =>
+      includeArchived
+        ? []
+        : [
+            {
+              id: 'thread-local',
+              title: 'Initial sidebar prompt',
+              preview: 'Initial sidebar prompt',
+              createdAt: '2026-06-30T04:00:00.000Z',
+              updatedAt: '2026-06-30T04:05:00.000Z',
+              archived: false,
+              running: false,
+              cwd: '/repo/desktop-app'
+            }
+          ]
+    )
     vi.mocked(threadClient.readThreadWithFullTurns).mockResolvedValue({
       id: 'thread-local',
       title: null,
@@ -688,6 +950,7 @@ describe('ConversationApiService', () => {
     })
 
     await service.refreshConversationList()
+    vi.mocked(threadClient.listThreads).mockResolvedValue([])
 
     await expect(service.archiveConversation({ conversationId: 'thread-local' })).resolves.toEqual({
       loaded: true,
@@ -888,7 +1151,7 @@ describe('ConversationApiService', () => {
     await service.refreshConversationList()
 
     // Second refresh: thread/list is authoritative unless a caller explicitly awaits a thread.
-    vi.mocked(threadClient.listThreads).mockResolvedValueOnce([])
+    vi.mocked(threadClient.listThreads).mockResolvedValue([])
 
     const state = await service.refreshConversationList()
     expect(state.conversations).toEqual([])
@@ -915,14 +1178,14 @@ describe('ConversationApiService', () => {
     expect(threadClient.readThread).not.toHaveBeenCalled()
   })
 
-  it('merges sidebar preferences with defaults', () => {
+  it('merges sidebar preferences with defaults', async () => {
     const service = new ConversationApiService({
       threadClient: createClient(),
       projectStore: { getState: async () => baseProjectState }
     })
 
     expect(
-      service.setPreferences({
+      await service.setPreferences({
         organizeMode: 'chronological',
         collapsedGroupIds: ['local:local']
       })
@@ -930,7 +1193,8 @@ describe('ConversationApiService', () => {
       organizeMode: 'chronological',
       sortKey: 'updated_at',
       collapsedSectionIds: [],
-      collapsedGroupIds: ['local:local']
+      collapsedGroupIds: ['local:local'],
+      pinnedConversationIds: []
     })
   })
 })

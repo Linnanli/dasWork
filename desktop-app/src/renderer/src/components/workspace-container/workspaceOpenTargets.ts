@@ -21,6 +21,19 @@ export type WorkspaceOpenTarget =
       revealPath?: string
     }
   | { type: 'review'; source?: LocalGitReviewSource }
+  | { type: 'task-summary' }
+  | { type: 'timeline' }
+  | { type: 'outputs' }
+  | { type: 'sources' }
+  | { type: 'pull-request' }
+  | {
+      type: 'mcp-app'
+      threadId: string
+      server: string
+      resourceUri: string
+      title?: string
+    }
+  | { type: 'processes' }
   | { type: 'terminal'; id?: string; title?: string }
   | { type: 'browser'; id?: string; title?: string; url?: string }
 
@@ -61,6 +74,73 @@ export function createWorkspaceDescriptor(
         kind: 'review',
         title: 'Review',
         props: target.source ? { source: target.source as unknown as WorkspaceJsonValue } : {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'task-summary':
+      return {
+        id: 'task-summary',
+        kind: 'task-summary',
+        title: '任务',
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'timeline':
+      return {
+        id: 'timeline',
+        kind: 'timeline',
+        title: '时间线',
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'outputs':
+      return {
+        id: 'outputs',
+        kind: 'outputs',
+        title: 'Outputs',
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'sources':
+      return {
+        id: 'sources',
+        kind: 'sources',
+        title: 'Sources',
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'pull-request':
+      return {
+        id: 'pull-request',
+        kind: 'pull-request',
+        title: 'Pull Request',
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
+    case 'mcp-app':
+      return {
+        id: `mcp-app:${encodeURIComponent(target.threadId)}:${encodeURIComponent(target.server)}:${encodeURIComponent(target.resourceUri)}`,
+        kind: 'mcp-app',
+        title: target.title ?? 'MCP App',
+        props: {
+          threadId: target.threadId,
+          server: target.server,
+          resourceUri: target.resourceUri
+        },
+        isPreview: false,
+        isClosable: true
+      }
+    case 'processes':
+      return {
+        id: 'processes',
+        kind: 'processes',
+        title: '进程',
+        props: {},
         isPreview: false,
         isClosable: true
       }

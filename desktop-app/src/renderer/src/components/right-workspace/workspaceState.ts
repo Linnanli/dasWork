@@ -4,7 +4,18 @@ import type { WorkspaceFileLocation } from '../workspace-container/workspaceOpen
 
 export { RIGHT_WORKSPACE_MIN_WIDTH }
 
-export const RIGHT_WORKSPACE_TAB_TYPES = ['review', 'file', 'terminal', 'browser'] as const
+export const RIGHT_WORKSPACE_TAB_TYPES = [
+  'review',
+  'pull-request',
+  'task-summary',
+  'timeline',
+  'outputs',
+  'sources',
+  'processes',
+  'file',
+  'terminal',
+  'browser'
+] as const
 export type RightWorkspaceTabType = (typeof RIGHT_WORKSPACE_TAB_TYPES)[number]
 
 export type RightWorkspaceTab =
@@ -14,6 +25,42 @@ export type RightWorkspaceTab =
       title: string
       label?: string
       source?: LocalGitReviewSource
+    }
+  | {
+      id: 'pull-request'
+      type: 'pull-request'
+      title: string
+      label?: string
+    }
+  | {
+      id: 'task-summary'
+      type: 'task-summary'
+      title: string
+      label?: string
+    }
+  | {
+      id: 'timeline'
+      type: 'timeline'
+      title: string
+      label?: string
+    }
+  | {
+      id: 'outputs'
+      type: 'outputs'
+      title: string
+      label?: string
+    }
+  | {
+      id: 'sources'
+      type: 'sources'
+      title: string
+      label?: string
+    }
+  | {
+      id: 'processes'
+      type: 'processes'
+      title: string
+      label?: string
     }
   | {
       id: string
@@ -41,6 +88,12 @@ export type RightWorkspaceTab =
 
 export type PersistedRightWorkspaceTab =
   | { id: 'review'; type: 'review'; title: string; source?: LocalGitReviewSource }
+  | { id: 'pull-request'; type: 'pull-request'; title: string }
+  | { id: 'task-summary'; type: 'task-summary'; title: string }
+  | { id: 'timeline'; type: 'timeline'; title: string }
+  | { id: 'outputs'; type: 'outputs'; title: string }
+  | { id: 'sources'; type: 'sources'; title: string }
+  | { id: 'processes'; type: 'processes'; title: string }
   | { id: string; type: 'file'; title: string; relativePath: string }
   | { id: string; type: 'terminal'; title: string }
   | { id: string; type: 'browser'; title: string }
@@ -96,6 +149,12 @@ export function createWorkspaceTab(
   id = crypto.randomUUID()
 ): RightWorkspaceTab {
   if (type === 'terminal') return { id, type, title: 'Terminal' }
+  if (type === 'pull-request') return { id: 'pull-request', type, title: 'Pull Request' }
+  if (type === 'task-summary') return { id: 'task-summary', type, title: '任务' }
+  if (type === 'timeline') return { id: 'timeline', type, title: '时间线' }
+  if (type === 'outputs') return { id: 'outputs', type, title: 'Outputs' }
+  if (type === 'sources') return { id: 'sources', type, title: 'Sources' }
+  if (type === 'processes') return { id: 'processes', type, title: '进程' }
   return { id, type, title: 'New tab' }
 }
 
@@ -256,6 +315,12 @@ function insertAndActivate(
 
 function persistableTab(tab: RightWorkspaceTab): PersistedRightWorkspaceTab {
   if (tab.type === 'review') return tab
+  if (tab.type === 'pull-request') return tab
+  if (tab.type === 'task-summary') return tab
+  if (tab.type === 'timeline') return tab
+  if (tab.type === 'outputs') return tab
+  if (tab.type === 'sources') return tab
+  if (tab.type === 'processes') return tab
   if (tab.type === 'file') return tab
   return { id: tab.id, type: tab.type, title: tab.title }
 }
@@ -279,6 +344,11 @@ function isPersistedTab(tab: unknown): tab is PersistedRightWorkspaceTab {
   const candidate = tab as Partial<PersistedRightWorkspaceTab>
   if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return false
   if (candidate.type === 'review') return candidate.id === 'review'
+  if (candidate.type === 'task-summary') return candidate.id === 'task-summary'
+  if (candidate.type === 'timeline') return candidate.id === 'timeline'
+  if (candidate.type === 'outputs') return candidate.id === 'outputs'
+  if (candidate.type === 'sources') return candidate.id === 'sources'
+  if (candidate.type === 'processes') return candidate.id === 'processes'
   if (candidate.type === 'file') return typeof candidate.relativePath === 'string'
   return candidate.type === 'terminal' || candidate.type === 'browser'
 }

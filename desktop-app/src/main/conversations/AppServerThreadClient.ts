@@ -1,8 +1,10 @@
 import {
   createCodexHistoryClient,
+  type CodexFeedbackClassification,
   type CodexExperimentalFeature,
   mapCodexThreadToUiMessages,
   type CodexThreadGoalSetParams,
+  type CodexThreadForkParams,
   type CodexTurnListParams,
   type CodexHistoryClient,
   type CodexThreadForUi,
@@ -22,6 +24,7 @@ type AppServerHistoryThread = CodexThreadForUi & {
   updatedAt: number
   status: { type: string }
   cwd: string | null
+  threadSource?: string | null
 }
 
 export type AppServerThreadRow = {
@@ -33,6 +36,7 @@ export type AppServerThreadRow = {
   archived: boolean
   running: boolean
   cwd: string | null
+  threadSource?: string
   turns?: CodexThreadForUi['turns']
   messages?: UIMessage[]
 }
@@ -56,7 +60,15 @@ export type AppServerHistoryClientLike = {
   listTurns(threadId: string, input?: CodexTurnListParams): Promise<AppServerTurnsPage>
   archiveThread(threadId: string): Promise<void>
   unarchiveThread(threadId: string): Promise<void>
+  deleteThread?(threadId: string): Promise<void>
   renameThread(threadId: string, name: string): Promise<void>
+  forkThread(threadId: string, input?: CodexThreadForkParams): Promise<AppServerHistoryThread>
+  rollbackThread(threadId: string, numTurns: number): Promise<AppServerHistoryThread>
+  submitFeedback?(
+    threadId: string,
+    classification: CodexFeedbackClassification,
+    targetTurnId?: string
+  ): Promise<void>
   listExperimentalFeatures?(): Promise<CodexExperimentalFeature[]>
   getThreadGoal?(threadId: string): Promise<AppServerThreadGoal | null>
   setThreadGoal?(threadId: string, params: CodexThreadGoalSetParams): Promise<AppServerThreadGoal>
@@ -126,8 +138,66 @@ export class AppServerThreadClient {
     await this.withHistoryClient((client) => client.unarchiveThread(threadId))
   }
 
+  async deleteThread(threadId: string): Promise<void> {
+    await this.withHistoryClient((client) => {
+      if (!client.deleteThread) {
+        throw new Error('Deleting tasks is not supported by this app-server')
+      }
+      return client.deleteThread(threadId)
+    })
+  }
+
   async renameThread(threadId: string, name: string): Promise<void> {
     await this.withHistoryClient((client) => client.renameThread(threadId, name))
+  }
+
+  async submitFeedback(
+    threadId: string,
+    classification: CodexFeedbackClassification,
+    targetTurnId?: string
+  ): Promise<void> {
+    await this.withHistoryClient((client) => {
+      if (!client.submitFeedback) {
+        throw new Error('Feedback is not supported by this app-server')
+      }
+      return client.submitFeedback(threadId, classification, targetTurnId)
+    })
+  }
+
+  async forkThread(input: {
+    threadId: string
+    targetTurnId: string
+    ephemeral: boolean
+    cwd?: string
+    runtimeWorkspaceRoots?: string[]
+  }): Promise<AppServerThreadRow> {
+    return this.withHistoryClient(async (client) => {
+      const sourceTurns = await listAllFullTurns(client, input.threadId, {})
+      const targetTurnIndex = sourceTurns.findIndex((turn) => turn.id === input.targetTurnId)
+      if (targetTurnIndex < 0) {
+        throw new Error('无法从该消息继续：原任务中找不到对应的执行步骤。')
+      }
+
+      const forkedThread = await client.forkThread(input.threadId, {
+        ephemeral: input.ephemeral,
+        cwd: input.cwd,
+        runtimeWorkspaceRoots: input.runtimeWorkspaceRoots
+      })
+      const turnsToDiscard = forkedThread.turns.length - targetTurnIndex - 1
+      const completedThread =
+        turnsToDiscard > 0
+          ? await client.rollbackThread(forkedThread.id, turnsToDiscard)
+          : forkedThread
+      const retainedTurn = completedThread.turns.at(-1)
+      if (
+        completedThread.turns.length !== targetTurnIndex + 1 ||
+        retainedTurn?.id !== input.targetTurnId
+      ) {
+        throw new Error('无法从该消息继续：新任务未能保留正确的历史步骤。')
+      }
+
+      return toThreadRow(completedThread, false, { includeMessages: true })
+    })
   }
 
   async getThreadGoal(threadId: string): Promise<AppServerThreadGoal | null> {
@@ -257,6 +327,7 @@ function toThreadRow(
     archived,
     running: thread.status.type === 'active',
     cwd: thread.cwd,
+    ...(thread.threadSource ? { threadSource: thread.threadSource } : {}),
     ...(thread.turns.length > 0 ? { turns: thread.turns } : {}),
     ...(options.includeMessages ? { messages: mapCodexThreadToUiMessages(thread) } : {})
   }

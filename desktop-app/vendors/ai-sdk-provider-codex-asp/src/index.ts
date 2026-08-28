@@ -89,9 +89,11 @@ export {
   isCodexProviderErrorCode
 } from './errors'
 export type {
+  CodexFeedbackClassification,
   CodexExperimentalFeature,
   CodexHistoryClientSettings,
   CodexHistoryJsonRpcClientLike,
+  CodexMcpResourceReadParams,
   CodexHistorySortDirection,
   CodexHistorySortKey,
   CodexThreadForkParams,

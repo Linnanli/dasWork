@@ -65,11 +65,19 @@ export type ThreadProjectAssignment =
 export type ResolvedExecutionTarget = {
   hostId: string
   cwd: string | null
+  /** Main-owned app-server remote execution selection for a configured remote project. */
+  remoteEnvironment?: RemoteExecutionEnvironment
   /** Main-validated project/host shell override; never supplied by a terminal renderer request. */
   terminalCommand?: string
   workspaceRoots: string[]
   workspaceKind: WorkspaceKind
   projectAssignment?: ThreadProjectAssignment
+}
+
+export type RemoteExecutionEnvironment = {
+  environmentId: string
+  cwd: string
+  execServerUrl: string
 }
 
 export type WorkspaceRootOption = {
@@ -79,6 +87,31 @@ export type WorkspaceRootOption = {
   addedAt: string
   lastOpenedAt: string
   missing?: boolean
+}
+
+/** A locally verified Git worktree that can become the execution directory for a new task. */
+export type ProjectWorktree = {
+  path: string
+  branch: string | null
+  isCurrent: boolean
+}
+
+/** A named shell command saved for one concrete project or registered path. */
+export type ProjectAction = {
+  id: string
+  title: string
+  command: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** Project kinds that have a stable location in which an action may run. */
+export type ProjectActionScope = Exclude<ProjectSelection, { projectKind: 'projectless' }>
+
+export function projectActionScopeKey(scope: ProjectActionScope): string {
+  if (scope.projectKind === 'local') return `local:${scope.projectId}`
+  if (scope.projectKind === 'remote') return `remote:${scope.hostId}:${scope.projectId}`
+  return `path:${scope.path}`
 }
 
 export type LocalProject = {
@@ -98,6 +131,8 @@ export type RemoteProject = {
   hostId: string
   label: string
   remotePath: string
+  /** Optional only for projects persisted before remote execution was supported. */
+  execServerUrl?: string
   terminalCommand?: string
   createdAt: string
   updatedAt: string
@@ -113,6 +148,8 @@ export type ProjectState = {
   activeRemoteProjectId?: string
   projectOrder: string[]
   pinnedProjectIds: string[]
+  /** Commands are keyed by a canonical project-action scope; see projectActionScopeKey. */
+  projectActions?: Record<string, ProjectAction[]>
   projectWritableRoots: Record<string, string[]>
   threadProjectAssignments: Record<string, ThreadProjectAssignment>
   threadWritableRoots: Record<string, string[]>

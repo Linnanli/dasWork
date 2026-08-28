@@ -1,5 +1,9 @@
 appId: com.electron.app
 productName: desktop-app
+protocols:
+  - name: dasCowork task
+    schemes:
+      - dascowork
 directories:
   buildResources: build
 files:

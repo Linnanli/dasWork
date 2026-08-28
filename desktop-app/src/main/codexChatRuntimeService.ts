@@ -66,8 +66,10 @@ import type {
   CodexModel,
   CodexModelList,
   CodexStatus,
+  ReasoningEffort,
   ThreadGoalSummary
 } from '../shared/codexIpcApi'
+import { isReasoningEffort } from '../shared/codexIpcApi'
 import type { ThreadProjectAssignment } from '../shared/projects/projectTypes'
 import type { LocalGitTarget } from '../shared/localGitApi'
 import { selectUniqueLegacyCandidate } from '../shared/uniqueLegacyCandidate'
@@ -124,9 +126,11 @@ type StreamTextLike = (input: {
   onExistingTurnRecoveryState?: CodexCallOptions['onExistingTurnRecoveryState']
   collaborationMode?: CodexCallOptions['collaborationMode']
   approvalSettings?: ApprovalSettings
+  personality?: CodexCallOptions['personality']
   goalFirstTurnObjective?: CodexCallOptions['goalFirstTurnObjective']
   goalControlObjective?: CodexCallOptions['goalControlObjective']
   goalContinuous?: CodexCallOptions['goalContinuous']
+  threadSource?: CodexCallOptions['threadSource']
   approvals?: CodexCallOptions['approvals']
   onProviderToolCall?: (toolName: string) => void
 }) => Promise<StreamTextLikeResult> | StreamTextLikeResult
@@ -398,10 +402,11 @@ export class CodexChatRuntimeService {
     if (this.modelCatalog) {
       try {
         const list = await this.modelCatalog.listModels()
-        if (list.models.length > 0) {
-          this.selectedModelId = list.selectedModelId
+        const enrichedList = await this.enrichCatalogModelsWithProviderCapabilities(list)
+        if (enrichedList.models.length > 0) {
+          this.selectedModelId = enrichedList.selectedModelId
         }
-        return list
+        return enrichedList
       } catch (error) {
         return { models: [], unavailableReason: errorMessage(error) }
       }
@@ -418,6 +423,8 @@ export class CodexChatRuntimeService {
         displayName: model.displayName || model.model || model.id,
         description: model.description || undefined,
         inputModalities: model.inputModalities ?? [],
+        ...modelReasoningEfforts(model),
+        ...(model.supportsPersonality ? { supportsPersonality: true } : {}),
         isDefault: Boolean(model.isDefault)
       }))
       const selectedModelId =
@@ -426,6 +433,36 @@ export class CodexChatRuntimeService {
       return { models: mapped, selectedModelId }
     } catch (error) {
       return { models: [], unavailableReason: unavailableReason ?? errorMessage(error) }
+    }
+  }
+
+  private async enrichCatalogModelsWithProviderCapabilities(
+    list: CodexModelList
+  ): Promise<CodexModelList> {
+    if (list.models.length === 0) return list
+
+    try {
+      const providerModels = await this.provider.listModels()
+      if (!Array.isArray(providerModels)) return list
+
+      const providerModelsById = new Map(providerModels.map((model) => [model.id, model]))
+      return {
+        ...list,
+        models: list.models.map((model) => {
+          const providerModel = providerModelsById.get(model.id)
+          if (!providerModel) return model
+          const catalogModel = { ...model }
+          delete catalogModel.supportsPersonality
+          return {
+            ...catalogModel,
+            ...modelReasoningEfforts(providerModel),
+            ...(providerModel.supportsPersonality ? { supportsPersonality: true } : {})
+          }
+        })
+      }
+    } catch {
+      // The backend catalog remains usable if the optional app-server metadata lookup fails.
+      return list
     }
   }
 
@@ -443,7 +480,8 @@ export class CodexChatRuntimeService {
 
   private async resolveCollaborationMode(
     mode: ComposerModeKind,
-    model: string
+    model: string,
+    selectedReasoningEffort?: ReasoningEffort
   ): Promise<NonNullable<CodexCallOptions['collaborationMode']>> {
     const masks = await this.loadCollaborationModeMasks()
     const preset = masks?.find((candidate) => candidate.mode === mode)
@@ -453,7 +491,9 @@ export class CodexChatRuntimeService {
     return collaborationModeForComposerMode(
       mode,
       preset?.model ?? model,
-      preset?.reasoning_effort ?? null
+      mode === 'default'
+        ? (selectedReasoningEffort ?? preset?.reasoning_effort ?? null)
+        : (preset?.reasoning_effort ?? null)
     )
   }
 
@@ -549,7 +589,8 @@ export class CodexChatRuntimeService {
     request: CodexChatRequest,
     port: CodexPortLike,
     callbacks?: StartChatStreamCallbacks,
-    streamId?: string
+    streamId?: string,
+    options?: { threadSource?: CodexCallOptions['threadSource'] }
   ): Promise<CodexChatRunResult> {
     const releaseAdmission = this.acquireStartAdmission()
     if (!releaseAdmission) {
@@ -651,7 +692,8 @@ export class CodexChatRuntimeService {
       const threadGoalControl = threadGoalControlFromRequest(effectiveRequest)
       const collaborationMode = await this.resolveCollaborationMode(
         effectiveRequest.body?.composerModeKind ?? 'default',
-        streamModelId
+        streamModelId,
+        effectiveRequest.body?.reasoningEffort
       )
       const localAttachmentCount = threadGoalControl
         ? 0
@@ -849,9 +891,11 @@ export class CodexChatRuntimeService {
           onThreadGoalUpdated,
           collaborationMode,
           approvalSettings,
+          personality: effectiveRequest.body?.personality ?? 'none',
           ...(threadGoalDraft ? { goalFirstTurnObjective: threadGoalDraft.objective } : {}),
           ...(threadGoalControl ? { goalControlObjective: threadGoalControl.objective } : {}),
           ...(threadGoalDraft || threadGoalControl ? { goalContinuous: true } : {}),
+          ...(options?.threadSource ? { threadSource: options.threadSource } : {}),
           onExistingTurnRecoveryState: (state) => {
             activeRun.existingTurnRecoveryState = state
           },
@@ -2410,9 +2454,11 @@ async function defaultStreamText({
   onExistingTurnRecoveryState,
   collaborationMode,
   approvalSettings,
+  personality,
   goalFirstTurnObjective,
   goalControlObjective,
   goalContinuous,
+  threadSource,
   approvals,
   onProviderToolCall
 }: {
@@ -2436,9 +2482,11 @@ async function defaultStreamText({
   onExistingTurnRecoveryState?: CodexCallOptions['onExistingTurnRecoveryState']
   collaborationMode?: CodexCallOptions['collaborationMode']
   approvalSettings?: ApprovalSettings
+  personality?: CodexCallOptions['personality']
   goalFirstTurnObjective?: CodexCallOptions['goalFirstTurnObjective']
   goalControlObjective?: CodexCallOptions['goalControlObjective']
   goalContinuous?: CodexCallOptions['goalContinuous']
+  threadSource?: CodexCallOptions['threadSource']
   approvals?: CodexCallOptions['approvals']
   onProviderToolCall?: (toolName: string) => void
 }): Promise<StreamTextLikeResult> {
@@ -2466,9 +2514,11 @@ async function defaultStreamText({
       onExistingTurnRecoveryState,
       collaborationMode,
       approvalSettings,
+      personality,
       goalFirstTurnObjective,
       goalControlObjective,
       goalContinuous,
+      threadSource,
       approvals
     })
   )
@@ -2509,9 +2559,11 @@ function codexCallOptionsInput({
   onExistingTurnRecoveryState,
   collaborationMode,
   approvalSettings,
+  personality,
   goalFirstTurnObjective,
   goalControlObjective,
   goalContinuous,
+  threadSource,
   approvals
 }: {
   modelId: string
@@ -2531,9 +2583,11 @@ function codexCallOptionsInput({
   onExistingTurnRecoveryState?: CodexCallOptions['onExistingTurnRecoveryState']
   collaborationMode?: CodexCallOptions['collaborationMode']
   approvalSettings?: ApprovalSettings
+  personality?: CodexCallOptions['personality']
   goalFirstTurnObjective?: CodexCallOptions['goalFirstTurnObjective']
   goalControlObjective?: CodexCallOptions['goalControlObjective']
   goalContinuous?: CodexCallOptions['goalContinuous']
+  threadSource?: CodexCallOptions['threadSource']
   approvals?: CodexCallOptions['approvals']
 }): CodexCallOptions {
   return {
@@ -2554,11 +2608,16 @@ function codexCallOptionsInput({
     ...(onExistingTurnRecoveryState ? { onExistingTurnRecoveryState } : {}),
     ...(collaborationMode ? { collaborationMode } : {}),
     ...(approvalSettings ?? {}),
+    ...(personality ? { personality } : {}),
     ...(goalFirstTurnObjective ? { goalFirstTurnObjective } : {}),
     ...(goalControlObjective ? { goalControlObjective } : {}),
     ...(goalContinuous ? { goalContinuous: true } : {}),
+    ...(threadSource ? { threadSource } : {}),
     ...(approvals ? { approvals } : {}),
     ...(executionTarget?.cwd ? { cwd: executionTarget.cwd } : {}),
+    ...(executionTarget?.remoteEnvironment
+      ? { remoteEnvironment: executionTarget.remoteEnvironment }
+      : {}),
     ...(executionTarget?.runtimeWorkspaceRoots
       ? { runtimeWorkspaceRoots: executionTarget.runtimeWorkspaceRoots }
       : {})
@@ -2584,6 +2643,24 @@ function collaborationModeForComposerMode(
       reasoning_effort: reasoningEffort,
       developer_instructions: null
     }
+  }
+}
+
+function modelReasoningEfforts(
+  model: Awaited<ReturnType<CodexProvider['listModels']>>[number]
+): Pick<CodexModel, 'reasoningEfforts' | 'defaultReasoningEffort'> {
+  const reasoningEfforts = model.supportedReasoningEfforts.flatMap((option) =>
+    isReasoningEffort(option.reasoningEffort)
+      ? [{ id: option.reasoningEffort, description: option.description || undefined }]
+      : []
+  )
+  const defaultReasoningEffort = isReasoningEffort(model.defaultReasoningEffort)
+    ? model.defaultReasoningEffort
+    : undefined
+
+  return {
+    ...(reasoningEfforts.length > 0 ? { reasoningEfforts } : {}),
+    ...(defaultReasoningEffort ? { defaultReasoningEffort } : {})
   }
 }
 

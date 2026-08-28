@@ -4,6 +4,7 @@ import type {
   CodexApprovalRequest,
   CodexApprovalResponse,
   CodexModelList,
+  ReasoningEffort,
   SidebarConversation,
   SidebarConversationActionPayload,
   ThreadGoalSummary
@@ -18,7 +19,8 @@ import {
 import type {
   ConversationApprovalModeKind,
   ConversationComposerModeKind,
-  ConversationDraftAttachment
+  ConversationDraftAttachment,
+  ConversationPersonality
 } from '../runtime/ConversationDraftStore'
 import type { ActiveConversationContext } from '../lib/ElectronIpcChatTransport'
 import { ConversationRuntimeIndicatorStore } from '../runtime/ConversationRuntimeIndicatorStore'
@@ -31,6 +33,7 @@ export type CodexIpcAssistantRuntimeState = {
   serverRequests: readonly CodexApprovalRequest[]
   models: readonly ModelOption[]
   selectedModelId: string | undefined
+  reasoningEffort: ReasoningEffort | undefined
   modelSelectionError: string | undefined
   startNewConversation: (projectSelection?: ProjectSelection) => ConversationChatEntry
   startNewConversationWithDraft: (
@@ -43,11 +46,13 @@ export type CodexIpcAssistantRuntimeState = {
   restoreSingleActiveConversation: () => Promise<boolean>
   openConversation: (input: SidebarConversationActionPayload) => Promise<void>
   setSelectedModelId: (modelId: string) => Promise<void>
+  setActiveReasoningEffort: (reasoningEffort: ReasoningEffort | undefined) => void
   setActiveProjectSelection: (selection: ProjectSelection | undefined) => void
   setActiveDraft: (draft: string) => void
   setActiveDraftAttachments: (attachments: readonly ConversationDraftAttachment[]) => void
   setActiveComposerModeKind: (composerModeKind: ConversationComposerModeKind) => void
   setActiveApprovalModeKind: (approvalModeKind: ConversationApprovalModeKind) => void
+  setActivePersonality: (personality: ConversationPersonality) => void
   setActiveGoalEditorActive: (goalEditorActive: boolean) => void
   setActiveThreadGoal: (threadGoal: ThreadGoalSummary | null | undefined) => void
   setActiveGoalOperation: (
@@ -238,6 +243,12 @@ export function useCodexIpcAssistantRuntime(
     [activeEntry, registry]
   )
 
+  const setActiveReasoningEffort = useCallback(
+    (reasoningEffort: ReasoningEffort | undefined) =>
+      registry.setReasoningEffort(activeEntry, reasoningEffort),
+    [activeEntry, registry]
+  )
+
   const setActiveDraft = useCallback(
     (draft: string) => registry.setDraft(activeEntry, draft),
     [activeEntry, registry]
@@ -255,6 +266,10 @@ export function useCodexIpcAssistantRuntime(
   const setActiveApprovalModeKind = useCallback(
     (approvalModeKind: ConversationApprovalModeKind) =>
       registry.setApprovalModeKind(activeEntry, approvalModeKind),
+    [activeEntry, registry]
+  )
+  const setActivePersonality = useCallback(
+    (personality: ConversationPersonality) => registry.setPersonality(activeEntry, personality),
     [activeEntry, registry]
   )
   const setActiveGoalEditorActive = useCallback(
@@ -336,6 +351,7 @@ export function useCodexIpcAssistantRuntime(
     serverRequests,
     models,
     selectedModelId: activeEntry.selectedModelId ?? selectedModelId,
+    reasoningEffort: activeEntry.reasoningEffort,
     modelSelectionError: activeEntry.modelSelectionError,
     startNewConversation,
     startNewConversationWithDraft,
@@ -345,11 +361,13 @@ export function useCodexIpcAssistantRuntime(
     restoreSingleActiveConversation,
     openConversation,
     setSelectedModelId,
+    setActiveReasoningEffort,
     setActiveProjectSelection,
     setActiveDraft,
     setActiveDraftAttachments,
     setActiveComposerModeKind,
     setActiveApprovalModeKind,
+    setActivePersonality,
     setActiveGoalEditorActive,
     setActiveThreadGoal,
     setActiveGoalOperation,
@@ -376,6 +394,9 @@ function toModelOptions(list: CodexModelList): ModelOption[] {
     name: model.displayName,
     description: model.description,
     inputModalities: model.inputModalities,
+    efforts: model.reasoningEfforts?.map((effort) => ({ id: effort.id, name: effort.id })),
+    defaultReasoningEffort: model.defaultReasoningEffort,
+    supportsPersonality: model.supportsPersonality,
     disabled: false
   }))
 }

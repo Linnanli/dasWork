@@ -123,6 +123,7 @@ export type SubagentActivityAgent = {
   agentPath: string
   displayName: string
   displayStatus: SubagentActivityDisplayStatus
+  model?: string
 }
 
 export type MultiAgentReceiverAgent = {
@@ -360,6 +361,7 @@ const WEBSITE_FILE_EXTENSIONS = new Set(['htm', 'html'])
 type SubagentRenderContext = {
   displayNamesByThreadId: ReadonlyMap<string, string>
   activityStatusesByPartIndex: ReadonlyMap<number, SubagentActivityDisplayStatus>
+  modelsByThreadId: ReadonlyMap<string, string>
 }
 
 type DerivedEndResource = {
@@ -1039,6 +1041,19 @@ function normalizeParts(
 
     if (type === 'indicator' || type === 'step-start') return []
 
+    const sourceItem = sourceItemForPart(part, type)
+    if (sourceItem) {
+      return [
+        {
+          kind: 'entry',
+          partIndex,
+          part,
+          item: sourceItem,
+          itemType: 'source'
+        }
+      ]
+    }
+
     if (isToolLikePartType(type)) {
       const toolName = stringValue(part.toolName)
       const item =
@@ -1081,6 +1096,55 @@ function normalizeParts(
   })
 }
 
+/**
+ * AI SDK transports sources as source-url/source-document parts. Historical
+ * transcript conversion uses the smaller source shape, so normalize both
+ * representations into one renderer-owned entry instead of dropping them as
+ * unknown content.
+ */
+function sourceItemForPart(
+  part: AssistantMessagePart,
+  type: string | undefined
+): Record<string, unknown> | undefined {
+  if (type === 'source-url') {
+    return {
+      id: stringValue(part.sourceId) ?? stringValue(part.id) ?? 'source-url',
+      type: 'source',
+      sourceType: 'url',
+      ...(stringValue(part.url) ? { url: stringValue(part.url) } : {}),
+      ...(stringValue(part.title) ? { title: stringValue(part.title) } : {}),
+      ...(recordValue(part.providerMetadata) ? { providerMetadata: part.providerMetadata } : {})
+    }
+  }
+
+  if (type === 'source-document') {
+    return {
+      id: stringValue(part.sourceId) ?? stringValue(part.id) ?? 'source-document',
+      type: 'source',
+      sourceType: 'document',
+      ...(stringValue(part.title) ? { title: stringValue(part.title) } : {}),
+      ...(stringValue(part.filename) ? { filename: stringValue(part.filename) } : {}),
+      ...(stringValue(part.mediaType) ? { mediaType: stringValue(part.mediaType) } : {}),
+      ...(recordValue(part.providerMetadata) ? { providerMetadata: part.providerMetadata } : {})
+    }
+  }
+
+  if (type !== 'source') return undefined
+
+  const sourceType = stringValue(part.sourceType)
+  if (sourceType !== 'url' && sourceType !== 'document') return undefined
+  return {
+    id: stringValue(part.id) ?? stringValue(part.sourceId) ?? `source-${sourceType}`,
+    type: 'source',
+    sourceType,
+    ...(stringValue(part.url) ? { url: stringValue(part.url) } : {}),
+    ...(stringValue(part.title) ? { title: stringValue(part.title) } : {}),
+    ...(stringValue(part.filename) ? { filename: stringValue(part.filename) } : {}),
+    ...(stringValue(part.mediaType) ? { mediaType: stringValue(part.mediaType) } : {}),
+    ...(recordValue(part.providerMetadata) ? { providerMetadata: part.providerMetadata } : {})
+  }
+}
+
 function groupWebSearchAndMultiAgent(
   parts: readonly NormalizedPart[],
   subagentContext: SubagentRenderContext
@@ -1120,7 +1184,7 @@ function groupWebSearchAndMultiAgent(
         nextIndex += 1
       }
 
-      const agents = mergeSubagentActivityAgents(group, subagentContext.activityStatusesByPartIndex)
+      const agents = mergeSubagentActivityAgents(group, subagentContext)
       const anchorEventId = subagentActivityAgent(group[0]!)?.eventId
       if (agents.length > 0) {
         units.push({
@@ -2462,6 +2526,16 @@ function buildSubagentRenderContext(parts: readonly NormalizedPart[]): SubagentR
   const displayNamesByThreadId = new Map<string, string>()
   const activityStatusesByPartIndex = new Map<number, SubagentActivityDisplayStatus>()
   const latestActivityPartIndexByThreadId = new Map<string, number>()
+  const modelsByThreadId = new Map<string, string>()
+
+  for (const part of parts) {
+    if (!isMultiAgentPart(part)) continue
+    const model = modelForMultiAgentPart(part)
+    if (!model) continue
+    for (const threadId of multiAgentReceiverThreadIds(part.item, extractToolInput(part.part))) {
+      modelsByThreadId.set(threadId, model)
+    }
+  }
 
   for (const part of parts) {
     const activity = subagentActivityAgent(part)
@@ -2484,7 +2558,7 @@ function buildSubagentRenderContext(parts: readonly NormalizedPart[]): SubagentR
     }
   }
 
-  return { displayNamesByThreadId, activityStatusesByPartIndex }
+  return { displayNamesByThreadId, activityStatusesByPartIndex, modelsByThreadId }
 }
 
 function isSubagentActivityPart(part: NormalizedPart): part is SubagentActivityNormalizedPart {
@@ -2504,15 +2578,20 @@ function isWaitingMultiAgentPart(part: NormalizedPart): boolean {
 
 function mergeSubagentActivityAgents(
   parts: readonly NormalizedPart[],
-  activityStatusesByPartIndex: ReadonlyMap<number, SubagentActivityDisplayStatus>
+  context: SubagentRenderContext
 ): SubagentActivityAgent[] {
   const agents = new Map<string, SubagentActivityAgent>()
 
   for (const part of parts) {
     const agent = subagentActivityAgent(part)
     if (!agent) continue
-    const displayStatus = activityStatusesByPartIndex.get(part.partIndex) ?? agent.displayStatus
-    agents.set(agent.threadId ?? agent.eventId, { ...agent, displayStatus })
+    const displayStatus = context.activityStatusesByPartIndex.get(part.partIndex) ?? agent.displayStatus
+    const model = agent.threadId ? context.modelsByThreadId.get(agent.threadId) : undefined
+    agents.set(agent.threadId ?? agent.eventId, {
+      ...agent,
+      displayStatus,
+      ...(model ? { model } : {})
+    })
   }
 
   return [...agents.values()]
@@ -2577,16 +2656,8 @@ function receiverAgentsForMultiAgentItem(
   input: unknown,
   context: SubagentRenderContext
 ): readonly MultiAgentReceiverAgent[] | undefined {
-  const inputRecord = recordValue(input)
   const agentsStates = recordValue(item?.agentsStates) ?? {}
-  const threadIds = [
-    ...arrayValue(item?.receiverThreadIds),
-    ...arrayValue(inputRecord?.receiverThreadIds),
-    ...Object.keys(agentsStates)
-  ]
-    .map(stringValue)
-    .filter(isDefined)
-  const uniqueThreadIds = [...new Set(threadIds)]
+  const uniqueThreadIds = multiAgentReceiverThreadIds(item, input)
   if (uniqueThreadIds.length === 0) return undefined
 
   return uniqueThreadIds.map((threadId) => {
@@ -2600,6 +2671,28 @@ function receiverAgentsForMultiAgentItem(
       ...(stringValue(state?.message) ? { message: stringValue(state?.message) } : {})
     }
   })
+}
+
+function modelForMultiAgentPart(
+  part: Extract<NormalizedPart, { kind: 'tool' }>
+): string | undefined {
+  return stringValue(part.item?.model) ?? stringValue(recordValue(extractToolInput(part.part))?.model)
+}
+
+function multiAgentReceiverThreadIds(
+  item: Record<string, unknown> | undefined,
+  input: unknown
+): string[] {
+  const inputRecord = recordValue(input)
+  const agentsStates = recordValue(item?.agentsStates) ?? {}
+  const threadIds = [
+    ...arrayValue(item?.receiverThreadIds),
+    ...arrayValue(inputRecord?.receiverThreadIds),
+    ...Object.keys(agentsStates)
+  ]
+    .map(stringValue)
+    .filter(isDefined)
+  return [...new Set(threadIds)]
 }
 
 function dynamicMetadataForPart(

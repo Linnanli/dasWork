@@ -22,6 +22,7 @@ const storedState: ProjectState = {
   remoteProjects: [],
   projectOrder: ['abc'],
   pinnedProjectIds: [],
+  projectActions: {},
   projectWritableRoots: {},
   threadProjectAssignments: {},
   threadWritableRoots: {},
@@ -92,6 +93,22 @@ describe('ProjectStore', () => {
 
     expect((await store.getState()).activeWorkspaceRoots).toEqual(['/repo'])
     expect((await store.getState()).localProjects.abc.writableRoots).toEqual(['/repo'])
+  })
+
+  it('adds an empty action catalog when loading state saved before project actions existed', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'project-store-'))
+    const filePath = join(directory, 'projects.json')
+    const legacyState = { ...storedState }
+    delete legacyState.projectActions
+
+    try {
+      await writeFile(filePath, JSON.stringify(legacyState), 'utf8')
+      const store = ProjectStore.onDisk(filePath)
+
+      await expect(store.getState()).resolves.toMatchObject({ projectActions: {} })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('serializes overlapping disk writes in invocation order', async () => {

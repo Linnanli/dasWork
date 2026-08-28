@@ -1,4 +1,4 @@
-import { PlusIcon, PuzzleIcon } from 'lucide-react'
+import { CommandIcon, PlusIcon, PuzzleIcon } from 'lucide-react'
 
 import { Button } from '../components/ui/button'
 import { cn } from '../lib/utils'
@@ -6,11 +6,13 @@ import { cn } from '../lib/utils'
 export function SidebarPrimaryActions({
   nativeBackdrop,
   onNewChat,
+  onOpenCommandPalette,
   onOpenPlugins,
   pluginsActive = false
 }: {
   nativeBackdrop: boolean
   onNewChat: () => void
+  onOpenCommandPalette?: () => void
   onOpenPlugins?: () => void
   pluginsActive?: boolean
 }): React.JSX.Element {
@@ -31,6 +33,23 @@ export function SidebarPrimaryActions({
         <PlusIcon className="size-4 shrink-0" />
         <span className="min-w-0 truncate">新对话</span>
       </Button>
+      {onOpenCommandPalette ? (
+        <Button
+          aria-label="命令面板"
+          className={cn(
+            'w-full min-w-0 justify-start gap-2 font-normal text-foreground',
+            hoverClass
+          )}
+          size="sm"
+          title="命令面板（⌘K）"
+          type="button"
+          variant="ghost"
+          onClick={onOpenCommandPalette}
+        >
+          <CommandIcon className="size-4 shrink-0" />
+          <span className="min-w-0 truncate">命令面板</span>
+        </Button>
+      ) : null}
       {onOpenPlugins && (
         <Button
           aria-current={pluginsActive ? 'page' : undefined}

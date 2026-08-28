@@ -182,6 +182,49 @@ describe('ConversationFollowUpQueueService', () => {
     }
   })
 
+  it('removes an archived task queue and its persisted attachment snapshots', async () => {
+    const fixture = await createService()
+
+    try {
+      const queued = await fixture.service.enqueue(
+        'conversation-1',
+        snapshotWithImage('message-delete', 'conversation-1', 'delete me'),
+        'queue'
+      )
+      const attachment = queued.items[0]?.message.attachments[0]
+      if (!attachment || attachment.kind !== 'persisted-asset') {
+        throw new Error('expected persisted attachment')
+      }
+
+      await fixture.service.setArchived('conversation-1', true)
+      await fixture.service.deleteConversation('conversation-1')
+
+      expect((await fixture.store.getState()).conversations['conversation-1']).toBeUndefined()
+      await expect(fixture.assetStore.validate([attachment])).rejects.toThrow()
+    } finally {
+      await fixture.dispose()
+    }
+  })
+
+  it('refuses permanent deletion while a queued message delivery is being confirmed', async () => {
+    const fixture = await createService()
+
+    try {
+      await fixture.service.enqueue('conversation-1', snapshot('message-in-flight'), 'queue')
+      await fixture.service.claimHead('conversation-1', 'turn-start')
+
+      await expect(
+        fixture.service.assertConversationCanBeDeleted('conversation-1')
+      ).rejects.toThrow('Cannot delete a task while a delivery is being confirmed.')
+      await expect(fixture.service.deleteConversation('conversation-1')).rejects.toThrow(
+        'Cannot delete a task while a delivery is being confirmed.'
+      )
+      expect((await fixture.service.getState('conversation-1')).items).toHaveLength(1)
+    } finally {
+      await fixture.dispose()
+    }
+  })
+
   it('E19 keeps committed queue state when stale asset cleanup fails', async () => {
     const fixture = await createService()
     const prepare = fixture.assetStore.prepare.bind(fixture.assetStore)

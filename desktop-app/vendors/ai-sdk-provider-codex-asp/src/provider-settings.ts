@@ -18,6 +18,7 @@ import type {
   AskForApproval,
   CodexThreadResumeResult,
   CollaborationMode,
+  Personality,
   SandboxMode,
   SandboxPolicy,
   ThreadGoal,
@@ -58,6 +59,8 @@ export interface CodexTurnDefaults {
   approvalsReviewer?: ApprovalsReviewer
   /** Fine-grained sandbox policy — `{ type: "dangerFullAccess" }` | `{ type: "readOnly", … }` | `{ type: "workspaceWrite", … }` | `{ type: "externalSandbox", … }`. See {@link SandboxPolicy}. */
   sandboxPolicy?: SandboxPolicy
+  /** Response style selected from the app-server's fixed personality enum. */
+  personality?: Personality
   /** Model to use for this turn (overrides provider-level `defaultModel`). */
   model?: string
   /** How much effort the model should spend on the response. */
@@ -206,6 +209,16 @@ export interface CodexCallOptions {
   startFreshTerminalRetry?: boolean
   /** Working directory for this call. Also sent as turn-level `cwd`. */
   cwd?: string
+  /**
+   * Registers and selects a main-owned remote execution environment for this
+   * thread. This uses app-server's experimental environment protocol.
+   */
+  remoteEnvironment?: {
+    environmentId: string
+    cwd: string
+    execServerUrl: string
+    connectTimeoutMs?: number
+  }
   /** Runtime workspace roots for thread/start, thread/resume, and turn/start. Paths must be absolute. */
   runtimeWorkspaceRoots?: string[]
   /** Tool-use approval policy — `"never"` | `"on-failure"` | `"on-request"` | `"untrusted"` | `{ granular: … }`. See {@link AskForApproval}. */
@@ -216,6 +229,8 @@ export interface CodexCallOptions {
   sandbox?: SandboxMode
   /** Start the thread without writing rollout/session files. Only applies to `thread/start`. */
   ephemeral?: boolean
+  /** Labels a desktop-created scheduled task without exposing scheduler details to the model. */
+  threadSource?: 'automation'
   /**
    * Invoked after `thread/start` returns a new thread id and before the first
    * `turn/start` on that thread. The callback's returned promise is awaited so
@@ -251,6 +266,8 @@ export interface CodexCallOptions {
   model?: string
   /** Fine-grained sandbox policy — `{ type: "dangerFullAccess" }` | `{ type: "readOnly", … }` | `{ type: "workspaceWrite", … }` | `{ type: "externalSandbox", … }`. See {@link SandboxPolicy}. */
   sandboxPolicy?: SandboxPolicy
+  /** Response style selected from the app-server's fixed personality enum. */
+  personality?: Personality
   /** Controls turn summary generation. */
   summary?: 'auto' | 'concise' | 'detailed' | 'none'
   /**
@@ -310,7 +327,8 @@ export interface CodexCompactionOnResumeContext {
 }
 
 export type CodexCompactionOnResumeDecision =
-  boolean | ((context: CodexCompactionOnResumeContext) => boolean | Promise<boolean>)
+  | boolean
+  | ((context: CodexCompactionOnResumeContext) => boolean | Promise<boolean>)
 
 export type McpServerConfig =
   | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string>; cwd?: string }

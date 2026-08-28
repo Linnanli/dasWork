@@ -6,8 +6,11 @@ import type {
   CodexChatStreamError,
   CodexTurnLifecycleEvent,
   DesktopCodexChatApi,
+  Personality,
+  ReasoningEffort,
   ThreadGoalSummary
 } from '../../../shared/codexIpcApi'
+import { isReasoningEffort } from '../../../shared/codexIpcApi'
 import type { ProjectSelection } from '../../../shared/projects/projectTypes'
 
 export type { CodexChatStreamError } from '../../../shared/codexIpcApi'
@@ -26,6 +29,8 @@ export type ElectronIpcChatTransportOptions = {
   getProjectSelection?: () => ProjectSelection | undefined
   getComposerModeKind?: () => ComposerModeKind
   getApprovalModeKind?: () => ApprovalModeKind | string | undefined
+  getPersonality?: () => Personality | string | undefined
+  getReasoningEffort?: () => ReasoningEffort | string | undefined
   getGoalEditorActive?: () => boolean
   /** Current Goal editor text, used only for a typed existing-thread control stream. */
   getGoalEditorObjective?: () => string | undefined
@@ -60,13 +65,16 @@ type TrustedRequestContext = {
 
 const APPROVAL_MODE_KINDS = ['request-approval', 'approve-for-me', 'full-access'] as const
 const DEFAULT_APPROVAL_MODE_KIND = 'request-approval'
-
+const PERSONALITIES = ['none', 'friendly', 'pragmatic'] as const
+const DEFAULT_PERSONALITY = 'none'
 export class ElectronIpcChatTransport implements ChatTransport<UIMessage> {
   private readonly chatBridge: DesktopCodexChatApi
   private readonly getActiveConversation: () => ActiveConversationContext | undefined
   private readonly getProjectSelection: () => ProjectSelection | undefined
   private readonly getComposerModeKind: () => ComposerModeKind
   private readonly getApprovalModeKind: () => ApprovalModeKind | string | undefined
+  private readonly getPersonality: () => Personality | string | undefined
+  private readonly getReasoningEffort: () => ReasoningEffort | string | undefined
   private readonly getGoalEditorActive: () => boolean
   private readonly getGoalEditorObjective: () => string | undefined
   private readonly getConversationRevision: () => number
@@ -93,6 +101,8 @@ export class ElectronIpcChatTransport implements ChatTransport<UIMessage> {
     this.getProjectSelection = options.getProjectSelection ?? (() => undefined)
     this.getComposerModeKind = options.getComposerModeKind ?? (() => 'default')
     this.getApprovalModeKind = options.getApprovalModeKind ?? (() => DEFAULT_APPROVAL_MODE_KIND)
+    this.getPersonality = options.getPersonality ?? (() => DEFAULT_PERSONALITY)
+    this.getReasoningEffort = options.getReasoningEffort ?? (() => undefined)
     this.getGoalEditorActive = options.getGoalEditorActive ?? (() => false)
     this.getGoalEditorObjective = options.getGoalEditorObjective ?? (() => undefined)
     this.getConversationRevision = options.getConversationRevision ?? (() => 0)
@@ -335,6 +345,9 @@ export class ElectronIpcChatTransport implements ChatTransport<UIMessage> {
     const projectSelection = activeConversation?.projectSelection ?? this.getProjectSelection()
     trustedBody.composerModeKind = this.getComposerModeKind()
     trustedBody.approvalModeKind = normalizeApprovalModeKind(this.getApprovalModeKind())
+    trustedBody.personality = normalizePersonality(this.getPersonality())
+    const reasoningEffort = normalizeReasoningEffort(this.getReasoningEffort())
+    if (reasoningEffort) trustedBody.reasoningEffort = reasoningEffort
     if (this.getGoalEditorActive()) {
       if (activeConversation?.threadId && trigger === 'goal-control') {
         const objective = this.getGoalEditorObjective()?.trim()
@@ -383,7 +396,13 @@ function isRecoveryFailure(error: unknown): error is Exclude<CodexChatStreamErro
     'code' in error &&
     'message' in error &&
     (error as { code?: unknown }).code !== undefined &&
-    ['run-unavailable', 'run-mismatch', 'journal-unavailable', 'unknown-recovery'].includes(
+    [
+      'transport-unavailable',
+      'run-unavailable',
+      'run-mismatch',
+      'journal-unavailable',
+      'unknown-recovery'
+    ].includes(
       (error as { code: string }).code
     ) &&
     typeof (error as { message?: unknown }).message === 'string'
@@ -395,6 +414,7 @@ function stripRendererExecutionHints(body: unknown): Record<string, unknown> {
   const {
     approvalMode: _approvalMode,
     approvalModeKind: _approvalModeKind,
+    personality: _personality,
     approvalPolicy: _approvalPolicy,
     approvalsReviewer: _approvalsReviewer,
     cwd: _cwd,
@@ -405,6 +425,7 @@ function stripRendererExecutionHints(body: unknown): Record<string, unknown> {
     threadId: _threadId,
     projectSelection: _projectSelection,
     composerModeKind: _composerModeKind,
+    reasoningEffort: _reasoningEffort,
     threadGoalDraft: _threadGoalDraft,
     threadGoalControl: _threadGoalControl,
     collaborationMode: _collaborationMode,
@@ -412,6 +433,7 @@ function stripRendererExecutionHints(body: unknown): Record<string, unknown> {
   } = body as Record<string, unknown>
   void _approvalMode
   void _approvalModeKind
+  void _personality
   void _approvalPolicy
   void _approvalsReviewer
   void _cwd
@@ -422,6 +444,7 @@ function stripRendererExecutionHints(body: unknown): Record<string, unknown> {
   void _threadId
   void _projectSelection
   void _composerModeKind
+  void _reasoningEffort
   void _threadGoalDraft
   void _threadGoalControl
   void _collaborationMode
@@ -432,6 +455,15 @@ function normalizeApprovalModeKind(value: string | undefined): ApprovalModeKind 
   const modeKind = APPROVAL_MODE_KINDS.find((candidate) => candidate === value)
   if (modeKind) return modeKind
   return DEFAULT_APPROVAL_MODE_KIND
+}
+
+function normalizeReasoningEffort(value: unknown): ReasoningEffort | undefined {
+  return isReasoningEffort(value) ? value : undefined
+}
+
+function normalizePersonality(value: string | undefined): Personality {
+  const personality = PERSONALITIES.find((candidate) => candidate === value)
+  return personality ?? DEFAULT_PERSONALITY
 }
 
 function latestUserMessageText(messages: readonly UIMessage[]): string | undefined {

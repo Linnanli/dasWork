@@ -192,6 +192,42 @@ describe('ComposerProjectCard', () => {
     expect(projectController.pickWorkspaceRoot).toHaveBeenCalledOnce()
   })
 
+  it('selects a verified Git worktree through the project controller', async () => {
+    const projectController = controller({
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValue([
+          { path: '/repos/alpha-feature', branch: 'feature/widget', isCurrent: false }
+        ])
+    })
+    const activeSelection = { projectKind: 'path' as const, path: '/repos/alpha' }
+
+    act(() => {
+      root.render(
+        <ComposerProjectCard activeSelection={activeSelection} projectState={projectController} />
+      )
+    })
+    await openPicker(container)
+    await act(async () => {
+      itemWithText('选择 Git worktree')?.click()
+      await Promise.resolve()
+    })
+
+    expect(projectController.listWorktrees).toHaveBeenCalledWith(activeSelection)
+    expect(document.body.textContent).toContain('feature/widget')
+    expect(document.body.textContent).toContain('/repos/alpha-feature')
+
+    await act(async () => {
+      itemWithText('feature/widget')?.click()
+      await Promise.resolve()
+    })
+
+    expect(projectController.selectWorktree).toHaveBeenCalledWith({
+      source: activeSelection,
+      path: '/repos/alpha-feature'
+    })
+  })
+
   it('creates a blank project for an unbound draft', async () => {
     const projectController = controller({
       createBlankProject: vi.fn().mockResolvedValue({
@@ -226,6 +262,48 @@ describe('ComposerProjectCard', () => {
 
     expect(projectController.createBlankProject).toHaveBeenCalledWith('New App', expect.any(String))
   })
+
+  it('connects a remote project with its execution server', async () => {
+    const projectController = controller({
+      createRemoteProject: vi.fn().mockResolvedValue({ id: 'remote-created' })
+    })
+
+    act(() => {
+      root.render(
+        <ComposerProjectCard
+          activeSelection={{ projectKind: 'path', path: '/repos/alpha' }}
+          projectState={projectController}
+        />
+      )
+    })
+    await openPicker(container)
+    act(() => itemWithText('新建项目')?.click())
+    act(() => itemWithText('连接远程项目')?.click())
+
+    const values: Array<[string, string]> = [
+      ['remote-project-host-input', 'ssh-devbox'],
+      ['remote-project-label-input', 'Staging API'],
+      ['remote-project-path-input', '/srv/staging-api'],
+      ['remote-project-exec-server-input', 'wss://exec.example.test/codex']
+    ]
+    act(() => {
+      for (const [slot, value] of values) {
+        const input = document.querySelector<HTMLInputElement>(`[data-slot="${slot}"]`)
+        if (input) setInputValue(input, value)
+      }
+    })
+    await act(async () => {
+      buttonWithText('连接项目')?.click()
+      await Promise.resolve()
+    })
+
+    expect(projectController.createRemoteProject).toHaveBeenCalledWith({
+      hostId: 'ssh-devbox',
+      label: 'Staging API',
+      remotePath: '/srv/staging-api',
+      execServerUrl: 'wss://exec.example.test/codex'
+    })
+  })
 })
 
 function controller(overrides: Partial<ProjectStateController> = {}): ProjectStateController {
@@ -237,6 +315,9 @@ function controller(overrides: Partial<ProjectStateController> = {}): ProjectSta
     pickWorkspaceRoot: vi.fn().mockResolvedValue(null),
     createBlankProject: vi.fn(),
     createLocalProject: vi.fn(),
+    createRemoteProject: vi.fn(),
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    selectWorktree: vi.fn().mockResolvedValue(undefined),
     selectProject: vi.fn().mockResolvedValue(undefined),
     renameProject: vi.fn(),
     removeProject: vi.fn(),

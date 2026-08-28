@@ -3,8 +3,12 @@ import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dn
 import {
   FileCode2Icon,
   FilesIcon,
+  BoxIcon,
+  BookOpenTextIcon,
   GitPullRequestIcon,
   GlobeIcon,
+  Clock3Icon,
+  ListTodoIcon,
   PlusIcon,
   TerminalIcon,
   XIcon
@@ -59,6 +63,11 @@ type WorkspaceTabStripProps = {
 
 const TAB_ICONS: Record<string, IconComponent> = {
   review: GitPullRequestIcon,
+  'task-summary': ListTodoIcon,
+  timeline: Clock3Icon,
+  outputs: BoxIcon,
+  sources: BookOpenTextIcon,
+  processes: TerminalIcon,
   file: FileCode2Icon,
   terminal: TerminalIcon,
   browser: GlobeIcon
@@ -71,6 +80,11 @@ const NEW_TAB_OPTIONS: readonly {
   shortcut?: string
 }[] = [
   { target: { type: 'review' }, label: 'Review', icon: GitPullRequestIcon, shortcut: '⌘ R' },
+  { target: { type: 'task-summary' }, label: 'Task', icon: ListTodoIcon },
+  { target: { type: 'timeline' }, label: 'Timeline', icon: Clock3Icon },
+  { target: { type: 'outputs' }, label: 'Outputs', icon: BoxIcon },
+  { target: { type: 'sources' }, label: 'Sources', icon: BookOpenTextIcon },
+  { target: { type: 'processes' }, label: 'Processes', icon: TerminalIcon },
   { target: { type: 'terminal' }, label: 'Terminal', icon: TerminalIcon, shortcut: '⌘ T' },
   { target: { type: 'browser' }, label: 'Browser', icon: GlobeIcon, shortcut: '⌘ B' },
   { target: { type: 'file', relativePath: '' }, label: 'Files', icon: FilesIcon }

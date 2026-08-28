@@ -239,6 +239,46 @@ describe('startConversation', () => {
     })
   })
 
+  it('preserves the main-resolved remote execution environment for the provider', async () => {
+    const projectService = {
+      resolveNewThreadTarget: vi.fn().mockResolvedValue({
+        hostId: 'ssh-prod',
+        cwd: '/srv/app',
+        remoteEnvironment: {
+          environmentId: 'ssh-prod',
+          cwd: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex'
+        },
+        workspaceRoots: ['/srv/app'],
+        workspaceKind: 'project'
+      }),
+      resolveExistingThreadTarget: vi.fn()
+    }
+
+    const result = await startConversation({
+      request: {
+        chatId: 'chat-remote',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: {
+          projectSelection: { projectKind: 'remote', projectId: 'remote-1', hostId: 'ssh-prod' }
+        }
+      },
+      projectService
+    })
+
+    expect(result.executionTarget).toEqual({
+      cwd: '/srv/app',
+      remoteEnvironment: {
+        environmentId: 'ssh-prod',
+        cwd: '/srv/app',
+        execServerUrl: 'wss://exec.example.test/codex'
+      },
+      runtimeWorkspaceRoots: ['/srv/app']
+    })
+  })
+
   it('rejects direct chat payloads that forge an unregistered path project', async () => {
     const port = new FakePort()
     const streamText = vi.fn(async () => ({

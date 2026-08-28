@@ -4,6 +4,9 @@ import type {
   DesktopCodexFollowUpApi,
   DesktopComposerContextApi,
   DesktopConversationsApi,
+  DesktopAutomationsApi,
+  DesktopGithubPullRequestApi,
+  DesktopKeyboardShortcutsApi,
   DesktopGitApi,
   DesktopProjectsApi
 } from '../shared/codexIpcApi'
@@ -23,6 +26,9 @@ export type DesktopAppApi = {
   conversations: DesktopConversationsApi
   followUps: DesktopCodexFollowUpApi
   git: DesktopGitApi
+  githubPullRequests: DesktopGithubPullRequestApi
+  keyboardShortcuts: DesktopKeyboardShortcutsApi
+  automations: DesktopAutomationsApi
   nativeContextMenu: DesktopNativeContextMenuApi
   workspace: DesktopRightWorkspaceApi
 }

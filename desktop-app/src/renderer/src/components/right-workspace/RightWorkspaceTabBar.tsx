@@ -56,6 +56,12 @@ function openTarget(
       return
     case 'terminal':
     case 'browser':
+    case 'pull-request':
+    case 'task-summary':
+    case 'timeline':
+    case 'outputs':
+    case 'sources':
+    case 'processes':
       workspace.openTab(target.type)
   }
 }
@@ -71,6 +77,15 @@ function toDescriptor(tab: RightWorkspaceTab): WorkspaceTabRecord {
         isPreview: false,
         isClosable: true
       }
+    case 'pull-request':
+      return {
+        id: tab.id,
+        kind: tab.type,
+        title: tab.title,
+        props: {},
+        isPreview: false,
+        isClosable: true
+      }
     case 'file':
       return {
         id: tab.id,
@@ -82,6 +97,11 @@ function toDescriptor(tab: RightWorkspaceTab): WorkspaceTabRecord {
       }
     case 'terminal':
     case 'browser':
+    case 'task-summary':
+    case 'timeline':
+    case 'outputs':
+    case 'sources':
+    case 'processes':
       return {
         id: tab.id,
         kind: tab.type,

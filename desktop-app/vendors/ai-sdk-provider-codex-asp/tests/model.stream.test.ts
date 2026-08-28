@@ -26,6 +26,11 @@ class ScriptedTransport extends MockTransport {
       return
     }
 
+    if (message.method === 'environment/add') {
+      this.emitMessage({ id: message.id, result: {} })
+      return
+    }
+
     if (message.method === 'thread/start') {
       this.emitMessage({ id: message.id, result: { threadId: 'thr_1' } })
       return
@@ -2138,6 +2143,80 @@ describe('CodexLanguageModel.doStream', () => {
     })
   })
 
+  it('registers and selects a remote environment for new threads', async () => {
+    const transport = new ScriptedTransport()
+    const provider = createCodexAppServer({
+      transportFactory: () => transport,
+      clientInfo: { name: 'test-client', version: '1.0.0' }
+    })
+
+    const { stream } = await provider.languageModel('gpt-5.5').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'inspect the remote app' }] }],
+      providerOptions: codexCallOptions({
+        cwd: '/srv/app',
+        remoteEnvironment: {
+          environmentId: 'ssh-prod',
+          cwd: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex',
+          connectTimeoutMs: 30_000
+        }
+      })
+    })
+
+    await readAll(stream)
+
+    const methods = transport.sentMessages
+      .filter((message): message is { method: string } => 'method' in message)
+      .map((message) => message.method)
+    expect(methods).toEqual([
+      'initialize',
+      'initialized',
+      'environment/add',
+      'thread/start',
+      'turn/start'
+    ])
+
+    const environmentAdd = transport.sentMessages.find(
+      (message): message is { method: string; params?: unknown } =>
+        'method' in message && message.method === 'environment/add'
+    )
+    expect(environmentAdd?.params).toEqual({
+      environmentId: 'ssh-prod',
+      execServerUrl: 'wss://exec.example.test/codex',
+      connectTimeoutMs: 30_000
+    })
+
+    const selectedEnvironment = [{ environmentId: 'ssh-prod', cwd: '/srv/app' }]
+    for (const method of ['thread/start', 'turn/start']) {
+      const message = transport.sentMessages.find(
+        (candidate): candidate is { method: string; params?: unknown } =>
+          'method' in candidate && candidate.method === method
+      )
+      expect(message?.params).toMatchObject({ environments: selectedEnvironment })
+    }
+  })
+
+  it('marks desktop-scheduled runs as automation threads', async () => {
+    const transport = new ScriptedTransport()
+    const provider = createCodexAppServer({
+      transportFactory: () => transport,
+      clientInfo: { name: 'test-client', version: '1.0.0' }
+    })
+
+    const { stream } = await provider.languageModel('gpt-5.5').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'run the daily report' }] }],
+      providerOptions: codexCallOptions({ threadSource: 'automation' })
+    })
+
+    await readAll(stream)
+
+    const threadStart = transport.sentMessages.find(
+      (message): message is { method: string; params?: unknown } =>
+        'method' in message && message.method === 'thread/start'
+    )
+    expect(threadStart?.params).toMatchObject({ threadSource: 'automation' })
+  })
+
   it('resumes an existing thread when providerMetadata carries a threadId', async () => {
     const transport = new ScriptedTransport()
 
@@ -2189,6 +2268,43 @@ describe('CodexLanguageModel.doStream', () => {
     )
     expect(turnStartMessage?.params).toMatchObject({
       input: [{ type: 'text', text: 'continue', text_elements: [] }]
+    })
+  })
+
+  it('selects a remote environment on a resumed thread without sending it to thread/resume', async () => {
+    const transport = new ScriptedTransport()
+    const provider = createCodexAppServer({
+      transportFactory: () => transport,
+      clientInfo: { name: 'test-client', version: '1.0.0' }
+    })
+
+    const { stream } = await provider.languageModel('gpt-5.5').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'continue remotely' }] }],
+      providerOptions: codexCallOptions({
+        resumeThreadId: 'thr-existing',
+        cwd: '/srv/app',
+        remoteEnvironment: {
+          environmentId: 'ssh-prod',
+          cwd: '/srv/app',
+          execServerUrl: 'wss://exec.example.test/codex'
+        }
+      })
+    })
+
+    await readAll(stream)
+
+    const resume = transport.sentMessages.find(
+      (message): message is { method: string; params?: Record<string, unknown> } =>
+        'method' in message && message.method === 'thread/resume'
+    )
+    expect(resume?.params).not.toHaveProperty('environments')
+
+    const turnStart = transport.sentMessages.find(
+      (message): message is { method: string; params?: unknown } =>
+        'method' in message && message.method === 'turn/start'
+    )
+    expect(turnStart?.params).toMatchObject({
+      environments: [{ environmentId: 'ssh-prod', cwd: '/srv/app' }]
     })
   })
 
@@ -2739,6 +2855,27 @@ describe('CodexLanguageModel.doStream', () => {
         networkAccess: 'enabled'
       }
     })
+  })
+
+  it('passes the fixed personality option through turn/start', async () => {
+    const transport = new ScriptedTransport()
+    const provider = createCodexAppServer({
+      transportFactory: () => transport,
+      clientInfo: { name: 'test-client', version: '1.0.0' }
+    })
+
+    const { stream } = await provider.languageModel('gpt-5.5').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }],
+      providerOptions: codexCallOptions({ personality: 'pragmatic' })
+    })
+    await readAll(stream)
+
+    const turnStartMessage = transport.sentMessages.find(
+      (message): message is { method: string; params?: unknown } =>
+        'method' in message && message.method === 'turn/start'
+    )
+
+    expect(turnStartMessage?.params).toMatchObject({ personality: 'pragmatic' })
   })
 
   it('passes approve-for-me packets through thread/start and turn/start', async () => {

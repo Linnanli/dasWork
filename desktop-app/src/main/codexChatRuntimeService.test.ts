@@ -141,6 +141,7 @@ type RuntimeStreamTextInput = {
     CodexCallOptions,
     'approvalPolicy' | 'approvalsReviewer' | 'sandbox' | 'sandboxPolicy'
   >
+  personality?: CodexCallOptions['personality']
   goalControlObjective?: string
   goalContinuous?: boolean
   resumeThreadId?: string
@@ -424,6 +425,48 @@ describe('CodexChatRuntimeService', () => {
     )
   })
 
+  it('passes the selected reasoning effort through the default collaboration mode', async () => {
+    const port = new FakePort()
+    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+      await input.onThreadStarted?.({ threadId: 'thread-reasoning-effort' })
+      await completeCanonicalTurn(input, 'thread-reasoning-effort', 'turn-reasoning-effort')
+      return { toUIMessageStream: () => emptyUiMessageStream() }
+    })
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      streamText
+    })
+
+    await service.startChatStream(
+      {
+        chatId: 'chat-reasoning-effort',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { reasoningEffort: 'high' }
+      },
+      port
+    )
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collaborationMode: {
+          mode: 'default',
+          settings: {
+            model: 'gpt-test',
+            reasoning_effort: 'high',
+            developer_instructions: null
+          }
+        }
+      })
+    )
+  })
+
   it('adds desktop instructions without changing normal user messages', async () => {
     const port = new FakePort()
     const streamText = streamTextWithStartedThread()
@@ -562,7 +605,7 @@ describe('CodexChatRuntimeService', () => {
     })
   })
 
-  it('passes the current approval mode snapshot to the provider stream', async () => {
+  it('passes the current approval, sandbox, and personality snapshots to the provider stream', async () => {
     const port = new FakePort()
     const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-full-access' })
@@ -585,7 +628,7 @@ describe('CodexChatRuntimeService', () => {
         trigger: 'submit-message',
         messages: [],
         modelId: 'gpt-test',
-        body: { approvalModeKind: 'full-access' }
+        body: { approvalModeKind: 'full-access', personality: 'pragmatic' }
       },
       port
     )
@@ -597,9 +640,32 @@ describe('CodexChatRuntimeService', () => {
           approvalsReviewer: 'user',
           sandbox: 'danger-full-access',
           sandboxPolicy: { type: 'dangerFullAccess' }
-        }
+        },
+        personality: 'pragmatic'
       })
     )
+  })
+
+  it('defaults omitted personality to none before calling the provider', async () => {
+    const port = new FakePort()
+    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+      await input.onThreadStarted?.({ threadId: 'thread-default-personality' })
+      await completeCanonicalTurn(input, 'thread-default-personality', 'turn-default-personality')
+      return { toUIMessageStream: () => emptyUiMessageStream() }
+    })
+    const service = new CodexChatRuntimeService({ streamText })
+
+    await service.startChatStream(
+      {
+        chatId: 'chat-default-personality',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test'
+      },
+      port
+    )
+
+    expect(streamText).toHaveBeenCalledWith(expect.objectContaining({ personality: 'none' }))
   })
 
   it('uses the app-server Plan preset when the collaboration catalog is available', async () => {
@@ -630,7 +696,7 @@ describe('CodexChatRuntimeService', () => {
         trigger: 'submit-message',
         messages: [],
         modelId: 'gpt-test',
-        body: { composerModeKind: 'plan' }
+        body: { composerModeKind: 'plan', reasoningEffort: 'low' }
       },
       port
     )
@@ -1157,6 +1223,53 @@ describe('CodexChatRuntimeService', () => {
     expect(providerState.listModels).not.toHaveBeenCalled()
   })
 
+  it('adds app-server reasoning capabilities to configured backend models', async () => {
+    providerState.listModels.mockResolvedValue([
+      {
+        id: 'gpt-test',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Fast' },
+          { reasoningEffort: 'xhigh', description: 'Thorough' },
+          { reasoningEffort: 'unbounded', description: 'Unsupported' }
+        ],
+        defaultReasoningEffort: 'xhigh'
+      }
+    ])
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      modelCatalog: {
+        listModels: vi.fn().mockResolvedValue({
+          models: [{ id: 'gpt-test', displayName: 'Test', inputModalities: [], isDefault: true }],
+          selectedModelId: 'gpt-test'
+        }),
+        setSelectedModel: vi.fn(),
+        resolveClientModel: vi.fn()
+      } satisfies ModelCatalogLike
+    })
+
+    await expect(service.listModels()).resolves.toEqual({
+      models: [
+        {
+          id: 'gpt-test',
+          displayName: 'Test',
+          inputModalities: [],
+          reasoningEfforts: [
+            { id: 'low', description: 'Fast' },
+            { id: 'xhigh', description: 'Thorough' }
+          ],
+          defaultReasoningEffort: 'xhigh',
+          isDefault: true
+        }
+      ],
+      selectedModelId: 'gpt-test'
+    })
+  })
+
   it('replays a recent failed terminal to a renderer that detached before it arrived', async () => {
     const firstPort = new FakePort()
     const replacementPort = new FakePort()
@@ -1444,6 +1557,51 @@ describe('CodexChatRuntimeService', () => {
 
     await expect(service.listModels()).resolves.toEqual(catalogList)
     expect(modelCatalog.listModels).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes only supported provider reasoning efforts to the renderer', async () => {
+    providerState.listModels.mockResolvedValue([
+      {
+        id: 'provider-model',
+        model: 'provider-model',
+        displayName: 'Provider Model',
+        description: 'Provider model',
+        inputModalities: ['text'],
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Faster responses' },
+          { reasoningEffort: 'xhigh', description: 'More thorough responses' },
+          { reasoningEffort: 'unbounded', description: 'Unsupported effort' }
+        ],
+        defaultReasoningEffort: 'xhigh',
+        isDefault: true
+      }
+    ])
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      }
+    })
+
+    await expect(service.listModels()).resolves.toEqual({
+      models: [
+        {
+          id: 'provider-model',
+          displayName: 'Provider Model',
+          description: 'Provider model',
+          inputModalities: ['text'],
+          reasoningEfforts: [
+            { id: 'low', description: 'Faster responses' },
+            { id: 'xhigh', description: 'More thorough responses' }
+          ],
+          defaultReasoningEffort: 'xhigh',
+          isDefault: true
+        }
+      ],
+      selectedModelId: 'provider-model'
+    })
   })
 
   it('uses the catalog selected model when chat requests omit modelId', async () => {

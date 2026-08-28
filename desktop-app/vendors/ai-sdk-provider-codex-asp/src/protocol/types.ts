@@ -10,6 +10,7 @@
  * and serve as the authoritative reference. V2 types (camelCase) are in the v2/ subdirectory.
  */
 import type { CollaborationMode } from './app-server-protocol/CollaborationMode'
+import type { Personality } from './app-server-protocol/Personality'
 import type { JsonValue } from './app-server-protocol/serde_json/JsonValue'
 import type { ApprovalsReviewer } from './app-server-protocol/v2/ApprovalsReviewer'
 import type { AskForApproval } from './app-server-protocol/v2/AskForApproval'
@@ -81,6 +82,7 @@ export type { McpServerElicitationRequestParams }
 export type { McpServerElicitationRequestResponse }
 export type { PermissionsRequestApprovalParams }
 export type { PermissionsRequestApprovalResponse }
+export type { Personality }
 export type { ToolRequestUserInputParams }
 export type { ToolRequestUserInputResponse }
 export type { TurnInterruptParams }
@@ -139,10 +141,13 @@ export interface CodexThreadStartParams {
   model?: string
   modelProvider?: string
   cwd?: string
+  runtimeWorkspaceRoots?: string[]
+  environments?: Array<{ environmentId: string; cwd: string }>
   approvalPolicy?: AskForApproval
   approvalsReviewer?: ApprovalsReviewer
   sandbox?: SandboxMode
   ephemeral?: boolean
+  threadSource?: string
   config?: Record<string, JsonValue | undefined>
   dynamicTools?: CodexDynamicToolDefinition[]
   developerInstructions?: string
@@ -210,7 +215,8 @@ export interface CodexToolCallRequestParams {
 }
 
 export type CodexToolResultContentItem =
-  { type: 'inputText'; text: string } | { type: 'inputImage'; imageUrl: string }
+  | { type: 'inputText'; text: string }
+  | { type: 'inputImage'; imageUrl: string }
 
 export interface CodexToolCallResult {
   success: boolean

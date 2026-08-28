@@ -432,6 +432,38 @@ export class ConversationFollowUpQueueService {
     })
   }
 
+  async deleteConversation(conversationKey: string): Promise<void> {
+    await this.serialize(async () => {
+      const state = await this.options.store.getState()
+      const queue = state.conversations[conversationKey]
+      if (!queue) return
+      assertConversationCanBeDeleted(queue)
+
+      const removedItems = queue.items
+      delete state.conversations[conversationKey]
+      state.revision += 1
+      await this.options.store.setState(state)
+      this.options.logger?.('delete-conversation', {
+        conversationKey,
+        revision: state.revision
+      })
+      this.broadcast(toConversationState(state, conversationKey))
+      await Promise.all(
+        removedItems.map((item) =>
+          this.deleteSnapshotAssetsBestEffort(item.message, item.id, 'delete-conversation-assets')
+        )
+      )
+    })
+  }
+
+  async assertConversationCanBeDeleted(conversationKey: string): Promise<void> {
+    await this.serialize(async () => {
+      const state = await this.options.store.getState()
+      const queue = state.conversations[conversationKey]
+      if (queue) assertConversationCanBeDeleted(queue)
+    })
+  }
+
   async setDefaultMode(mode: FollowUpMode): Promise<void> {
     return this.serialize(async () => {
       const state = await this.options.store.getState()
@@ -1198,6 +1230,12 @@ function followUpUserMessage(error: unknown): string {
   if (!message) return 'The follow-up operation failed.'
   if (message.length <= 2_000) return message
   return `${message.slice(0, 1_999)}…`
+}
+
+function assertConversationCanBeDeleted(queue: StoredConversationFollowUpQueue): void {
+  if (queue.items.some((item) => item.status === 'sending' || item.status === 'steering')) {
+    throw new Error('Cannot delete a task while a delivery is being confirmed.')
+  }
 }
 
 function toConversationState(

@@ -11,12 +11,19 @@ import type {
   DesktopCodexFollowUpApi,
   DesktopComposerContextApi,
   DesktopConversationsApi,
+  DesktopAutomationsApi,
+  DesktopGithubPullRequestApi,
+  DesktopKeyboardShortcutsApi,
   DesktopGitApi,
   DesktopProjectsApi,
   LocalContextPickerKind,
   LocalContextReference,
   FollowUpQueueChangeEvent,
   ProjectCreateBlankResult,
+  ProjectActionRemovePayload,
+  ProjectActionUpsertPayload,
+  ProjectWorktreeListPayload,
+  ProjectWorktreeSelectPayload,
   WorkspaceRecoveryPayload,
   SidebarConversationListState,
   SidebarConversationOpenResult,
@@ -25,6 +32,20 @@ import type {
   SidebarConversationGoalSetPayload,
   SidebarPreferences
 } from '../shared/codexIpcApi'
+import {
+  keyboardShortcutConfigSchema,
+  keyboardShortcutIpcChannels,
+  keyboardShortcutUpdateRequestSchema
+} from '../shared/keyboardShortcutsApi'
+import {
+  automationActionRequestSchema,
+  automationCreateRequestSchema,
+  automationIpcChannels,
+  automationStatusRequestSchema,
+  automationUpdateRequestSchema,
+  scheduledAutomationListSchema,
+  scheduledAutomationSchema
+} from '../shared/automationApi'
 import {
   browserWorkspaceCreateRequestSchema,
   browserWorkspaceEventSchema,
@@ -96,10 +117,19 @@ import {
   localGitResolveMergeBaseRequestSchema,
   turnPatchRequestSchema
 } from '../shared/localGitApi'
+import {
+  githubPullRequestCommentRequestSchema,
+  githubPullRequestCreateRequestSchema,
+  githubPullRequestIpcChannels,
+  githubPullRequestRequestReviewersRequestSchema,
+  githubPullRequestStatusRequestSchema,
+  githubPullRequestSubmitReviewRequestSchema
+} from '../shared/githubPullRequestApi'
 import type {
   LocalProject,
   ProjectSelection,
   ProjectState,
+  ProjectWorktree,
   RemoteProject,
   WorkspaceRootOption
 } from '../shared/projects/projectTypes'
@@ -107,6 +137,7 @@ import { createChatStreamBridge } from './chatStreamBridge'
 import { createComposerContextBridge } from './composerContextBridge'
 import { assertFollowUpSnapshotFitsIpc } from './followUpPayloadGuard'
 import { createMcpServerStatusBridge } from './mcpServerStatusBridge'
+import { createMcpAppResourceBridge } from './mcpAppResourceBridge'
 import { createPluginCenterBridge } from './pluginCenterBridge'
 
 // Electron's renderer CSP disallows Zod's optional dynamic parser compilation.
@@ -122,6 +153,7 @@ const desktopCodex: DesktopCodexApi = {
   getStatus: () => ipcRenderer.invoke('codex:get-status') as Promise<CodexStatus>,
   listModels: () => ipcRenderer.invoke('codex:list-models') as Promise<CodexModelList>,
   ...createMcpServerStatusBridge((channel, payload) => ipcRenderer.invoke(channel, payload)),
+  ...createMcpAppResourceBridge((channel, payload) => ipcRenderer.invoke(channel, payload)),
   setSelectedModel: (modelId: string) =>
     ipcRenderer.invoke('codex:set-selected-model', { modelId }) as Promise<{
       selectedModelId: string
@@ -136,6 +168,7 @@ const desktopCodex: DesktopCodexApi = {
     ipcRenderer.invoke('codex:open-external-http-url', { url }) as Promise<void>,
   openLocalPath: (input) => ipcRenderer.invoke('codex:open-local-path', input) as Promise<void>,
   revealLocalPath: (input) => ipcRenderer.invoke('codex:reveal-local-path', input) as Promise<void>,
+  startLocalPathDrag: (input) => ipcRenderer.send('codex:start-local-path-drag', input),
   listExistingLocalPaths: (input) => ipcRenderer.invoke('codex:list-existing-local-paths', input),
   pickLocalContext: (kind: LocalContextPickerKind) =>
     ipcRenderer.invoke('codex:pick-local-context', { kind }) as Promise<LocalContextReference[]>,
@@ -157,6 +190,21 @@ const desktopCodex: DesktopCodexApi = {
     }
     ipcRenderer.on('codex:approval-settled', listener)
     return () => ipcRenderer.removeListener('codex:approval-settled', listener)
+  },
+  onConversationFindRequested: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('codex:conversation-find', listener)
+    return () => ipcRenderer.removeListener('codex:conversation-find', listener)
+  },
+  onNewTaskRequested: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('codex:new-task', listener)
+    return () => ipcRenderer.removeListener('codex:new-task', listener)
+  },
+  onCommandPaletteRequested: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('codex:command-palette', listener)
+    return () => ipcRenderer.removeListener('codex:command-palette', listener)
   }
 }
 
@@ -221,12 +269,20 @@ const desktopProjects: DesktopProjectsApi = {
     ipcRenderer.invoke('codex:projects:create-local', input) as Promise<LocalProject>,
   createRemoteProject: (input) =>
     ipcRenderer.invoke('codex:projects:create-remote', input) as Promise<RemoteProject>,
+  listWorktrees: (input: ProjectWorktreeListPayload) =>
+    ipcRenderer.invoke('codex:projects:list-worktrees', input) as Promise<ProjectWorktree[]>,
+  selectWorktree: (input: ProjectWorktreeSelectPayload) =>
+    ipcRenderer.invoke('codex:projects:select-worktree', input) as Promise<ProjectState>,
   selectProject: (input: ProjectSelection) =>
     ipcRenderer.invoke('codex:projects:select', input) as Promise<ProjectState>,
   removeProject: (input: ProjectSelection) =>
     ipcRenderer.invoke('codex:projects:remove', input) as Promise<ProjectState>,
   renameProject: (input) =>
     ipcRenderer.invoke('codex:projects:rename', input) as Promise<ProjectState>,
+  upsertAction: (input: ProjectActionUpsertPayload) =>
+    ipcRenderer.invoke('codex:projects:upsert-action', input) as Promise<ProjectState>,
+  removeAction: (input: ProjectActionRemovePayload) =>
+    ipcRenderer.invoke('codex:projects:remove-action', input) as Promise<ProjectState>,
   getWorkspaceRecovery: (input: WorkspaceRecoveryPayload) =>
     ipcRenderer.invoke('codex:projects:get-workspace-recovery', input),
   restoreWorkspace: (input: WorkspaceRecoveryPayload) =>
@@ -254,6 +310,8 @@ const desktopConversations: DesktopConversationsApi = {
     ipcRenderer.invoke('codex:conversations:refresh-list') as Promise<SidebarConversationListState>,
   openConversation: (input) =>
     ipcRenderer.invoke('codex:conversations:open', input) as Promise<SidebarConversationOpenResult>,
+  openConversationInNewWindow: (input) =>
+    ipcRenderer.invoke('codex:conversations:open-in-new-window', input) as Promise<void>,
   getConversationGoal: (input) =>
     ipcRenderer.invoke('codex:conversations:get-goal', input) as Promise<ThreadGoalLoadResult>,
   setConversationGoal: (input: SidebarConversationGoalSetPayload) =>
@@ -270,11 +328,25 @@ const desktopConversations: DesktopConversationsApi = {
       'codex:conversations:unarchive',
       input
     ) as Promise<SidebarConversationListState>,
+  deleteConversation: (input) =>
+    ipcRenderer.invoke(
+      'codex:conversations:delete',
+      input
+    ) as Promise<SidebarConversationListState>,
+  deleteArchivedConversations: (input) =>
+    ipcRenderer.invoke(
+      'codex:conversations:delete-archived',
+      input
+    ) as Promise<SidebarConversationListState>,
   renameConversation: (input) =>
     ipcRenderer.invoke(
       'codex:conversations:rename',
       input
     ) as Promise<SidebarConversationListState>,
+  forkConversation: (input) =>
+    ipcRenderer.invoke('codex:conversations:fork', input) as Promise<SidebarConversationOpenResult>,
+  submitFeedback: (input) =>
+    ipcRenderer.invoke('codex:conversations:submit-feedback', input) as Promise<void>,
   interruptConversation: (input) =>
     ipcRenderer.invoke('codex:conversations:interrupt', input) as Promise<void>,
   getPreferences: () =>
@@ -288,6 +360,13 @@ const desktopConversations: DesktopConversationsApi = {
     ): void => callback(state)
     ipcRenderer.on('codex:conversations-state-change', listener)
     return () => ipcRenderer.removeListener('codex:conversations-state-change', listener)
+  },
+  consumeConversationLink: () => ipcRenderer.invoke('codex:conversations:consume-link'),
+  onConversationLink: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, link: { conversationId: string }): void =>
+      callback(link)
+    ipcRenderer.on('codex:conversations:open-link', listener)
+    return () => ipcRenderer.removeListener('codex:conversations:open-link', listener)
   }
 }
 
@@ -480,6 +559,92 @@ const desktopGit: DesktopGitApi = {
       ipcRenderer.send(`${gitIpcChannels.changed}:unsubscribe`)
     }
   }
+}
+
+const desktopGithubPullRequests: DesktopGithubPullRequestApi = {
+  getStatus: (input) =>
+    ipcRenderer.invoke(
+      githubPullRequestIpcChannels.getStatus,
+      parseGitPayload(githubPullRequestStatusRequestSchema, input)
+    ),
+  create: (input) =>
+    ipcRenderer.invoke(
+      githubPullRequestIpcChannels.create,
+      parseGitPayload(githubPullRequestCreateRequestSchema, input)
+    ),
+  comment: (input) =>
+    ipcRenderer.invoke(
+      githubPullRequestIpcChannels.comment,
+      parseGitPayload(githubPullRequestCommentRequestSchema, input)
+    ),
+  submitReview: (input) =>
+    ipcRenderer.invoke(
+      githubPullRequestIpcChannels.submitReview,
+      parseGitPayload(githubPullRequestSubmitReviewRequestSchema, input)
+    ),
+  requestReviewers: (input) =>
+    ipcRenderer.invoke(
+      githubPullRequestIpcChannels.requestReviewers,
+      parseGitPayload(githubPullRequestRequestReviewersRequestSchema, input)
+    )
+}
+
+const desktopKeyboardShortcuts: DesktopKeyboardShortcutsApi = {
+  get: () =>
+    ipcRenderer
+      .invoke(keyboardShortcutIpcChannels.get)
+      .then((result) => keyboardShortcutConfigSchema.parse(result, { jitless: true })),
+  update: (input) =>
+    ipcRenderer
+      .invoke(
+        keyboardShortcutIpcChannels.update,
+        keyboardShortcutUpdateRequestSchema.parse(input, { jitless: true })
+      )
+      .then((result) => keyboardShortcutConfigSchema.parse(result, { jitless: true })),
+  reset: () =>
+    ipcRenderer
+      .invoke(keyboardShortcutIpcChannels.reset)
+      .then((result) => keyboardShortcutConfigSchema.parse(result, { jitless: true }))
+}
+
+const desktopAutomations: DesktopAutomationsApi = {
+  list: () =>
+    ipcRenderer
+      .invoke(automationIpcChannels.list)
+      .then((result) => scheduledAutomationListSchema.parse(result, { jitless: true })),
+  create: (input) =>
+    ipcRenderer
+      .invoke(
+        automationIpcChannels.create,
+        parseWorkspacePayload(automationCreateRequestSchema, input)
+      )
+      .then((result) => scheduledAutomationSchema.parse(result, { jitless: true })),
+  update: (input) =>
+    ipcRenderer
+      .invoke(
+        automationIpcChannels.update,
+        parseWorkspacePayload(automationUpdateRequestSchema, input)
+      )
+      .then((result) => scheduledAutomationSchema.parse(result, { jitless: true })),
+  setStatus: (input) =>
+    ipcRenderer
+      .invoke(
+        automationIpcChannels.setStatus,
+        parseWorkspacePayload(automationStatusRequestSchema, input)
+      )
+      .then((result) => scheduledAutomationSchema.parse(result, { jitless: true })),
+  remove: (input) =>
+    ipcRenderer.invoke(
+      automationIpcChannels.remove,
+      parseWorkspacePayload(automationActionRequestSchema, input)
+    ),
+  runNow: (input) =>
+    ipcRenderer
+      .invoke(
+        automationIpcChannels.runNow,
+        parseWorkspacePayload(automationActionRequestSchema, input)
+      )
+      .then((result) => scheduledAutomationSchema.parse(result, { jitless: true }))
 }
 
 const desktopRightWorkspace: DesktopRightWorkspaceApi = {
@@ -711,6 +876,9 @@ const desktopApp = {
   conversations: desktopConversations,
   followUps: desktopFollowUps,
   git: desktopGit,
+  githubPullRequests: desktopGithubPullRequests,
+  keyboardShortcuts: desktopKeyboardShortcuts,
+  automations: desktopAutomations,
   nativeContextMenu: desktopNativeContextMenu,
   workspace: desktopRightWorkspace
 }

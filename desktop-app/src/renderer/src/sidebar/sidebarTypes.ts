@@ -15,6 +15,7 @@ export type SidebarProjectGroup = {
 export type SidebarConversationView = SidebarConversation & {
   active?: boolean
   attention?: boolean
+  pinned?: boolean
 }
 
 export type SidebarViewModel = {
@@ -22,4 +23,5 @@ export type SidebarViewModel = {
   projectGroups: SidebarProjectGroup[]
   quickChats: SidebarConversationView[]
   chronologicalChats: SidebarConversationView[]
+  archivedChats: SidebarConversationView[]
 }

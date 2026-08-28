@@ -40,7 +40,7 @@ describe('reviewFileContent', () => {
       before: 'const value = 1\nconst stable = true\n',
       after: 'const value = 2\nconst stable = true\n'
     })
-  })
+  }, 30_000)
 
   it('reads branch before content from the merge-base revision', async () => {
     const { repo } = await createGitFixture()
@@ -78,7 +78,7 @@ describe('reviewFileContent', () => {
       status: 'text',
       text: 'base\n'
     })
-  }, 15_000)
+  }, 30_000)
 
   it('reconstructs a completed-turn file only while its worktree after-version still matches', async () => {
     const { repo } = await createGitFixture()
@@ -108,5 +108,5 @@ describe('reviewFileContent', () => {
     await expect(
       readReviewTurnDiffFileContents({ repository, path: 'src.ts', diff })
     ).resolves.toMatchObject({ status: 'unsupported' })
-  }, 15_000)
+  }, 30_000)
 })

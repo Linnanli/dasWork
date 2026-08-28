@@ -129,6 +129,17 @@ describe('ConversationChatRegistry', () => {
     expect(registry.resolve('thread-approval-mode')?.approvalModeKind).toBe('full-access')
   })
 
+  it('keeps personality on a local chat when it receives a stable thread id', () => {
+    const { registry } = registryFixture()
+    const entry = registry.getSnapshot().activeEntry
+
+    registry.setPersonality(entry, 'friendly')
+    registry.bindThread(entry, 'thread-personality')
+
+    expect(entry.personality).toBe('friendly')
+    expect(registry.resolve('thread-personality')?.personality).toBe('friendly')
+  })
+
   it('starts new conversations with request approval', () => {
     const { registry } = registryFixture()
 
@@ -142,9 +153,11 @@ describe('ConversationChatRegistry', () => {
     registry.setApprovalModeKind(entryA, 'approve-for-me')
     registry.setDraft(entryA, 'draft A')
     registry.setComposerModeKind(entryA, 'plan')
+    registry.setPersonality(entryA, 'pragmatic')
 
     const entryB = registry.startNewConversation()
     registry.setApprovalModeKind(entryB, 'full-access')
+    registry.setPersonality(entryB, 'friendly')
 
     expect(entryA.approvalModeKind).toBe('approve-for-me')
     expect(entryB.approvalModeKind).toBe('full-access')
@@ -169,12 +182,14 @@ describe('ConversationChatRegistry', () => {
     const requests = vi.mocked(bridge.startChatStream).mock.calls.map(([request]) => request)
     expect(requests.find((request) => request.chatId === entryA.controller.id)?.body).toMatchObject(
       {
-        approvalModeKind: 'approve-for-me'
+        approvalModeKind: 'approve-for-me',
+        personality: 'pragmatic'
       }
     )
     expect(requests.find((request) => request.chatId === entryB.controller.id)?.body).toMatchObject(
       {
-        approvalModeKind: 'full-access'
+        approvalModeKind: 'full-access',
+        personality: 'friendly'
       }
     )
   })
@@ -185,6 +200,14 @@ describe('ConversationChatRegistry', () => {
     const { registry } = registryFixture({ draftStore })
 
     expect(registry.getSnapshot().activeEntry.approvalModeKind).toBe('approve-for-me')
+  })
+
+  it('restores per-conversation personality from persisted drafts', () => {
+    const draftStore = new ConversationDraftStore(new MemoryStorage())
+    draftStore.setPersonality('local-0', 'friendly')
+    const { registry } = registryFixture({ draftStore })
+
+    expect(registry.getSnapshot().activeEntry.personality).toBe('friendly')
   })
 
   it('uses the server acknowledgement to correct a conversation mode intent', async () => {
@@ -426,6 +449,35 @@ describe('ConversationChatRegistry', () => {
 
       expect(bridge.attachChatStream).toHaveBeenCalledTimes(1)
       expect(entry.recoveryPhase).toBe('needs_resume')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries one confirmed app-server transport interruption', async () => {
+    vi.useFakeTimers()
+    try {
+      const { bridge, registry } = registryFixture()
+      let callbacks: Parameters<NonNullable<typeof bridge.attachChatStream>>[1] | undefined
+      bridge.attachChatStream = vi.fn(async (_conversationId, nextCallbacks) => {
+        callbacks = nextCallbacks
+        return 'recovered-stream'
+      })
+
+      await registry.openConversation('recover-transport', async () =>
+        openResult('recover-transport')
+      )
+      await flushRecoveryWork()
+      callbacks?.onError({
+        code: 'transport-unavailable',
+        message: '任务连接暂时中断，正在自动重连。'
+      })
+      await flushRecoveryWork()
+
+      await vi.advanceTimersByTimeAsync(750)
+      await flushRecoveryWork()
+
+      expect(bridge.attachChatStream).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

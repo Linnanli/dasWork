@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type {
   SidebarConversationActionPayload,
+  SidebarConversationBatchDeletePayload,
   SidebarConversationListState,
   SidebarConversationRenamePayload,
   SidebarPreferences
@@ -17,7 +18,8 @@ const defaultPreferences: SidebarPreferences = {
   organizeMode: 'project',
   sortKey: 'updated_at',
   collapsedSectionIds: [],
-  collapsedGroupIds: []
+  collapsedGroupIds: [],
+  pinnedConversationIds: []
 }
 
 export type ConversationStateController = {
@@ -27,6 +29,8 @@ export type ConversationStateController = {
   openConversation: (input: SidebarConversationActionPayload) => Promise<void>
   archiveConversation: (input: SidebarConversationActionPayload) => Promise<void>
   unarchiveConversation: (input: SidebarConversationActionPayload) => Promise<void>
+  deleteConversation: (input: SidebarConversationActionPayload) => Promise<void>
+  deleteArchivedConversations: (input: SidebarConversationBatchDeletePayload) => Promise<void>
   renameConversation: (input: SidebarConversationRenamePayload) => Promise<void>
   interruptConversation: (input: SidebarConversationActionPayload) => Promise<void>
   setPreferences: (input: Partial<SidebarPreferences>) => Promise<void>
@@ -84,6 +88,17 @@ export function useConversationState({
     setState(await window.desktopApp.conversations.unarchiveConversation(input))
   }, [])
 
+  const deleteConversation = useCallback(async (input: SidebarConversationActionPayload) => {
+    setState(await window.desktopApp.conversations.deleteConversation(input))
+  }, [])
+
+  const deleteArchivedConversations = useCallback(
+    async (input: SidebarConversationBatchDeletePayload) => {
+      setState(await window.desktopApp.conversations.deleteArchivedConversations(input))
+    },
+    []
+  )
+
   const renameConversation = useCallback(async (input: SidebarConversationRenamePayload) => {
     setState(await window.desktopApp.conversations.renameConversation(input))
   }, [])
@@ -104,12 +119,16 @@ export function useConversationState({
       openConversation,
       archiveConversation,
       unarchiveConversation,
+      deleteConversation,
+      deleteArchivedConversations,
       renameConversation,
       interruptConversation,
       setPreferences
     }),
     [
       archiveConversation,
+      deleteConversation,
+      deleteArchivedConversations,
       interruptConversation,
       openConversation,
       preferences,

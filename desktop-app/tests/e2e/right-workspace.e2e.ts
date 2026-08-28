@@ -19,7 +19,7 @@ import { assistantMessageResponse, startMockBackend } from './support/mockBacken
 
 const execFile = promisify(execFileCallback)
 
-test('RW-E2E-01 opens the four workspace surfaces from a real local conversation', async ({
+test('RW-E2E-01 opens task, timeline, outputs, sources, and processes from a real local conversation', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -78,7 +78,41 @@ test('RW-E2E-01 opens the four workspace surfaces from a real local conversation
     await expect(page.locator('[data-slot="review-workspace"]')).toBeVisible()
     await captureWorkspaceScreenshot(page, testInfo, 'RW-05-review')
 
+    await openWorkspaceMenuItem(page, 'Task')
+    await expect(page.locator('[data-slot="workspace-task-summary"]')).toBeVisible()
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-07-task-summary')
+    const taskProcess = page.locator('[data-slot="workspace-task-process"]')
+    await expect(taskProcess).toContainText('运行中')
+    await taskProcess.getByRole('button', { name: '打开输出' }).click()
+    await expect(page.locator('.xterm')).toBeVisible()
+
+    await openWorkspaceMenuItem(page, 'Timeline')
+    await expect(page.locator('[data-slot="workspace-timeline"]')).toBeVisible()
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-08-timeline')
+
+    await openWorkspaceMenuItem(page, 'Outputs')
+    await expect(page.locator('[data-slot="workspace-outputs"]')).toBeVisible()
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-09-outputs')
+
+    await openWorkspaceMenuItem(page, 'Sources')
+    await expect(page.locator('[data-slot="workspace-sources"]')).toBeVisible()
+    await expect(page.getByText('这个任务还没有可显示的来源。')).toBeVisible()
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-10-sources')
+
+    await openWorkspaceMenuItem(page, 'Processes')
+    await expect(page.locator('[data-slot="workspace-processes"]')).toBeVisible()
+    await expect(page.locator('[data-slot="workspace-process"]')).toContainText('运行中')
+    await page.getByRole('button', { name: '停止全部运行进程', exact: true }).click()
+    await expect(page.locator('[data-slot="workspace-stop-all-processes-dialog"]')).toBeVisible()
+    await page.getByRole('button', { name: '停止全部', exact: true }).click()
+    await expect(page.locator('[data-slot="workspace-process"]')).toContainText('已退出')
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-11-processes')
+
     await page.setViewportSize({ width: 1_100, height: 800 })
+    await page.getByRole('button', { name: '最大化工作区', exact: true }).click()
+    await expect(page.locator('[data-slot="right-workspace-shell"]')).toHaveClass(/absolute/)
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-12-maximized-workspace')
+    await page.getByRole('button', { name: '恢复工作区宽度', exact: true }).click()
     await page.getByRole('tab', { name: 'Files', exact: true }).click()
     await expect(page.getByText('只读预览')).toBeVisible()
     await captureWorkspaceScreenshot(page, testInfo, 'RW-06-narrow-files')
@@ -256,7 +290,8 @@ test('RW-E2E-07 keeps task A terminal output continuous after switching A to B a
     collectRendererLogs(page, logs)
     await createLocalProject(page, `Terminal task switch ${Date.now().toString(36)}`, projectRoot)
     await sendComposerMessage(page, 'Task A terminal continuity.')
-    await expect(page.getByRole('button', { name: /Task A terminal continuity/u })).toBeVisible()
+    const taskAConversation = sidebarConversationButton(page, 'Task A terminal continuity.')
+    await expect(taskAConversation).toBeVisible()
     await openRightWorkspace(page)
     await openWorkspaceMenuItem(page, 'Terminal')
     const firstStarted = await startVisibleTerminalIfAvailable(page)
@@ -267,9 +302,9 @@ test('RW-E2E-07 keeps task A terminal output continuous after switching A to B a
     await expectTerminalSnapshot(page, taskASessionId, ['RW_E2E_07_TASK_A_FIRST'])
 
     await page.getByRole('button', { name: '新对话', exact: true }).click()
-    await expect(page.getByRole('button', { name: /Task A terminal continuity/u })).toBeVisible()
+    await expect(taskAConversation).toBeVisible()
     await sendComposerMessage(page, 'Task B terminal continuity.')
-    await expect(page.getByRole('button', { name: /Task B terminal continuity/u })).toBeVisible()
+    await expect(sidebarConversationButton(page, 'Task B terminal continuity.')).toBeVisible()
     await openRightWorkspace(page)
     await openWorkspaceMenuItem(page, 'Terminal')
     const secondStarted = await startVisibleTerminalIfAvailable(page)
@@ -279,7 +314,7 @@ test('RW-E2E-07 keeps task A terminal output continuous after switching A to B a
     await typeVisibleTerminalCommand(page, 'echo RW_E2E_07_TASK_B_ONLY')
     await expectTerminalSnapshot(page, taskBSessionId, ['RW_E2E_07_TASK_B_ONLY'])
 
-    await page.getByRole('button', { name: /Task A terminal continuity/u }).click()
+    await taskAConversation.click()
     await expect(
       page.locator(`[role="tab"][data-workspace-tab-id="terminal:${taskASessionId}"]`)
     ).toBeVisible()
@@ -601,6 +636,16 @@ async function openRightWorkspace(page: Page): Promise<void> {
   await expect(closeToggle).toBeVisible()
 }
 
+function sidebarConversationButton(page: Page, title: string): Locator {
+  return page
+    .locator('[data-slot="codex-sidebar"]')
+    .getByRole('button', { name: new RegExp(`^${escapeRegExp(title)}`) })
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
 async function openWorkspaceMenuItem(page: Page, label: string): Promise<void> {
   const menuTrigger = page.getByRole('button', { name: 'Open workspace tab', exact: true })
   if (await menuTrigger.isVisible().catch(() => false)) {
@@ -610,6 +655,10 @@ async function openWorkspaceMenuItem(page: Page, label: string): Promise<void> {
   }
 
   const launcherLabels: Record<string, string> = {
+    Task: '任务',
+    Timeline: '时间线',
+    Sources: '来源',
+    Processes: '进程',
     Review: '审阅',
     Terminal: '终端',
     Browser: '浏览器',

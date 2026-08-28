@@ -103,8 +103,8 @@ export function createChatStreamBridge(
   }
 
   const makeConnectionLostFailure = (): CodexChatStreamFailure => ({
-    code: 'unknown-recovery',
-    message: '任务连接已中断，无法自动恢复。'
+    code: 'transport-unavailable',
+    message: '任务连接暂时中断，正在自动重连。'
   })
 
   const makeRunUnavailableFailure = (): CodexChatStreamFailure => ({

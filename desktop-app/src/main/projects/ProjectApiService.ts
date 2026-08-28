@@ -3,11 +3,16 @@ import { basename, posix } from 'node:path'
 
 import type {
   LocalProject,
+  ProjectAction,
+  ProjectActionScope,
   ProjectSelection,
   ProjectState,
+  ProjectWorktree,
   RemoteProject,
   WorkspaceRootOption
 } from '../../shared/projects/projectTypes'
+import { projectActionScopeKey } from '../../shared/projects/projectTypes'
+import { normalizeRemoteExecServerUrl } from '../../shared/projects/remoteExecution'
 import type { ProjectCreateBlankResult } from '../../shared/codexIpcApi'
 import type { ProjectStore } from './ProjectStore'
 
@@ -28,6 +33,16 @@ export type ProjectRenameInput =
   | { projectKind: 'remote'; projectId: string; label: string }
   | { projectKind: 'path'; path: string; label: string }
 
+export type ProjectActionUpsertInput = {
+  scope: ProjectActionScope
+  action: Pick<ProjectAction, 'title' | 'command'> & { id?: string }
+}
+
+export type ProjectActionRemoveInput = {
+  scope: ProjectActionScope
+  actionId: string
+}
+
 export class ProjectApiService {
   private readonly blankProjectOperations = new Map<string, Promise<ProjectCreateBlankResult>>()
 
@@ -42,6 +57,18 @@ export class ProjectApiService {
     if (!selectedPath) return null
 
     return (await this.registerWorkspaceRoot(selectedPath)).option
+  }
+
+  /**
+   * This method is intentionally not exposed as a generic renderer operation.
+   * The worktree IPC handler calls it only after ProjectWorktreeService has
+   * revalidated the requested path against Git's current worktree list.
+   */
+  async activateVerifiedWorktree(worktree: ProjectWorktree): Promise<ProjectState> {
+    const label = worktree.branch
+      ? `${basename(worktree.path)} (${worktree.branch})`
+      : basename(worktree.path)
+    return (await this.registerWorkspaceRoot(worktree.path, label)).state
   }
 
   async createBlankProject(name: string, operationId: string): Promise<ProjectCreateBlankResult> {
@@ -154,9 +181,11 @@ export class ProjectApiService {
     hostId: string
     label: string
     remotePath: string
+    execServerUrl: string
     terminalCommand?: string
   }): Promise<RemoteProject> {
     const remotePath = normalizeRemoteProjectPath(input.remotePath)
+    const execServerUrl = normalizeRemoteExecServerUrl(input.execServerUrl)
     await this.dependencies.validateRemoteRoot?.(input.hostId, remotePath)
 
     const now = new Date().toISOString()
@@ -166,6 +195,7 @@ export class ProjectApiService {
       hostId: input.hostId,
       label: input.label.trim(),
       remotePath,
+      execServerUrl,
       ...(input.terminalCommand ? { terminalCommand: input.terminalCommand.trim() } : {}),
       createdAt: now,
       updatedAt: now
@@ -388,6 +418,91 @@ export class ProjectApiService {
     }
     await this.dependencies.store.setState(nextState)
     return nextState
+  }
+
+  async upsertProjectAction(input: ProjectActionUpsertInput): Promise<ProjectState> {
+    const state = await this.dependencies.store.getState()
+    const scope = await this.resolveProjectActionScope(input.scope, state)
+    const key = projectActionScopeKey(scope)
+    const projectActions = state.projectActions ?? {}
+    const existing = projectActions[key] ?? []
+    const now = new Date().toISOString()
+    const action = existing.find((candidate) => candidate.id === input.action.id)
+    const nextAction: ProjectAction = action
+      ? {
+          ...action,
+          title: input.action.title.trim(),
+          command: input.action.command.trim(),
+          updatedAt: now
+        }
+      : {
+          id: randomUUID(),
+          title: input.action.title.trim(),
+          command: input.action.command.trim(),
+          createdAt: now,
+          updatedAt: now
+        }
+    const nextState: ProjectState = {
+      ...state,
+      projectActions: {
+        ...projectActions,
+        [key]: action
+          ? existing.map((candidate) => (candidate.id === action.id ? nextAction : candidate))
+          : [...existing, nextAction]
+      }
+    }
+    await this.dependencies.store.setState(nextState)
+    return nextState
+  }
+
+  async removeProjectAction(input: ProjectActionRemoveInput): Promise<ProjectState> {
+    const state = await this.dependencies.store.getState()
+    const scope = await this.resolveProjectActionScope(input.scope, state)
+    const key = projectActionScopeKey(scope)
+    const existing = state.projectActions?.[key] ?? []
+    if (!existing.some((action) => action.id === input.actionId)) {
+      throw new Error(`Project action not found: ${input.actionId}`)
+    }
+    const remaining = existing.filter((action) => action.id !== input.actionId)
+    const projectActions = { ...(state.projectActions ?? {}) }
+    if (remaining.length) {
+      projectActions[key] = remaining
+    } else {
+      delete projectActions[key]
+    }
+    const nextState = { ...state, projectActions }
+    await this.dependencies.store.setState(nextState)
+    return nextState
+  }
+
+  private async resolveProjectActionScope(
+    scope: ProjectActionScope,
+    state: ProjectState
+  ): Promise<ProjectActionScope> {
+    if (scope.projectKind === 'local') {
+      if (!state.localProjects[scope.projectId]) {
+        throw new Error(`Local project not found: ${scope.projectId}`)
+      }
+      return scope
+    }
+
+    if (scope.projectKind === 'remote') {
+      const project = state.remoteProjects.find((candidate) => candidate.id === scope.projectId)
+      if (!project || project.hostId !== scope.hostId) {
+        throw new Error(`Remote project not found: ${scope.projectId}`)
+      }
+      return scope
+    }
+
+    const { realPath } = await this.dependencies.validateLocalRoot(scope.path)
+    if (
+      !state.workspaceRootOptions.some(
+        (option) => option.hostId === 'local' && option.root === realPath
+      )
+    ) {
+      throw new Error(`Workspace root is not registered: ${scope.path}`)
+    }
+    return { projectKind: 'path', path: realPath }
   }
 
   private async validateLocalRoots(paths: string[]): Promise<string[]> {

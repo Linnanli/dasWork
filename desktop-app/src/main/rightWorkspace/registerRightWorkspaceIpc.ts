@@ -518,6 +518,10 @@ function createBrowserHost(window: BrowserWindow): BrowserWorkspaceHostAdapter {
           webContents.on('did-fail-load', (_event, errorCode, errorDescription) =>
             listener(`${errorDescription} (${errorCode})`)
           ),
+        onDidNavigate: (listener: (url: string) => void) =>
+          webContents.on('did-navigate', (_event, url) => listener(url)),
+        onDidNavigateInPage: (listener: (url: string) => void) =>
+          webContents.on('did-navigate-in-page', (_event, url) => listener(url)),
         onFaviconUpdated: (listener: (faviconUrls: string[]) => void) =>
           webContents.on('page-favicon-updated', (_event, faviconUrls) => listener(faviconUrls))
       }

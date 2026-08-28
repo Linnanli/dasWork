@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  projectActionRemovePayloadSchema,
+  projectActionUpsertPayloadSchema,
   projectCreateBlankPayloadSchema,
   projectCreateRemotePayloadSchema,
-  projectSelectionSchema
+  projectSelectionSchema,
+  projectWorktreeListPayloadSchema,
+  projectWorktreeSelectPayloadSchema
 } from './projectSchemas'
 
 describe('project selection schema', () => {
@@ -54,6 +58,34 @@ describe('project selection schema', () => {
   })
 })
 
+describe('project worktree payload schemas', () => {
+  it('accepts a local source and absolute worktree path', () => {
+    expect(
+      projectWorktreeListPayloadSchema.safeParse({
+        source: { projectKind: 'local', projectId: 'project-1' }
+      }).success
+    ).toBe(true)
+    expect(
+      projectWorktreeSelectPayloadSchema.safeParse({
+        source: { projectKind: 'path', path: '/workspace/app' },
+        path: '/workspace/app-feature'
+      }).success
+    ).toBe(true)
+  })
+
+  it.each(['relative/path', '//network/share', '\\\\network\\share', '/workspace/line\nbreak'])(
+    'rejects an unsafe worktree path %j',
+    (path) => {
+      expect(
+        projectWorktreeSelectPayloadSchema.safeParse({
+          source: { projectKind: 'path', path: '/workspace/app' },
+          path
+        }).success
+      ).toBe(false)
+    }
+  )
+})
+
 describe('blank project payload schema', () => {
   it('trims and accepts a safe directory name', () => {
     expect(
@@ -99,21 +131,79 @@ describe('blank project payload schema', () => {
 })
 
 describe('remote terminal command schema', () => {
-  it('accepts a main-validated host terminal command and rejects command lines', () => {
+  it('accepts a main-validated host terminal command and normalized execution server URL', () => {
     expect(
       projectCreateRemotePayloadSchema.parse({
         hostId: 'build-host',
         label: 'Build host',
         remotePath: '/srv/app',
+        execServerUrl: '  wss://exec.example.test/codex  ',
         terminalCommand: '/bin/zsh'
-      }).terminalCommand
-    ).toBe('/bin/zsh')
+      })
+    ).toMatchObject({
+      execServerUrl: 'wss://exec.example.test/codex',
+      terminalCommand: '/bin/zsh'
+    })
+  })
+
+  it('rejects command lines and unsafe remote execution URLs', () => {
     expect(
       projectCreateRemotePayloadSchema.safeParse({
         hostId: 'build-host',
         label: 'Build host',
         remotePath: '/srv/app',
+        execServerUrl: 'wss://exec.example.test/codex',
         terminalCommand: 'zsh -l'
+      }).success
+    ).toBe(false)
+    for (const execServerUrl of [
+      'https://exec.example.test',
+      'wss://user:secret@exec.example.test',
+      'wss://exec.example.test?token=secret',
+      'not a URL'
+    ]) {
+      expect(
+        projectCreateRemotePayloadSchema.safeParse({
+          hostId: 'build-host',
+          label: 'Build host',
+          remotePath: '/srv/app',
+          execServerUrl
+        }).success
+      ).toBe(false)
+    }
+  })
+})
+
+describe('project action payload schemas', () => {
+  it('accepts a named action for a project scope', () => {
+    expect(
+      projectActionUpsertPayloadSchema.parse({
+        scope: { projectKind: 'path', path: '/workspace/app' },
+        action: { title: '  Test  ', command: '  npm test  ' }
+      })
+    ).toEqual({
+      scope: { projectKind: 'path', path: '/workspace/app' },
+      action: { title: 'Test', command: 'npm test' }
+    })
+  })
+
+  it('rejects projectless scopes, invalid IDs, and NUL commands', () => {
+    expect(
+      projectActionUpsertPayloadSchema.safeParse({
+        scope: { projectKind: 'projectless' },
+        action: { title: 'Test', command: 'npm test' }
+      }).success
+    ).toBe(false)
+    expect(
+      projectActionRemovePayloadSchema.safeParse({
+        scope: { projectKind: 'local', projectId: 'project' },
+        actionId: 'not-a-uuid'
+      }).success
+    ).toBe(false)
+    expect(
+      projectActionUpsertPayloadSchema.safeParse({
+        scope: { projectKind: 'local', projectId: 'project' },
+        action: { title: 'Test', command: 'echo bad\0command' }
       }).success
     ).toBe(false)
   })

@@ -35,6 +35,8 @@ export type BrowserWorkspaceViewAdapter = {
   onDidStartLoading?(listener: () => void): void
   onDidFinishLoad?(listener: () => void): void
   onDidFailLoad?(listener: (error?: string) => void): void
+  onDidNavigate?(listener: (url: string) => void): void
+  onDidNavigateInPage?(listener: (url: string) => void): void
   onFaviconUpdated?(listener: (faviconUrls: string[]) => void): void
 }
 
@@ -106,6 +108,8 @@ export class BrowserWorkspaceService {
     view.onDidStartLoading?.(() => this.updateState(viewId, 'loading'))
     view.onDidFinishLoad?.(() => this.updateState(viewId, 'ready'))
     view.onDidFailLoad?.((error) => this.updateState(viewId, 'failed', error))
+    view.onDidNavigate?.((url) => this.updateNavigatedUrl(viewId, url))
+    view.onDidNavigateInPage?.((url) => this.updateNavigatedUrl(viewId, url))
     view.onFaviconUpdated?.((faviconUrls) => this.updateFavicon(viewId, faviconUrls))
 
     this.views.set(viewId, record)
@@ -126,6 +130,7 @@ export class BrowserWorkspaceService {
     record.state = 'loading'
     record.updatedAt = this.nowIso()
     record.error = undefined
+    record.faviconUrl = undefined
     this.loadUrl(record, request.url)
     const snapshot = this.snapshot(record)
     this.emit({ version: BROWSER_WORKSPACE_API_VERSION, type: 'updated', view: snapshot })
@@ -302,6 +307,21 @@ export class BrowserWorkspaceService {
     if (!record || record.state === 'destroyed') return
     record.faviconUrl = faviconUrls.find(isExternalHttpsUrl)
     record.updatedAt = this.nowIso()
+    this.emit({
+      version: BROWSER_WORKSPACE_API_VERSION,
+      type: 'updated',
+      view: this.snapshot(record)
+    })
+  }
+
+  private updateNavigatedUrl(viewId: string, url: string): void {
+    const record = this.views.get(viewId)
+    if (!record || record.state === 'destroyed' || !this.isAllowedAppUrl(url)) return
+    if (record.url === url) return
+    record.url = url
+    record.faviconUrl = undefined
+    record.updatedAt = this.nowIso()
+    this.refreshLiveMetadata(record)
     this.emit({
       version: BROWSER_WORKSPACE_API_VERSION,
       type: 'updated',

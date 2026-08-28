@@ -62,6 +62,40 @@ describe('ConversationTranscriptController', () => {
     await expect(send).resolves.toBeUndefined()
   })
 
+  it('retains an assistant response that contains only a generated image file', async () => {
+    const transport = new ControlledTransport()
+    const controller = createController(transport)
+    const send = controller.sendMessage({
+      id: 'image-user',
+      role: 'user',
+      parts: [{ type: 'text', text: 'Generate an image.' }]
+    })
+
+    await vi.waitFor(() => expect(transport.sendCount).toBe(1))
+    beginCanonicalTurn(controller, 'image-only-turn')
+    transport.enqueue({ type: 'start', messageId: 'image-assistant' })
+    transport.enqueue({ type: 'start-step' })
+    transport.enqueue({
+      type: 'file',
+      mediaType: 'image/png',
+      url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    })
+
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().messages.at(-1)?.parts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'file', mediaType: 'image/png' })
+        ])
+      )
+    )
+
+    completeCanonicalTurn(controller, 'image-only-turn', 'completed', 2)
+    transport.enqueue({ type: 'finish-step' })
+    transport.enqueue({ type: 'finish', finishReason: 'stop' })
+    transport.close()
+    await expect(send).resolves.toBeUndefined()
+  })
+
   it('resolves a start-only send after the stream is accepted without waiting for completion', async () => {
     const transport = new ControlledTransport()
     const controller = createController(transport)
