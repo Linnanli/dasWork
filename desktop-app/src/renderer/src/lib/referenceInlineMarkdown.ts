@@ -1,5 +1,4 @@
-import { defaultRehypePlugins } from 'streamdown'
-import type { Plugin, PluggableList } from 'unified'
+import { defaultRehypePlugins, type StreamdownProps } from 'streamdown'
 
 import { inlineCodeReference } from './referenceInlineCode'
 import { classifyReferenceTarget } from './referenceInlineTarget'
@@ -13,7 +12,10 @@ type SanitizeOptions = {
   attributes?: Record<string, readonly unknown[] | undefined>
 }
 
-const defaultSanitize = defaultRehypePlugins.sanitize as unknown as [Plugin, SanitizeOptions]
+type RehypePlugins = NonNullable<StreamdownProps['rehypePlugins']>
+type RehypePlugin = Exclude<RehypePlugins[number], readonly unknown[] | { plugins?: unknown }>
+
+const defaultSanitize = defaultRehypePlugins.sanitize as unknown as [RehypePlugin, SanitizeOptions]
 const [sanitizePlugin, sanitizeOptions] = defaultSanitize
 
 /**
@@ -21,7 +23,7 @@ const [sanitizePlugin, sanitizeOptions] = defaultSanitize
  * to an ordinary link. Preserve that ordering around Streamdown's sanitizer
  * and hardener so local paths and semantic references reach our classifier.
  */
-export const referenceInlineRehypePlugins: PluggableList = [
+export const referenceInlineRehypePlugins: RehypePlugins = [
   defaultRehypePlugins.raw,
   protectInlineReferenceLinks,
   [

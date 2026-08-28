@@ -5,6 +5,7 @@ import {
   PLUGIN_CENTER_API_VERSION,
   PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH,
   pluginCenterAddMarketplaceResultSchema,
+  pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailResultSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterMutationResultSchema,
@@ -12,7 +13,12 @@ import {
   type PluginCenterAddMarketplaceRequest,
   type PluginCenterAddMarketplaceResult,
   type PluginCenterApp,
+  type PluginCenterAppToolRestriction,
+  type PluginCenterAppToolSummary,
   type PluginCenterChangedSection,
+  type PluginCenterConfigRestrictionSource,
+  type PluginCenterGetAppToolsRequest,
+  type PluginCenterGetAppToolsResult,
   type PluginCenterGetPluginDetailRequest,
   type PluginCenterGetPluginDetailResult,
   type PluginCenterHttpMcpServer,
@@ -50,8 +56,13 @@ export type PluginCenterProvider = {
     pluginName: string
   }): Promise<unknown>
   listSkillsForManagement(input: { cwd?: string; forceReload?: boolean }): Promise<unknown>
-  readAppsForManagement?(input: { appIds: string[] }): Promise<unknown>
+  readAppsForManagement?(input: {
+    appIds: string[]
+    threadId?: string
+    includeTools?: boolean
+  }): Promise<unknown>
   listAppsForManagement(input?: { forceRefetch?: boolean }): Promise<unknown>
+  readConfigForManagement?(input: { cwd?: string }): Promise<unknown>
   readMcpManagementSnapshot(input: { cwd?: string; threadId?: string }): Promise<unknown>
   installPlugin(input: {
     marketplacePath?: string | null
@@ -89,13 +100,17 @@ type McpRawSnapshot = {
   pluginDetails: unknown[]
 }
 
+type ConfigReadSnapshot = {
+  config: JsonRecord
+  origins: JsonRecord
+}
+
 type SnapshotCapability = NonNullable<PluginCenterSnapshot['capabilities']>[keyof NonNullable<
   PluginCenterSnapshot['capabilities']
 >]
 
 type SafeResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; restriction: SnapshotCapability['restriction'] }
+  { ok: true; value: T } | { ok: false; restriction: SnapshotCapability['restriction'] }
 
 type PluginCenterPerformanceLogger = (
   event: string,
@@ -103,12 +118,7 @@ type PluginCenterPerformanceLogger = (
 ) => void
 
 type SnapshotReadName =
-  | 'plugin/list'
-  | 'plugin/installed'
-  | 'plugin-details'
-  | 'skills/list'
-  | 'app/list'
-  | 'mcp'
+  'plugin/list' | 'plugin/installed' | 'plugin-details' | 'skills/list' | 'app/list' | 'mcp'
 type CachedReadName = 'catalog' | 'installed'
 
 type SharedCacheEntry<T> = {
@@ -369,22 +379,31 @@ export class PluginCenterService {
             readAppsForManagement && appIds.length > 0
               ? safeRead(() => readAppsForManagement.call(provider, { appIds }))
               : Promise.resolve(null)
-          const [directoryAppsResult, readAppsResult, skillsResult, installedPluginsResult] =
-            await Promise.all([
-              safeRead(() =>
-                this.dependencies.provider.listAppsForManagement({
-                  forceRefetch: input.forceRefresh
-                })
-              ),
-              readAppsPromise,
-              safeRead(() =>
-                this.dependencies.provider.listSkillsForManagement({
-                  ...(cwd ? { cwd } : {}),
-                  forceReload: input.forceRefresh
-                })
-              ),
-              installedPluginsPromise
-            ])
+          const readConfigPromise = provider.readConfigForManagement
+            ? safeRead(() => provider.readConfigForManagement!({ cwd }))
+            : Promise.resolve(null)
+          const [
+            directoryAppsResult,
+            readAppsResult,
+            skillsResult,
+            installedPluginsResult,
+            configResult
+          ] = await Promise.all([
+            safeRead(() =>
+              this.dependencies.provider.listAppsForManagement({
+                forceRefetch: input.forceRefresh
+              })
+            ),
+            readAppsPromise,
+            safeRead(() =>
+              this.dependencies.provider.listSkillsForManagement({
+                ...(cwd ? { cwd } : {}),
+                forceReload: input.forceRefresh
+              })
+            ),
+            installedPluginsPromise,
+            readConfigPromise
+          ])
           const directoryApps = directoryAppsResult.ok ? directoryAppsResult.value : []
           const installedPlugin = installedPluginsResult.ok
             ? installedPluginsResult.value.find((plugin) => plugin.id === located.locator.plugin.id)
@@ -395,7 +414,8 @@ export class PluginCenterService {
             readAppsResult?.ok ? readAppsResult.value : [],
             directoryApps,
             skillsResult.ok ? skillsResult.value : null,
-            installedPlugin
+            installedPlugin,
+            configResult?.ok ? normalizeConfigReadSnapshot(configResult.value) : undefined
           )
         })
       this.singlePluginDetailCache.set(key, { expiresAt: now + 30_000, promise: detailPromise })
@@ -406,6 +426,41 @@ export class PluginCenterService {
       version: PLUGIN_CENTER_API_VERSION,
       status: 'ready',
       detail: await detailPromise
+    })
+  }
+
+  async getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult> {
+    const readAppsForManagement = this.dependencies.provider.readAppsForManagement
+    if (!readAppsForManagement) {
+      throw new Error('当前 Codex app server 不支持读取应用工具')
+    }
+
+    const rawRead = await readAppsForManagement.call(this.dependencies.provider, {
+      appIds: [input.app.id],
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      includeTools: true
+    })
+    const read = normalizeReadAppsResponse(rawRead)
+    const app = read.apps.find((candidate) => stringValue(candidate.id) === input.app.id)
+    if (!app) {
+      return pluginCenterGetAppToolsResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'missing',
+        app: { id: input.app.id },
+        missingReason: read.missingAppIds.includes(input.app.id) ? 'not_found' : 'unavailable'
+      })
+    }
+
+    const config = this.dependencies.provider.readConfigForManagement
+      ? normalizeConfigReadSnapshot(
+          await this.dependencies.provider.readConfigForManagement({ cwd: this.cwdFor(input) })
+        )
+      : undefined
+    return pluginCenterGetAppToolsResultSchema.parse({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready',
+      app: { id: input.app.id },
+      tools: normalizeAppToolSummaries(app, input.app.id, config?.origins ?? {})
     })
   }
 
@@ -1126,7 +1181,8 @@ function normalizePluginDetail(
   rawReadApps: unknown,
   rawDirectoryApps: unknown,
   rawInstalledSkills: unknown | null,
-  installedPlugin?: PluginCenterPlugin
+  installedPlugin?: PluginCenterPlugin,
+  config?: ConfigReadSnapshot
 ): PluginCenterPluginDetail {
   const detail = objectValue(rawDetail)
   const detailSummary = objectValue(detail.summary)
@@ -1190,8 +1246,8 @@ function normalizePluginDetail(
     arrayValue(interfaceInfo.capabilities).map(displayTextValue).filter(Boolean)
   ).slice(0, 30)
   const readAppsById = new Map(
-    arrayValue(rawReadApps)
-      .map(objectValue)
+    normalizeReadAppsResponse(rawReadApps)
+      .apps.map(objectValue)
       .flatMap((app) => {
         const id = stringValue(app.id)
         return id ? [[id, app] as const] : []
@@ -1225,16 +1281,24 @@ function normalizePluginDetail(
       safeHttpsUrl(directoryApp?.logoUrl) ??
       safeHttpsUrl(pluginApp.logoUrlDark) ??
       safeHttpsUrl(pluginApp.logoUrl)
-    const installUrl =
-      safeHttpUrl(readApp?.installUrl) ??
-      safeHttpUrl(directoryApp?.installUrl) ??
-      safeHttpUrl(pluginApp.installUrl)
+    const rawInstallUrl = readApp?.installUrl ?? directoryApp?.installUrl ?? pluginApp.installUrl
+    const installUrl = safeAppInstallUrl(rawInstallUrl)
+    const settingsUrl = buildAppSettingsUrl({
+      appId: id,
+      installUrl: rawInstallUrl,
+      remotePluginId:
+        stringValue(readApp?.remotePluginId) ||
+        stringValue(directoryApp?.remotePluginId) ||
+        stringValue(pluginApp.remotePluginId) ||
+        undefined
+    })
     const category =
       displayTextValue(pluginApp.category) ||
       displayTextValue(objectValue(directoryApp?.branding).category)
     const accessible = directoryApp
       ? booleanValue(directoryApp.isAccessible)
       : booleanValue(pluginApp.isAccessible)
+    const restriction = appRestrictionForConfig(config?.origins ?? {}, id)
     return [
       {
         id,
@@ -1242,12 +1306,20 @@ function normalizePluginDetail(
         ...(description ? { description } : {}),
         ...(category ? { category } : {}),
         ...(installUrl ? { installUrl } : {}),
+        ...(settingsUrl ? { settingsUrl } : {}),
         ...(icon ? { icon: { kind: 'url' as const, value: icon } } : {}),
+        mention: { path: `app://${encodeURIComponent(id)}`, name },
+        multiAccountCapability: 'unknown' as const,
         enabled: directoryApp
           ? booleanValue(directoryApp.isEnabled)
           : booleanValue(pluginApp.isEnabled),
         accessible,
-        canToggle: plugin.installed && plugin.canToggle && Boolean(directoryApp)
+        canToggle:
+          plugin.installed &&
+          plugin.canToggle &&
+          Boolean(directoryApp) &&
+          (restriction?.editable ?? true),
+        ...(restriction ? { restriction } : {})
       }
     ]
   })
@@ -1331,6 +1403,195 @@ function normalizePluginDetail(
       100
     )
   }
+}
+
+function normalizeReadAppsResponse(raw: unknown): { apps: JsonRecord[]; missingAppIds: string[] } {
+  const response = objectValue(raw)
+  const apps = Array.isArray(raw) ? raw : arrayValue(response.apps)
+  return {
+    apps: apps.map(objectValue),
+    missingAppIds: arrayValue(response.missingAppIds).map(stringValue).filter(Boolean)
+  }
+}
+
+function normalizeConfigReadSnapshot(raw: unknown): ConfigReadSnapshot {
+  const response = objectValue(raw)
+  return {
+    config: objectValue(response.config),
+    origins: objectValue(response.origins)
+  }
+}
+
+function normalizeAppToolSummaries(
+  app: JsonRecord,
+  appId: string,
+  origins: JsonRecord
+): PluginCenterAppToolSummary[] {
+  const seenNames = new Set<string>()
+  const tools: PluginCenterAppToolSummary[] = []
+  for (const value of arrayValue(app.toolSummaries)) {
+    const tool = objectValue(value)
+    const name = displayTextValue(tool.name) || displayTextValue(tool.toolName)
+    if (!name || seenNames.has(name)) continue
+    seenNames.add(name)
+    const enabled = booleanValue(tool.enabled) || booleanValue(tool.isEnabled)
+    const explicitlyDisabled = tool.enabled === false || tool.isEnabled === false
+    const disabledReason = displayTextValue(tool.disabledReason)
+    const restriction = toolRestriction({
+      appId,
+      toolName: name,
+      enabled: explicitlyDisabled ? false : enabled || !disabledReason,
+      disabledReason,
+      origins
+    })
+    tools.push({
+      name,
+      ...(displayTextValue(tool.title) ? { title: displayTextValue(tool.title) } : {}),
+      ...(displayTextValue(tool.description)
+        ? { description: displayTextValue(tool.description) }
+        : {}),
+      enabled: explicitlyDisabled ? false : enabled || !disabledReason,
+      ...(disabledReason ? { disabledReason } : {}),
+      readOnly: booleanValue(tool.readOnly) || booleanValue(tool.isReadOnly),
+      ...(restriction ? { restriction } : {})
+    })
+    if (tools.length === 200) break
+  }
+  return tools
+}
+
+function toolRestriction({
+  appId,
+  toolName,
+  enabled,
+  disabledReason,
+  origins
+}: {
+  appId: string
+  toolName: string
+  enabled: boolean
+  disabledReason: string
+  origins: JsonRecord
+}): PluginCenterAppToolRestriction | undefined {
+  if (disabledReason === 'disabled_by_admin') {
+    return {
+      kind: 'admin',
+      message: '此工具已被管理员禁用',
+      editable: false
+    }
+  }
+  if (enabled) return undefined
+
+  const toolKeyPath = configPathKey(['apps', appId, 'tools', toolName, 'enabled'])
+  const appKeyPath = configPathKey(['apps', appId, 'enabled'])
+  const source = configOriginSource(origins, toolKeyPath) ?? configOriginSource(origins, appKeyPath)
+  if (!source) {
+    return {
+      kind: 'unavailable',
+      message: '此工具当前不可用',
+      editable: false
+    }
+  }
+  const editable = source === 'user'
+  return {
+    source,
+    kind: 'configuration',
+    message: editable
+      ? '此工具已在你的配置中停用，可在应用设置中恢复。'
+      : `此工具由${configSourceLabel(source)}配置停用。`,
+    recoveryKeyPath: toolKeyPath,
+    editable
+  }
+}
+
+function appRestrictionForConfig(
+  origins: JsonRecord,
+  appId: string
+): PluginCenterPluginDetail['apps'][number]['restriction'] | undefined {
+  const source = configOriginSource(origins, configPathKey(['apps', appId, 'enabled']))
+  if (!source || source === 'user') return undefined
+  return {
+    code: source === 'unknown' ? 'readonly' : 'policy',
+    source,
+    editable: false,
+    message: `此应用由${configSourceLabel(source)}配置管理，无法在此处更改。`
+  }
+}
+
+function configOriginSource(
+  origins: JsonRecord,
+  keyPath: string
+): PluginCenterConfigRestrictionSource | undefined {
+  const metadata = objectValue(origins[keyPath])
+  if (Object.keys(metadata).length === 0) return undefined
+  const sourceType = stringValue(objectValue(metadata.name).type) || stringValue(metadata.type)
+  switch (sourceType) {
+    case 'user':
+      return 'user'
+    case 'project':
+      return 'project'
+    case 'system':
+    case 'packagedDefaults':
+      return 'system'
+    case 'mdm':
+      return 'mdm'
+    case 'enterpriseManaged':
+      return 'enterprise'
+    case 'sessionFlags':
+      return 'session'
+    case 'legacyManagedConfigTomlFromFile':
+    case 'legacyManagedConfigTomlFromMdm':
+      return 'managed'
+    default:
+      return 'unknown'
+  }
+}
+
+function configSourceLabel(source: PluginCenterConfigRestrictionSource): string {
+  switch (source) {
+    case 'user':
+      return '用户'
+    case 'project':
+      return '项目'
+    case 'system':
+      return '系统'
+    case 'mdm':
+      return '设备管理'
+    case 'enterprise':
+      return '企业策略'
+    case 'session':
+      return '会话策略'
+    case 'managed':
+      return '受管'
+    case 'unknown':
+      return '受管'
+  }
+}
+
+function buildAppSettingsUrl({
+  appId,
+  installUrl,
+  remotePluginId
+}: {
+  appId: string
+  installUrl: unknown
+  remotePluginId?: string
+}): string | undefined {
+  const suppliedInstallUrl = stringValue(installUrl)
+  const base = suppliedInstallUrl ? safeHttpUrl(suppliedInstallUrl) : 'https://chatgpt.com'
+  if (!base) return undefined
+
+  const url = new URL(base)
+  url.search = ''
+  if (remotePluginId) {
+    const encodedPluginId = encodeURIComponent(remotePluginId)
+    url.pathname = `/plugins/${encodedPluginId}`
+    url.hash = `settings/Plugins/${encodedPluginId}?product-sku=CODEX`
+  } else {
+    url.pathname = '/plugins'
+    url.hash = `settings/Connectors?connector=${encodeURIComponent(appId)}&product-sku=CODEX&referrer=codex`
+  }
+  return safeHttpUrl(url.toString())
 }
 
 type InstalledSkillIndex = {
@@ -2193,12 +2454,28 @@ function requiredString(value: unknown, label: string): string {
 
 function safeHttpUrl(value: unknown): string | undefined {
   const candidate = stringValue(value)
+  if (!candidate || candidate.length > 4_000) return undefined
   try {
     const url = new URL(candidate)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.username.length > 0 ||
+      url.password.length > 0
+    ) {
+      return undefined
+    }
+    return url.toString()
   } catch {
     return undefined
   }
+}
+
+function safeAppInstallUrl(value: unknown): string | undefined {
+  const url = safeHttpUrl(value)
+  if (!url) return undefined
+  const parsed = new URL(url)
+  parsed.hash = ''
+  return parsed.toString()
 }
 
 function safeHttpsUrl(value: unknown): string | undefined {

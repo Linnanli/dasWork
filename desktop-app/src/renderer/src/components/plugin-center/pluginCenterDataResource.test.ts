@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   DesktopPluginCenterApi,
+  PluginCenterGetAppToolsResult,
   PluginCenterInstalledPluginsResult,
   PluginCenterPlugin,
   PluginCenterSnapshot
@@ -9,6 +10,7 @@ import type {
 import { PLUGIN_CENTER_API_VERSION } from '../../../../shared/pluginCenterApi'
 import {
   getPluginCenterCatalogResource,
+  getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
   getPluginCenterSupplementalResource,
@@ -86,6 +88,12 @@ function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterA
       version: PLUGIN_CENTER_API_VERSION,
       status: 'missing' as const,
       missingReason: 'not_found' as const
+    })),
+    getAppTools: vi.fn(async (input) => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready' as const,
+      app: { id: input.app.id },
+      tools: []
     })),
     addMarketplace: vi.fn(),
     installPlugin: vi.fn(),
@@ -255,6 +263,36 @@ describe('pluginCenterDataResource', () => {
       plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
       forceRefresh: false
     })
+  })
+
+  it('lazily reads one app tool list per cwd, thread, and app identity for five minutes', async () => {
+    const api = createApi()
+    vi.mocked(api.getAppTools).mockResolvedValue({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready',
+      app: { id: 'github-app' },
+      tools: [{ name: 'github.search', enabled: true, readOnly: true }]
+    } satisfies PluginCenterGetAppToolsResult)
+    const resource = getPluginCenterAppToolsResource(api, 'github-app', '/repo/', 'thread-a')
+
+    await resource.prefetch()
+    await resource.prefetch()
+
+    expect(api.getAppTools).toHaveBeenCalledTimes(1)
+    expect(api.getAppTools).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      threadId: 'thread-a',
+      app: { id: 'github-app' }
+    })
+    expect(resource.getSnapshot().data).toMatchObject({
+      status: 'ready',
+      tools: [{ name: 'github.search' }]
+    })
+
+    vi.setSystemTime(Date.now() + 5 * 60_000 + 1)
+    await resource.prefetch()
+    expect(api.getAppTools).toHaveBeenCalledTimes(2)
   })
 
   it('ignores an older installed-state response after invalidation starts a readback', async () => {

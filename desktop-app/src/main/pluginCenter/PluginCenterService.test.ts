@@ -1210,6 +1210,175 @@ describe('PluginCenterService', () => {
     expect(provider.upsertMcpServer).not.toHaveBeenCalled()
   })
 
+  it('projects one app tool list with redacted configuration restrictions', async () => {
+    const provider = createProvider({
+      readAppsForManagement: vi.fn(async () => ({
+        apps: [
+          {
+            id: 'github-app',
+            toolSummaries: [
+              {
+                name: 'github.write_issue',
+                title: '创建议题',
+                description: '创建一个新的议题。',
+                isEnabled: false,
+                isReadOnly: false
+              },
+              {
+                name: 'github.admin_only',
+                isEnabled: false,
+                disabledReason: 'disabled_by_admin',
+                isReadOnly: false
+              },
+              {
+                name: 'github.unavailable',
+                isEnabled: false,
+                isReadOnly: true
+              },
+              {
+                name: 'github.search',
+                isEnabled: true,
+                isReadOnly: true
+              }
+            ]
+          }
+        ],
+        missingAppIds: []
+      })),
+      readConfigForManagement: vi.fn(async () => ({
+        config: {},
+        origins: {
+          'apps."github-app"."tools"."github.write_issue".enabled': {
+            name: { type: 'project', dotCodexFolder: '/repo/.codex' },
+            version: 'v-project'
+          }
+        }
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getAppTools({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      threadId: 'thread-app-tools',
+      app: { id: 'github-app' }
+    })
+
+    expect(provider.readAppsForManagement).toHaveBeenCalledWith({
+      appIds: ['github-app'],
+      threadId: 'thread-app-tools',
+      includeTools: true
+    })
+    expect(provider.readConfigForManagement).toHaveBeenCalledWith({ cwd: '/repo' })
+    expect(result).toMatchObject({
+      status: 'ready',
+      app: { id: 'github-app' },
+      tools: [
+        {
+          name: 'github.write_issue',
+          title: '创建议题',
+          enabled: false,
+          readOnly: false,
+          restriction: {
+            kind: 'configuration',
+            source: 'project',
+            editable: false,
+            recoveryKeyPath: 'apps."github-app"."tools"."github.write_issue".enabled'
+          }
+        },
+        {
+          name: 'github.admin_only',
+          enabled: false,
+          restriction: { kind: 'admin', editable: false }
+        },
+        {
+          name: 'github.unavailable',
+          enabled: false,
+          restriction: { kind: 'unavailable', editable: false }
+        },
+        { name: 'github.search', enabled: true, readOnly: true }
+      ]
+    })
+    expect(JSON.stringify(result)).not.toContain('/repo/.codex')
+  })
+
+  it('builds safe settings URLs and stable app mentions from app/read metadata', async () => {
+    const provider = createProvider({
+      readPluginDetailForManagement: vi.fn(async () => ({
+        summary: {
+          id: 'git@official',
+          name: 'git',
+          installed: true,
+          enabled: true,
+          source: { type: 'local', path: '/plugins/git' },
+          interface: { displayName: 'Git helpers' }
+        },
+        apps: [
+          { id: 'google_drive', name: 'Google Drive' },
+          { id: 'remote-plugin', name: 'Remote Plugin' },
+          { id: 'unsafe-app', name: 'Unsafe App' }
+        ],
+        skills: [],
+        mcpServers: []
+      })),
+      readAppsForManagement: vi.fn(async () => ({
+        apps: [
+          {
+            id: 'google_drive',
+            name: 'Google Drive',
+            installUrl: 'https://chatgpt.com/install#untrusted-fragment'
+          },
+          {
+            id: 'remote-plugin',
+            name: 'Remote Plugin',
+            remotePluginId: 'rp/123'
+          },
+          {
+            id: 'unsafe-app',
+            name: 'Unsafe App',
+            installUrl: 'javascript:alert(1)'
+          }
+        ],
+        missingAppIds: []
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getPluginDetail({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'git@official', marketplaceId: 'official' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      detail: {
+        apps: [
+          {
+            id: 'google_drive',
+            mention: { path: 'app://google_drive', name: 'Google Drive' },
+            installUrl: 'https://chatgpt.com/install',
+            settingsUrl:
+              'https://chatgpt.com/plugins#settings/Connectors?connector=google_drive&product-sku=CODEX&referrer=codex'
+          },
+          {
+            id: 'remote-plugin',
+            settingsUrl:
+              'https://chatgpt.com/plugins/rp%2F123#settings/Plugins/rp%2F123?product-sku=CODEX'
+          },
+          {
+            id: 'unsafe-app'
+          }
+        ]
+      }
+    })
+    const unsafeApp =
+      result.status === 'ready'
+        ? result.detail.apps.find((app) => app.id === 'unsafe-app')
+        : undefined
+    expect(unsafeApp?.installUrl).toBeUndefined()
+    expect(unsafeApp?.settingsUrl).toBeUndefined()
+  })
+
   it('reads and projects a single safe plugin detail without batch detail reads', async () => {
     const provider = createProvider({
       readAppsForManagement: vi.fn(async () => [

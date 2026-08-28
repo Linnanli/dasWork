@@ -1,6 +1,8 @@
 import {
   pluginCenterAddMarketplaceRequestSchema,
   pluginCenterAddMarketplaceResultSchema,
+  pluginCenterGetAppToolsRequestSchema,
+  pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
@@ -17,6 +19,8 @@ import {
   pluginCenterUninstallPluginRequestSchema,
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcChannels,
+  type PluginCenterGetAppToolsRequest,
+  type PluginCenterGetAppToolsResult,
   type PluginCenterInstalledPluginsRequest,
   type PluginCenterInstalledPluginsResult
 } from '../../shared/pluginCenterApi'
@@ -44,6 +48,7 @@ type PluginCenterServiceLike = Pick<
   getInstalledPlugins(
     input: PluginCenterInstalledPluginsRequest
   ): Promise<PluginCenterInstalledPluginsResult>
+  getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
 }
 
 export function createPluginCenterIpcHandlers(
@@ -73,6 +78,13 @@ export function createPluginCenterIpcHandlers(
       return safePluginCenterCall(
         async () =>
           pluginCenterGetPluginDetailResultSchema.parse(await service.getPluginDetail(input)),
+        SNAPSHOT_ERROR_MESSAGE
+      )
+    },
+    [pluginCenterIpcChannels.getAppTools]: async (_event, payload) => {
+      const input = pluginCenterGetAppToolsRequestSchema.parse(payload)
+      return safePluginCenterCall(
+        async () => pluginCenterGetAppToolsResultSchema.parse(await service.getAppTools(input)),
         SNAPSHOT_ERROR_MESSAGE
       )
     },

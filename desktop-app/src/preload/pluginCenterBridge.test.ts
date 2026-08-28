@@ -39,6 +39,28 @@ const PLUGIN_DETAIL_RESULT = {
   missingReason: 'not_found'
 } as const
 
+const APP_TOOLS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  status: 'ready',
+  app: { id: 'app-a' },
+  tools: [
+    {
+      name: 'create_issue',
+      title: 'Create issue',
+      description: 'Creates an issue',
+      enabled: false,
+      disabledReason: 'disabled_by_admin',
+      readOnly: false,
+      restriction: {
+        source: 'enterprise',
+        kind: 'admin',
+        message: '被管理员禁用',
+        editable: false
+      }
+    }
+  ]
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -54,6 +76,7 @@ type BridgeMethod =
   | 'getSnapshot'
   | 'getInstalledPlugins'
   | 'getPluginDetail'
+  | 'getAppTools'
   | 'addMarketplace'
   | 'installPlugin'
   | 'uninstallPlugin'
@@ -97,6 +120,14 @@ const cases: Case[] = [
     expectedPayload: { ...VALID_CONTEXT, plugin: { id: 'plugin-a', marketplaceId: 'market-main' } },
     invalidInput: { ...VALID_CONTEXT, plugin: { id: '' } },
     result: PLUGIN_DETAIL_RESULT
+  },
+  {
+    method: 'getAppTools',
+    channel: pluginCenterIpcChannels.getAppTools,
+    input: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
+    expectedPayload: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
+    invalidInput: { ...VALID_CONTEXT, app: { id: 'app-a' }, includeTools: true },
+    result: APP_TOOLS_RESULT
   },
   {
     method: 'addMarketplace',
@@ -217,6 +248,7 @@ describe('createPluginCenterBridge', () => {
       getSnapshot: 'codex:plugin-center:get-snapshot',
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
+      getAppTools: 'codex:plugin-center:get-app-tools',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',

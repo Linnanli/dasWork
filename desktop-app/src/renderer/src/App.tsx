@@ -310,9 +310,7 @@ type ComposerProps = {
   onSteerFollowUp: (
     itemId: string,
     message:
-      | MaterializedQueuedUserMessage
-      | QueuedUserMessageSnapshot
-      | QueuedUserMessageSnapshotInput
+      MaterializedQueuedUserMessage | QueuedUserMessageSnapshot | QueuedUserMessageSnapshotInput
   ) => Promise<void>
   onStartCodeReview: (prompt: string) => Promise<void>
   onCreateNewTask: () => void
@@ -728,6 +726,20 @@ function App(): React.JSX.Element {
     },
     [startNewConversationWithDraft]
   )
+  const handleTryApp = useCallback(
+    ({ mention }: { mention: { path: string; name: string } }): void => {
+      const directive = serializeComposerContextReference({
+        type: 'app',
+        path: mention.path,
+        label: mention.name,
+        mentionName: mention.name
+      })
+      setSurface({ kind: 'conversation' })
+      clearActiveConversationId()
+      startNewConversationWithDraft(directive)
+    },
+    [startNewConversationWithDraft]
+  )
   const handleOpenConversation = useCallback<OpenSubagentConversation>(
     (conversationId) => {
       setSurface({ kind: 'conversation' })
@@ -823,6 +835,7 @@ function App(): React.JSX.Element {
             cwd={pluginCenterCwd}
             threadId={activeConversation?.threadId ?? activeEntry.context.threadId}
             onActivatePluginPrompt={handleActivatePluginPrompt}
+            onTryApp={handleTryApp}
           />
         </section>
       ) : (
@@ -1082,9 +1095,7 @@ function ActiveConversationPane({
     async (
       itemId: string,
       message:
-        | MaterializedQueuedUserMessage
-        | QueuedUserMessageSnapshot
-        | QueuedUserMessageSnapshotInput
+        MaterializedQueuedUserMessage | QueuedUserMessageSnapshot | QueuedUserMessageSnapshotInput
     ): Promise<void> => {
       await steerFollowUpItemWithTranscript(message, entry, () => followUps.steerItem(itemId))
     },

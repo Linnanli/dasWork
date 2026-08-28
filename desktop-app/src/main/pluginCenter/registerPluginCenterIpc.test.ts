@@ -38,6 +38,28 @@ const PLUGIN_DETAIL_RESULT = {
   missingReason: 'not_found'
 } as const
 
+const APP_TOOLS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  status: 'ready',
+  app: { id: 'app-a' },
+  tools: [
+    {
+      name: 'create_issue',
+      title: 'Create issue',
+      description: 'Creates an issue',
+      enabled: false,
+      disabledReason: 'disabled_by_admin',
+      readOnly: false,
+      restriction: {
+        source: 'enterprise',
+        kind: 'admin',
+        message: '被管理员禁用',
+        editable: false
+      }
+    }
+  ]
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -53,6 +75,7 @@ type ServiceMethod =
   | 'getSnapshot'
   | 'getInstalledPlugins'
   | 'getPluginDetail'
+  | 'getAppTools'
   | 'addMarketplace'
   | 'installPlugin'
   | 'uninstallPlugin'
@@ -96,6 +119,14 @@ const cases: Case[] = [
     expectedPayload: { ...VALID_CONTEXT, plugin: { id: 'plugin-a', marketplaceId: 'market-main' } },
     invalidPayload: { ...VALID_CONTEXT, plugin: { id: '' } },
     validResult: PLUGIN_DETAIL_RESULT
+  },
+  {
+    channel: pluginCenterIpcChannels.getAppTools,
+    method: 'getAppTools',
+    validPayload: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
+    expectedPayload: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
+    invalidPayload: { ...VALID_CONTEXT, app: { id: 'app-a' }, includeTools: true },
+    validResult: APP_TOOLS_RESULT
   },
   {
     channel: pluginCenterIpcChannels.addMarketplace,
@@ -217,6 +248,7 @@ function createService(
       async () => resultByMethod.getInstalledPlugins ?? INSTALLED_PLUGINS_RESULT
     ),
     getPluginDetail: vi.fn(async () => resultByMethod.getPluginDetail ?? PLUGIN_DETAIL_RESULT),
+    getAppTools: vi.fn(async () => resultByMethod.getAppTools ?? APP_TOOLS_RESULT),
     addMarketplace: vi.fn(async () => resultByMethod.addMarketplace ?? MARKETPLACE_RESULT),
     installPlugin: vi.fn(async () => resultByMethod.installPlugin ?? MUTATION_RESULT),
     uninstallPlugin: vi.fn(async () => resultByMethod.uninstallPlugin ?? MUTATION_RESULT),
@@ -240,6 +272,7 @@ describe('createPluginCenterIpcHandlers', () => {
       getSnapshot: 'codex:plugin-center:get-snapshot',
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
+      getAppTools: 'codex:plugin-center:get-app-tools',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
@@ -301,7 +334,10 @@ describe('createPluginCenterIpcHandlers', () => {
       const handlers = createPluginCenterIpcHandlers(service as never)
 
       const expectedMessage =
-        method === 'getSnapshot' || method === 'getInstalledPlugins' || method === 'getPluginDetail'
+        method === 'getSnapshot' ||
+        method === 'getInstalledPlugins' ||
+        method === 'getPluginDetail' ||
+        method === 'getAppTools'
           ? '插件中心数据加载失败，请重试。'
           : '插件中心操作失败，请刷新后重试。'
       await expect(handlers[channel]({}, validPayload)).rejects.toThrow(expectedMessage)

@@ -7,6 +7,7 @@ export const pluginCenterIpcChannels = {
   getSnapshot: 'codex:plugin-center:get-snapshot',
   getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
   getPluginDetail: 'codex:plugin-center:get-plugin-detail',
+  getAppTools: 'codex:plugin-center:get-app-tools',
   addMarketplace: 'codex:plugin-center:add-marketplace',
   installPlugin: 'codex:plugin-center:install-plugin',
   uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
@@ -31,11 +32,16 @@ const stringListSchema = z.array(nonEmptyStringSchema).default([])
 const httpUrlSchema = z
   .string()
   .trim()
+  .max(4_000)
   .url()
   .refine((value) => {
-    const protocol = new URL(value).protocol
-    return protocol === 'http:' || protocol === 'https:'
-  }, 'URL must use http or https')
+    const parsed = new URL(value)
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.username.length === 0 &&
+      parsed.password.length === 0
+    )
+  }, 'URL must use http or https and must not contain credentials')
 
 const safeImageUrlSchema = z
   .string()
@@ -77,11 +83,62 @@ export type PluginCenterIcon = z.infer<typeof pluginCenterIconSchema>
 export const pluginCenterRestrictionSchema = z
   .object({
     code: z.enum(['policy', 'inaccessible', 'readonly', 'unavailable', 'unsupported', 'error']),
-    message: z.string().trim().min(1).max(1_000)
+    message: z.string().trim().min(1).max(1_000),
+    source: z
+      .enum(['user', 'project', 'system', 'mdm', 'enterprise', 'session', 'managed', 'unknown'])
+      .optional(),
+    editable: z.boolean().optional()
   })
   .strict()
 
 export type PluginCenterRestriction = z.infer<typeof pluginCenterRestrictionSchema>
+
+const pluginCenterMentionSchema = z
+  .object({
+    path: z
+      .string()
+      .trim()
+      .regex(/^(?:app|plugin):\/\/[^\s]+$/)
+      .max(600),
+    name: nonEmptyStringSchema.max(300)
+  })
+  .strict()
+
+export const pluginCenterConfigRestrictionSourceSchema = z.enum([
+  'user',
+  'project',
+  'system',
+  'mdm',
+  'enterprise',
+  'session',
+  'managed',
+  'unknown'
+])
+
+export type PluginCenterConfigRestrictionSource = z.infer<
+  typeof pluginCenterConfigRestrictionSourceSchema
+>
+
+export const pluginCenterToolRestrictionKindSchema = z.enum([
+  'admin',
+  'configuration',
+  'unavailable',
+  'unknown'
+])
+
+export type PluginCenterToolRestrictionKind = z.infer<typeof pluginCenterToolRestrictionKindSchema>
+
+export const pluginCenterAppToolRestrictionSchema = z
+  .object({
+    source: pluginCenterConfigRestrictionSourceSchema.optional(),
+    kind: pluginCenterToolRestrictionKindSchema,
+    message: z.string().trim().min(1).max(1_000),
+    recoveryKeyPath: z.string().trim().min(1).max(600).optional(),
+    editable: z.boolean()
+  })
+  .strict()
+
+export type PluginCenterAppToolRestriction = z.infer<typeof pluginCenterAppToolRestrictionSchema>
 
 export const pluginCenterRequestContextSchema = z
   .object({
@@ -426,7 +483,13 @@ const pluginCenterPluginDetailAppSchema = z
     description: optionalDisplayStringSchema,
     category: optionalDisplayStringSchema,
     installUrl: httpUrlSchema.optional(),
+    settingsUrl: httpUrlSchema.optional(),
     icon: pluginCenterIconSchema.optional(),
+    mention: pluginCenterMentionSchema.refine(
+      (mention) => mention.path.startsWith('app://'),
+      'App mention path must use app://'
+    ),
+    multiAccountCapability: z.enum(['supported', 'unsupported', 'unknown']),
     enabled: z.boolean().default(true),
     accessible: z.boolean().default(true),
     canToggle: z.boolean().default(true),
@@ -449,16 +512,10 @@ const pluginCenterPluginDetailSkillSchema = z
 export const pluginCenterPluginDetailSchema = z
   .object({
     plugin: pluginCenterPluginSchema,
-    mention: z
-      .object({
-        path: z
-          .string()
-          .trim()
-          .regex(/^plugin:\/\/[^\s]+$/)
-          .max(600),
-        name: nonEmptyStringSchema.max(300)
-      })
-      .strict(),
+    mention: pluginCenterMentionSchema.refine(
+      (mention) => mention.path.startsWith('plugin://'),
+      'Plugin mention path must use plugin://'
+    ),
     longDescription: detailDisplayStringSchema.optional(),
     capabilities: z.array(optionalDisplayStringSchema.unwrap()).max(30).default([]),
     defaultPrompts: z
@@ -502,6 +559,50 @@ export const pluginCenterGetPluginDetailResultSchema = z.discriminatedUnion('sta
 export type PluginCenterGetPluginDetailResult = z.infer<
   typeof pluginCenterGetPluginDetailResultSchema
 >
+
+export const pluginCenterGetAppToolsRequestSchema = pluginCenterRequestContextSchema
+  .extend({
+    app: pluginCenterItemRefSchema,
+    forceRefresh: z.boolean().optional()
+  })
+  .strict()
+
+export type PluginCenterGetAppToolsRequest = z.infer<typeof pluginCenterGetAppToolsRequestSchema>
+
+export const pluginCenterAppToolSummarySchema = z
+  .object({
+    name: nonEmptyStringSchema.max(300),
+    title: optionalDisplayStringSchema,
+    description: optionalDisplayStringSchema,
+    enabled: z.boolean().default(true),
+    disabledReason: optionalDisplayStringSchema,
+    readOnly: z.boolean().default(false),
+    restriction: pluginCenterAppToolRestrictionSchema.optional()
+  })
+  .strict()
+
+export type PluginCenterAppToolSummary = z.infer<typeof pluginCenterAppToolSummarySchema>
+
+export const pluginCenterGetAppToolsResultSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      version: z.literal(PLUGIN_CENTER_API_VERSION),
+      status: z.literal('ready'),
+      app: pluginCenterItemRefSchema,
+      tools: z.array(pluginCenterAppToolSummarySchema).max(200)
+    })
+    .strict(),
+  z
+    .object({
+      version: z.literal(PLUGIN_CENTER_API_VERSION),
+      status: z.literal('missing'),
+      app: pluginCenterItemRefSchema,
+      missingReason: z.enum(['not_found', 'unavailable'])
+    })
+    .strict()
+])
+
+export type PluginCenterGetAppToolsResult = z.infer<typeof pluginCenterGetAppToolsResultSchema>
 
 export const pluginCenterInstallPluginRequestSchema = pluginCenterRequestContextSchema
   .extend({
@@ -707,6 +808,7 @@ export type DesktopPluginCenterApi = {
   getPluginDetail(
     input: PluginCenterGetPluginDetailRequest
   ): Promise<PluginCenterGetPluginDetailResult>
+  getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
   addMarketplace(
     input: PluginCenterAddMarketplaceRequest
   ): Promise<PluginCenterAddMarketplaceResult>

@@ -2,7 +2,9 @@ import * as React from 'react'
 import {
   AppWindowIcon,
   ArrowRightIcon,
+  ChevronDownIcon,
   ExternalLinkIcon,
+  LockKeyholeIcon,
   Loader2Icon,
   PuzzleIcon,
   ServerIcon
@@ -13,6 +15,13 @@ import type {
   PluginCenterPluginDetail
 } from '../../../../shared/pluginCenterApi'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { PluginImage } from './PluginImage'
@@ -27,11 +36,13 @@ export function PluginDetailPage({
   pendingSkillId,
   onInstall,
   onToggle,
-  onAppToggle,
   onSkillToggle,
   onUninstall,
   onActivatePrompt,
   onConnectApp,
+  onReconnectApp,
+  onDisconnectApp,
+  onOpenAppTools,
   onOpenExternal
 }: {
   detail: PluginCenterPluginDetail
@@ -40,11 +51,13 @@ export function PluginDetailPage({
   pendingSkillId?: string
   onInstall: (plugin: PluginCenterPlugin) => void
   onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
-  onAppToggle: (app: PluginDetailApp, enabled: boolean) => void
   onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => void
   onUninstall: (plugin: PluginCenterPlugin) => void
   onActivatePrompt: (prompt: string) => void
   onConnectApp: (app: PluginDetailApp) => void
+  onReconnectApp: (app: PluginDetailApp) => void
+  onDisconnectApp: (app: PluginDetailApp) => void
+  onOpenAppTools: (app: PluginDetailApp) => void
   onOpenExternal: (url: string) => void
 }): React.JSX.Element {
   const plugin = detail.plugin
@@ -141,9 +154,10 @@ export function PluginDetailPage({
         detail={detail}
         pendingAppId={pendingAppId}
         pendingSkillId={pendingSkillId}
-        onAppToggle={onAppToggle}
         onConnectApp={onConnectApp}
-        onOpenExternal={onOpenExternal}
+        onReconnectApp={onReconnectApp}
+        onDisconnectApp={onDisconnectApp}
+        onOpenAppTools={onOpenAppTools}
         onSkillToggle={onSkillToggle}
       />
       <Information detail={detail} onOpenExternal={onOpenExternal} />
@@ -243,17 +257,19 @@ function Includes({
   detail,
   pendingAppId,
   pendingSkillId,
-  onAppToggle,
   onConnectApp,
-  onOpenExternal,
+  onReconnectApp,
+  onDisconnectApp,
+  onOpenAppTools,
   onSkillToggle
 }: {
   detail: PluginCenterPluginDetail
   pendingAppId?: string
   pendingSkillId?: string
-  onAppToggle: (app: PluginDetailApp, enabled: boolean) => void
   onConnectApp: (app: PluginDetailApp) => void
-  onOpenExternal: (url: string) => void
+  onReconnectApp: (app: PluginDetailApp) => void
+  onDisconnectApp: (app: PluginDetailApp) => void
+  onOpenAppTools: (app: PluginDetailApp) => void
   onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => void
 }): React.JSX.Element | null {
   if (detail.apps.length === 0 && detail.skills.length === 0 && detail.mcpServers.length === 0) {
@@ -263,60 +279,18 @@ function Includes({
     <section className="space-y-5">
       {detail.apps.length > 0 && (
         <IncludedSection title={`应用 ${detail.apps.length}`}>
-          {detail.apps.map((app) => {
-            const needsConnection =
-              detail.plugin.installed && !app.accessible && Boolean(app.installUrl)
-            return (
-              <div
-                key={app.id}
-                data-slot="plugin-detail-app"
-                className="group flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 transition-colors hover:bg-foreground/5"
-              >
-                <PluginImage
-                  icon={app.icon ?? detail.plugin.icon}
-                  title={app.name}
-                  fallback={<AppWindowIcon className="size-4" />}
-                  className="size-9 shrink-0 rounded-lg border bg-transparent object-contain"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-base font-medium">{app.name}</div>
-                  <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
-                    {app.description ?? '此应用未提供简短说明。'}
-                  </p>
-                </div>
-                {app.accessible && (
-                  <Switch
-                    checked={app.enabled}
-                    disabled={pendingAppId === app.id || !app.canToggle}
-                    aria-label={`${app.name} ${app.enabled ? '停用' : '启用'}`}
-                    title={app.restriction?.message}
-                    onCheckedChange={(enabled) => onAppToggle(app, enabled)}
-                  />
-                )}
-                {needsConnection && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 rounded-lg px-4"
-                    disabled={pendingAppId === app.id || Boolean(app.restriction)}
-                    aria-label={`连接 ${app.name}`}
-                    title={app.restriction?.message}
-                    onClick={() => onConnectApp(app)}
-                  >
-                    连接
-                  </Button>
-                )}
-                {app.accessible && app.installUrl && (
-                  <ExternalButton
-                    url={app.installUrl}
-                    label={`打开 ${app.name}`}
-                    onOpen={onOpenExternal}
-                  />
-                )}
-              </div>
-            )
-          })}
+          {detail.apps.map((app) => (
+            <PluginDetailAppRow
+              key={app.id}
+              app={app}
+              plugin={detail.plugin}
+              pending={pendingAppId === app.id}
+              onConnect={onConnectApp}
+              onDisconnect={onDisconnectApp}
+              onOpen={onOpenAppTools}
+              onReconnect={onReconnectApp}
+            />
+          ))}
         </IncludedSection>
       )}
       {detail.skills.length > 0 && (
@@ -369,6 +343,147 @@ function Includes({
         </IncludedSection>
       )}
     </section>
+  )
+}
+
+function PluginDetailAppRow({
+  app,
+  plugin,
+  pending,
+  onConnect,
+  onDisconnect,
+  onOpen,
+  onReconnect
+}: {
+  app: PluginDetailApp
+  plugin: PluginCenterPlugin
+  pending: boolean
+  onConnect: (app: PluginDetailApp) => void
+  onDisconnect: (app: PluginDetailApp) => void
+  onOpen: (app: PluginDetailApp) => void
+  onReconnect: (app: PluginDetailApp) => void
+}): React.JSX.Element {
+  const blocked = app.restriction?.editable === false
+  const hasConnectedMenu = plugin.installed && app.accessible && app.enabled
+
+  return (
+    <div
+      data-slot="plugin-detail-app"
+      className="group flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 text-left transition-colors hover:bg-foreground/5"
+    >
+      <button
+        data-slot="plugin-detail-app-open"
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-3 bg-transparent text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => onOpen(app)}
+      >
+        <PluginImage
+          icon={app.icon ?? plugin.icon}
+          title={app.name}
+          fallback={<AppWindowIcon className="size-4" />}
+          className="size-9 shrink-0 rounded-lg border bg-transparent object-contain"
+        />
+        <span className="min-w-0 flex-1">
+          <span data-slot="plugin-detail-app-name" className="block truncate text-base font-medium">
+            {app.name}
+          </span>
+          <span
+            data-slot="plugin-detail-app-description"
+            className="block line-clamp-1 text-sm leading-relaxed text-muted-foreground"
+          >
+            {app.description ?? '此应用未提供简短说明。'}
+          </span>
+        </span>
+      </button>
+      <div className="shrink-0">
+        {!plugin.installed && null}
+        {plugin.installed && !app.accessible && blocked && (
+          <span
+            className="flex size-8 items-center justify-center text-muted-foreground"
+            title={app.restriction?.message}
+            aria-label={app.restriction?.message ?? '此应用已锁定'}
+          >
+            <LockKeyholeIcon className="size-4" />
+          </span>
+        )}
+        {hasConnectedMenu && (
+          <ConnectedAppMenu
+            app={app}
+            pending={pending}
+            onDisconnect={onDisconnect}
+            onReconnect={onReconnect}
+          />
+        )}
+        {plugin.installed && !hasConnectedMenu && !(blocked && !app.accessible) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-lg px-4"
+            disabled={pending || blocked || (!app.accessible && !app.installUrl)}
+            aria-label={`连接 ${app.name}`}
+            title={app.restriction?.message}
+            onClick={() => onConnect(app)}
+          >
+            {pending && <Loader2Icon className="size-3.5 animate-spin" />}
+            连接
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ConnectedAppMenu({
+  app,
+  pending,
+  onDisconnect,
+  onReconnect
+}: {
+  app: PluginDetailApp
+  pending: boolean
+  onDisconnect: (app: PluginDetailApp) => void
+  onReconnect: (app: PluginDetailApp) => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5 rounded-lg px-3"
+          disabled={pending}
+          aria-label={`${app.name} 已连接，打开管理菜单`}
+        >
+          {pending ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <span className="size-2 rounded-full bg-emerald-500" />
+          )}
+          已连接
+          <ChevronDownIcon className="size-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem disabled={!app.installUrl} onSelect={() => onReconnect(app)}>
+          重新连接
+        </DropdownMenuItem>
+        {app.multiAccountCapability === 'supported' && (
+          <DropdownMenuItem disabled={!app.settingsUrl} onSelect={() => onDisconnect(app)}>
+            添加账户
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={!app.settingsUrl}
+          className="text-destructive focus:text-destructive"
+          onSelect={() => onDisconnect(app)}
+        >
+          断开连接
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   PLUGIN_CENTER_API_VERSION,
   pluginCenterAddMarketplaceRequestSchema,
+  pluginCenterGetAppToolsRequestSchema,
+  pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
@@ -365,5 +367,175 @@ describe('plugin center API schemas', () => {
       status: 'missing',
       missingReason: 'ambiguous'
     })
+  })
+
+  it('accepts plugin detail apps only through safe display fields and app mentions', () => {
+    const baseDetail = {
+      plugin: {
+        kind: 'plugin',
+        id: 'plugin:github',
+        name: 'github',
+        sourceKind: 'marketplace',
+        categories: [],
+        tags: [],
+        installed: true,
+        enabled: true
+      },
+      mention: { path: 'plugin://github', name: 'github' },
+      capabilities: [],
+      defaultPrompts: [],
+      screenshots: [],
+      apps: [
+        {
+          id: 'github',
+          name: 'GitHub',
+          description: 'Repository tools',
+          installUrl: 'https://chatgpt.com/plugins',
+          settingsUrl:
+            'https://chatgpt.com/plugins#settings/Connectors?connector=github&product-sku=CODEX&referrer=codex',
+          mention: { path: 'app://github', name: 'github' },
+          multiAccountCapability: 'unknown',
+          enabled: true,
+          accessible: true,
+          restriction: {
+            code: 'readonly',
+            source: 'project',
+            editable: false,
+            message: '由项目配置控制'
+          }
+        }
+      ],
+      skills: [],
+      mcpServers: []
+    }
+
+    expect(
+      pluginCenterGetPluginDetailResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        detail: baseDetail
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterGetPluginDetailResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        detail: {
+          ...baseDetail,
+          apps: [{ ...baseDetail.apps[0], mention: { path: 'plugin://github', name: 'github' } }]
+        }
+      }).success
+    ).toBe(false)
+    expect(
+      pluginCenterGetPluginDetailResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        detail: {
+          ...baseDetail,
+          apps: [{ ...baseDetail.apps[0], connectedEmail: 'user@example.com' }]
+        }
+      }).success
+    ).toBe(false)
+  })
+
+  it('keeps app tool loading on a fixed request shape and safe result projection', () => {
+    expect(
+      pluginCenterGetAppToolsRequestSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        threadId: 'thread-a',
+        app: { id: 'github' }
+      })
+    ).toEqual({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      threadId: 'thread-a',
+      app: { id: 'github' }
+    })
+    expect(
+      pluginCenterGetAppToolsRequestSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        app: { id: 'github' },
+        includeTools: true
+      }).success
+    ).toBe(false)
+
+    expect(
+      pluginCenterGetAppToolsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        app: { id: 'github' },
+        tools: [
+          {
+            name: 'create_issue',
+            title: 'Create issue',
+            description: 'Creates an issue',
+            enabled: false,
+            disabledReason: 'disabled_by_admin',
+            readOnly: false,
+            restriction: {
+              source: 'enterprise',
+              kind: 'admin',
+              message: '被管理员禁用',
+              editable: false,
+              recoveryKeyPath: 'apps.github.tools.create_issue.enabled'
+            }
+          }
+        ]
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterGetAppToolsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        app: { id: 'github' },
+        tools: [
+          {
+            name: 'create_issue',
+            title: 'Create issue',
+            inputSchema: { type: 'object' },
+            restriction: {
+              source: 'enterprise',
+              kind: 'admin',
+              message: '被管理员禁用',
+              editable: false,
+              configPath: '/Users/me/.codex/config.toml'
+            }
+          }
+        ]
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects credential-bearing plugin center URLs', () => {
+    expect(
+      pluginCenterGetPluginDetailResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        detail: {
+          plugin: {
+            kind: 'plugin',
+            id: 'plugin:github',
+            name: 'github',
+            sourceKind: 'marketplace',
+            categories: [],
+            tags: [],
+            installed: true,
+            enabled: true
+          },
+          mention: { path: 'plugin://github', name: 'github' },
+          defaultPrompts: [],
+          apps: [
+            {
+              id: 'github',
+              name: 'GitHub',
+              installUrl: 'https://user:secret@chatgpt.com/plugins',
+              mention: { path: 'app://github', name: 'github' },
+              multiAccountCapability: 'unknown'
+            }
+          ]
+        }
+      }).success
+    ).toBe(false)
   })
 })

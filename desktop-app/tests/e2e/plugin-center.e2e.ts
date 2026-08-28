@@ -74,7 +74,7 @@ test('renders a non-empty Plugin Center snapshot from the app-server catalog wit
     await page.getByRole('tab', { name: /应用/ }).click()
     await expect(page.getByText('E2E App', { exact: true }).last()).toBeVisible()
     await expect(page.getByText('App returned by app/list.', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: '连接 E2E App' })).toBeVisible()
+    await expect(page.getByRole('switch', { name: 'E2E App 启用' })).toBeVisible()
     await expect(page.locator('[data-slot="plugin-center-page"]')).not.toContainText(
       '此应用当前不可访问或需要连接帐户'
     )
@@ -130,7 +130,7 @@ test('installs a marketplace plugin through the Plugin Center app-server RPC pat
   })
 })
 
-test('opens one plugin detail, preserves the detail action context, and creates an unsent prompt draft', async ({
+test('opens one plugin detail, preserves the detail action context, and creates an unsent app draft', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -189,15 +189,53 @@ test('opens one plugin detail, preserves the detail action context, and creates 
 
     await detail.getByRole('button', { name: '安装插件' }).click()
     await expect(detail).toBeVisible()
-    await expect(
-      detail.locator('[data-slot="plugin-detail-app"]').getByRole('button', {
-        name: '连接 E2E App from app/read'
-      })
-    ).toBeVisible()
+    const appCard = detail.locator('[data-slot="plugin-detail-app"]')
+    await appCard.getByRole('button', { name: '连接 E2E App from app/read' }).click()
+    await expect
+      .poll(() => rpcMethods(rpcLogPath))
+      .toContainEqual(
+        expect.objectContaining({
+          method: 'config/batchWrite',
+          params: expect.objectContaining({
+            edits: expect.arrayContaining([
+              expect.objectContaining({ keyPath: 'apps."e2e-app".enabled', value: true })
+            ])
+          })
+        })
+      )
+    const connectedMenu = appCard.getByRole('button', {
+      name: 'E2E App from app/read 已连接，打开管理菜单'
+    })
+    await expect(connectedMenu).toBeVisible()
+    await connectedMenu.click()
+    await expect(page.getByRole('menuitem', { name: '重新连接' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '断开连接' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '添加账户' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    await detail
-      .getByRole('button', { name: '用 E2E Installable Plugin 执行提示词：Review this repository' })
-      .click()
+    const appOpen = appCard.locator('[data-slot="plugin-detail-app-open"]')
+    await appOpen.focus()
+    await page.keyboard.press('Enter')
+    const toolsDialog = page.getByRole('dialog')
+    await expect(toolsDialog).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(toolsDialog).toHaveCount(0)
+    await appOpen.focus()
+    await page.keyboard.press(' ')
+    await expect(toolsDialog).toBeVisible()
+    await expect(toolsDialog).toContainText('会更改数据 1')
+    await expect(toolsDialog).toContainText('只读 1')
+    await expect
+      .poll(async () =>
+        (await rpcMethods(rpcLogPath)).filter(({ method }) => method === 'app/read').at(-1)
+      )
+      .toEqual(expect.objectContaining({ params: { appIds: ['e2e-app'], includeTools: true } }))
+    const writeTools = toolsDialog.getByRole('button', { name: /会更改数据 1/ })
+    await expect(writeTools).toHaveAttribute('aria-expanded', 'true')
+    await writeTools.click()
+    await expect(writeTools).toHaveAttribute('aria-expanded', 'false')
+    await toolsDialog.getByRole('button', { name: '立即试用' }).click()
     await expect(page.locator('[data-slot="plugin-center-page"]')).toHaveCount(0)
     await expect
       .poll(async () =>

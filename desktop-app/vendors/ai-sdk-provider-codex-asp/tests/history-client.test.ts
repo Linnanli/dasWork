@@ -275,6 +275,7 @@ function thread(overrides: Partial<Thread> = {}): Thread {
     ephemeral: false,
     section: null,
     sectionEnteredAt: null,
+    projectId: null,
     historyMode: 'legacy',
     modelProvider: 'openai',
     createdAt: 1782777600,

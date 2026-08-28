@@ -136,6 +136,8 @@ function defaultState() {
   return {
     availableInstalled: false,
     installedEnabled: true,
+    e2eAppEnabled: false,
+    e2eAppAccessible: true,
     marketplaces: ['e2e-market'],
     mcpServers: {
       local_tools: {
@@ -321,6 +323,7 @@ function skillsList() {
 }
 
 function appsList() {
+  const state = loadState()
   return {
     data: [
       {
@@ -328,8 +331,8 @@ function appsList() {
         name: 'E2E App',
         description: 'App returned by app/list.',
         installUrl: 'https://example.test/fixture-app',
-        isEnabled: true,
-        isAccessible: false,
+        isEnabled: state.e2eAppEnabled,
+        isAccessible: state.e2eAppAccessible,
         pluginDisplayNames: ['E2E Installed Plugin'],
         logoUrl: null,
         logoUrlDark: null
@@ -347,8 +350,29 @@ function appsRead(params) {
       .map((app) => ({
         ...app,
         name: 'E2E App from app/read',
-        description: 'Short description returned by app/read.'
-      }))
+        description: 'Short description returned by app/read.',
+        ...(params?.includeTools
+          ? {
+              toolSummaries: [
+                {
+                  name: 'e2e.create_issue',
+                  title: '创建议题',
+                  description: '创建一个测试议题。',
+                  isEnabled: true,
+                  isReadOnly: false
+                },
+                {
+                  name: 'e2e.search',
+                  title: '搜索',
+                  description: '搜索测试数据。',
+                  isEnabled: true,
+                  isReadOnly: true
+                }
+              ]
+            }
+          : {})
+      })),
+    missingAppIds: []
   }
 }
 
@@ -366,14 +390,23 @@ function mcpServerStatus(state) {
 
 function configRead(state) {
   return {
-    config: { mcp_servers: state.mcpServers },
+    config: {
+      apps: { 'e2e-app': { enabled: state.e2eAppEnabled } },
+      mcp_servers: state.mcpServers
+    },
     layers: [
       {
         name: { type: 'user' },
         version: state.configVersion,
-        config: { mcp_servers: state.mcpServers }
+        config: {
+          apps: { 'e2e-app': { enabled: state.e2eAppEnabled } },
+          mcp_servers: state.mcpServers
+        }
       }
-    ]
+    ],
+    origins: {
+      'apps."e2e-app".enabled': { name: { type: 'user' }, version: state.configVersion }
+    }
   }
 }
 
@@ -389,6 +422,12 @@ function applyConfigWrite(params) {
 
 function applyEdit(state, edit) {
   const value = edit.value
+  const appEnabledMatch = /^apps\.(".*"|[^.]+)\.enabled$/.exec(edit.keyPath)
+  if (appEnabledMatch) {
+    const appId = unquoteKeySegment(appEnabledMatch[1])
+    if (appId === 'e2e-app') state.e2eAppEnabled = value
+    return
+  }
   const enabledMatch = /^mcp_servers\.(".*"|[^.]+)\.enabled$/.exec(edit.keyPath)
   if (enabledMatch) {
     const serverName = unquoteKeySegment(enabledMatch[1])

@@ -1,5 +1,6 @@
 import type {
   DesktopPluginCenterApi,
+  PluginCenterGetAppToolsResult,
   PluginCenterGetPluginDetailResult,
   PluginCenterPlugin,
   PluginCenterSnapshot,
@@ -13,19 +14,18 @@ const SKILLS_FRESH_MS = 60_000
 const APPS_FRESH_MS = 60_000
 const MCP_FRESH_MS = 30_000
 const PLUGIN_DETAIL_FRESH_MS = 30_000
+const APP_TOOLS_FRESH_MS = 5 * 60_000
 const RESOURCE_GC_MS = 5 * 60_000
 const MAX_CWD_RESOURCES = 3
 const MAX_PLUGIN_DETAIL_RESOURCES = 20
+const MAX_APP_TOOLS_RESOURCES = 40
 
 type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error'
-type ResourceKind = 'catalog' | 'installed' | 'detail' | PluginCenterSupplementalSection
+type ResourceKind =
+  'catalog' | 'installed' | 'detail' | 'app-tools' | PluginCenterSupplementalSection
 export type PluginCenterSupplementalSection = Exclude<PluginCenterSnapshotSection, 'plugins'>
 type ResourceLogEvent =
-  | 'prefetch-start'
-  | 'prefetch-complete'
-  | 'cache-hit-fresh'
-  | 'cache-hit-stale'
-  | 'inflight-joined'
+  'prefetch-start' | 'prefetch-complete' | 'cache-hit-fresh' | 'cache-hit-stale' | 'inflight-joined'
 
 export type PluginCenterResourceSnapshot<T> = {
   data: T | null
@@ -56,6 +56,7 @@ type ApiResources = {
   apps: Map<string, ResourceStore<PluginCenterSnapshot>>
   mcp: Map<string, ResourceStore<PluginCenterSnapshot>>
   details: Map<string, ResourceStore<PluginCenterGetPluginDetailResult>>
+  appTools: Map<string, ResourceStore<PluginCenterGetAppToolsResult>>
 }
 
 type InFlightRequest = {
@@ -103,7 +104,8 @@ function resourcesForApi(api: DesktopPluginCenterApi): ApiResources {
     skills: new Map(),
     apps: new Map(),
     mcp: new Map(),
-    details: new Map()
+    details: new Map(),
+    appTools: new Map()
   }
   resourcesByApi.set(api, created)
   return created
@@ -435,6 +437,43 @@ export function getPluginCenterPluginDetailResource(
   })
   resources.details.set(key, resource)
   evictOldestCwdResource(resources.details, MAX_PLUGIN_DETAIL_RESOURCES)
+  return resource
+}
+
+export function getPluginCenterAppToolsResource(
+  api: DesktopPluginCenterApi,
+  appId: string,
+  cwd?: string,
+  threadId?: string
+): PluginCenterResource<PluginCenterGetAppToolsResult> {
+  const normalizedCwd = normalizeCwd(cwd)
+  const normalizedThreadId = threadId?.trim() ?? ''
+  const key = `${normalizedCwd}\u0000${normalizedThreadId}\u0000${appId}`
+  const resources = resourcesForApi(api)
+  const existing = resources.appTools.get(key)
+  if (existing) {
+    existing.lastAccessedAt = now()
+    return existing
+  }
+
+  const resource = createResource({
+    kind: 'app-tools',
+    cwd: normalizedCwd,
+    freshMs: APP_TOOLS_FRESH_MS,
+    load: (forceRefresh) =>
+      api.getAppTools({
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: normalizedCwd || undefined,
+        threadId: normalizedThreadId || undefined,
+        app: { id: appId },
+        ...(forceRefresh ? { forceRefresh: true } : {})
+      }),
+    onRelease: () => {
+      resources.appTools.delete(key)
+    }
+  })
+  resources.appTools.set(key, resource)
+  evictOldestCwdResource(resources.appTools, MAX_APP_TOOLS_RESOURCES)
   return resource
 }
 

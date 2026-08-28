@@ -1282,7 +1282,7 @@ describe("CodexContextCatalogClient", () =>
         expect(mock.disconnectCount).toBe(1);
     });
 
-    it("reads exact app metadata in app/read batches", async () =>
+    it("reads exact app metadata in app/read batches with missing ids and tool summaries", async () =>
     {
         const mock = new CatalogMockClient((method, params) =>
         {
@@ -1292,20 +1292,115 @@ describe("CodexContextCatalogClient", () =>
             }
             const appIds = (params as { appIds: string[] }).appIds;
             return {
-                apps: appIds.map((id) => ({ id, name: `App ${id}` })),
+                apps: appIds
+                    .filter((id) => id !== "missing-app")
+                    .map((id) => ({
+                        id,
+                        name: `App ${id}`,
+                        toolSummaries: id === "app-100"
+                            ? [{
+                                name: "lookup",
+                                title: "Lookup",
+                                description: "Find a record",
+                                isEnabled: false,
+                                disabledReason: "disabled_by_admin",
+                                readOnly: true,
+                            }]
+                            : [],
+                    })),
+                missingAppIds: appIds.includes("missing-app") ? ["missing-app"] : [],
             };
         });
         const client = new CodexContextCatalogClient({ createClient: () => mock });
         const appIds = Array.from({ length: 101 }, (_, index) => `app-${index}`);
 
-        const apps = await client.readAppsForManagement({ appIds: [...appIds, "app-0"] });
+        const result = await client.readAppsForManagement({
+            appIds: [...appIds, "app-0", "missing-app"],
+            threadId: "thread-1",
+            includeTools: true,
+        });
 
-        expect(apps).toHaveLength(101);
+        expect(result.apps).toHaveLength(101);
+        expect(result.missingAppIds).toEqual(["missing-app"]);
+        expect(result.apps.find((app) => app.id === "app-100")?.toolSummaries).toEqual([{
+            name: "lookup",
+            title: "Lookup",
+            description: "Find a record",
+            isEnabled: false,
+            disabledReason: "disabled_by_admin",
+            readOnly: true,
+        }]);
         expect(mock.requests.filter(({ method }) => method === "app/read").map(({ params }) => params))
             .toEqual([
-                { appIds: appIds.slice(0, 100) },
-                { appIds: appIds.slice(100) },
+                { appIds: appIds.slice(0, 100), threadId: "thread-1", includeTools: true },
+                { appIds: [...appIds.slice(100), "missing-app"], threadId: "thread-1", includeTools: true },
             ]);
+        await client.shutdown();
+    });
+
+    it("reads an empty app set without calling app/read", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.readAppsForManagement({ appIds: ["", ""] })).resolves.toEqual({
+            apps: [],
+            missingAppIds: [],
+        });
+        expect(mock.requests).toEqual([]);
+        await client.shutdown();
+    });
+
+    it("propagates app/read protocol errors", async () =>
+    {
+        const error = new JsonRpcError({ code: -32_602, message: "Invalid app/read params" });
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method !== "app/read")
+            {
+                throw new Error(`unexpected method: ${method}`);
+            }
+            return Promise.reject(error);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.readAppsForManagement({ appIds: ["bad-app"] })).rejects.toBe(error);
+        await client.shutdown();
+    });
+
+    it("exposes a safe config/read entry for management", async () =>
+    {
+        const configResponse = {
+            config: { apps: { github: { enabled: true } } },
+            origins: {
+                "apps.\"github\".enabled": {
+                    name: { type: "user", file: "/user/config.toml", profile: null },
+                    value: true,
+                },
+            },
+            layers: [],
+        };
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method !== "config/read")
+            {
+                throw new Error(`unexpected method: ${method}`);
+            }
+            return configResponse;
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.readConfigForManagement({ cwd: "/repo" })).resolves.toBe(configResponse);
+        expect(mock.requests.at(-1)).toEqual({
+            method: "config/read",
+            params: {
+                includeLayers: true,
+                cwd: "/repo",
+            },
+        });
         await client.shutdown();
     });
 

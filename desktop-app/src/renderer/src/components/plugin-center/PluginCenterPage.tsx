@@ -26,6 +26,7 @@ import type {
   PluginCenterMutationResult,
   PluginCenterNamedSecretPatch,
   PluginCenterPlugin,
+  PluginCenterPluginDetail,
   PluginCenterPluginMcpServer,
   PluginCenterRequestContext,
   PluginCenterSnapshotSection,
@@ -63,6 +64,7 @@ import { cn } from '@/lib/utils'
 import { PluginImage } from './PluginImage'
 import {
   getPluginCenterCatalogResource,
+  getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
   getPluginCenterSupplementalResource,
@@ -71,6 +73,7 @@ import {
   type PluginCenterResourceSnapshot,
   type PluginCenterSupplementalSection
 } from './pluginCenterDataResource'
+import { PluginAppToolsDialog } from './PluginAppToolsDialog'
 import { PluginDetailPage } from './PluginDetailPage'
 
 export type PluginCenterPageKind = 'browse' | 'manage' | 'detail'
@@ -105,6 +108,7 @@ export type PluginCenterPageProps = {
     mention: { path: string; name: string }
     prompt: string
   }) => void
+  onTryApp?: (input: { mention: { path: string; name: string } }) => void
 }
 
 type MutationStatus = { id: string; label: string } | null
@@ -303,7 +307,7 @@ function resolveContentView({
     id: string,
     label: string,
     action: () => Promise<PluginCenterMutationResult>
-  ) => Promise<void>
+  ) => Promise<PluginCenterMutationResult | undefined>
   setMcpDialog: React.Dispatch<React.SetStateAction<McpDialogState>>
   setConfirm: React.Dispatch<React.SetStateAction<ConfirmState>>
   onManageInstalledPlugins: () => void
@@ -531,7 +535,8 @@ export function PluginCenterPage({
   cwd,
   threadId,
   api: apiProp,
-  onActivatePluginPrompt
+  onActivatePluginPrompt,
+  onTryApp
 }: PluginCenterPageProps): React.JSX.Element {
   const api = React.useMemo(() => getPluginCenterApi(apiProp), [apiProp])
   const snapshotSections = React.useMemo(() => snapshotSectionsForSurface(surface), [surface])
@@ -571,6 +576,20 @@ export function PluginCenterPage({
   const appsState = usePluginCenterResource(appsResource, supplementalSection === 'apps')
   const mcpState = usePluginCenterResource(mcpResource, supplementalSection === 'mcp')
   const detailState = usePluginCenterResource(detailResource, isDetailSurface)
+  const [selectedAppId, setSelectedAppId] = React.useState<string | null>(null)
+  const selectedApp = React.useMemo<PluginCenterPluginDetail['apps'][number] | null>(() => {
+    const result = detailState.data
+    if (!selectedAppId || result?.status !== 'ready') return null
+    return result.detail.apps.find((app) => app.id === selectedAppId) ?? null
+  }, [detailState.data, selectedAppId])
+  const appToolsResource = React.useMemo(
+    () =>
+      api && selectedApp
+        ? getPluginCenterAppToolsResource(api, selectedApp.id, cwd, threadId)
+        : null,
+    [api, cwd, selectedApp, threadId]
+  )
+  const appToolsState = usePluginCenterResource(appToolsResource, selectedApp !== null)
   const supplementalSnapshot = React.useMemo(() => {
     let merged = emptySnapshot
     if (skillsState.data) merged = mergeSnapshotSections(merged, skillsState.data, ['skills'])
@@ -725,6 +744,10 @@ export function PluginCenterPage({
         detailResource.invalidate()
         readbacks.push(detailResource.refresh(true))
       }
+      if (changedSections.has('apps') && appToolsResource) {
+        appToolsResource.invalidate()
+        readbacks.push(appToolsResource.refresh(true))
+      }
       const supplementalSections: PluginCenterSupplementalSection[] = []
       for (const section of changedSections) {
         if (section === 'skills' || section === 'apps' || section === 'mcp') {
@@ -736,7 +759,13 @@ export function PluginCenterPage({
       }
       await Promise.all(readbacks)
     },
-    [catalogResource, detailResource, installedResource, refreshSupplementalSections]
+    [
+      appToolsResource,
+      catalogResource,
+      detailResource,
+      installedResource,
+      refreshSupplementalSections
+    ]
   )
 
   const rendererStartedAt = React.useRef<number | null>(null)
@@ -772,8 +801,8 @@ export function PluginCenterPage({
       id: string,
       label: string,
       action: () => Promise<PluginCenterMutationResult>
-    ): Promise<void> => {
-      if (!api) return
+    ): Promise<PluginCenterMutationResult | undefined> => {
+      if (!api) return undefined
       setMutation({ id, label })
       setActionError(null)
       try {
@@ -784,10 +813,12 @@ export function PluginCenterPage({
         } else {
           toast.success(result.message ?? `${label}完成`)
         }
+        return result
       } catch (nextError) {
         const message = nextError instanceof Error ? nextError.message : `${label}失败`
         setActionError(message)
         toast.error(message)
+        return undefined
       } finally {
         setMutation(null)
       }
@@ -795,32 +826,69 @@ export function PluginCenterPage({
     [api, applyMutationResult, setActionError, setMutation]
   )
 
-  const openExternal = React.useCallback((url: string): void => {
-    void window.desktopApp.codex.openExternalHttpUrl(url).catch((cause: unknown) => {
+  const openExternal = React.useCallback(async (url: string): Promise<boolean> => {
+    try {
+      await window.desktopApp.codex.openExternalHttpUrl(url)
+      return true
+    } catch (cause) {
       const message = cause instanceof Error ? cause.message : '无法打开安全外链'
       toast.error(message)
-    })
+      return false
+    }
   }, [])
 
-  const [awaitingAppConnection, setAwaitingAppConnection] = React.useState(false)
-  const connectApp = React.useCallback(
-    (app: { installUrl?: string }): void => {
-      if (!app.installUrl) return
-      setAwaitingAppConnection(true)
-      openExternal(app.installUrl)
+  const [awaitingAppConnectionId, setAwaitingAppConnectionId] = React.useState<string | null>(null)
+  const openAppExternal = React.useCallback(
+    async (app: { id: string }, url: string): Promise<void> => {
+      if (await openExternal(url)) setAwaitingAppConnectionId(app.id)
     },
     [openExternal]
+  )
+  const connectApp = React.useCallback(
+    async (app: PluginCenterPluginDetail['apps'][number]): Promise<void> => {
+      if (app.accessible) {
+        if (!app.enabled) {
+          await runMutation(app.id, '启用应用', () =>
+            api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled: true })
+          )
+        }
+        return
+      }
+      if (app.restriction?.editable === false || !app.installUrl) return
+      if (!app.enabled && app.canToggle) {
+        const result = await runMutation(app.id, '启用应用', () =>
+          api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled: true })
+        )
+        if (result?.status !== 'applied') return
+      }
+      await openAppExternal(app, app.installUrl)
+    },
+    [api, openAppExternal, requestContext, runMutation]
+  )
+
+  const reconnectApp = React.useCallback(
+    (app: PluginCenterPluginDetail['apps'][number]): void => {
+      if (app.installUrl) void openAppExternal(app, app.installUrl)
+    },
+    [openAppExternal]
+  )
+
+  const disconnectApp = React.useCallback(
+    (app: PluginCenterPluginDetail['apps'][number]): void => {
+      if (app.settingsUrl) void openAppExternal(app, app.settingsUrl)
+    },
+    [openAppExternal]
   )
 
   React.useEffect(() => {
     const refreshAfterConnection = (): void => {
-      if (!awaitingAppConnection) return
-      setAwaitingAppConnection(false)
+      if (!awaitingAppConnectionId) return
+      setAwaitingAppConnectionId(null)
       void refresh(true)
     }
     window.addEventListener('focus', refreshAfterConnection)
     return () => window.removeEventListener('focus', refreshAfterConnection)
-  }, [awaitingAppConnection, refresh])
+  }, [awaitingAppConnectionId, refresh])
 
   const browseContext: PluginCenterBrowseContext =
     surface.page === 'browse'
@@ -903,7 +971,9 @@ export function PluginCenterPage({
         setMcpDialog,
         setConfirm,
         onManageInstalledPlugins: () => navigateManage('plugins'),
-        onConnectApp: connectApp,
+        onConnectApp: (app) => {
+          if (app.installUrl) void openAppExternal(app, app.installUrl)
+        },
         onOpenCategory: (category) => navigateBrowse('plugins', category),
         onOpenDetails: (plugin) =>
           onSurfaceChange({
@@ -1051,7 +1121,7 @@ export function PluginCenterPage({
               <PluginDetailPage
                 detail={readyDetail.detail}
                 pending={mutation?.id === readyDetail.detail.plugin.id}
-                pendingAppId={mutation?.id}
+                pendingAppId={mutation?.id ?? awaitingAppConnectionId ?? undefined}
                 pendingSkillId={mutation?.id}
                 onInstall={(plugin) =>
                   void runMutation(plugin.id, '安装插件', () =>
@@ -1066,11 +1136,6 @@ export function PluginCenterPage({
                     api!.setPluginEnabled({ ...requestContext, plugin: { id: plugin.id }, enabled })
                   )
                 }
-                onAppToggle={(app, enabled) =>
-                  void runMutation(app.id, enabled ? '启用应用' : '停用应用', () =>
-                    api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled })
-                  )
-                }
                 onSkillToggle={(skill, enabled) =>
                   void runMutation(skill.id, enabled ? '启用技能' : '停用技能', () =>
                     api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled })
@@ -1078,8 +1143,11 @@ export function PluginCenterPage({
                 }
                 onUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
                 onActivatePrompt={(prompt) => void ensurePluginReadyForPrompt(readyDetail, prompt)}
-                onConnectApp={connectApp}
-                onOpenExternal={openExternal}
+                onConnectApp={(app) => void connectApp(app)}
+                onReconnectApp={reconnectApp}
+                onDisconnectApp={disconnectApp}
+                onOpenAppTools={(app) => setSelectedAppId(app.id)}
+                onOpenExternal={(url) => void openExternal(url)}
               />
             )}
           </div>
@@ -1099,6 +1167,34 @@ export function PluginCenterPage({
             }
           }}
         />
+        {selectedApp && (
+          <PluginAppToolsDialog
+            key={selectedApp.id}
+            app={selectedApp}
+            open
+            state={appToolsState}
+            pending={mutation?.id === selectedApp.id || awaitingAppConnectionId === selectedApp.id}
+            onOpenChange={(open) => {
+              if (!open) setSelectedAppId(null)
+            }}
+            onToggle={(enabled) =>
+              void runMutation(selectedApp.id, enabled ? '启用应用' : '停用应用', () =>
+                api!.setAppEnabled({ ...requestContext, app: { id: selectedApp.id }, enabled })
+              )
+            }
+            onTryApp={() => {
+              if (!selectedApp.accessible || !selectedApp.enabled) {
+                return
+              }
+              setSelectedAppId(null)
+              onTryApp?.({ mention: selectedApp.mention })
+            }}
+            onRetry={() => {
+              appToolsResource?.invalidate()
+              void appToolsResource?.refresh(true)
+            }}
+          />
+        )}
         <Toaster position="top-center" richColors closeButton />
       </main>
     )
@@ -1266,13 +1362,13 @@ export function PluginCenterPage({
       <McpServerDialog
         state={mcpDialog}
         onOpenChange={(open) => setMcpDialog((current) => ({ ...current, open }))}
-        onSubmit={(serverId, displayName, server) =>
-          runMutation(
+        onSubmit={async (serverId, displayName, server) => {
+          await runMutation(
             serverId ?? displayName ?? 'new-mcp',
             serverId ? '保存 MCP' : '新增 MCP',
             () => api!.upsertMcpServer({ ...requestContext, serverId, displayName, server })
           )
-        }
+        }}
       />
       <ConfirmDialog
         state={confirm}

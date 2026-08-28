@@ -188,6 +188,7 @@ const runtimeState = vi.hoisted<{
   setSelectedModelId: ReturnType<typeof vi.fn>
   setActiveProjectSelection: ReturnType<typeof vi.fn>
   startNewConversation: ReturnType<typeof vi.fn>
+  startNewConversationWithDraft: ReturnType<typeof vi.fn>
   prepareNewConversation: ReturnType<typeof vi.fn>
   activateConversation: ReturnType<typeof vi.fn>
   openConversation: ReturnType<typeof vi.fn>
@@ -241,6 +242,7 @@ const runtimeState = vi.hoisted<{
   setSelectedModelId: vi.fn(),
   setActiveProjectSelection: vi.fn(),
   startNewConversation: vi.fn(),
+  startNewConversationWithDraft: vi.fn(),
   prepareNewConversation: vi.fn(),
   activateConversation: vi.fn(),
   openConversation: vi.fn(),
@@ -381,6 +383,7 @@ function resetThreadMessageState(): void {
   runtimeState.setSelectedModelId.mockResolvedValue(undefined)
   runtimeState.setActiveProjectSelection.mockReset()
   runtimeState.startNewConversation.mockReset()
+  runtimeState.startNewConversationWithDraft.mockReset()
   runtimeState.prepareNewConversation.mockReset()
   runtimeState.activateConversation.mockReset()
   runtimeState.openConversation.mockReset()
@@ -770,6 +773,7 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
       modelSelectionError: runtimeState.modelSelectionError,
       activeConversation: runtimeState.activeConversation,
       startNewConversation: runtimeState.startNewConversation,
+      startNewConversationWithDraft: runtimeState.startNewConversationWithDraft,
       prepareNewConversation: runtimeState.prepareNewConversation,
       activateConversation: runtimeState.activateConversation,
       openConversation: runtimeState.openConversation,
@@ -2161,6 +2165,31 @@ describe('App composer', () => {
     expect(pluginCenterPagePropsState.lastProps?.cwd).toBe('/repo')
     expect(runtimeState.startNewConversation).not.toHaveBeenCalled()
     expect(runtimeState.openConversation).not.toHaveBeenCalled()
+  })
+
+  it('starts an unsent conversation draft when an app is tried from Plugin Center', async () => {
+    act(() => {
+      root.render(<App />)
+    })
+    const plugins = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '插件'
+    )
+    await act(async () => {
+      plugins?.click()
+      await Promise.resolve()
+    })
+
+    const onTryApp = pluginCenterPagePropsState.lastProps?.onTryApp as
+      ((input: { mention: { path: string; name: string } }) => void) | undefined
+    expect(onTryApp).toBeTypeOf('function')
+    await act(async () => {
+      onTryApp?.({ mention: { path: 'app://github-app', name: 'github' } })
+    })
+
+    expect(runtimeState.startNewConversationWithDraft).toHaveBeenCalledWith(
+      ':app[github]{name=app%3A%2F%2Fgithub-app}'
+    )
+    expect(runtimeState.activeEntry.controller.sendMessage).not.toHaveBeenCalled()
   })
 
   it('does not pass a remote conversation cwd to the plugin center', async () => {

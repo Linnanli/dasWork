@@ -9,9 +9,12 @@ import type { FuzzyFileSearchResult } from "./protocol/app-server-protocol/Fuzzy
 import type { JsonValue } from "./protocol/app-server-protocol/serde_json/JsonValue";
 import type { AppInfo } from "./protocol/app-server-protocol/v2/AppInfo";
 import type { AppsListResponse } from "./protocol/app-server-protocol/v2/AppsListResponse";
+import type { AppsReadParams } from "./protocol/app-server-protocol/v2/AppsReadParams";
+import type { AppsReadResponse } from "./protocol/app-server-protocol/v2/AppsReadResponse";
 import type { ConfigBatchWriteParams } from "./protocol/app-server-protocol/v2/ConfigBatchWriteParams";
 import type { ConfigReadResponse } from "./protocol/app-server-protocol/v2/ConfigReadResponse";
 import type { ConfigWriteResponse } from "./protocol/app-server-protocol/v2/ConfigWriteResponse";
+import type { ConnectorMetadata } from "./protocol/app-server-protocol/v2/ConnectorMetadata";
 import type { ListMcpServerStatusResponse } from "./protocol/app-server-protocol/v2/ListMcpServerStatusResponse";
 import type { MarketplaceAddParams } from "./protocol/app-server-protocol/v2/MarketplaceAddParams";
 import type { MarketplaceAddResponse } from "./protocol/app-server-protocol/v2/MarketplaceAddResponse";
@@ -115,9 +118,17 @@ export interface CodexAppsManagementPage
     nextCursor?: string;
 }
 
-interface AppReadResponse
+export interface CodexAppsReadParams
 {
-    apps: AppInfo[];
+    appIds: string[];
+    threadId?: AppsReadParams["threadId"];
+    includeTools?: AppsReadParams["includeTools"];
+}
+
+export interface CodexAppsManagementReadResult
+{
+    apps: ConnectorMetadata[];
+    missingAppIds: string[];
 }
 
 export interface CodexFuzzyFileSearchSession
@@ -383,25 +394,30 @@ export class CodexContextCatalogClient
         });
     }
 
-    async readAppsForManagement(params: { appIds: string[] }): Promise<AppInfo[]>
+    async readAppsForManagement(params: CodexAppsReadParams): Promise<CodexAppsManagementReadResult>
     {
         const appIds = [...new Set(params.appIds.filter(Boolean))];
         if (appIds.length === 0)
         {
-            return [];
+            return { apps: [], missingAppIds: [] };
         }
 
         return this.withClient(async (client) =>
         {
-            const apps: AppInfo[] = [];
+            const apps: ConnectorMetadata[] = [];
+            const missingAppIds: string[] = [];
             for (let start = 0; start < appIds.length; start += 100)
             {
-                const response = await client.request<AppReadResponse>("app/read", {
+                const request = stripUndefined({
                     appIds: appIds.slice(start, start + 100),
-                });
+                    threadId: params.threadId,
+                    includeTools: params.includeTools,
+                }) satisfies AppsReadParams;
+                const response = await client.request<AppsReadResponse>("app/read", request);
                 apps.push(...response.apps);
+                missingAppIds.push(...(response.missingAppIds ?? []));
             }
-            return apps;
+            return { apps, missingAppIds };
         });
     }
 
@@ -410,6 +426,11 @@ export class CodexContextCatalogClient
     ): Promise<CodexAppsManagementPage>
     {
         return this.withClient((client) => this.requestAppsManagementPage(client, params, params.cursor));
+    }
+
+    async readConfigForManagement(params: { cwd?: string } = {}): Promise<ConfigReadResponse>
+    {
+        return this.withClient((client) => this.readConfig(client, params.cwd));
     }
 
     async readMcpManagementSnapshot(params: { cwd?: string; threadId?: string | null } = {}): Promise<CodexMcpManagementSnapshot>
