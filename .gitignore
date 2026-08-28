@@ -1,6 +1,7 @@
 .code-review-graph
 .vscode
 /node_modules/
+/.pnpm-store/
 /reference-projects/
 
 # Local OMX runtime state and one-off capture output.

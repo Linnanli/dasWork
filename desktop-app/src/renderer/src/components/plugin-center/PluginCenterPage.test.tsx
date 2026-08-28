@@ -608,6 +608,50 @@ describe('PluginCenterPage', () => {
     expect(openExternalHttpUrl).not.toHaveBeenCalled()
   })
 
+  it('reloads cached app tools after changing the app while its dialog is closed', async () => {
+    const installedPlugin = { ...baseSnapshot.plugins[0], installed: true, enabled: true }
+    const api = pluginApiMock({ ...baseSnapshot, plugins: [installedPlugin] })
+    const detail = pluginDetailResult(installedPlugin)
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps[0] = { ...detail.detail.apps[0]!, enabled: false }
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    const appOpen = container.querySelector<HTMLButtonElement>(
+      '[data-slot="plugin-detail-app-open"]'
+    )
+
+    await act(async () => {
+      appOpen?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.getAppTools).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')?.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-slot="plugin-detail-app"] button[aria-label="连接 GitHub App"]'
+        )
+        ?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      appOpen?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.getAppTools).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
     {
       name: 'uninstalled plugin',

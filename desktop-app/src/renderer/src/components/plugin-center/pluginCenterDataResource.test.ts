@@ -14,6 +14,7 @@ import {
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
   getPluginCenterSupplementalResource,
+  invalidatePluginCenterAppToolsResource,
   mergePluginCatalogWithInstalled,
   prefetchPluginCenterData,
   subscribePluginCenterData
@@ -292,6 +293,17 @@ describe('pluginCenterDataResource', () => {
 
     vi.setSystemTime(Date.now() + 5 * 60_000 + 1)
     await resource.prefetch()
+    expect(api.getAppTools).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates one cached app tool list by cwd, thread, and app identity', async () => {
+    const api = createApi()
+    const resource = getPluginCenterAppToolsResource(api, 'github-app', '/repo/', 'thread-a')
+
+    await resource.prefetch()
+    invalidatePluginCenterAppToolsResource(api, 'github-app', '/repo', 'thread-a')
+    await resource.prefetch()
+
     expect(api.getAppTools).toHaveBeenCalledTimes(2)
   })
 

@@ -68,6 +68,7 @@ import {
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
   getPluginCenterSupplementalResource,
+  invalidatePluginCenterAppToolsResource,
   mergePluginCatalogWithInstalled,
   type PluginCenterResource,
   type PluginCenterResourceSnapshot,
@@ -729,8 +730,9 @@ export function PluginCenterPage({
   )
 
   const applyMutationResult = React.useCallback(
-    async (result: PluginCenterMutationResult): Promise<void> => {
+    async (result: PluginCenterMutationResult, fallbackChangedItemId?: string): Promise<void> => {
       const changedSections = new Set(result.changedSections)
+      const changedItemId = result.changedItemId ?? fallbackChangedItemId
       const readbacks: Promise<void>[] = []
       if (changedSections.has('installed') && installedResource) {
         installedResource.invalidate()
@@ -744,9 +746,11 @@ export function PluginCenterPage({
         detailResource.invalidate()
         readbacks.push(detailResource.refresh(true))
       }
-      if (changedSections.has('apps') && appToolsResource) {
-        appToolsResource.invalidate()
-        readbacks.push(appToolsResource.refresh(true))
+      if (changedSections.has('apps') && api && changedItemId) {
+        invalidatePluginCenterAppToolsResource(api, changedItemId, cwd, threadId)
+        if (appToolsResource && selectedAppId === changedItemId) {
+          readbacks.push(appToolsResource.refresh(true))
+        }
       }
       const supplementalSections: PluginCenterSupplementalSection[] = []
       for (const section of changedSections) {
@@ -761,10 +765,14 @@ export function PluginCenterPage({
     },
     [
       appToolsResource,
+      api,
       catalogResource,
+      cwd,
       detailResource,
       installedResource,
-      refreshSupplementalSections
+      refreshSupplementalSections,
+      selectedAppId,
+      threadId
     ]
   )
 
@@ -807,7 +815,7 @@ export function PluginCenterPage({
       setActionError(null)
       try {
         const result = await action()
-        await applyMutationResult(result)
+        await applyMutationResult(result, id)
         if (result.status === 'overridden' || result.status === 'partial') {
           toast.warning(result.message ?? `${label}需要重新确认`)
         } else {
@@ -883,12 +891,15 @@ export function PluginCenterPage({
   React.useEffect(() => {
     const refreshAfterConnection = (): void => {
       if (!awaitingAppConnectionId) return
+      if (api) {
+        invalidatePluginCenterAppToolsResource(api, awaitingAppConnectionId, cwd, threadId)
+      }
       setAwaitingAppConnectionId(null)
       void refresh(true)
     }
     window.addEventListener('focus', refreshAfterConnection)
     return () => window.removeEventListener('focus', refreshAfterConnection)
-  }, [awaitingAppConnectionId, refresh])
+  }, [api, awaitingAppConnectionId, cwd, refresh, threadId])
 
   const browseContext: PluginCenterBrowseContext =
     surface.page === 'browse'

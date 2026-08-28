@@ -1302,6 +1302,42 @@ describe('PluginCenterService', () => {
     expect(JSON.stringify(result)).not.toContain('/repo/.codex')
   })
 
+  it('keeps app tools available when configuration origins cannot be read', async () => {
+    const provider = createProvider({
+      readAppsForManagement: vi.fn(async () => ({
+        apps: [
+          {
+            id: 'github-app',
+            toolSummaries: [
+              {
+                name: 'github.search',
+                isEnabled: true,
+                isReadOnly: true
+              }
+            ]
+          }
+        ],
+        missingAppIds: []
+      })),
+      readConfigForManagement: vi.fn(async () => {
+        throw new Error('config unavailable')
+      })
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getAppTools({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      app: { id: 'github-app' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      app: { id: 'github-app' },
+      tools: [{ name: 'github.search', enabled: true, readOnly: true }]
+    })
+  })
+
   it('builds safe settings URLs and stable app mentions from app/read metadata', async () => {
     const provider = createProvider({
       readPluginDetailForManagement: vi.fn(async () => ({
@@ -1330,8 +1366,7 @@ describe('PluginCenterService', () => {
           },
           {
             id: 'remote-plugin',
-            name: 'Remote Plugin',
-            remotePluginId: 'rp/123'
+            name: 'Remote Plugin'
           },
           {
             id: 'unsafe-app',
@@ -1363,7 +1398,7 @@ describe('PluginCenterService', () => {
           {
             id: 'remote-plugin',
             settingsUrl:
-              'https://chatgpt.com/plugins/rp%2F123#settings/Plugins/rp%2F123?product-sku=CODEX'
+              'https://chatgpt.com/plugins#settings/Connectors?connector=remote-plugin&product-sku=CODEX&referrer=codex'
           },
           {
             id: 'unsafe-app'
@@ -1377,6 +1412,47 @@ describe('PluginCenterService', () => {
         : undefined
     expect(unsafeApp?.installUrl).toBeUndefined()
     expect(unsafeApp?.settingsUrl).toBeUndefined()
+  })
+
+  it('builds remote plugin settings URLs from plugin summary metadata', async () => {
+    const provider = createProvider({
+      readPluginDetailForManagement: vi.fn(async () => ({
+        summary: {
+          id: 'git@official',
+          name: 'git',
+          installed: true,
+          enabled: true,
+          source: { type: 'local', path: '/plugins/git' },
+          remotePluginId: 'rp/123'
+        },
+        apps: [{ id: 'remote-app', name: 'Remote App' }],
+        skills: [],
+        mcpServers: []
+      })),
+      readAppsForManagement: vi.fn(async () => ({
+        apps: [{ id: 'remote-app', name: 'Remote App' }],
+        missingAppIds: []
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getPluginDetail({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'git@official', marketplaceId: 'official' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      detail: {
+        apps: [
+          {
+            id: 'remote-app',
+            settingsUrl:
+              'https://chatgpt.com/plugins/rp%2F123#settings/Plugins/rp%2F123?product-sku=CODEX'
+          }
+        ]
+      }
+    })
   })
 
   it('reads and projects a single safe plugin detail without batch detail reads', async () => {

@@ -76,6 +76,10 @@ function normalizeCwd(cwd?: string): string {
   return trimmed.replace(/\/+$/, '')
 }
 
+function appToolsResourceKey(appId: string, cwd?: string, threadId?: string): string {
+  return `${normalizeCwd(cwd)}\u0000${threadId?.trim() ?? ''}\u0000${appId}`
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '读取插件中心失败'
 }
@@ -448,7 +452,7 @@ export function getPluginCenterAppToolsResource(
 ): PluginCenterResource<PluginCenterGetAppToolsResult> {
   const normalizedCwd = normalizeCwd(cwd)
   const normalizedThreadId = threadId?.trim() ?? ''
-  const key = `${normalizedCwd}\u0000${normalizedThreadId}\u0000${appId}`
+  const key = appToolsResourceKey(appId, normalizedCwd, normalizedThreadId)
   const resources = resourcesForApi(api)
   const existing = resources.appTools.get(key)
   if (existing) {
@@ -475,6 +479,16 @@ export function getPluginCenterAppToolsResource(
   resources.appTools.set(key, resource)
   evictOldestCwdResource(resources.appTools, MAX_APP_TOOLS_RESOURCES)
   return resource
+}
+
+export function invalidatePluginCenterAppToolsResource(
+  api: DesktopPluginCenterApi,
+  appId: string,
+  cwd?: string,
+  threadId?: string
+): void {
+  const key = appToolsResourceKey(appId, cwd, threadId)
+  resourcesByApi.get(api)?.appTools.get(key)?.invalidate()
 }
 
 export async function prefetchPluginCenterData(

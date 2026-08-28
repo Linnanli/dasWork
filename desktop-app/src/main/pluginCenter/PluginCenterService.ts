@@ -451,16 +451,21 @@ export class PluginCenterService {
       })
     }
 
-    const config = this.dependencies.provider.readConfigForManagement
-      ? normalizeConfigReadSnapshot(
-          await this.dependencies.provider.readConfigForManagement({ cwd: this.cwdFor(input) })
-        )
-      : undefined
+    let configOrigins: ConfigReadSnapshot['origins'] = {}
+    const readConfigForManagement = this.dependencies.provider.readConfigForManagement
+    if (readConfigForManagement) {
+      const configResult = await safeRead(() =>
+        readConfigForManagement.call(this.dependencies.provider, { cwd: this.cwdFor(input) })
+      )
+      if (configResult.ok) {
+        configOrigins = normalizeConfigReadSnapshot(configResult.value).origins
+      }
+    }
     return pluginCenterGetAppToolsResultSchema.parse({
       version: PLUGIN_CENTER_API_VERSION,
       status: 'ready',
       app: { id: input.app.id },
-      tools: normalizeAppToolSummaries(app, input.app.id, config?.origins ?? {})
+      tools: normalizeAppToolSummaries(app, input.app.id, configOrigins)
     })
   }
 
@@ -1245,6 +1250,7 @@ function normalizePluginDetail(
   const capabilities = uniqueStrings(
     arrayValue(interfaceInfo.capabilities).map(displayTextValue).filter(Boolean)
   ).slice(0, 30)
+  const remotePluginId = stringValue(detailSummary.remotePluginId) || undefined
   const readAppsById = new Map(
     normalizeReadAppsResponse(rawReadApps)
       .apps.map(objectValue)
@@ -1286,11 +1292,7 @@ function normalizePluginDetail(
     const settingsUrl = buildAppSettingsUrl({
       appId: id,
       installUrl: rawInstallUrl,
-      remotePluginId:
-        stringValue(readApp?.remotePluginId) ||
-        stringValue(directoryApp?.remotePluginId) ||
-        stringValue(pluginApp.remotePluginId) ||
-        undefined
+      remotePluginId
     })
     const category =
       displayTextValue(pluginApp.category) ||
