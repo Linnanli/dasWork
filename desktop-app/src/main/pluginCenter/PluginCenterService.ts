@@ -166,8 +166,8 @@ const REMOTE_CATALOG_LOCAL_ONLY_MESSAGE =
 
 /**
  * Translates the app-server catalog into the safe, product-facing Plugin
- * Center DTO.  Mutations are serialized per target so a double click cannot
- * win a race against its own readback.
+ * Center DTO. Mutations are serialized per target so repeated writes cannot
+ * race each other.
  */
 export class PluginCenterService {
   private readonly mutationQueues = new Map<string, Promise<unknown>>()
@@ -839,15 +839,11 @@ export class PluginCenterService {
       })
       const skill = snapshot.snapshot.skills.find((candidate) => candidate.id === input.skill.id)
       if (!skill) throw new Error('Skill is no longer available')
-      await this.dependencies.provider.setSkillEnabled({
-        ...(skill.id.startsWith('/') ? { path: skill.id } : { name: skill.name }),
+      const write = await this.dependencies.provider.setSkillEnabled({
+        ...(skill.name.includes(':') ? { name: skill.name } : { path: skill.id }),
         enabled: input.enabled
       })
-      return this.successWithSnapshot(input, input.skill.id, ['skills'], undefined, (snapshot) =>
-        snapshot.skills.some(
-          (candidate) => candidate.id === input.skill.id && candidate.enabled === input.enabled
-        )
-      )
+      return this.successAfterWrite(input.skill.id, ['skills'], write)
     })
   }
 
@@ -1014,6 +1010,39 @@ export class PluginCenterService {
     for (const key of this.singlePluginDetailCache.keys()) {
       if (key.startsWith(prefix)) this.singlePluginDetailCache.delete(key)
     }
+  }
+
+  private successAfterWrite(
+    changedItemId: string,
+    changedSections: PluginCenterChangedSection[],
+    write: unknown
+  ): PluginCenterMutationResult {
+    const response = objectValue(objectValue(write).response)
+    const overridden = stringValue(response.status) === 'okOverridden'
+    const writeStatus = stringValue(response.status)
+    const reloadFailed = stringValue(objectValue(write).reloadStatus) === 'failed'
+    const status = mutationStatus({
+      overridden,
+      reloadFailed,
+      writeStatus,
+      verified: true
+    })
+    this.logPerformance('mutation:write', {
+      hasChangedItemId: Boolean(changedItemId),
+      changedSections: changedSections.join(','),
+      status
+    })
+    return pluginCenterMutationResultSchema.parse({
+      version: PLUGIN_CENTER_API_VERSION,
+      status,
+      ...(overridden ? { message: '设置已被更高优先级的配置覆盖' } : {}),
+      ...(!overridden && reloadFailed ? { message: '配置已写入，但 MCP 运行时重载失败' } : {}),
+      ...(!overridden && !reloadFailed && status === 'partial'
+        ? { message: '配置写入未完全确认' }
+        : {}),
+      changedItemId,
+      changedSections
+    })
   }
 
   private async successWithSnapshot(

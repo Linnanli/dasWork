@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import { OptimisticSkillSwitch } from './OptimisticSkillSwitch'
 import { PluginImage } from './PluginImage'
 
 type PluginDetailSkill = PluginCenterPluginDetail['skills'][number]
@@ -51,7 +52,7 @@ export function PluginDetailPage({
   pendingSkillId?: string
   onInstall: (plugin: PluginCenterPlugin) => void
   onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
-  onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => void
+  onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => Promise<boolean>
   onUninstall: (plugin: PluginCenterPlugin) => void
   onActivatePrompt: (prompt: string) => void
   onConnectApp: (app: PluginDetailApp) => void
@@ -270,7 +271,7 @@ function Includes({
   onReconnectApp: (app: PluginDetailApp) => void
   onDisconnectApp: (app: PluginDetailApp) => void
   onOpenAppTools: (app: PluginDetailApp) => void
-  onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => void
+  onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => Promise<boolean>
 }): React.JSX.Element | null {
   if (detail.apps.length === 0 && detail.skills.length === 0 && detail.mcpServers.length === 0) {
     return null
@@ -317,12 +318,14 @@ function Includes({
                   </p>
                 )}
               </div>
-              <Switch
-                checked={skill.enabled}
+              <OptimisticSkillSwitch
+                enabled={skill.enabled}
                 disabled={pendingSkillId === skill.id || !skill.canToggle}
-                aria-label={`${skill.displayName ?? skill.name} ${skill.enabled ? '停用' : '启用'}`}
+                getAriaLabel={(enabled) =>
+                  `${skill.displayName ?? skill.name} ${enabled ? '停用' : '启用'}`
+                }
                 title={skill.canToggle ? undefined : '请先安装并启用所属插件'}
-                onCheckedChange={(enabled) => onSkillToggle(skill, enabled)}
+                onToggle={(enabled) => onSkillToggle(skill, enabled)}
               />
             </div>
           ))}
