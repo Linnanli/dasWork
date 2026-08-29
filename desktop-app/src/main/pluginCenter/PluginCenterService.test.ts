@@ -1005,7 +1005,7 @@ describe('PluginCenterService', () => {
     expect(provider.listAppsForManagement).not.toHaveBeenCalled()
   })
 
-  it('writes a plugin detail skill through its installed path', async () => {
+  it('writes an unqualified plugin detail skill through its installed path', async () => {
     const skillPath = '/plugins/git/skills/review/SKILL.md'
     let enabled = true
     const provider = createProvider({
@@ -1027,6 +1027,49 @@ describe('PluginCenterService', () => {
 
     expect(provider.setSkillEnabled).toHaveBeenCalledWith({ path: skillPath, enabled: false })
     expect(result).toMatchObject({ status: 'applied', changedSections: ['skills'] })
+  })
+
+  it('writes a qualified plugin detail skill by name', async () => {
+    const skillPath = '/plugins/git/skills/review/SKILL.md'
+    let enabled = true
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        { name: 'git:review', path: skillPath, scope: 'plugin', enabled }
+      ]),
+      setSkillEnabled: vi.fn(async (input) => {
+        enabled = input.enabled
+        return {}
+      })
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.setSkillEnabled({
+      version: PLUGIN_CENTER_API_VERSION,
+      skill: { id: skillPath },
+      enabled: false
+    })
+
+    expect(provider.setSkillEnabled).toHaveBeenCalledWith({ name: 'git:review', enabled: false })
+    expect(result).toMatchObject({ status: 'applied', changedSections: ['skills'] })
+  })
+
+  it('does not wait for a post-write skill readback', async () => {
+    const skillPath = '/skills/writer/SKILL.md'
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        { name: 'writer', path: skillPath, scope: 'user', enabled: true }
+      ])
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.setSkillEnabled({
+      version: PLUGIN_CENTER_API_VERSION,
+      skill: { id: skillPath },
+      enabled: false
+    })
+
+    expect(result).toMatchObject({ status: 'applied', changedSections: ['skills'] })
+    expect(provider.listSkillsForManagement).toHaveBeenCalledTimes(1)
   })
 
   it('does not synchronously refresh the full catalog after adding a marketplace', async () => {
@@ -1146,8 +1189,8 @@ describe('PluginCenterService', () => {
 
     expect(events).toContainEqual(
       expect.objectContaining({
-        event: 'mutation:readback',
-        details: expect.objectContaining({ hasChangedItemId: true, readbackType: 'snapshot' })
+        event: 'mutation:write',
+        details: expect.objectContaining({ hasChangedItemId: true, changedSections: 'skills' })
       })
     )
     expect(JSON.stringify(events)).not.toContain('/skills/writer/SKILL.md')

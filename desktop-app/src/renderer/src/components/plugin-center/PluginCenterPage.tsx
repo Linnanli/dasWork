@@ -60,6 +60,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
+import { OptimisticSkillSwitch } from './OptimisticSkillSwitch'
 import { PluginImage } from './PluginImage'
 import {
   getPluginCenterCatalogResource,
@@ -108,6 +109,7 @@ export type PluginCenterPageProps = {
 }
 
 type MutationStatus = { id: string; label: string } | null
+type MutationOptions = { refreshInBackground?: boolean }
 type BrowsePluginsLoadingState = {
   catalog: boolean
   installed: boolean
@@ -302,8 +304,9 @@ function resolveContentView({
   runMutation: (
     id: string,
     label: string,
-    action: () => Promise<PluginCenterMutationResult>
-  ) => Promise<void>
+    action: () => Promise<PluginCenterMutationResult>,
+    options?: MutationOptions
+  ) => Promise<boolean>
   setMcpDialog: React.Dispatch<React.SetStateAction<McpDialogState>>
   setConfirm: React.Dispatch<React.SetStateAction<ConfirmState>>
   onManageInstalledPlugins: () => void
@@ -347,8 +350,11 @@ function resolveContentView({
         skills={snapshot.skills.filter((item) => matchesSearch(item, search))}
         pendingId={mutation?.id}
         onToggle={(skill, enabled) =>
-          void runMutation(skill.id, enabled ? '启用技能' : '停用技能', () =>
-            api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled })
+          runMutation(
+            skill.id,
+            enabled ? '启用技能' : '停用技能',
+            () => api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled }),
+            { refreshInBackground: true }
           )
         }
       />
@@ -374,8 +380,11 @@ function resolveContentView({
         )
       }
       onSkillToggle={(skill, enabled) =>
-        void runMutation(skill.id, enabled ? '启用技能' : '停用技能', () =>
-          api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled })
+        runMutation(
+          skill.id,
+          enabled ? '启用技能' : '停用技能',
+          () => api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled }),
+          { refreshInBackground: true }
         )
       }
       onMcpToggle={(server, enabled) =>
@@ -771,23 +780,30 @@ export function PluginCenterPage({
     async (
       id: string,
       label: string,
-      action: () => Promise<PluginCenterMutationResult>
-    ): Promise<void> => {
-      if (!api) return
+      action: () => Promise<PluginCenterMutationResult>,
+      options: MutationOptions = {}
+    ): Promise<boolean> => {
+      if (!api) return false
       setMutation({ id, label })
       setActionError(null)
       try {
         const result = await action()
-        await applyMutationResult(result)
+        if (options.refreshInBackground) {
+          void applyMutationResult(result)
+        } else {
+          await applyMutationResult(result)
+        }
         if (result.status === 'overridden' || result.status === 'partial') {
           toast.warning(result.message ?? `${label}需要重新确认`)
         } else {
           toast.success(result.message ?? `${label}完成`)
         }
+        return true
       } catch (nextError) {
         const message = nextError instanceof Error ? nextError.message : `${label}失败`
         setActionError(message)
         toast.error(message)
+        return false
       } finally {
         setMutation(null)
       }
@@ -1072,8 +1088,12 @@ export function PluginCenterPage({
                   )
                 }
                 onSkillToggle={(skill, enabled) =>
-                  void runMutation(skill.id, enabled ? '启用技能' : '停用技能', () =>
-                    api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled })
+                  runMutation(
+                    skill.id,
+                    enabled ? '启用技能' : '停用技能',
+                    () =>
+                      api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled }),
+                    { refreshInBackground: true }
                   )
                 }
                 onUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
@@ -1266,13 +1286,13 @@ export function PluginCenterPage({
       <McpServerDialog
         state={mcpDialog}
         onOpenChange={(open) => setMcpDialog((current) => ({ ...current, open }))}
-        onSubmit={(serverId, displayName, server) =>
-          runMutation(
+        onSubmit={async (serverId, displayName, server) => {
+          await runMutation(
             serverId ?? displayName ?? 'new-mcp',
             serverId ? '保存 MCP' : '新增 MCP',
             () => api!.upsertMcpServer({ ...requestContext, serverId, displayName, server })
           )
-        }
+        }}
       />
       <ConfirmDialog
         state={confirm}
@@ -2039,7 +2059,7 @@ function BrowseSkills({
 }: {
   skills: PluginCenterSkill[]
   pendingId?: string
-  onToggle: (skill: PluginCenterSkill, enabled: boolean) => void
+  onToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
 }): React.JSX.Element {
   if (skills.length === 0) {
     return (
@@ -2094,7 +2114,7 @@ function SkillRow({
 }: {
   skill: PluginCenterSkill
   pending: boolean
-  onToggle: (skill: PluginCenterSkill, enabled: boolean) => void
+  onToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
 }): React.JSX.Element {
   return (
     <article className="flex items-center gap-3 rounded-lg border bg-card p-3">
@@ -2108,12 +2128,12 @@ function SkillRow({
           values={[scopeLabel(skill.scope), skill.pluginDisplayName, sourceLabel(skill.sourceKind)]}
         />
       </div>
-      <Switch
-        checked={skill.enabled}
+      <OptimisticSkillSwitch
+        enabled={skill.enabled}
         disabled={pending || !skill.canToggle}
+        getAriaLabel={(enabled) => `${itemTitle(skill)} ${enabled ? '停用' : '启用'}`}
         title={skill.restriction?.message}
-        aria-label={`${itemTitle(skill)} ${skill.enabled ? '停用' : '启用'}`}
-        onCheckedChange={(enabled) => onToggle(skill, enabled)}
+        onToggle={(enabled) => onToggle(skill, enabled)}
       />
     </article>
   )
@@ -2142,7 +2162,7 @@ function ManagePanel({
   onPluginUninstall: (plugin: PluginCenterPlugin) => void
   onConnectApp: (app: PluginCenterApp) => void
   onAppToggle: (app: PluginCenterApp, enabled: boolean) => void
-  onSkillToggle: (skill: PluginCenterSkill, enabled: boolean) => void
+  onSkillToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
   onMcpToggle: (server: PluginCenterUserMcpServer, enabled: boolean) => void
   onMcpEdit: (server: PluginCenterUserMcpServer) => void
   onMcpRemove: (server: PluginCenterUserMcpServer) => void

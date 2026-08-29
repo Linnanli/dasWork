@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DesktopPluginCenterApi,
   PluginCenterGetPluginDetailResult,
+  PluginCenterMutationResult,
   PluginCenterSnapshot
 } from '../../../../shared/pluginCenterApi'
 import { PLUGIN_CENTER_API_VERSION } from '../../../../shared/pluginCenterApi'
@@ -17,14 +18,17 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 type Deferred<T> = {
   promise: Promise<T>
   resolve(value: T): void
+  reject(reason?: unknown): void
 }
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((nextResolve) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve
+    reject = nextReject
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 beforeEach(() => {
@@ -560,6 +564,68 @@ describe('PluginCenterPage', () => {
       skill: { id: 'github-review' },
       enabled: false
     })
+  })
+
+  it('updates a plugin detail skill switch before its write completes', async () => {
+    const write = deferred<PluginCenterMutationResult>()
+    const api = pluginApiMock(baseSnapshot)
+    vi.mocked(api.setSkillEnabled).mockReturnValue(write.promise)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="GitHub review 停用"]'
+    )
+
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('data-state')).toBe('unchecked')
+    expect(toggle?.disabled).toBe(true)
+
+    await act(async () => {
+      write.resolve({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'applied',
+        changedSections: ['skills']
+      })
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('data-state')).toBe('unchecked')
+    expect(toggle?.disabled).toBe(false)
+  })
+
+  it('rolls back a plugin detail skill switch when its write fails', async () => {
+    const write = deferred<PluginCenterMutationResult>()
+    const api = pluginApiMock(baseSnapshot)
+    vi.mocked(api.setSkillEnabled).mockReturnValue(write.promise)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="GitHub review 停用"]'
+    )
+
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('data-state')).toBe('unchecked')
+
+    await act(async () => {
+      write.reject(new Error('无法保存技能设置'))
+      await write.promise.catch(() => undefined)
+      await Promise.resolve()
+    })
+
+    expect(toggle?.getAttribute('data-state')).toBe('checked')
+    expect(toggle?.disabled).toBe(false)
   })
 
   it('writes the included app enabled state from plugin details', async () => {
