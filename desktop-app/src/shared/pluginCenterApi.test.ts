@@ -7,6 +7,8 @@ import {
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetSkillContentsRequestSchema,
+  pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterMutationResultSchema,
@@ -175,7 +177,8 @@ describe('plugin center API schemas', () => {
     expect(
       pluginCenterInstalledPluginsRequestSchema.safeParse({
         version: PLUGIN_CENTER_API_VERSION,
-        cwd: '/repo'
+        cwd: '/repo',
+        forceRefresh: true
       }).success
     ).toBe(true)
     expect(
@@ -503,6 +506,69 @@ describe('plugin center API schemas', () => {
             }
           }
         ]
+      }).success
+    ).toBe(false)
+  })
+
+  it('loads skill contents through plugin and skill identity only', () => {
+    expect(
+      pluginCenterGetSkillContentsRequestSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        plugin: { id: 'github@official', marketplaceId: 'official' },
+        skill: { id: 'plugin:github@official:review', name: 'review' },
+        forceRefresh: true
+      })
+    ).toEqual({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      plugin: { id: 'github@official', marketplaceId: 'official' },
+      skill: { id: 'plugin:github@official:review', name: 'review' },
+      forceRefresh: true
+    })
+    expect(
+      pluginCenterGetSkillContentsRequestSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        plugin: { id: 'github@official' },
+        skill: { id: 'review', name: 'review', path: '/private/SKILL.md' }
+      }).success
+    ).toBe(false)
+    expect(
+      pluginCenterGetSkillContentsRequestSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        plugin: { id: 'github@official' },
+        skill: { id: 'review', name: 'review' },
+        method: 'fs/readFile'
+      }).success
+    ).toBe(false)
+
+    expect(
+      pluginCenterGetSkillContentsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        plugin: { id: 'github@official', marketplaceId: 'official' },
+        skill: { id: 'plugin:github@official:review', name: 'review' },
+        contents: '# Review\nUse carefully.',
+        localPath: '/trusted/SKILL.md'
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterGetSkillContentsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'missing',
+        plugin: { id: 'github@official' },
+        skill: { id: 'review', name: 'review' },
+        missingReason: 'unavailable'
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterGetSkillContentsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        plugin: { id: 'github@official' },
+        skill: { id: 'review', name: 'review' },
+        contents: '# Review',
+        backendPath: '/private/SKILL.md'
       }).success
     ).toBe(false)
   })

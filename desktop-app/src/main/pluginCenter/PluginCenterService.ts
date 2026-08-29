@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url'
 import {
   PLUGIN_CENTER_API_VERSION,
   PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH,
+  PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES,
   pluginCenterAddMarketplaceResultSchema,
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterMutationResultSchema,
   pluginCenterSnapshotResultSchema,
@@ -21,6 +23,8 @@ import {
   type PluginCenterGetAppToolsResult,
   type PluginCenterGetPluginDetailRequest,
   type PluginCenterGetPluginDetailResult,
+  type PluginCenterGetSkillContentsRequest,
+  type PluginCenterGetSkillContentsResult,
   type PluginCenterHttpMcpServer,
   type PluginCenterInstalledPluginsRequest,
   type PluginCenterInstalledPluginsResult,
@@ -55,6 +59,13 @@ export type PluginCenterProvider = {
     remoteMarketplaceName?: string
     pluginName: string
   }): Promise<unknown>
+  readSkillFileContents?(input: { path: string; maxBytes?: number }): Promise<string>
+  readRemotePluginSkillContents?(input: {
+    remoteMarketplaceName: string
+    remotePluginId: string
+    skillName: string
+    maxBytes?: number
+  }): Promise<string | null>
   listSkillsForManagement(input: { cwd?: string; forceReload?: boolean }): Promise<unknown>
   readAppsForManagement?(input: {
     appIds: string[]
@@ -110,7 +121,8 @@ type SnapshotCapability = NonNullable<PluginCenterSnapshot['capabilities']>[keyo
 >]
 
 type SafeResult<T> =
-  { ok: true; value: T } | { ok: false; restriction: SnapshotCapability['restriction'] }
+  | { ok: true; value: T }
+  | { ok: false; restriction: SnapshotCapability['restriction'] }
 
 type PluginCenterPerformanceLogger = (
   event: string,
@@ -118,7 +130,12 @@ type PluginCenterPerformanceLogger = (
 ) => void
 
 type SnapshotReadName =
-  'plugin/list' | 'plugin/installed' | 'plugin-details' | 'skills/list' | 'app/list' | 'mcp'
+  | 'plugin/list'
+  | 'plugin/installed'
+  | 'plugin-details'
+  | 'skills/list'
+  | 'app/list'
+  | 'mcp'
 type CachedReadName = 'catalog' | 'installed'
 
 type SharedCacheEntry<T> = {
@@ -142,6 +159,7 @@ type PluginLocator = {
   plugin: JsonRecord
   marketplace: JsonRecord
   pluginName: string
+  remotePluginId?: string
   marketplaceName: string
   marketplacePath?: string
   remoteMarketplaceName?: string
@@ -150,6 +168,14 @@ type PluginLocator = {
 type PluginLocatorResult =
   | { status: 'ready'; locator: PluginLocator }
   | { status: 'missing'; missingReason: 'not_found' | 'ambiguous' }
+
+function pluginReadOrInstallRequestName(locator: PluginLocator): string {
+  return locator.remotePluginId ?? locator.pluginName
+}
+
+function pluginUninstallRequestId(locator: PluginLocator): string {
+  return locator.remotePluginId ?? (stringValue(locator.plugin.id) || locator.pluginName)
+}
 
 const ALL_SNAPSHOT_SECTIONS: PluginCenterSnapshotSection[] = ['plugins', 'skills', 'apps', 'mcp']
 const CATALOG_CACHE_FRESH_MS = 6 * 60 * 60 * 1_000
@@ -316,7 +342,7 @@ export class PluginCenterService {
       requestId,
       hasCwd: Boolean(cwd)
     })
-    const plugins = await this.readInstalledPlugins(cwd, false, requestId)
+    const plugins = await this.readInstalledPlugins(cwd, input.forceRefresh === true, requestId)
     const result = pluginCenterInstalledPluginsResultSchema.parse({
       version: PLUGIN_CENTER_API_VERSION,
       generatedAt: (this.dependencies.now ?? (() => new Date()))().toISOString(),
@@ -360,7 +386,7 @@ export class PluginCenterService {
           ...(located.locator.remoteMarketplaceName
             ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
             : {}),
-          pluginName: located.locator.pluginName
+          pluginName: pluginReadOrInstallRequestName(located.locator)
         })
         .then(async (rawDetail) => {
           const appIds = arrayValue(objectValue(rawDetail).apps)
@@ -466,6 +492,108 @@ export class PluginCenterService {
       status: 'ready',
       app: { id: input.app.id },
       tools: normalizeAppToolSummaries(app, input.app.id, configOrigins)
+    })
+  }
+
+  async getSkillContents(
+    input: PluginCenterGetSkillContentsRequest
+  ): Promise<PluginCenterGetSkillContentsResult> {
+    const located = await this.resolvePluginLocator(input)
+    if (located.status === 'missing') {
+      return pluginCenterGetSkillContentsResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'missing',
+        plugin: input.plugin,
+        skill: input.skill,
+        missingReason: located.missingReason
+      })
+    }
+    const readPluginDetailForManagement = this.dependencies.provider.readPluginDetailForManagement
+    if (!readPluginDetailForManagement) {
+      return this.missingSkillContents(input, 'unavailable')
+    }
+
+    const rawDetail = await readPluginDetailForManagement.call(this.dependencies.provider, {
+      ...(located.locator.marketplacePath
+        ? { marketplacePath: located.locator.marketplacePath }
+        : {}),
+      ...(located.locator.remoteMarketplaceName
+        ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
+        : {}),
+      pluginName: pluginReadOrInstallRequestName(located.locator)
+    })
+    const cwd = this.cwdFor(input)
+    const installedSkills = await safeRead(() =>
+      this.dependencies.provider.listSkillsForManagement({
+        ...(cwd ? { cwd } : {}),
+        forceReload: input.forceRefresh
+      })
+    )
+    const trustedSkill = findTrustedPluginSkill(
+      located.locator,
+      rawDetail,
+      installedSkills.ok ? installedSkills.value : null,
+      input.skill
+    )
+    if (!trustedSkill) {
+      return this.missingSkillContents(input, 'not_found')
+    }
+
+    if (trustedSkill.localPath) {
+      const readSkillFileContents = this.dependencies.provider.readSkillFileContents
+      if (!readSkillFileContents) {
+        return this.missingSkillContents(input, 'unavailable')
+      }
+      const contents = await readSkillFileContents.call(this.dependencies.provider, {
+        path: trustedSkill.localPath,
+        maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+      })
+      return pluginCenterGetSkillContentsResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        plugin: input.plugin,
+        skill: input.skill,
+        contents,
+        localPath: trustedSkill.localPath
+      })
+    }
+
+    const readRemotePluginSkillContents = this.dependencies.provider.readRemotePluginSkillContents
+    if (
+      !readRemotePluginSkillContents ||
+      !trustedSkill.remoteMarketplaceName ||
+      !trustedSkill.remotePluginId
+    ) {
+      return this.missingSkillContents(input, 'unavailable')
+    }
+    const contents = await readRemotePluginSkillContents.call(this.dependencies.provider, {
+      remoteMarketplaceName: trustedSkill.remoteMarketplaceName,
+      remotePluginId: trustedSkill.remotePluginId,
+      skillName: trustedSkill.name,
+      maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+    })
+    if (contents === null) {
+      return this.missingSkillContents(input, 'not_found')
+    }
+    return pluginCenterGetSkillContentsResultSchema.parse({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready',
+      plugin: input.plugin,
+      skill: input.skill,
+      contents
+    })
+  }
+
+  private missingSkillContents(
+    input: PluginCenterGetSkillContentsRequest,
+    missingReason: 'not_found' | 'ambiguous' | 'unavailable'
+  ): PluginCenterGetSkillContentsResult {
+    return pluginCenterGetSkillContentsResultSchema.parse({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'missing',
+      plugin: input.plugin,
+      skill: input.skill,
+      missingReason
     })
   }
 
@@ -784,31 +912,27 @@ export class PluginCenterService {
   ): Promise<PluginCenterMutationResult> {
     return this.queue(`plugin:${input.plugin.id}`, async () => {
       const locator = await this.findPluginLocator(input)
-      await this.dependencies.provider.installPlugin({
+      const write = await this.dependencies.provider.installPlugin({
         ...(locator.marketplacePath ? { marketplacePath: locator.marketplacePath } : {}),
         ...(locator.remoteMarketplaceName
           ? { remoteMarketplaceName: locator.remoteMarketplaceName }
           : {}),
         installAttemptId: crypto.randomUUID(),
-        pluginName: locator.pluginName
+        pluginName: pluginReadOrInstallRequestName(locator)
       })
-      return this.successWithInstalledState(input, input.plugin.id, undefined, (plugins) =>
-        plugins.some((plugin) => plugin.id === input.plugin.id && plugin.installed)
-      )
+      return this.successAfterPluginMutation(input, input.plugin.id, true, write)
     })
   }
 
   async uninstallPlugin(
-    input: PluginCenterRequestContext & { plugin: { id: string } }
+    input: PluginCenterRequestContext & { plugin: { id: string; marketplaceId?: string } }
   ): Promise<PluginCenterMutationResult> {
     return this.queue(`plugin:${input.plugin.id}`, async () => {
-      await this.dependencies.provider.uninstallPlugin({ pluginId: input.plugin.id })
-      return this.successWithInstalledState(
-        input,
-        input.plugin.id,
-        undefined,
-        (plugins) => !plugins.some((plugin) => plugin.id === input.plugin.id && plugin.installed)
-      )
+      const locator = await this.findPluginLocator(input)
+      const write = await this.dependencies.provider.uninstallPlugin({
+        pluginId: pluginUninstallRequestId(locator)
+      })
+      return this.successAfterPluginMutation(input, input.plugin.id, false, write)
     })
   }
 
@@ -872,12 +996,12 @@ export class PluginCenterService {
         sections: ['mcp'],
         includePluginDetails: false
       })
-      if (
-        !snapshot.snapshot.mcp.userServers.some(
-          (server) => server.id === input.server.id && server.editable
-        )
-      ) {
-        throw new Error('Only user-configured MCP servers can be changed here')
+      const server = [
+        ...snapshot.snapshot.mcp.userServers,
+        ...snapshot.snapshot.mcp.pluginServers
+      ].find((candidate) => candidate.id === input.server.id)
+      if (!server?.canToggle) {
+        throw new Error('Only user-toggleable MCP servers can be changed here')
       }
       const write = await this.dependencies.provider.setMcpServerEnabled({
         cwd: this.cwdFor(input),
@@ -885,8 +1009,8 @@ export class PluginCenterService {
         enabled: input.enabled
       })
       return this.successWithSnapshot(input, input.server.id, ['mcp'], write, (snapshot) =>
-        snapshot.mcp.userServers.some(
-          (server) => server.id === input.server.id && server.enabled === input.enabled
+        [...snapshot.mcp.userServers, ...snapshot.mcp.pluginServers].some(
+          (candidate) => candidate.id === input.server.id && candidate.enabled === input.enabled
         )
       )
     })
@@ -1127,6 +1251,21 @@ export class PluginCenterService {
     })
   }
 
+  private successAfterPluginMutation(
+    input: PluginCenterRequestContext,
+    changedItemId: string,
+    targetInstalled: boolean,
+    write: unknown
+  ): PluginCenterMutationResult {
+    const cwd = this.cwdFor(input)
+    this.invalidateInstalledCache(cwd)
+    this.invalidateSinglePluginDetail(cwd, changedItemId)
+    return pluginCenterMutationResultSchema.parse({
+      ...this.successAfterWrite(changedItemId, ['installed'], write),
+      targetInstalled
+    })
+  }
+
   private async findPluginLocator(
     input: PluginCenterRequestContext & { plugin: { id: string; marketplaceId?: string } }
   ): Promise<PluginLocator> {
@@ -1155,6 +1294,7 @@ export class PluginCenterService {
         const pluginName = stringValue(plugin.name)
         if (!pluginName || !marketplaceName) continue
         const marketplacePath = stringValue(marketplace.path)
+        const remotePluginId = stringValue(plugin.remotePluginId)
         candidates.push(
           marketplacePath
             ? { plugin, marketplace, pluginName, marketplaceName, marketplacePath }
@@ -1162,6 +1302,7 @@ export class PluginCenterService {
                 plugin,
                 marketplace,
                 pluginName,
+                ...(remotePluginId ? { remotePluginId } : {}),
                 marketplaceName,
                 remoteMarketplaceName: marketplaceName
               }
@@ -1631,6 +1772,13 @@ type InstalledSkillIndex = {
   byComparableName: Map<string, JsonRecord[]>
 }
 
+type TrustedPluginSkill = {
+  name: string
+  localPath?: string
+  remoteMarketplaceName?: string
+  remotePluginId?: string
+}
+
 function createInstalledSkillIndex(rawSkills: unknown): InstalledSkillIndex {
   const byPath = new Map<string, JsonRecord>()
   const byName = new Map<string, JsonRecord>()
@@ -1673,6 +1821,72 @@ function matchInstalledSkill(
 
   const comparableMatches = index.byComparableName.get(comparableSkillName(pluginSkill.name)) ?? []
   return comparableMatches.length === 1 ? comparableMatches[0] : undefined
+}
+
+function findTrustedPluginSkill(
+  locator: PluginLocator,
+  rawDetail: unknown,
+  rawInstalledSkills: unknown | null,
+  requestSkill: { id: string; name: string }
+): TrustedPluginSkill | undefined {
+  const detail = objectValue(rawDetail)
+  const detailSummary = objectValue(detail.summary)
+  const pluginId = stringValue(detailSummary.id) || stringValue(locator.plugin.id)
+  if (pluginId && pluginId !== stringValue(locator.plugin.id)) return undefined
+
+  const installedSkillIndex =
+    rawInstalledSkills === null ? undefined : createInstalledSkillIndex(rawInstalledSkills)
+  const pluginName = stringValue(detailSummary.name) || locator.pluginName
+  for (const value of arrayValue(detail.skills)) {
+    const skill = objectValue(value)
+    const name = stringValue(skill.name)
+    if (!name) continue
+    const path = stringValue(skill.path)
+    let installedSkill: JsonRecord | undefined
+    if (installedSkillIndex) {
+      installedSkill = matchInstalledSkill(installedSkillIndex, { name, path, pluginName })
+    }
+    const installedPath = stringValue(installedSkill?.path)
+    const candidateIds = new Set([
+      name,
+      path,
+      installedPath,
+      `plugin:${pluginId || stringValue(locator.plugin.id)}:${name}`
+    ])
+    const candidateNames = new Set([
+      name,
+      stringValue(installedSkill?.name),
+      `${pluginName}:${name}`
+    ])
+    if (!candidateIds.has(requestSkill.id) && !candidateNames.has(requestSkill.name)) continue
+
+    const localPath = trustedLocalSkillPath(locator, detailSummary, path, installedPath)
+    const remotePluginId =
+      stringValue(detailSummary.remotePluginId) || stringValue(locator.plugin.remotePluginId)
+    return {
+      name,
+      ...(localPath ? { localPath } : {}),
+      ...(locator.remoteMarketplaceName
+        ? { remoteMarketplaceName: locator.remoteMarketplaceName }
+        : {}),
+      ...(remotePluginId ? { remotePluginId } : {})
+    }
+  }
+  return undefined
+}
+
+function trustedLocalSkillPath(
+  locator: PluginLocator,
+  detailSummary: JsonRecord,
+  detailPath: string,
+  installedPath: string
+): string | undefined {
+  if (installedPath) return installedPath
+  const source = objectValue(locator.plugin.source)
+  const isLocalPlugin = stringValue(source.type) === 'local'
+  const isInstalledPlugin =
+    booleanValue(locator.plugin.installed) || booleanValue(detailSummary.installed)
+  return detailPath && (isLocalPlugin || isInstalledPlugin) ? detailPath : undefined
 }
 
 function comparableSkillName(value: string): string {
@@ -1898,6 +2112,12 @@ function normalizeApps(raw: unknown): PluginCenterApp[] {
       const logo = safeHttpsUrl(app.logoUrlDark) ?? safeHttpsUrl(app.logoUrl)
       const accessible = booleanValue(app.isAccessible)
       const description = displayTextValue(app.description)
+      const labels = Object.fromEntries(
+        Object.entries(objectValue(app.labels)).flatMap(([key, value]) => {
+          const label = stringValue(value)
+          return label ? [[key, label]] : []
+        })
+      )
       return {
         id: requiredString(app.id, 'app id'),
         name: stringValue(app.name) || requiredString(app.id, 'app id'),
@@ -1906,6 +2126,7 @@ function normalizeApps(raw: unknown): PluginCenterApp[] {
         sourceKind: 'marketplace',
         pluginIds: [],
         pluginDisplayNames: arrayValue(app.pluginDisplayNames).map(stringValue).filter(Boolean),
+        ...(Object.keys(labels).length > 0 ? { labels } : {}),
         enabled: booleanValue(app.isEnabled),
         accessible,
         canToggle: true,
@@ -2018,18 +2239,38 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
       displayTextValue(objectValue(summary.interface).displayName) || displayTextValue(summary.name)
     for (const name of arrayValue(detail.mcpServers).map(stringValue).filter(Boolean)) {
       const status = statuses.get(name) ?? {}
+      const configEntry = mcpConfigEntries(raw.config)[name]
+      const enabled =
+        configEntry?.enabled === undefined
+          ? booleanValue(summary.enabled)
+          : configEntry.enabled !== false
+      const source = configOriginSource(
+        raw.origins,
+        configPathKey(['mcp_servers', name, 'enabled'])
+      )
+      const canToggle = source === undefined || source === 'user'
+      const restriction = canToggle
+        ? undefined
+        : {
+            code: 'readonly' as const,
+            source,
+            editable: false,
+            message: `此 MCP 服务器由${configSourceLabel(source)}配置管理，无法在此处更改。`
+          }
       pluginServers.push({
         id: name,
         name,
-        enabled: booleanValue(summary.enabled),
+        enabled,
         connected: booleanValue(status.connected),
         authStatus: normalizeAuthStatus(status.authStatus),
         toolCount: nonNegativeInteger(status.toolCount),
         origin: 'plugin' as const,
         editable: false as const,
+        canToggle,
         pluginId,
         ...(pluginDisplayName ? { pluginDisplayName } : {}),
-        transport: 'unknown' as const
+        transport: 'unknown' as const,
+        ...(restriction ? { restriction } : {})
       })
     }
   }
@@ -2042,6 +2283,7 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
     const enabled = value.enabled !== false
     const origin = mcpOrigin(raw.origins, id, Boolean(userEntries[id]))
     const editable = origin === 'user'
+    const canToggle = editable
     const restriction = editable
       ? undefined
       : { code: 'readonly' as const, message: '此 MCP 服务器来自不可写配置层' }
@@ -2055,6 +2297,7 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
         toolCount: nonNegativeInteger(status.toolCount),
         origin,
         editable,
+        canToggle,
         transport: 'streamable-http',
         ...(safeHttpUrl(value.url) ? { url: safeHttpUrl(value.url) } : {}),
         ...(stringValue(value.bearer_token_env_var)
@@ -2076,6 +2319,7 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
       toolCount: nonNegativeInteger(status.toolCount),
       origin,
       editable,
+      canToggle,
       transport: 'stdio',
       ...(stringValue(value.command) ? { command: stringValue(value.command) } : {}),
       args: arrayValue(value.args).map(stringValue).filter(Boolean),

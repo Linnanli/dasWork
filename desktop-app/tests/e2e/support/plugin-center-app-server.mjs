@@ -50,6 +50,9 @@ input.on('line', (line) => {
       case 'app/list':
         respond(message.id, appsList())
         return
+      case 'app/installed':
+        respond(message.id, installedApps())
+        return
       case 'app/read':
         if (appReadUnsupported) {
           emit({
@@ -339,6 +342,20 @@ function appsList() {
       }
     ],
     nextCursor: null
+  }
+}
+
+function installedApps() {
+  const state = loadState()
+  return {
+    apps: [
+      {
+        id: 'e2e-app',
+        runtimeName: 'E2E App',
+        enabled: state.e2eAppEnabled,
+        callable: state.e2eAppAccessible
+      }
+    ]
   }
 }
 

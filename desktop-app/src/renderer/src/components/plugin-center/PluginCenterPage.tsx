@@ -68,6 +68,7 @@ import {
   getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
+  getPluginCenterSkillContentsResource,
   getPluginCenterSupplementalResource,
   invalidatePluginCenterAppToolsResource,
   mergePluginCatalogWithInstalled,
@@ -77,6 +78,7 @@ import {
 } from './pluginCenterDataResource'
 import { PluginAppToolsDialog } from './PluginAppToolsDialog'
 import { PluginDetailPage } from './PluginDetailPage'
+import { PluginSkillPreviewDialog } from './PluginSkillPreviewDialog'
 
 export type PluginCenterPageKind = 'browse' | 'manage' | 'detail'
 export type PluginCenterBrowseTab = 'plugins' | 'skills'
@@ -111,12 +113,32 @@ export type PluginCenterPageProps = {
     prompt: string
   }) => void
   onTryApp?: (input: { mention: { path: string; name: string } }) => void
+  onTrySkill?: (input: { mention: { path: string; name: string } }) => void
 }
 
 type MutationStatus = { id: string; label: string } | null
 type MutationOptions = {
   refreshInBackground?: boolean
   isSuccessful?: (result: PluginCenterMutationResult) => boolean
+}
+
+function directoryAppAsPluginDetailApp(
+  app: PluginCenterApp
+): PluginCenterPluginDetail['apps'][number] {
+  const name = app.displayName ?? app.name
+  return {
+    id: app.id,
+    name,
+    ...(app.description ? { description: app.description } : {}),
+    ...(app.installUrl ? { installUrl: app.installUrl } : {}),
+    ...(app.icon ? { icon: app.icon } : {}),
+    mention: { path: `app://${app.id}`, name },
+    multiAccountCapability: 'unknown',
+    enabled: app.enabled,
+    accessible: app.accessible,
+    canToggle: app.canToggle,
+    ...(app.restriction ? { restriction: app.restriction } : {})
+  }
 }
 type BrowsePluginsLoadingState = {
   catalog: boolean
@@ -549,7 +571,8 @@ export function PluginCenterPage({
   threadId,
   api: apiProp,
   onActivatePluginPrompt,
-  onTryApp
+  onTryApp,
+  onTrySkill
 }: PluginCenterPageProps): React.JSX.Element {
   const api = React.useMemo(() => getPluginCenterApi(apiProp), [apiProp])
   const snapshotSections = React.useMemo(() => snapshotSectionsForSurface(surface), [surface])
@@ -586,15 +609,30 @@ export function PluginCenterPage({
   const catalogState = usePluginCenterResource(catalogResource, usesPluginResources)
   const installedState = usePluginCenterResource(installedResource, usesPluginResources)
   const skillsState = usePluginCenterResource(skillsResource, supplementalSection === 'skills')
-  const appsState = usePluginCenterResource(appsResource, supplementalSection === 'apps')
-  const mcpState = usePluginCenterResource(mcpResource, supplementalSection === 'mcp')
+  const appsState = usePluginCenterResource(
+    appsResource,
+    supplementalSection === 'apps' || isDetailSurface
+  )
+  const mcpState = usePluginCenterResource(
+    mcpResource,
+    supplementalSection === 'mcp' || isDetailSurface
+  )
   const detailState = usePluginCenterResource(detailResource, isDetailSurface)
   const [selectedAppId, setSelectedAppId] = React.useState<string | null>(null)
+  const [selectedSkillId, setSelectedSkillId] = React.useState<string | null>(null)
   const selectedApp = React.useMemo<PluginCenterPluginDetail['apps'][number] | null>(() => {
     const result = detailState.data
     if (!selectedAppId || result?.status !== 'ready') return null
-    return result.detail.apps.find((app) => app.id === selectedAppId) ?? null
-  }, [detailState.data, selectedAppId])
+    const detailApp = result.detail.apps.find((app) => app.id === selectedAppId)
+    if (detailApp) return detailApp
+    const directoryApp = appsState.data?.apps.find((app) => app.id === selectedAppId)
+    return directoryApp ? directoryAppAsPluginDetailApp(directoryApp) : null
+  }, [appsState.data, detailState.data, selectedAppId])
+  const selectedSkill = React.useMemo<PluginCenterPluginDetail['skills'][number] | null>(() => {
+    const result = detailState.data
+    if (!selectedSkillId || result?.status !== 'ready') return null
+    return result.detail.skills.find((skill) => skill.id === selectedSkillId) ?? null
+  }, [detailState.data, selectedSkillId])
   const appToolsResource = React.useMemo(
     () =>
       api && selectedApp
@@ -603,6 +641,19 @@ export function PluginCenterPage({
     [api, cwd, selectedApp, threadId]
   )
   const appToolsState = usePluginCenterResource(appToolsResource, selectedApp !== null)
+  const skillContentsResource = React.useMemo(
+    () =>
+      api && selectedSkill && surface.page === 'detail'
+        ? getPluginCenterSkillContentsResource(
+            api,
+            surface.pluginRef,
+            { id: selectedSkill.id, name: selectedSkill.name },
+            cwd
+          )
+        : null,
+    [api, cwd, selectedSkill, surface]
+  )
+  const skillContentsState = usePluginCenterResource(skillContentsResource, selectedSkill !== null)
   const supplementalSnapshot = React.useMemo(() => {
     let merged = emptySnapshot
     if (skillsState.data) merged = mergeSnapshotSections(merged, skillsState.data, ['skills'])
@@ -716,7 +767,11 @@ export function PluginCenterPage({
   const refresh = React.useCallback(
     async (forceRefresh = true): Promise<void> => {
       if (isDetailSurface) {
-        await detailResource?.refresh(forceRefresh)
+        await Promise.all([
+          detailResource?.refresh(forceRefresh),
+          appsResource?.refresh(forceRefresh),
+          mcpResource?.refresh(forceRefresh)
+        ])
         return
       }
       if (usesPluginResources) {
@@ -732,9 +787,11 @@ export function PluginCenterPage({
     },
     [
       catalogResource,
+      appsResource,
       detailResource,
       installedResource,
       isDetailSurface,
+      mcpResource,
       refreshSupplementalSections,
       supplementalSection,
       usesPluginResources
@@ -774,6 +831,26 @@ export function PluginCenterPage({
         readbacks.push(refreshSupplementalSections(supplementalSections, true, true))
       }
       await Promise.all(readbacks)
+      if (
+        changedSections.has('installed') &&
+        installedResource &&
+        changedItemId &&
+        result.targetInstalled !== undefined
+      ) {
+        const targetInstalled = result.targetInstalled
+        const catalogPlugin = catalogResource
+          ?.getSnapshot()
+          .data?.plugins.find((plugin) => plugin.id === changedItemId)
+        const detail = detailResource?.getSnapshot().data
+        const plugin =
+          catalogPlugin ??
+          (detail?.status === 'ready' && detail.detail.plugin.id === changedItemId
+            ? detail.detail.plugin
+            : undefined)
+        installedResource.update((plugins) =>
+          applyInstalledMutation(plugins, changedItemId, plugin, targetInstalled)
+        )
+      }
     },
     [
       appToolsResource,
@@ -1151,6 +1228,8 @@ export function PluginCenterPage({
             {!loading && !error && readyDetail && (
               <PluginDetailPage
                 detail={readyDetail.detail}
+                directoryApps={appsState.data?.apps ?? []}
+                mcpServers={mcpState.data?.mcp ?? emptySnapshot.mcp}
                 pending={mutation?.id === readyDetail.detail.plugin.id}
                 pendingAppId={mutation?.id ?? awaitingAppConnectionId ?? undefined}
                 pendingSkillId={mutation?.id}
@@ -1182,6 +1261,21 @@ export function PluginCenterPage({
                 onReconnectApp={reconnectApp}
                 onDisconnectApp={disconnectApp}
                 onOpenAppTools={(app) => setSelectedAppId(app.id)}
+                onMcpToggle={(server, enabled) =>
+                  runMutation(
+                    server.id,
+                    enabled ? '启用 MCP 服务器' : '停用 MCP 服务器',
+                    () =>
+                      api!.setMcpServerEnabled({
+                        ...requestContext,
+                        server: { id: server.id },
+                        enabled
+                      }),
+                    { refreshInBackground: true }
+                  )
+                }
+                onOpenMcpSettings={() => onSurfaceChange({ page: 'manage', tab: 'mcp' })}
+                onOpenSkill={(skill) => setSelectedSkillId(skill.id)}
                 onOpenExternal={(url) => void openExternal(url)}
               />
             )}
@@ -1197,7 +1291,10 @@ export function PluginCenterPage({
             setConfirm(null)
             if (current?.kind === 'plugin') {
               void runMutation(current.plugin.id, '卸载插件', () =>
-                api!.uninstallPlugin({ ...requestContext, plugin: { id: current.plugin.id } })
+                api!.uninstallPlugin({
+                  ...requestContext,
+                  plugin: { id: current.plugin.id, marketplaceId: current.plugin.marketplaceId }
+                })
               )
             }
           }}
@@ -1227,6 +1324,50 @@ export function PluginCenterPage({
             onRetry={() => {
               appToolsResource?.invalidate()
               void appToolsResource?.refresh(true)
+            }}
+          />
+        )}
+        {selectedSkill && (
+          <PluginSkillPreviewDialog
+            key={selectedSkill.id}
+            skill={selectedSkill}
+            open
+            state={skillContentsState}
+            pending={mutation?.id === selectedSkill.id}
+            onOpenChange={(open) => {
+              if (!open) setSelectedSkillId(null)
+            }}
+            onToggle={(enabled) =>
+              void runMutation(
+                selectedSkill.id,
+                enabled ? '启用技能' : '停用技能',
+                () =>
+                  api!.setSkillEnabled({
+                    ...requestContext,
+                    skill: { id: selectedSkill.id },
+                    enabled
+                  }),
+                { refreshInBackground: true }
+              )
+            }
+            onTrySkill={() => {
+              const contents = skillContentsState.data
+              if (contents?.status !== 'ready' || !contents.localPath || !selectedSkill.enabled)
+                return
+              setSelectedSkillId(null)
+              onTrySkill?.({
+                mention: {
+                  path: contents.localPath,
+                  name: selectedSkill.displayName ?? selectedSkill.name
+                }
+              })
+            }}
+            onOpenLocalPath={(path) => {
+              void window.desktopApp.codex.openLocalPath({ path, ...(cwd ? { cwd } : {}) })
+            }}
+            onRetry={() => {
+              skillContentsResource?.invalidate()
+              void skillContentsResource?.refresh(true)
             }}
           />
         )}
@@ -1416,7 +1557,10 @@ export function PluginCenterPage({
           if (!current) return
           if (current.kind === 'plugin') {
             void runMutation(current.plugin.id, '卸载插件', () =>
-              api!.uninstallPlugin({ ...requestContext, plugin: { id: current.plugin.id } })
+              api!.uninstallPlugin({
+                ...requestContext,
+                plugin: { id: current.plugin.id, marketplaceId: current.plugin.marketplaceId }
+              })
             )
           } else {
             void runMutation(current.server.id, '删除 MCP', () =>
@@ -1428,6 +1572,31 @@ export function PluginCenterPage({
       <Toaster position="top-center" richColors closeButton />
     </main>
   )
+}
+
+function applyInstalledMutation(
+  plugins: PluginCenterPlugin[],
+  pluginId: string,
+  catalogPlugin: PluginCenterPlugin | undefined,
+  targetInstalled: boolean
+): PluginCenterPlugin[] {
+  const currentIndex = plugins.findIndex((plugin) => plugin.id === pluginId)
+  if (!targetInstalled) {
+    return currentIndex < 0 ? plugins : plugins.filter((plugin) => plugin.id !== pluginId)
+  }
+  if (!catalogPlugin) return plugins
+
+  const installedPlugin: PluginCenterPlugin = {
+    ...catalogPlugin,
+    installed: true,
+    enabled: true,
+    canInstall: false,
+    canUninstall: true,
+    canToggle: true,
+    restriction: undefined
+  }
+  if (currentIndex < 0) return [...plugins, installedPlugin]
+  return plugins.map((plugin, index) => (index === currentIndex ? installedPlugin : plugin))
 }
 
 function AddMenu({

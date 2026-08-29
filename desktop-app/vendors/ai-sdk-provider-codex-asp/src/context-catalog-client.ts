@@ -15,6 +15,8 @@ import type { ConfigBatchWriteParams } from "./protocol/app-server-protocol/v2/C
 import type { ConfigReadResponse } from "./protocol/app-server-protocol/v2/ConfigReadResponse";
 import type { ConfigWriteResponse } from "./protocol/app-server-protocol/v2/ConfigWriteResponse";
 import type { ConnectorMetadata } from "./protocol/app-server-protocol/v2/ConnectorMetadata";
+import type { FsReadFileParams } from "./protocol/app-server-protocol/v2/FsReadFileParams";
+import type { FsReadFileResponse } from "./protocol/app-server-protocol/v2/FsReadFileResponse";
 import type { ListMcpServerStatusResponse } from "./protocol/app-server-protocol/v2/ListMcpServerStatusResponse";
 import type { MarketplaceAddParams } from "./protocol/app-server-protocol/v2/MarketplaceAddParams";
 import type { MarketplaceAddResponse } from "./protocol/app-server-protocol/v2/MarketplaceAddResponse";
@@ -28,6 +30,8 @@ import type { PluginListParams } from "./protocol/app-server-protocol/v2/PluginL
 import type { PluginListResponse } from "./protocol/app-server-protocol/v2/PluginListResponse";
 import type { PluginMarketplaceEntry } from "./protocol/app-server-protocol/v2/PluginMarketplaceEntry";
 import type { PluginReadResponse } from "./protocol/app-server-protocol/v2/PluginReadResponse";
+import type { PluginSkillReadParams } from "./protocol/app-server-protocol/v2/PluginSkillReadParams";
+import type { PluginSkillReadResponse } from "./protocol/app-server-protocol/v2/PluginSkillReadResponse";
 import type { PluginSummary } from "./protocol/app-server-protocol/v2/PluginSummary";
 import type { PluginUninstallParams } from "./protocol/app-server-protocol/v2/PluginUninstallParams";
 import type { PluginUninstallResponse } from "./protocol/app-server-protocol/v2/PluginUninstallResponse";
@@ -41,6 +45,19 @@ import type { CodexProviderSettings, TransportContext } from "./provider-setting
 import { stripUndefined } from "./utils/object";
 
 const PLUGIN_DETAIL_READ_CONCURRENCY = 6;
+const APP_READ_BATCH_SIZE = 100;
+const DEFAULT_SKILL_CONTENTS_MAX_BYTES = 512 * 1024;
+
+type InstalledAppSummary = {
+    id: string;
+    runtimeName?: string | null;
+    enabled: boolean;
+    callable: boolean;
+};
+
+type AppsInstalledResponse = {
+    apps: InstalledAppSummary[];
+};
 
 export interface CodexContextCatalogJsonRpcClientLike
 {
@@ -225,6 +242,20 @@ export interface CodexMcpManagementSnapshot
     pluginDetails: PluginDetail[];
 }
 
+export interface CodexSkillFileReadParams
+{
+    path: string;
+    maxBytes?: number;
+}
+
+export interface CodexRemotePluginSkillReadParams
+{
+    remoteMarketplaceName: string;
+    remotePluginId: string;
+    skillName: string;
+    maxBytes?: number;
+}
+
 export class CodexContextCatalogClient
 {
     private clientPromise: Promise<CodexContextCatalogJsonRpcClientLike> | undefined;
@@ -375,10 +406,78 @@ export class CodexContextCatalogClient
         });
     }
 
+    async readSkillFileContents(params: CodexSkillFileReadParams): Promise<string>
+    {
+        const path = requiredSkillContentValue(params.path, "path");
+        const maxBytes = skillContentsMaxBytes(params.maxBytes);
+        return this.withClient(async (client) =>
+        {
+            const response = await client.request<FsReadFileResponse>(
+                "fs/readFile",
+                { path } satisfies FsReadFileParams,
+            );
+            return decodeBoundedSkillContents(response.dataBase64, maxBytes);
+        });
+    }
+
+    async readRemotePluginSkillContents(params: CodexRemotePluginSkillReadParams): Promise<string | null>
+    {
+        const remoteMarketplaceName = requiredSkillContentValue(
+            params.remoteMarketplaceName,
+            "remote marketplace name",
+        );
+        const remotePluginId = requiredSkillContentValue(params.remotePluginId, "remote plugin id");
+        const skillName = requiredSkillContentValue(params.skillName, "skill name");
+        const maxBytes = skillContentsMaxBytes(params.maxBytes);
+        return this.withClient(async (client) =>
+        {
+            const response = await client.request<PluginSkillReadResponse>(
+                "plugin/skill/read",
+                {
+                    remoteMarketplaceName,
+                    remotePluginId,
+                    skillName,
+                } satisfies PluginSkillReadParams,
+            );
+            return response.contents === null
+                ? null
+                : boundedSkillContents(response.contents, maxBytes);
+        });
+    }
+
     async listAppsForManagement(params: CodexAppsListParams = {}): Promise<AppInfo[]>
     {
         return this.withClient(async (client) =>
         {
+            try
+            {
+                const installed = await client.request<AppsInstalledResponse>(
+                    "app/installed",
+                    params.forceRefetch ? { forceRefresh: true } : {},
+                );
+                const metadataById = new Map<string, ConnectorMetadata>();
+                for (let start = 0; start < installed.apps.length; start += APP_READ_BATCH_SIZE)
+                {
+                    const appIds = installed.apps
+                        .slice(start, start + APP_READ_BATCH_SIZE)
+                        .map((app) => app.id);
+                    const response = await client.request<AppsReadResponse>("app/read", { appIds });
+                    for (const app of response.apps)
+                    {
+                        metadataById.set(app.id, app);
+                    }
+                }
+
+                return installed.apps.map((app) => installedAppInfo(app, metadataById.get(app.id)));
+            }
+            catch (error)
+            {
+                if (!isUnsupportedMethod(error, "app/installed") && !isUnsupportedMethod(error, "app/read"))
+                {
+                    throw error;
+                }
+            }
+
             const apps: AppInfo[] = [];
             let cursor: string | undefined;
 
@@ -1287,6 +1386,27 @@ function normalizeApp(app: AppInfo): CodexCatalogApp
     });
 }
 
+function installedAppInfo(app: InstalledAppSummary, metadata?: ConnectorMetadata): AppInfo
+{
+    return {
+        id: app.id,
+        name: metadata?.name ?? app.runtimeName ?? app.id,
+        description: metadata?.description ?? null,
+        logoUrl: metadata?.iconUrl ?? metadata?.iconUrlDark ?? null,
+        logoUrlDark: metadata?.iconUrlDark ?? metadata?.iconUrl ?? null,
+        iconAssets: null,
+        iconDarkAssets: null,
+        distributionChannel: metadata?.distributionChannel ?? null,
+        branding: null,
+        appMetadata: null,
+        labels: null,
+        installUrl: metadata?.installUrl ?? null,
+        isAccessible: app.callable,
+        isEnabled: app.enabled,
+        pluginDisplayNames: metadata?.pluginDisplayNames ?? [],
+    };
+}
+
 function normalizeMcpServerStatus(status: McpServerStatus): CodexMcpServerStatusSummary
 {
     const toolCount = countRecordKeys(status.tools);
@@ -1352,6 +1472,11 @@ function parseFuzzyFileSearchSessionCompleted(value: unknown): { sessionId: stri
 
 function isUnsupportedFuzzyFileSearchMethod(error: unknown, method: string): boolean
 {
+    return isUnsupportedMethod(error, method);
+}
+
+function isUnsupportedMethod(error: unknown, method: string): boolean
+{
     if (!(error instanceof JsonRpcError))
     {
         return false;
@@ -1366,6 +1491,58 @@ function isUnsupportedFuzzyFileSearchMethod(error: unknown, method: string): boo
             message.includes(method.toLowerCase())
         )
     );
+}
+
+function requiredSkillContentValue(value: string, label: string): string
+{
+    const trimmed = value.trim();
+    if (!trimmed)
+    {
+        throw new Error(`Skill content ${label} is required`);
+    }
+    return trimmed;
+}
+
+function skillContentsMaxBytes(value: number | undefined): number
+{
+    const maxBytes = value ?? DEFAULT_SKILL_CONTENTS_MAX_BYTES;
+    if (
+        !Number.isSafeInteger(maxBytes) ||
+        maxBytes <= 0 ||
+        maxBytes > DEFAULT_SKILL_CONTENTS_MAX_BYTES
+    )
+    {
+        throw new Error(
+            `Skill contents maximum supported size is ${DEFAULT_SKILL_CONTENTS_MAX_BYTES} bytes`,
+        );
+    }
+    return maxBytes;
+}
+
+function decodeBoundedSkillContents(dataBase64: string, maxBytes: number): string
+{
+    const bytes = Buffer.from(dataBase64, "base64");
+    if (bytes.byteLength > maxBytes)
+    {
+        throw new Error(`Skill contents maximum supported size is ${maxBytes} bytes`);
+    }
+    try
+    {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    }
+    catch
+    {
+        throw new Error("Skill contents must be valid UTF-8");
+    }
+}
+
+function boundedSkillContents(contents: string, maxBytes: number): string
+{
+    if (Buffer.byteLength(contents, "utf8") > maxBytes)
+    {
+        throw new Error(`Skill contents maximum supported size is ${maxBytes} bytes`);
+    }
+    return contents;
 }
 
 function isFuzzyFileSearchSessionNotFound(error: unknown): boolean

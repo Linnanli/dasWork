@@ -6,16 +6,10 @@ import type {
   PluginCenterPluginDetail
 } from '../../../../shared/pluginCenterApi'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { CapabilityPill, PluginCapabilityDialog } from './PluginCapabilityDialog'
 import { PluginImage } from './PluginImage'
 import type { PluginCenterResourceSnapshot } from './pluginCenterDataResource'
 
@@ -43,52 +37,69 @@ export function PluginAppToolsDialog({
 }): React.JSX.Element {
   const result = state.data
   const isLoading = state.status === 'idle' || state.status === 'loading'
+  const tools = result?.status === 'ready' ? result.tools : []
+  const toolCount = tools.length
+  const readCount = tools.filter((tool) => tool.readOnly).length
+  const writeCount = toolCount - readCount
   const canTry = app.accessible && app.enabled && !pending
-  const toolCount = result?.status === 'ready' ? result.tools.length : 0
+  const tryDisabledReason = pending ? '正在处理应用状态。' : '请先连接并启用此应用后再试用。'
+  const toggleDisabledReason = app.restriction?.message ?? '此应用当前不能切换启用状态。'
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <div className="flex min-w-0 items-center gap-3 pe-6">
-            <PluginImage
-              icon={app.icon}
-              title={app.name}
-              fallback={<span className="text-sm">{app.name.slice(0, 1)}</span>}
-              className="size-10 shrink-0 rounded-lg border bg-transparent object-contain"
-            />
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="truncate">{app.name}</DialogTitle>
-              <DialogDescription className="mt-1">
-                {app.description ?? '此应用未提供简短说明。'}
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <section className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 px-3 py-2.5">
-          <div className="min-w-0">
-            <div className="text-sm font-medium">启用应用</div>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-              {app.restriction?.message ?? '启用后，此应用的工具可以在对话中使用。'}
-            </p>
-          </div>
+    <PluginCapabilityDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      dataSlot="plugin-app-tools-dialog"
+      icon={
+        <PluginImage
+          icon={app.icon}
+          title={app.name}
+          fallback={<span className="text-sm">{app.name.slice(0, 1)}</span>}
+          className="size-12 shrink-0 rounded-xl border bg-transparent object-contain"
+        />
+      }
+      title={app.name}
+      typeLabel="应用"
+      description={app.description ?? '此应用未提供简短说明。'}
+      status={
+        !app.enabled ? <CapabilityPill className="text-amber-700">停用</CapabilityPill> : null
+      }
+      actions={
+        <TooltipHint enabled={pending || !app.canToggle} message={toggleDisabledReason}>
           <Switch
             checked={app.enabled}
             disabled={pending || !app.canToggle}
             aria-label={`${app.name} ${app.enabled ? '停用' : '启用'}`}
-            title={app.restriction?.message}
             onCheckedChange={onToggle}
           />
-        </section>
-
-        <section aria-label="应用工具" className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium">工具 {toolCount}</h3>
-            {state.isRefreshing && (
-              <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
-            )}
+        </TooltipHint>
+      }
+      footer={
+        <>
+          <p className="text-xs text-muted-foreground">
+            {canTry ? '会新建对话并预填应用引用，不会自动发送。' : tryDisabledReason}
+          </p>
+          <TooltipHint enabled={!canTry} message={tryDisabledReason}>
+            <Button type="button" disabled={!canTry} onClick={onTryApp}>
+              立即试用
+            </Button>
+          </TooltipHint>
+        </>
+      }
+    >
+      <section aria-label="应用工具" className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-medium">工具摘要</h3>
+            <p className="mt-1 text-sm leading-5 text-muted-foreground">
+              该应用包含 {toolCount} 个操作（写入 {writeCount}、读取 {readCount}）。
+            </p>
           </div>
+          {state.isRefreshing && (
+            <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+        <div className="space-y-3">
           {isLoading && <ToolsLoading />}
           {!isLoading && state.error && <ToolsError message={state.error} onRetry={onRetry} />}
           {!isLoading && !state.error && result?.status === 'missing' && (
@@ -101,18 +112,9 @@ export function PluginAppToolsDialog({
           {!isLoading && !state.error && result?.status === 'ready' && result.tools.length > 0 && (
             <ToolGroups tools={result.tools} />
           )}
-        </section>
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            {canTry ? '会新建对话并预填应用引用，不会自动发送。' : '请先连接并启用此应用后再试用。'}
-          </p>
-          <Button type="button" disabled={!canTry} onClick={onTryApp}>
-            立即试用
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </section>
+    </PluginCapabilityDialog>
   )
 }
 
@@ -184,7 +186,7 @@ function ToolGroup({
     <section className="overflow-hidden rounded-lg border">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 bg-muted/30 px-3 py-2 text-left text-sm font-medium hover:bg-muted/50"
+        className="sticky top-0 z-10 flex w-full items-center justify-between gap-3 bg-muted/60 px-3 py-2 text-left text-sm font-medium backdrop-blur hover:bg-muted/80"
         aria-expanded={expanded}
         onClick={() => setExpanded((current) => !current)}
       >
@@ -207,29 +209,34 @@ function ToolGroup({
 function ToolRow({ tool }: { tool: AppTool }): React.JSX.Element {
   const unavailableReason = tool.restriction?.message ?? disabledReasonLabel(tool.disabledReason)
   return (
-    <article className="px-3 py-3">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
+    <article
+      className={cn(
+        'grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,14rem)_1fr]',
+        !tool.enabled && 'opacity-60'
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="min-w-0 flex-1">
           <h4 className="truncate text-sm font-medium">{tool.title ?? tool.name}</h4>
           {tool.title && tool.title !== tool.name && (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{tool.name}</p>
           )}
+          {unavailableReason && (
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{unavailableReason}</p>
+          )}
         </div>
         <span
           className={cn(
-            'shrink-0 text-xs',
+            'shrink-0 rounded-full px-2 py-0.5 text-xs',
             tool.enabled ? 'text-emerald-600' : 'text-muted-foreground'
           )}
         >
           {tool.enabled ? '可用' : '不可用'}
         </span>
       </div>
-      {tool.description && (
-        <p className="mt-1 text-sm leading-5 text-muted-foreground">{tool.description}</p>
-      )}
-      {unavailableReason && (
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">{unavailableReason}</p>
-      )}
+      <p className="text-sm leading-5 text-muted-foreground">
+        {tool.description ?? '此工具未提供说明。'}
+      </p>
     </article>
   )
 }
@@ -238,4 +245,26 @@ function disabledReasonLabel(reason?: string): string | undefined {
   if (!reason) return undefined
   if (reason === 'disabled_by_admin') return '此工具已被管理员禁用。'
   return '此工具当前不可用。'
+}
+
+function TooltipHint({
+  enabled,
+  message,
+  children
+}: {
+  enabled: boolean
+  message: string
+  children: React.ReactElement
+}): React.JSX.Element {
+  if (!enabled) return children
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{message}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }

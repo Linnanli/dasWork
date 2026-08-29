@@ -135,6 +135,9 @@ describe('PluginAppToolsDialog', () => {
       })
     )
 
+    expect(document.body.querySelector('[data-slot="plugin-app-tools-dialog"]')).not.toBeNull()
+    expect(document.body.textContent).toContain('该应用包含 2 个操作（写入 1、读取 1）。')
+
     const writeTools = buttonWithText('会更改数据 1')
     const readTools = buttonWithText('只读 1')
     expect(writeTools?.getAttribute('aria-expanded')).toBe('true')

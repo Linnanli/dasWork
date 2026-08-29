@@ -7,10 +7,13 @@ import {
   LockKeyholeIcon,
   Loader2Icon,
   PuzzleIcon,
-  ServerIcon
+  ServerIcon,
+  SettingsIcon
 } from 'lucide-react'
 
 import type {
+  PluginCenterApp,
+  PluginCenterMcpSnapshot,
   PluginCenterPlugin,
   PluginCenterPluginDetail
 } from '../../../../shared/pluginCenterApi'
@@ -22,16 +25,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Switch } from '@/components/ui/switch'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { OptimisticSkillSwitch } from './OptimisticSkillSwitch'
 import { PluginImage } from './PluginImage'
 
 type PluginDetailSkill = PluginCenterPluginDetail['skills'][number]
 type PluginDetailApp = PluginCenterPluginDetail['apps'][number]
+type PluginDetailAppGroup = { category: string; apps: PluginDetailApp[] }
+type PluginDetailMcpServer =
+  | PluginCenterMcpSnapshot['userServers'][number]
+  | PluginCenterMcpSnapshot['pluginServers'][number]
 
 export function PluginDetailPage({
   detail,
+  directoryApps,
+  mcpServers,
   pending,
   pendingAppId,
   pendingSkillId,
@@ -44,9 +53,14 @@ export function PluginDetailPage({
   onReconnectApp,
   onDisconnectApp,
   onOpenAppTools,
+  onMcpToggle,
+  onOpenMcpSettings,
+  onOpenSkill,
   onOpenExternal
 }: {
   detail: PluginCenterPluginDetail
+  directoryApps: PluginCenterApp[]
+  mcpServers: PluginCenterMcpSnapshot
   pending: boolean
   pendingAppId?: string
   pendingSkillId?: string
@@ -59,6 +73,9 @@ export function PluginDetailPage({
   onReconnectApp: (app: PluginDetailApp) => void
   onDisconnectApp: (app: PluginDetailApp) => void
   onOpenAppTools: (app: PluginDetailApp) => void
+  onMcpToggle: (server: PluginDetailMcpServer, enabled: boolean) => Promise<boolean>
+  onOpenMcpSettings: () => void
+  onOpenSkill: (skill: PluginDetailSkill) => void
   onOpenExternal: (url: string) => void
 }): React.JSX.Element {
   const plugin = detail.plugin
@@ -153,12 +170,17 @@ export function PluginDetailPage({
 
       <Includes
         detail={detail}
+        directoryApps={directoryApps}
+        mcpServers={mcpServers}
         pendingAppId={pendingAppId}
         pendingSkillId={pendingSkillId}
         onConnectApp={onConnectApp}
         onReconnectApp={onReconnectApp}
         onDisconnectApp={onDisconnectApp}
         onOpenAppTools={onOpenAppTools}
+        onMcpToggle={onMcpToggle}
+        onOpenMcpSettings={onOpenMcpSettings}
+        onOpenSkill={onOpenSkill}
         onSkillToggle={onSkillToggle}
       />
       <Information detail={detail} onOpenExternal={onOpenExternal} />
@@ -256,97 +278,251 @@ function PluginActions({
 
 function Includes({
   detail,
+  directoryApps,
+  mcpServers: mcpSnapshot,
   pendingAppId,
   pendingSkillId,
   onConnectApp,
   onReconnectApp,
   onDisconnectApp,
   onOpenAppTools,
+  onMcpToggle,
+  onOpenMcpSettings,
+  onOpenSkill,
   onSkillToggle
 }: {
   detail: PluginCenterPluginDetail
+  directoryApps: PluginCenterApp[]
+  mcpServers: PluginCenterMcpSnapshot
   pendingAppId?: string
   pendingSkillId?: string
   onConnectApp: (app: PluginDetailApp) => void
   onReconnectApp: (app: PluginDetailApp) => void
   onDisconnectApp: (app: PluginDetailApp) => void
   onOpenAppTools: (app: PluginDetailApp) => void
+  onMcpToggle: (server: PluginDetailMcpServer, enabled: boolean) => Promise<boolean>
+  onOpenMcpSettings: () => void
+  onOpenSkill: (skill: PluginDetailSkill) => void
   onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => Promise<boolean>
 }): React.JSX.Element | null {
   if (detail.apps.length === 0 && detail.skills.length === 0 && detail.mcpServers.length === 0) {
     return null
   }
+  const appGroups = groupAppsByCategory(detail.apps)
+  const hasMultipleAppCategories = appGroups.length > 1
+  const mcpServers = resolvePluginMcpServers(directoryApps, detail, detail.mcpServers, mcpSnapshot)
   return (
     <section className="space-y-5">
       {detail.apps.length > 0 && (
         <IncludedSection title={`应用 ${detail.apps.length}`}>
-          {detail.apps.map((app) => (
-            <PluginDetailAppRow
-              key={app.id}
-              app={app}
-              plugin={detail.plugin}
-              pending={pendingAppId === app.id}
-              onConnect={onConnectApp}
-              onDisconnect={onDisconnectApp}
-              onOpen={onOpenAppTools}
-              onReconnect={onReconnectApp}
-            />
-          ))}
-        </IncludedSection>
-      )}
-      {detail.skills.length > 0 && (
-        <IncludedSection title={`技能 ${detail.skills.length}`}>
-          {detail.skills.map((skill) => (
-            <div
-              key={skill.id}
-              data-slot="plugin-detail-skill"
-              className="group flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 transition-colors hover:bg-foreground/5"
-            >
-              <PluginImage
-                icon={skill.icon}
-                title={skill.displayName ?? skill.name}
-                fallback={<SkillCubeIcon />}
-                className="size-8 shrink-0 rounded-none border-0 bg-transparent object-contain"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-medium">
-                  {skill.displayName ?? skill.name}
-                </div>
-                {skill.description && (
-                  <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
-                    {skill.description}
-                  </p>
+          <div className="flex flex-col gap-3">
+            {appGroups.map((group, index) => (
+              <div
+                key={group.category}
+                className={cn(
+                  'flex flex-col gap-2',
+                  hasMultipleAppCategories && index > 0 && 'pt-2'
                 )}
+              >
+                {hasMultipleAppCategories && (
+                  <div
+                    data-slot="plugin-detail-app-category"
+                    className="px-[var(--detail-page-inline-inset)] text-sm text-muted-foreground"
+                  >
+                    {group.category}
+                  </div>
+                )}
+                <ExpandableIncludedList
+                  items={group.apps}
+                  getItemKey={(app) => app.id}
+                  getItemPreview={(app) => app.name}
+                  renderItem={(app) => (
+                    <PluginDetailAppRow
+                      app={app}
+                      plugin={detail.plugin}
+                      pending={pendingAppId === app.id}
+                      onConnect={onConnectApp}
+                      onDisconnect={onDisconnectApp}
+                      onOpen={onOpenAppTools}
+                      onReconnect={onReconnectApp}
+                    />
+                  )}
+                />
               </div>
-              <OptimisticSkillSwitch
-                enabled={skill.enabled}
-                disabled={pendingSkillId === skill.id || !skill.canToggle}
-                getAriaLabel={(enabled) =>
-                  `${skill.displayName ?? skill.name} ${enabled ? '停用' : '启用'}`
-                }
-                title={skill.canToggle ? undefined : '请先安装并启用所属插件'}
-                onToggle={(enabled) => onSkillToggle(skill, enabled)}
-              />
-            </div>
-          ))}
+            ))}
+          </div>
         </IncludedSection>
       )}
       {detail.mcpServers.length > 0 && (
         <IncludedSection title={`MCP 服务器 ${detail.mcpServers.length}`}>
-          {detail.mcpServers.map((name) => (
-            <div
-              key={name}
-              data-slot="plugin-detail-mcp-server"
-              className="flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 text-base transition-colors hover:bg-foreground/5"
-            >
-              <ServerIcon className="size-4 text-muted-foreground" />
-              <span className="min-w-0 truncate font-medium">{name}</span>
-            </div>
-          ))}
+          <ExpandableIncludedList
+            items={mcpServers}
+            getItemKey={(server) => (server.kind === 'app' ? server.app.id : server.name)}
+            getItemPreview={(server) => (server.kind === 'app' ? server.app.name : server.name)}
+            renderItem={(server) => {
+              if (server.kind === 'app') {
+                return (
+                  <PluginDetailAppRow
+                    app={server.app}
+                    plugin={detail.plugin}
+                    pending={pendingAppId === server.app.id}
+                    onConnect={onConnectApp}
+                    onDisconnect={onDisconnectApp}
+                    onOpen={onOpenAppTools}
+                    onReconnect={onReconnectApp}
+                  />
+                )
+              }
+              return (
+                <PluginMcpServerRow
+                  server={server.server}
+                  name={server.name}
+                  pending={pendingAppId === server.server?.id}
+                  onToggle={onMcpToggle}
+                  onOpenSettings={onOpenMcpSettings}
+                />
+              )
+            }}
+          />
+        </IncludedSection>
+      )}
+      {detail.skills.length > 0 && (
+        <IncludedSection title={`技能 ${detail.skills.length}`}>
+          <ExpandableIncludedList
+            items={detail.skills}
+            getItemKey={(skill) => skill.id}
+            getItemPreview={(skill) => skill.displayName ?? skill.name}
+            renderItem={(skill) => (
+              <PreviewableCapabilityRow
+                dataSlot="plugin-detail-skill-row"
+                ariaLabel={`查看技能 ${skill.displayName ?? skill.name}`}
+                onOpen={() => onOpenSkill(skill)}
+                icon={
+                  <PluginImage
+                    icon={skill.icon}
+                    title={skill.displayName ?? skill.name}
+                    fallback={<SkillCubeIcon />}
+                    className="size-8 shrink-0 rounded-none border-0 bg-transparent object-contain"
+                  />
+                }
+                title={skill.displayName ?? skill.name}
+                description={skill.description}
+                actions={
+                  <div onClick={stopCapabilityPreview} onKeyDown={stopCapabilityPreview}>
+                    <OptimisticSkillSwitch
+                      enabled={skill.enabled}
+                      disabled={pendingSkillId === skill.id || !skill.canToggle}
+                      getAriaLabel={(enabled) =>
+                        `${skill.displayName ?? skill.name} ${enabled ? '停用' : '启用'}`
+                      }
+                      title={skill.canToggle ? undefined : '请先安装并启用所属插件'}
+                      onToggle={(enabled) => onSkillToggle(skill, enabled)}
+                    />
+                  </div>
+                }
+              />
+            )}
+          />
         </IncludedSection>
       )}
     </section>
   )
+}
+
+function groupAppsByCategory(apps: PluginDetailApp[]): PluginDetailAppGroup[] {
+  const groups = new Map<string, PluginDetailApp[]>()
+  for (const app of apps) {
+    const category = app.category?.trim() || '其他'
+    const group = groups.get(category)
+    if (group) {
+      group.push(app)
+    } else {
+      groups.set(category, [app])
+    }
+  }
+  return Array.from(groups, ([category, groupedApps]) => ({ category, apps: groupedApps }))
+}
+
+type ResolvedPluginMcpServer =
+  | { kind: 'app'; app: PluginDetailApp }
+  | { kind: 'config'; name: string; server?: PluginDetailMcpServer }
+
+function resolvePluginMcpServers(
+  apps: PluginCenterApp[],
+  detail: PluginCenterPluginDetail,
+  pluginServerNames: string[],
+  mcpSnapshot: PluginCenterMcpSnapshot
+): ResolvedPluginMcpServer[] {
+  const configuredServers = [...mcpSnapshot.userServers, ...mcpSnapshot.pluginServers]
+  return pluginServerNames.map((name) => {
+    const app =
+      findMatchingApp(detail.apps, name) ?? directoryAppAsDetailApp(findMatchingApp(apps, name))
+    const server = findMatchingMcpServer(configuredServers, name)
+    return app ? { kind: 'app', app } : { kind: 'config', name, ...(server ? { server } : {}) }
+  })
+}
+
+function findMatchingApp<T extends { id: string; name: string }>(
+  apps: T[],
+  serverName: string
+): T | null {
+  const normalizedServerName = normalizeMcpIdentity(serverName)
+  return (
+    apps.find((app) => appAliases(app).some((candidate) => candidate === normalizedServerName)) ??
+    null
+  )
+}
+
+function appAliases(app: { id: string; name: string }): string[] {
+  const aliases = [app.id, app.name]
+  if ('pluginDisplayNames' in app && Array.isArray(app.pluginDisplayNames)) {
+    aliases.push(...app.pluginDisplayNames)
+  }
+  if ('labels' in app && app.labels && typeof app.labels === 'object') {
+    aliases.push(...Object.keys(app.labels), ...Object.values(app.labels))
+  }
+  return aliases.map(normalizeMcpIdentity)
+}
+
+function findMatchingMcpServer(
+  servers: PluginDetailMcpServer[],
+  serverName: string
+): PluginDetailMcpServer | null {
+  const normalizedServerName = normalizeMcpIdentity(serverName)
+  return (
+    servers.find(
+      (server) =>
+        normalizeMcpIdentity(server.id) === normalizedServerName ||
+        normalizeMcpIdentity(server.name) === normalizedServerName
+    ) ?? null
+  )
+}
+
+function directoryAppAsDetailApp(app: PluginCenterApp | null): PluginDetailApp | null {
+  if (!app) return null
+  const name = app.displayName ?? app.name
+  return {
+    id: app.id,
+    name,
+    ...(app.description ? { description: app.description } : {}),
+    ...(app.installUrl ? { installUrl: app.installUrl } : {}),
+    ...(app.icon ? { icon: app.icon } : {}),
+    mention: { path: `app://${app.id}`, name },
+    multiAccountCapability: 'unknown',
+    enabled: app.enabled,
+    accessible: app.accessible,
+    canToggle: app.canToggle,
+    ...(app.restriction ? { restriction: app.restriction } : {})
+  }
+}
+
+function normalizeMcpIdentity(value: string | undefined): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^connector[_-]/, '')
+    .replace(/^mcp[_-]/, '')
+    .replace(/[\s_-]+/g, '')
 }
 
 function PluginDetailAppRow({
@@ -371,15 +547,15 @@ function PluginDetailAppRow({
 
   return (
     <div
-      data-slot="plugin-detail-app"
-      className="group flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 text-left transition-colors hover:bg-foreground/5"
+      data-slot="plugin-detail-app-row"
+      role="button"
+      tabIndex={0}
+      aria-label={`查看应用 ${app.name}`}
+      className="group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 text-left transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => onOpen(app)}
+      onKeyDown={(event) => handleCapabilityRowKeyDown(event, () => onOpen(app))}
     >
-      <button
-        data-slot="plugin-detail-app-open"
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 bg-transparent text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        onClick={() => onOpen(app)}
-      >
+      <div data-slot="plugin-detail-app-open" className="flex min-w-0 flex-1 items-center gap-3">
         <PluginImage
           icon={app.icon ?? plugin.icon}
           title={app.name}
@@ -397,8 +573,8 @@ function PluginDetailAppRow({
             {app.description ?? '此应用未提供简短说明。'}
           </span>
         </span>
-      </button>
-      <div className="shrink-0">
+      </div>
+      <div className="shrink-0" onClick={stopCapabilityPreview} onKeyDown={stopCapabilityPreview}>
         {!plugin.installed && null}
         {plugin.installed && !app.accessible && blocked && (
           <span
@@ -435,6 +611,198 @@ function PluginDetailAppRow({
       </div>
     </div>
   )
+}
+
+function PluginMcpServerRow({
+  name,
+  server,
+  pending,
+  onToggle,
+  onOpenSettings
+}: {
+  name: string
+  server?: PluginDetailMcpServer
+  pending: boolean
+  onToggle: (server: PluginDetailMcpServer, enabled: boolean) => Promise<boolean>
+  onOpenSettings: () => void
+}): React.JSX.Element {
+  const serverName = server?.displayName ?? server?.name ?? name
+  const connected = server?.connected === true
+  const details = server
+    ? `${connected ? '已连接' : '未连接'}${server.toolCount > 0 ? ` · ${server.toolCount} 个工具` : ''}`
+    : '尚未设置'
+  const canToggle = server?.canToggle === true
+
+  return (
+    <div
+      data-slot="plugin-detail-mcp-server"
+      className="flex min-w-0 items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 text-base transition-colors hover:bg-foreground/5"
+    >
+      <ServerIcon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{serverName}</div>
+        <div className="truncate text-sm text-muted-foreground">{details}</div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${server ? '打开' : '设置'} ${serverName} MCP`}
+        title={server ? '打开设置' : '设置 MCP'}
+        onClick={onOpenSettings}
+      >
+        <SettingsIcon className="size-4" />
+      </Button>
+      {server && (
+        <OptimisticMcpSwitch server={server} disabled={pending || !canToggle} onToggle={onToggle} />
+      )}
+    </div>
+  )
+}
+
+function OptimisticMcpSwitch({
+  server,
+  disabled,
+  onToggle
+}: {
+  server: PluginDetailMcpServer
+  disabled: boolean
+  onToggle: (server: PluginDetailMcpServer, enabled: boolean) => Promise<boolean>
+}): React.JSX.Element {
+  const disabledReason = server.restriction?.message ?? '此 MCP 服务器不可修改'
+
+  return (
+    <div onClick={stopCapabilityPreview} onKeyDown={stopCapabilityPreview}>
+      <CapabilityTooltip enabled={disabled} message={disabledReason}>
+        <OptimisticSkillSwitch
+          enabled={server.enabled}
+          disabled={disabled}
+          getAriaLabel={(enabled) =>
+            `${server.displayName ?? server.name} ${enabled ? '停用' : '启用'}`
+          }
+          onToggle={(enabled) => onToggle(server, enabled)}
+        />
+      </CapabilityTooltip>
+    </div>
+  )
+}
+
+function CapabilityTooltip({
+  enabled,
+  message,
+  children
+}: {
+  enabled: boolean
+  message: string
+  children: React.ReactElement
+}): React.JSX.Element {
+  if (!enabled) return children
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{message}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+function ExpandableIncludedList<T>({
+  items,
+  getItemKey,
+  getItemPreview,
+  renderItem
+}: {
+  items: T[]
+  getItemKey: (item: T) => string
+  getItemPreview: (item: T) => string
+  renderItem: (item: T) => React.ReactNode
+}): React.JSX.Element {
+  const [expanded, setExpanded] = React.useState(false)
+  const visibleItems = expanded ? items : items.slice(0, 5)
+  const hiddenItems = items.slice(5)
+
+  return (
+    <div className="flex flex-col gap-1">
+      {visibleItems.map((item) => (
+        <React.Fragment key={getItemKey(item)}>{renderItem(item)}</React.Fragment>
+      ))}
+      {hiddenItems.length > 0 && (
+        <button
+          type="button"
+          className="flex min-h-10 items-center gap-2 rounded-lg px-[var(--detail-page-inline-inset)] text-left text-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <ChevronDownIcon
+            className={cn('size-4 transition-transform', expanded && 'rotate-180')}
+          />
+          <span>{expanded ? '收起' : `查看更多 ${hiddenItems.length} 项`}</span>
+          {!expanded && (
+            <span className="min-w-0 truncate text-xs">
+              {hiddenItems.slice(0, 3).map(getItemPreview).join('、')}
+            </span>
+          )}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function PreviewableCapabilityRow({
+  dataSlot,
+  ariaLabel,
+  icon,
+  title,
+  description,
+  actions,
+  onOpen
+}: {
+  dataSlot: string
+  ariaLabel: string
+  icon: React.ReactNode
+  title: string
+  description?: string
+  actions?: React.ReactNode
+  onOpen: () => void
+}): React.JSX.Element {
+  return (
+    <div
+      data-slot={dataSlot}
+      role="button"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      className="group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={onOpen}
+      onKeyDown={(event) => handleCapabilityRowKeyDown(event, onOpen)}
+    >
+      {icon}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-base font-medium">{title}</div>
+        {description && (
+          <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+      {actions}
+    </div>
+  )
+}
+
+function handleCapabilityRowKeyDown(
+  event: React.KeyboardEvent<HTMLElement>,
+  onOpen: () => void
+): void {
+  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
+  event.preventDefault()
+  onOpen()
+}
+
+function stopCapabilityPreview(event: React.SyntheticEvent): void {
+  event.stopPropagation()
 }
 
 function ConnectedAppMenu({

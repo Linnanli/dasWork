@@ -5,6 +5,8 @@ import {
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetSkillContentsRequestSchema,
+  pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterInstallPluginRequestSchema,
@@ -48,6 +50,11 @@ export function createPluginCenterBridge(invoke: Invoke): DesktopPluginCenterApi
         pluginCenterIpcChannels.getAppTools,
         pluginCenterGetAppToolsRequestSchema.parse(input, { jitless: true })
       ).then((result) => pluginCenterGetAppToolsResultSchema.parse(result, { jitless: true })),
+    getSkillContents: (input) =>
+      invoke(
+        pluginCenterIpcChannels.getSkillContents,
+        pluginCenterGetSkillContentsRequestSchema.parse(input, { jitless: true })
+      ).then((result) => pluginCenterGetSkillContentsResultSchema.parse(result, { jitless: true })),
     addMarketplace: (input) =>
       invoke(
         pluginCenterIpcChannels.addMarketplace,

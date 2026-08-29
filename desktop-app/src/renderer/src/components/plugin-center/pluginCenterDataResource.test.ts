@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DesktopPluginCenterApi,
   PluginCenterGetAppToolsResult,
+  PluginCenterGetSkillContentsResult,
   PluginCenterInstalledPluginsResult,
   PluginCenterPlugin,
   PluginCenterSnapshot
@@ -13,6 +14,7 @@ import {
   getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
+  getPluginCenterSkillContentsResource,
   getPluginCenterSupplementalResource,
   invalidatePluginCenterAppToolsResource,
   mergePluginCatalogWithInstalled,
@@ -30,6 +32,7 @@ type TestPluginCenterApi = DesktopPluginCenterApi & {
   getInstalledPlugins(input: {
     version: typeof PLUGIN_CENTER_API_VERSION
     cwd?: string
+    forceRefresh?: boolean
   }): Promise<PluginCenterInstalledPluginsResult>
 }
 
@@ -95,6 +98,13 @@ function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterA
       status: 'ready' as const,
       app: { id: input.app.id },
       tools: []
+    })),
+    getSkillContents: vi.fn(async (input) => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready' as const,
+      plugin: input.plugin,
+      skill: input.skill,
+      contents: '# GitHub review\nUse GitHub.'
     })),
     addMarketplace: vi.fn(),
     installPlugin: vi.fn(),
@@ -246,6 +256,19 @@ describe('pluginCenterDataResource', () => {
     expect(resource.getSnapshot().data).toEqual([installed])
   })
 
+  it('passes force refresh through when reloading installed plugins', async () => {
+    const api = createApi()
+    const resource = getPluginCenterInstalledResource(api, '/repo')
+
+    await resource.refresh(true)
+
+    expect(api.getInstalledPlugins).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      forceRefresh: true
+    })
+  })
+
   it('reads one plugin detail by its exact locator and caches it for thirty seconds', async () => {
     const api = createApi()
     const resource = getPluginCenterPluginDetailResource(
@@ -305,6 +328,31 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
 
     expect(api.getAppTools).toHaveBeenCalledTimes(2)
+  })
+
+  it('lazily reads one trusted skill preview per plugin, skill, and cwd', async () => {
+    const api = createApi()
+    const resource = getPluginCenterSkillContentsResource(
+      api,
+      { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+      { id: 'github-review', name: 'GitHub review' },
+      '/repo/'
+    )
+
+    await resource.prefetch()
+    await resource.prefetch()
+
+    expect(api.getSkillContents).toHaveBeenCalledTimes(1)
+    expect(api.getSkillContents).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+      skill: { id: 'github-review', name: 'GitHub review' }
+    })
+    expect(resource.getSnapshot().data).toMatchObject({
+      status: 'ready',
+      contents: '# GitHub review\nUse GitHub.'
+    } satisfies Partial<PluginCenterGetSkillContentsResult>)
   })
 
   it('ignores an older installed-state response after invalidation starts a readback', async () => {

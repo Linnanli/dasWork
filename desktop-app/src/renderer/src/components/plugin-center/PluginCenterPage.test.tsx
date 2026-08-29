@@ -111,6 +111,13 @@ function pluginApiMock(snapshot: PluginCenterSnapshot): DesktopPluginCenterApi {
       app: { id: input.app.id },
       tools: []
     })),
+    getSkillContents: vi.fn(async (input) => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready' as const,
+      plugin: input.plugin,
+      skill: input.skill,
+      contents: '# Skill'
+    })),
     addMarketplace: vi.fn(),
     installPlugin: vi.fn(async () => {
       installedPlugins = snapshot.plugins
@@ -134,7 +141,11 @@ function pluginApiMock(snapshot: PluginCenterSnapshot): DesktopPluginCenterApi {
       status: 'applied' as const,
       changedSections: ['apps' as const]
     })),
-    setMcpServerEnabled: vi.fn(),
+    setMcpServerEnabled: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'applied' as const,
+      changedSections: ['mcp' as const]
+    })),
     upsertMcpServer: vi.fn(),
     removeMcpServer: vi.fn()
   }
@@ -196,7 +207,8 @@ async function renderPluginCenter(
     mention: { path: string; name: string }
     prompt: string
   }) => void,
-  onTryApp?: (input: { mention: { path: string; name: string } }) => void
+  onTryApp?: (input: { mention: { path: string; name: string } }) => void,
+  onTrySkill?: (input: { mention: { path: string; name: string } }) => void
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   const root = createRoot(container)
@@ -209,6 +221,7 @@ async function renderPluginCenter(
       threadId={context.threadId}
       onActivatePluginPrompt={onActivatePluginPrompt}
       onTryApp={onTryApp}
+      onTrySkill={onTrySkill}
     />
   )
   await act(async () => {
@@ -440,7 +453,8 @@ describe('PluginCenterPage', () => {
     })
     expect(api.getInstalledPlugins).toHaveBeenCalledWith({
       version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined
+      cwd: undefined,
+      forceRefresh: false
     })
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('GitHub')
@@ -470,9 +484,40 @@ describe('PluginCenterPage', () => {
     })
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(api.getInstalledPlugins).toHaveBeenCalledTimes(2)
+    expect(api.getInstalledPlugins).toHaveBeenLastCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: undefined,
+      forceRefresh: true
+    })
     expect(container.querySelector('[data-slot="installed-plugin-icon"]')).not.toBeNull()
     expect(container.querySelector('[role="switch"]')).toBeNull()
     expect(onSurfaceChange).not.toHaveBeenCalled()
+  })
+
+  it('keeps a successful installation visible while the refreshed installed list is still stale', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    vi.mocked(api.getInstalledPlugins).mockResolvedValue({
+      version: PLUGIN_CENTER_API_VERSION,
+      generatedAt: '2026-08-24T00:00:00.000Z',
+      plugins: []
+    })
+    vi.mocked(api.installPlugin).mockResolvedValue({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'applied',
+      changedItemId: 'plugin:github',
+      changedSections: ['installed'],
+      targetInstalled: true
+    })
+    const container = await renderPluginCenter(api)
+    const installButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '安装'
+    )
+
+    await act(async () => {
+      installButton?.click()
+    })
+
+    expect(container.querySelector('[data-slot="installed-plugin-icon"]')).not.toBeNull()
   })
 
   it('opens a card detail without nesting its install action, then restores the browse context', async () => {
@@ -544,7 +589,7 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    const skill = container.querySelector<HTMLElement>('[data-slot="plugin-detail-skill"]')
+    const skill = container.querySelector<HTMLElement>('[data-slot="plugin-detail-skill-row"]')
     const description = skill?.querySelector('p')
     const toggle = skill?.querySelector<HTMLButtonElement>(
       'button[aria-label="GitHub review 停用"]'
@@ -574,6 +619,39 @@ describe('PluginCenterPage', () => {
       skill: { id: 'github-review' },
       enabled: false
     })
+  })
+
+  it('lazily opens a skill preview without treating its inline switch as a preview action', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    const skill = container.querySelector<HTMLElement>('[data-slot="plugin-detail-skill-row"]')
+    const toggle = skill?.querySelector<HTMLButtonElement>(
+      'button[aria-label="GitHub review 停用"]'
+    )
+
+    expect(api.getSkillContents).not.toHaveBeenCalled()
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+    expect(api.getSkillContents).not.toHaveBeenCalled()
+
+    await act(async () => {
+      skill?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(api.getSkillContents).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: undefined,
+      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+      skill: { id: 'github-review', name: 'GitHub review' }
+    })
+    expect(document.body.querySelector('[data-slot="plugin-skill-preview-dialog"]')).not.toBeNull()
   })
 
   it('updates a plugin detail skill switch before its write completes', async () => {
@@ -656,7 +734,7 @@ describe('PluginCenterPage', () => {
     })
 
     const connect = container.querySelector<HTMLButtonElement>(
-      '[data-slot="plugin-detail-app"] button[aria-label="连接 GitHub App"]'
+      '[data-slot="plugin-detail-app-row"] button[aria-label="连接 GitHub App"]'
     )
     expect(connect?.textContent).toContain('连接')
 
@@ -703,7 +781,7 @@ describe('PluginCenterPage', () => {
     await act(async () => {
       container
         .querySelector<HTMLButtonElement>(
-          '[data-slot="plugin-detail-app"] button[aria-label="连接 GitHub App"]'
+          '[data-slot="plugin-detail-app-row"] button[aria-label="连接 GitHub App"]'
         )
         ?.click()
       await Promise.resolve()
@@ -761,7 +839,7 @@ describe('PluginCenterPage', () => {
       page: 'detail',
       pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
     })
-    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app-row"]')
     const appOpen = app?.querySelector<HTMLButtonElement>('[data-slot="plugin-detail-app-open"]')
 
     expect(app?.querySelector('[aria-label^="连接 "]')).toBeNull()
@@ -803,11 +881,11 @@ describe('PluginCenterPage', () => {
       page: 'detail',
       pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
     })
-    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app-row"]')
     const appOpen = app?.querySelector<HTMLButtonElement>('[data-slot="plugin-detail-app-open"]')
 
-    expect(appOpen?.tagName).toBe('BUTTON')
-    expect(app?.getAttribute('role')).toBeNull()
+    expect(appOpen?.tagName).toBe('DIV')
+    expect(app?.getAttribute('role')).toBe('button')
 
     await act(async () => {
       appOpen?.click()
@@ -871,7 +949,7 @@ describe('PluginCenterPage', () => {
       page: 'detail',
       pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
     })
-    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app-row"]')
     const connect = app?.querySelector<HTMLButtonElement>('button[aria-label="连接 GitHub App"]')
 
     expect(app?.querySelector('[data-slot="plugin-detail-app-description"]')?.textContent).toBe(
@@ -932,7 +1010,7 @@ describe('PluginCenterPage', () => {
         pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
       })
       const connect = container.querySelector<HTMLButtonElement>(
-        '[data-slot="plugin-detail-app"] button[aria-label="连接 GitHub App"]'
+        '[data-slot="plugin-detail-app-row"] button[aria-label="连接 GitHub App"]'
       )
 
       await act(async () => {
@@ -956,6 +1034,61 @@ describe('PluginCenterPage', () => {
     }
   )
 
+  it('groups detail apps by their categories when the plugin includes multiple categories', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const detail = pluginDetailResult(baseSnapshot.plugins[0])
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps = [
+      {
+        ...detail.detail.apps[0]!,
+        id: 'codex-security-access',
+        name: 'Codex Security Access',
+        category: 'Security'
+      },
+      {
+        ...detail.detail.apps[0]!,
+        id: 'linear',
+        name: 'Linear',
+        category: 'Work tracking & coordination'
+      },
+      {
+        ...detail.detail.apps[0]!,
+        id: 'atlassian-rovo',
+        name: 'Atlassian Rovo',
+        category: 'Work tracking & coordination'
+      },
+      {
+        ...detail.detail.apps[0]!,
+        id: 'github',
+        name: 'GitHub',
+        category: 'Code hosting & security findings'
+      }
+    ]
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
+
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(
+      Array.from(container.querySelectorAll('[data-slot="plugin-detail-app-category"]')).map(
+        (category) => category.textContent
+      )
+    ).toEqual(['Security', 'Work tracking & coordination', 'Code hosting & security findings'])
+    const appsSection = Array.from(container.querySelectorAll('h2'))
+      .find((heading) => heading.textContent === '应用 4')
+      ?.closest('section')
+    expect(
+      Array.from(appsSection?.querySelectorAll('[data-slot="plugin-detail-app-name"]') ?? []).map(
+        (app) => app.textContent
+      )
+    ).toEqual(['Codex Security Access', 'Linear', 'Atlassian Rovo', 'GitHub'])
+  })
+
   it('uses the reference detail-page inset across resource and information sections', async () => {
     const container = await renderPluginCenter(pluginApiMock(baseSnapshot), vi.fn(), {
       page: 'detail',
@@ -965,7 +1098,7 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app"]')
+    const app = container.querySelector<HTMLElement>('[data-slot="plugin-detail-app-row"]')
     const detailPage = container.querySelector<HTMLElement>('[data-slot="plugin-detail-page"]')
     const appsHeading = Array.from(container.querySelectorAll('h2')).find(
       (heading) => heading.textContent === '应用 1'
@@ -973,7 +1106,7 @@ describe('PluginCenterPage', () => {
     const informationHeading = Array.from(container.querySelectorAll('h2')).find(
       (heading) => heading.textContent === '信息'
     )
-    const icon = app?.querySelector<HTMLElement>('img, div')
+    const icon = app?.querySelector<HTMLElement>('.size-9')
     const title = app?.querySelector<HTMLElement>('[data-slot="plugin-detail-app-name"]')
     const description = app?.querySelector<HTMLElement>(
       '[data-slot="plugin-detail-app-description"]'
@@ -989,8 +1122,13 @@ describe('PluginCenterPage', () => {
     const mcpServer = detailPage?.querySelector<HTMLElement>(
       '[data-slot="plugin-detail-mcp-server"]'
     )
+    const sectionHeadings = Array.from(detailPage?.querySelectorAll('h2') ?? []).map(
+      (heading) => heading.textContent
+    )
 
     expect(detailPage?.className).toContain('[--detail-page-inline-inset:0.5rem]')
+    expect(sectionHeadings).toEqual(['应用 1', 'MCP 服务器 1', '技能 1', '信息'])
+    expect(container.querySelector('[data-slot="plugin-detail-app-category"]')).toBeNull()
     expect(detailHeader?.className).toContain('px-[var(--detail-page-inline-inset)]')
     expect(defaultPrompts?.className).toContain('mx-[var(--detail-page-inline-inset)]')
     expect(longDescription?.parentElement?.className).toContain(
@@ -1018,6 +1156,129 @@ describe('PluginCenterPage', () => {
     expect(informationHeading?.parentElement?.nextElementSibling?.className).toContain(
       'px-[var(--detail-page-inline-inset)]'
     )
+  })
+
+  it('resolves plugin MCP names to directory apps using the reference identity aliases', async () => {
+    const snapshot: PluginCenterSnapshot = {
+      ...baseSnapshot,
+      apps: [
+        {
+          id: 'github-app',
+          name: 'GitHub',
+          description: 'Repository tools',
+          sourceKind: 'marketplace',
+          pluginIds: ['plugin:github'],
+          pluginDisplayNames: ['Codex Security', 'GitHub'],
+          labels: { retrievable: 'true' },
+          enabled: true,
+          accessible: true,
+          canToggle: true
+        }
+      ]
+    }
+    const api = pluginApiMock(snapshot)
+    const detail = pluginDetailResult(snapshot.plugins[0])
+    if (detail.status !== 'ready') throw new Error('Expected ready plugin detail fixture')
+    detail.detail.apps[0] = { ...detail.detail.apps[0]!, name: 'GitHub' }
+    detail.detail.mcpServers = ['codex-security', 'unmatched-server']
+    vi.mocked(api.getPluginDetail).mockResolvedValue(detail)
+
+    const container = await renderPluginCenter(api, vi.fn(), {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const heading = Array.from(container.querySelectorAll('h2')).find(
+      (candidate) => candidate.textContent === 'MCP 服务器 2'
+    )
+    const section = heading?.closest('section')
+
+    expect(section?.textContent).toContain('GitHub')
+    expect(section?.textContent).not.toContain('codex-security')
+    expect(section?.textContent).toContain('unmatched-server')
+    expect(section?.querySelectorAll('[data-slot="plugin-detail-app-row"]')).toHaveLength(1)
+    expect(section?.querySelectorAll('[data-slot="plugin-detail-mcp-server"]')).toHaveLength(1)
+
+    await act(async () => {
+      section?.querySelector<HTMLElement>('[data-slot="plugin-detail-app-row"]')?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.getAppTools).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: undefined,
+      threadId: undefined,
+      app: { id: 'github-app' }
+    })
+    expect(document.body.querySelector('[data-slot="plugin-app-tools-dialog"]')).not.toBeNull()
+    expect(api.getSnapshot).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: undefined,
+      threadId: undefined,
+      forceRefresh: false,
+      sections: ['apps'],
+      includePluginDetails: false
+    })
+  })
+
+  it('keeps configured MCP servers inline with settings and an independently writable switch', async () => {
+    const snapshot: PluginCenterSnapshot = {
+      ...baseSnapshot,
+      mcp: {
+        userServers: [],
+        pluginServers: [
+          {
+            id: 'github-mcp',
+            name: 'github',
+            displayName: 'GitHub',
+            enabled: true,
+            connected: true,
+            authStatus: 'unsupported',
+            toolCount: 2,
+            origin: 'plugin',
+            editable: false,
+            canToggle: true,
+            pluginId: 'plugin:github',
+            pluginDisplayName: 'GitHub',
+            transport: 'unknown'
+          }
+        ]
+      }
+    }
+    const api = pluginApiMock(snapshot)
+    const onSurfaceChange = vi.fn()
+    const container = await renderPluginCenter(api, onSurfaceChange, {
+      page: 'detail',
+      pluginRef: { id: 'plugin:github', marketplaceId: 'marketplace:personal' }
+    })
+    const server = container.querySelector<HTMLElement>('[data-slot="plugin-detail-mcp-server"]')
+    const settings = server?.querySelector<HTMLButtonElement>(
+      'button[aria-label="打开 GitHub MCP"]'
+    )
+    const toggle = server?.querySelector<HTMLButtonElement>('button[aria-label="GitHub 停用"]')
+
+    expect(server?.textContent).toContain('已连接 · 2 个工具')
+    expect(settings).not.toBeNull()
+    expect(toggle).not.toBeNull()
+    await act(async () => {
+      settings?.click()
+    })
+    expect(onSurfaceChange).toHaveBeenCalledWith({ page: 'manage', tab: 'mcp' })
+
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+    expect(api.setMcpServerEnabled).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: undefined,
+      threadId: undefined,
+      server: { id: 'github-mcp' },
+      enabled: false
+    })
   })
 
   it('uses the plugin brand color for the animated default-prompt background', async () => {

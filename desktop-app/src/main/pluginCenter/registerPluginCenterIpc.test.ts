@@ -60,6 +60,15 @@ const APP_TOOLS_RESULT = {
   ]
 } as const
 
+const SKILL_CONTENTS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  status: 'ready',
+  plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+  skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' },
+  contents: '# Skill A',
+  localPath: '/trusted/skill-a/SKILL.md'
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -76,6 +85,7 @@ type ServiceMethod =
   | 'getInstalledPlugins'
   | 'getPluginDetail'
   | 'getAppTools'
+  | 'getSkillContents'
   | 'addMarketplace'
   | 'installPlugin'
   | 'uninstallPlugin'
@@ -127,6 +137,26 @@ const cases: Case[] = [
     expectedPayload: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
     invalidPayload: { ...VALID_CONTEXT, app: { id: 'app-a' }, includeTools: true },
     validResult: APP_TOOLS_RESULT
+  },
+  {
+    channel: pluginCenterIpcChannels.getSkillContents,
+    method: 'getSkillContents',
+    validPayload: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+      skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' }
+    },
+    expectedPayload: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+      skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' }
+    },
+    invalidPayload: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a' },
+      skill: { id: 'skill-a', name: 'skill-a', path: '/private/SKILL.md' }
+    },
+    validResult: SKILL_CONTENTS_RESULT
   },
   {
     channel: pluginCenterIpcChannels.addMarketplace,
@@ -249,6 +279,7 @@ function createService(
     ),
     getPluginDetail: vi.fn(async () => resultByMethod.getPluginDetail ?? PLUGIN_DETAIL_RESULT),
     getAppTools: vi.fn(async () => resultByMethod.getAppTools ?? APP_TOOLS_RESULT),
+    getSkillContents: vi.fn(async () => resultByMethod.getSkillContents ?? SKILL_CONTENTS_RESULT),
     addMarketplace: vi.fn(async () => resultByMethod.addMarketplace ?? MARKETPLACE_RESULT),
     installPlugin: vi.fn(async () => resultByMethod.installPlugin ?? MUTATION_RESULT),
     uninstallPlugin: vi.fn(async () => resultByMethod.uninstallPlugin ?? MUTATION_RESULT),
@@ -273,6 +304,7 @@ describe('createPluginCenterIpcHandlers', () => {
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
+      getSkillContents: 'codex:plugin-center:get-skill-contents',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
@@ -337,7 +369,8 @@ describe('createPluginCenterIpcHandlers', () => {
         method === 'getSnapshot' ||
         method === 'getInstalledPlugins' ||
         method === 'getPluginDetail' ||
-        method === 'getAppTools'
+        method === 'getAppTools' ||
+        method === 'getSkillContents'
           ? '插件中心数据加载失败，请重试。'
           : '插件中心操作失败，请刷新后重试。'
       await expect(handlers[channel]({}, validPayload)).rejects.toThrow(expectedMessage)

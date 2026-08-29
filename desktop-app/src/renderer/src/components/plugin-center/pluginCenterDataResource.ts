@@ -2,6 +2,7 @@ import type {
   DesktopPluginCenterApi,
   PluginCenterGetAppToolsResult,
   PluginCenterGetPluginDetailResult,
+  PluginCenterGetSkillContentsResult,
   PluginCenterPlugin,
   PluginCenterSnapshot,
   PluginCenterSnapshotSection
@@ -19,13 +20,23 @@ const RESOURCE_GC_MS = 5 * 60_000
 const MAX_CWD_RESOURCES = 3
 const MAX_PLUGIN_DETAIL_RESOURCES = 20
 const MAX_APP_TOOLS_RESOURCES = 40
+const MAX_SKILL_CONTENTS_RESOURCES = 40
 
 type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error'
 type ResourceKind =
-  'catalog' | 'installed' | 'detail' | 'app-tools' | PluginCenterSupplementalSection
+  | 'catalog'
+  | 'installed'
+  | 'detail'
+  | 'app-tools'
+  | 'skill-contents'
+  | PluginCenterSupplementalSection
 export type PluginCenterSupplementalSection = Exclude<PluginCenterSnapshotSection, 'plugins'>
 type ResourceLogEvent =
-  'prefetch-start' | 'prefetch-complete' | 'cache-hit-fresh' | 'cache-hit-stale' | 'inflight-joined'
+  | 'prefetch-start'
+  | 'prefetch-complete'
+  | 'cache-hit-fresh'
+  | 'cache-hit-stale'
+  | 'inflight-joined'
 
 export type PluginCenterResourceSnapshot<T> = {
   data: T | null
@@ -40,6 +51,7 @@ export type PluginCenterResource<T> = {
   getSnapshot(): PluginCenterResourceSnapshot<T>
   prefetch(forceRefresh?: boolean): Promise<void>
   refresh(forceRefresh?: boolean): Promise<void>
+  update(updater: (data: T) => T): void
   invalidate(): void
   release(): void
 }
@@ -57,6 +69,7 @@ type ApiResources = {
   mcp: Map<string, ResourceStore<PluginCenterSnapshot>>
   details: Map<string, ResourceStore<PluginCenterGetPluginDetailResult>>
   appTools: Map<string, ResourceStore<PluginCenterGetAppToolsResult>>
+  skillContents: Map<string, ResourceStore<PluginCenterGetSkillContentsResult>>
 }
 
 type InFlightRequest = {
@@ -78,6 +91,14 @@ function normalizeCwd(cwd?: string): string {
 
 function appToolsResourceKey(appId: string, cwd?: string, threadId?: string): string {
   return `${normalizeCwd(cwd)}\u0000${threadId?.trim() ?? ''}\u0000${appId}`
+}
+
+function skillContentsResourceKey(
+  plugin: { id: string; marketplaceId?: string },
+  skill: { id: string },
+  cwd?: string
+): string {
+  return `${normalizeCwd(cwd)}\u0000${plugin.id}\u0000${plugin.marketplaceId ?? ''}\u0000${skill.id}`
 }
 
 function errorMessage(error: unknown): string {
@@ -109,7 +130,8 @@ function resourcesForApi(api: DesktopPluginCenterApi): ApiResources {
     apps: new Map(),
     mcp: new Map(),
     details: new Map(),
-    appTools: new Map()
+    appTools: new Map(),
+    skillContents: new Map()
   }
   resourcesByApi.set(api, created)
   return created
@@ -273,6 +295,17 @@ function createResource<T>({
     refresh(forceRefresh = false) {
       return loadResource(forceRefresh, 'refresh')
     },
+    update(updater) {
+      if (snapshot.data === null) return
+      snapshot = {
+        ...snapshot,
+        data: updater(snapshot.data),
+        error: null,
+        status: 'ready',
+        updatedAt: now()
+      }
+      emit()
+    },
     invalidate() {
       generation += 1
       snapshot = {
@@ -394,10 +427,11 @@ export function getPluginCenterInstalledResource(
     kind: 'installed',
     cwd: key,
     freshMs: INSTALLED_FRESH_MS,
-    load: async () => {
+    load: async (forceRefresh) => {
       const result = await api.getInstalledPlugins({
         version: PLUGIN_CENTER_API_VERSION,
-        cwd: key || undefined
+        cwd: key || undefined,
+        forceRefresh
       })
       return result.plugins
     },
@@ -478,6 +512,42 @@ export function getPluginCenterAppToolsResource(
   })
   resources.appTools.set(key, resource)
   evictOldestCwdResource(resources.appTools, MAX_APP_TOOLS_RESOURCES)
+  return resource
+}
+
+export function getPluginCenterSkillContentsResource(
+  api: DesktopPluginCenterApi,
+  plugin: { id: string; marketplaceId?: string },
+  skill: { id: string; name: string },
+  cwd?: string
+): PluginCenterResource<PluginCenterGetSkillContentsResult> {
+  const normalizedCwd = normalizeCwd(cwd)
+  const key = skillContentsResourceKey(plugin, skill, normalizedCwd)
+  const resources = resourcesForApi(api)
+  const existing = resources.skillContents.get(key)
+  if (existing) {
+    existing.lastAccessedAt = now()
+    return existing
+  }
+
+  const resource = createResource({
+    kind: 'skill-contents',
+    cwd: normalizedCwd,
+    freshMs: APP_TOOLS_FRESH_MS,
+    load: (forceRefresh) =>
+      api.getSkillContents({
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: normalizedCwd || undefined,
+        plugin,
+        skill,
+        ...(forceRefresh ? { forceRefresh: true } : {})
+      }),
+    onRelease: () => {
+      resources.skillContents.delete(key)
+    }
+  })
+  resources.skillContents.set(key, resource)
+  evictOldestCwdResource(resources.skillContents, MAX_SKILL_CONTENTS_RESOURCES)
   return resource
 }
 

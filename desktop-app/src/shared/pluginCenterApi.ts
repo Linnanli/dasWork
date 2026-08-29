@@ -2,12 +2,14 @@ import { z } from 'zod'
 
 export const PLUGIN_CENTER_API_VERSION = 1 as const
 export const PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH = 500 as const
+export const PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES = 512 * 1024
 
 export const pluginCenterIpcChannels = {
   getSnapshot: 'codex:plugin-center:get-snapshot',
   getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
   getPluginDetail: 'codex:plugin-center:get-plugin-detail',
   getAppTools: 'codex:plugin-center:get-app-tools',
+  getSkillContents: 'codex:plugin-center:get-skill-contents',
   addMarketplace: 'codex:plugin-center:add-marketplace',
   installPlugin: 'codex:plugin-center:install-plugin',
   uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
@@ -153,7 +155,8 @@ export type PluginCenterRequestContext = z.infer<typeof pluginCenterRequestConte
 export const pluginCenterInstalledPluginsRequestSchema = z
   .object({
     version: z.literal(PLUGIN_CENTER_API_VERSION),
-    cwd: z.string().trim().min(1).optional()
+    cwd: z.string().trim().min(1).optional(),
+    forceRefresh: z.boolean().optional()
   })
   .strict()
 
@@ -253,6 +256,7 @@ export const pluginCenterAppSchema = z
     sourceKind: pluginCenterSourceKindSchema,
     pluginIds: z.array(idSchema).default([]),
     pluginDisplayNames: stringListSchema,
+    labels: z.record(z.string(), z.string()).optional(),
     enabled: z.boolean(),
     accessible: z.boolean(),
     canToggle: z.boolean().default(true),
@@ -325,6 +329,7 @@ const mcpServerBaseSchema = z
     toolCount: z.number().int().nonnegative(),
     origin: pluginCenterMcpOriginSchema,
     editable: z.boolean(),
+    canToggle: z.boolean().default(false),
     restriction: pluginCenterRestrictionSchema.optional()
   })
   .strict()
@@ -604,6 +609,53 @@ export const pluginCenterGetAppToolsResultSchema = z.discriminatedUnion('status'
 
 export type PluginCenterGetAppToolsResult = z.infer<typeof pluginCenterGetAppToolsResultSchema>
 
+export const pluginCenterSkillRefSchema = z
+  .object({
+    id: idSchema,
+    name: nonEmptyStringSchema
+  })
+  .strict()
+
+export type PluginCenterSkillRef = z.infer<typeof pluginCenterSkillRefSchema>
+
+export const pluginCenterGetSkillContentsRequestSchema = pluginCenterRequestContextSchema
+  .extend({
+    plugin: pluginCenterPluginRefSchema,
+    skill: pluginCenterSkillRefSchema,
+    forceRefresh: z.boolean().optional()
+  })
+  .strict()
+
+export type PluginCenterGetSkillContentsRequest = z.infer<
+  typeof pluginCenterGetSkillContentsRequestSchema
+>
+
+export const pluginCenterGetSkillContentsResultSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      version: z.literal(PLUGIN_CENTER_API_VERSION),
+      status: z.literal('ready'),
+      plugin: pluginCenterPluginRefSchema,
+      skill: pluginCenterSkillRefSchema,
+      contents: z.string().max(PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES),
+      localPath: z.string().trim().min(1).max(4_000).optional()
+    })
+    .strict(),
+  z
+    .object({
+      version: z.literal(PLUGIN_CENTER_API_VERSION),
+      status: z.literal('missing'),
+      plugin: pluginCenterPluginRefSchema,
+      skill: pluginCenterSkillRefSchema,
+      missingReason: z.enum(['not_found', 'ambiguous', 'unavailable'])
+    })
+    .strict()
+])
+
+export type PluginCenterGetSkillContentsResult = z.infer<
+  typeof pluginCenterGetSkillContentsResultSchema
+>
+
 export const pluginCenterInstallPluginRequestSchema = pluginCenterRequestContextSchema
   .extend({
     plugin: pluginCenterPluginRefSchema
@@ -616,7 +668,7 @@ export type PluginCenterInstallPluginRequest = z.infer<
 
 export const pluginCenterUninstallPluginRequestSchema = pluginCenterRequestContextSchema
   .extend({
-    plugin: pluginCenterItemRefSchema
+    plugin: pluginCenterPluginRefSchema
   })
   .strict()
 
@@ -783,6 +835,7 @@ export const pluginCenterMutationResultSchema = z
     message: optionalDisplayStringSchema,
     changedItemId: idSchema.optional(),
     changedSections: pluginCenterChangedSectionsSchema,
+    targetInstalled: z.boolean().optional(),
     snapshot: pluginCenterSnapshotSchema.optional()
   })
   .strict()
@@ -809,6 +862,9 @@ export type DesktopPluginCenterApi = {
     input: PluginCenterGetPluginDetailRequest
   ): Promise<PluginCenterGetPluginDetailResult>
   getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
+  getSkillContents(
+    input: PluginCenterGetSkillContentsRequest
+  ): Promise<PluginCenterGetSkillContentsResult>
   addMarketplace(
     input: PluginCenterAddMarketplaceRequest
   ): Promise<PluginCenterAddMarketplaceResult>

@@ -740,6 +740,20 @@ function App(): React.JSX.Element {
     },
     [startNewConversationWithDraft]
   )
+  const handleTrySkill = useCallback(
+    ({ mention }: { mention: { path: string; name: string } }): void => {
+      const directive = serializeComposerContextReference({
+        type: 'skill',
+        path: mention.path,
+        label: mention.name,
+        mentionName: mention.name
+      })
+      setSurface({ kind: 'conversation' })
+      clearActiveConversationId()
+      startNewConversationWithDraft(directive)
+    },
+    [startNewConversationWithDraft]
+  )
   const handleOpenConversation = useCallback<OpenSubagentConversation>(
     (conversationId) => {
       setSurface({ kind: 'conversation' })
@@ -836,6 +850,7 @@ function App(): React.JSX.Element {
             threadId={activeConversation?.threadId ?? activeEntry.context.threadId}
             onActivatePluginPrompt={handleActivatePluginPrompt}
             onTryApp={handleTryApp}
+            onTrySkill={handleTrySkill}
           />
         </section>
       ) : (

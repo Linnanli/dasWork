@@ -281,27 +281,32 @@ describe("CodexContextCatalogClient", () =>
                     }],
                 };
             }
-            if (method === "app/list")
+            if (method === "app/installed")
             {
                 return {
-                    data: [{
+                    apps: [{
+                        id: "disabled-app",
+                        runtimeName: "Disabled App",
+                        enabled: false,
+                        callable: false,
+                    }],
+                };
+            }
+            if (method === "app/read")
+            {
+                return {
+                    apps: [{
                         id: "disabled-app",
                         name: "Disabled App",
                         description: null,
-                        logoUrl: null,
-                        logoUrlDark: null,
-                        iconAssets: null,
-                        iconDarkAssets: null,
+                        iconUrl: null,
+                        iconUrlDark: null,
                         distributionChannel: null,
-                        branding: null,
-                        appMetadata: null,
-                        labels: null,
                         installUrl: null,
-                        isEnabled: false,
-                        isAccessible: false,
                         pluginDisplayNames: [],
+                        toolSummaries: null,
                     }],
-                    nextCursor: null,
+                    missingAppIds: [],
                 };
             }
             throw new Error(`unexpected method: ${method}`);
@@ -324,6 +329,233 @@ describe("CodexContextCatalogClient", () =>
             cwds: ["/repo"],
             forceRefetch: true,
         });
+        expect(mock.requests.find(({ method }) => method === "app/installed")?.params).toEqual({});
+        expect(mock.requests.find(({ method }) => method === "app/read")?.params).toEqual({
+            appIds: ["disabled-app"],
+        });
+    });
+
+    it("falls back to app/list when the installed app lifecycle is unsupported", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "initialize")
+            {
+                return { userAgent: "test" };
+            }
+            if (method === "app/installed")
+            {
+                throw new JsonRpcError({ code: -32_601, message: "Method not found" });
+            }
+            if (method === "app/list")
+            {
+                return {
+                    data: [{
+                        id: "directory-app",
+                        name: "Directory App",
+                        description: null,
+                        logoUrl: null,
+                        logoUrlDark: null,
+                        iconAssets: null,
+                        iconDarkAssets: null,
+                        distributionChannel: null,
+                        branding: null,
+                        appMetadata: null,
+                        labels: null,
+                        installUrl: null,
+                        isEnabled: true,
+                        isAccessible: true,
+                        pluginDisplayNames: [],
+                    }],
+                    nextCursor: null,
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(client.listAppsForManagement()).resolves.toMatchObject([
+            { id: "directory-app", name: "Directory App" },
+        ]);
+        expect(mock.requests.map(({ method }) => method)).toContain("app/list");
+    });
+
+    it("preserves installed app order while enriching identity aliases from app/read", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "initialize")
+            {
+                return { userAgent: "test" };
+            }
+            if (method === "app/installed")
+            {
+                return {
+                    apps: [
+                        { id: "github", runtimeName: "GitHub", enabled: true, callable: true },
+                        { id: "security-access", runtimeName: "Security", enabled: true, callable: true },
+                    ],
+                };
+            }
+            if (method === "app/read")
+            {
+                return {
+                    apps: [
+                        {
+                            id: "security-access",
+                            name: "Codex Security Access",
+                            description: null,
+                            iconUrl: null,
+                            iconUrlDark: null,
+                            distributionChannel: null,
+                            installUrl: null,
+                            pluginDisplayNames: ["Codex Security"],
+                            toolSummaries: null,
+                        },
+                        {
+                            id: "github",
+                            name: "GitHub",
+                            description: null,
+                            iconUrl: null,
+                            iconUrlDark: null,
+                            distributionChannel: null,
+                            installUrl: null,
+                            pluginDisplayNames: ["Codex Security", "GitHub"],
+                            toolSummaries: null,
+                        },
+                    ],
+                    missingAppIds: [],
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const apps = await client.listAppsForManagement();
+
+        expect(apps.map((app) => app.id)).toEqual(["github", "security-access"]);
+        expect(apps[0]?.pluginDisplayNames).toEqual(["Codex Security", "GitHub"]);
+    });
+
+    it("reads local skill contents through fs/readFile with bounded UTF-8 decoding", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method === "fs/readFile")
+            {
+                expect(params).toEqual({ path: "/trusted/review/SKILL.md" });
+                return {
+                    dataBase64: Buffer.from("# Review\nUse this skill.", "utf8").toString("base64"),
+                };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(
+            client.readSkillFileContents({
+                path: "/trusted/review/SKILL.md",
+                maxBytes: 512,
+            }),
+        ).resolves.toBe("# Review\nUse this skill.");
+        expect(mock.requests.map(({ method }) => method)).toContain("fs/readFile");
+    });
+
+    it("rejects non-UTF-8 or oversized local skill contents", async () =>
+    {
+        const invalidUtf8 = new CatalogMockClient((method) =>
+        {
+            if (method === "fs/readFile")
+            {
+                return { dataBase64: Buffer.from([0xff]).toString("base64") };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const oversized = new CatalogMockClient((method) =>
+        {
+            if (method === "fs/readFile")
+            {
+                return { dataBase64: Buffer.from("too large", "utf8").toString("base64") };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+
+        await expect(
+            new CodexContextCatalogClient({ createClient: () => invalidUtf8 }).readSkillFileContents({
+                path: "/trusted/review/SKILL.md",
+            }),
+        ).rejects.toThrow("valid UTF-8");
+        await expect(
+            new CodexContextCatalogClient({ createClient: () => oversized }).readSkillFileContents({
+                path: "/trusted/review/SKILL.md",
+                maxBytes: 4,
+            }),
+        ).rejects.toThrow("maximum supported size");
+    });
+
+    it("reads remote plugin skill contents through plugin/skill/read", async () =>
+    {
+        const mock = new CatalogMockClient((method, params) =>
+        {
+            if (method === "plugin/skill/read")
+            {
+                expect(params).toEqual({
+                    remoteMarketplaceName: "openai-curated-remote",
+                    remotePluginId: "plugin-123",
+                    skillName: "review",
+                });
+                return { contents: "# Remote review" };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        await expect(
+            client.readRemotePluginSkillContents({
+                remoteMarketplaceName: "openai-curated-remote",
+                remotePluginId: "plugin-123",
+                skillName: "review",
+                maxBytes: 512,
+            }),
+        ).resolves.toBe("# Remote review");
+    });
+
+    it("preserves remote skill missing responses and bounds remote contents", async () =>
+    {
+        const missing = new CatalogMockClient((method) =>
+        {
+            if (method === "plugin/skill/read")
+            {
+                return { contents: null };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const oversized = new CatalogMockClient((method) =>
+        {
+            if (method === "plugin/skill/read")
+            {
+                return { contents: "too large" };
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+
+        await expect(
+            new CodexContextCatalogClient({ createClient: () => missing }).readRemotePluginSkillContents({
+                remoteMarketplaceName: "openai-curated-remote",
+                remotePluginId: "plugin-123",
+                skillName: "review",
+            }),
+        ).resolves.toBeNull();
+        await expect(
+            new CodexContextCatalogClient({
+                createClient: () => oversized,
+            }).readRemotePluginSkillContents({
+                remoteMarketplaceName: "openai-curated-remote",
+                remotePluginId: "plugin-123",
+                skillName: "review",
+                maxBytes: 4,
+            }),
+        ).rejects.toThrow("maximum supported size");
     });
 
     it("writes fixed enabled config actions with quoted dynamic key segments", async () =>

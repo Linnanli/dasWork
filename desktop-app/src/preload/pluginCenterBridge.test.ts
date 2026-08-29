@@ -61,6 +61,15 @@ const APP_TOOLS_RESULT = {
   ]
 } as const
 
+const SKILL_CONTENTS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  status: 'ready',
+  plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+  skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' },
+  contents: '# Skill A',
+  localPath: '/trusted/skill-a/SKILL.md'
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -77,6 +86,7 @@ type BridgeMethod =
   | 'getInstalledPlugins'
   | 'getPluginDetail'
   | 'getAppTools'
+  | 'getSkillContents'
   | 'addMarketplace'
   | 'installPlugin'
   | 'uninstallPlugin'
@@ -128,6 +138,26 @@ const cases: Case[] = [
     expectedPayload: { ...VALID_CONTEXT, threadId: 'thread-a', app: { id: 'app-a' } },
     invalidInput: { ...VALID_CONTEXT, app: { id: 'app-a' }, includeTools: true },
     result: APP_TOOLS_RESULT
+  },
+  {
+    method: 'getSkillContents',
+    channel: pluginCenterIpcChannels.getSkillContents,
+    input: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+      skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' }
+    },
+    expectedPayload: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a', marketplaceId: 'market-main' },
+      skill: { id: 'plugin:plugin-a:skill-a', name: 'skill-a' }
+    },
+    invalidInput: {
+      ...VALID_CONTEXT,
+      plugin: { id: 'plugin-a' },
+      skill: { id: 'skill-a', name: 'skill-a', path: '/private/SKILL.md' }
+    },
+    result: SKILL_CONTENTS_RESULT
   },
   {
     method: 'addMarketplace',
@@ -249,6 +279,7 @@ describe('createPluginCenterBridge', () => {
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
+      getSkillContents: 'codex:plugin-center:get-skill-contents',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',

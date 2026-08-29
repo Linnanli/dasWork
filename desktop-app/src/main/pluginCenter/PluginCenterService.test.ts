@@ -126,6 +126,29 @@ function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCe
         mcpServers: ['plugin-server']
       }
     ]),
+    readPluginDetailForManagement: vi.fn(async () => ({
+      summary: {
+        id: 'git@official',
+        name: 'git',
+        remotePluginId: 'remote-git',
+        enabled: true,
+        installed: true,
+        source: { type: 'local', path: '/plugins/git' },
+        interface: { displayName: 'Git helpers' }
+      },
+      skills: [
+        {
+          name: 'review',
+          description: 'Review code',
+          path: '/plugins/git/skills/review/SKILL.md',
+          enabled: true
+        }
+      ],
+      apps: [{ id: 'github', name: 'GitHub' }],
+      mcpServers: ['plugin-server']
+    })),
+    readSkillFileContents: vi.fn(async () => '# Review\nUse the trusted local file.'),
+    readRemotePluginSkillContents: vi.fn(async () => '# Remote Review\nUse remote contents.'),
     listSkillsForManagement: vi.fn(async () => [
       {
         name: 'writer',
@@ -145,6 +168,7 @@ function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCe
         isEnabled: true,
         isAccessible: false,
         pluginDisplayNames: ['Git helpers'],
+        labels: { retrievable: 'true' },
         installUrl: 'https://github.com/apps/example'
       }
     ]),
@@ -195,7 +219,9 @@ describe('PluginCenterService', () => {
     expect(result.snapshot.skills).toContainEqual(
       expect.objectContaining({ id: '/skills/writer/SKILL.md', enabled: false })
     )
-    expect(result.snapshot.apps).toMatchObject([{ id: 'github', accessible: false }])
+    expect(result.snapshot.apps).toMatchObject([
+      { id: 'github', accessible: false, labels: { retrievable: 'true' } }
+    ])
     expect(result.snapshot.apps[0]?.restriction).toBeUndefined()
     expect(result.snapshot.mcp.userServers).toMatchObject([
       {
@@ -210,6 +236,10 @@ describe('PluginCenterService', () => {
         ]
       },
       { id: 'inherited', transport: 'streamable-http', editable: false, origin: 'project' }
+    ])
+    expect(result.snapshot.mcp.userServers.map((server) => [server.id, server.canToggle])).toEqual([
+      ['local', true],
+      ['inherited', false]
     ])
     expect(JSON.stringify(result.snapshot)).not.toContain('secret-value')
     expect(result.snapshot.plugins[0]).toMatchObject({
@@ -226,7 +256,7 @@ describe('PluginCenterService', () => {
       })
     )
     expect(result.snapshot.mcp.pluginServers).toMatchObject([
-      { id: 'plugin-server', pluginId: 'git@official', editable: false }
+      { id: 'plugin-server', pluginId: 'git@official', editable: false, canToggle: true }
     ])
   })
 
@@ -412,8 +442,161 @@ describe('PluginCenterService', () => {
         server: { id: 'inherited' },
         enabled: true
       })
-    ).rejects.toThrow('Only user-configured MCP servers')
+    ).rejects.toThrow('Only user-toggleable MCP servers')
     expect(provider.setMcpServerEnabled).not.toHaveBeenCalled()
+  })
+
+  it('allows plugin MCP servers to be toggled when no managed config layer owns enabled', async () => {
+    const provider = createProvider()
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.setMcpServerEnabled({
+      version: PLUGIN_CENTER_API_VERSION,
+      server: { id: 'plugin-server' },
+      enabled: true
+    })
+
+    expect(provider.setMcpServerEnabled).toHaveBeenCalledWith({
+      cwd: '/repo',
+      serverName: 'plugin-server',
+      enabled: true
+    })
+    expect(result.status).toBe('applied')
+  })
+
+  it('blocks plugin MCP toggles when a higher-priority config layer owns enabled', async () => {
+    const provider = createProvider({
+      readMcpManagementSnapshot: vi.fn(async () => ({
+        config: {
+          config: {
+            mcp_servers: {
+              'plugin-server': { enabled: false }
+            }
+          },
+          layers: [],
+          origins: {
+            'mcp_servers."plugin-server".enabled': {
+              name: { type: 'project', dotCodexFolder: '/repo/.codex' },
+              version: 'v-project'
+            }
+          }
+        },
+        servers: [{ name: 'plugin-server', connected: false, authStatus: 'oAuth', toolCount: 1 }],
+        pluginDetails: [
+          {
+            summary: {
+              id: 'git@official',
+              name: 'git',
+              enabled: true,
+              interface: { displayName: 'Git helpers' }
+            },
+            mcpServers: ['plugin-server']
+          }
+        ]
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    await expect(
+      service.setMcpServerEnabled({
+        version: PLUGIN_CENTER_API_VERSION,
+        server: { id: 'plugin-server' },
+        enabled: true
+      })
+    ).rejects.toThrow('Only user-toggleable MCP servers')
+    expect(provider.setMcpServerEnabled).not.toHaveBeenCalled()
+  })
+
+  it('reads installed skill contents from provider-resolved metadata instead of renderer paths', async () => {
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        {
+          name: 'git:review',
+          description: 'Review code',
+          path: '/trusted/installed/review/SKILL.md',
+          scope: 'plugin',
+          enabled: true
+        }
+      ])
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getSkillContents({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'git@official', marketplaceId: 'official' },
+      skill: { id: '/private/not-allowed/SKILL.md', name: 'review' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      contents: '# Review\nUse the trusted local file.',
+      localPath: '/trusted/installed/review/SKILL.md'
+    })
+    expect(provider.readSkillFileContents).toHaveBeenCalledWith({
+      path: '/trusted/installed/review/SKILL.md',
+      maxBytes: 524288
+    })
+  })
+
+  it('reads remote plugin skill contents from a server-resolved plugin locator', async () => {
+    const remotePlugin = {
+      id: 'remote@official',
+      name: 'remote',
+      remotePluginId: 'remote-plugin-id',
+      source: { type: 'remote' },
+      installed: false,
+      enabled: false,
+      installPolicy: 'AVAILABLE',
+      availability: 'AVAILABLE',
+      interface: { displayName: 'Remote helpers' }
+    }
+    const provider = createProvider({
+      listPluginCatalog: vi.fn(async () => ({
+        marketplaces: [{ name: 'official', path: null, plugins: [remotePlugin] }],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      })),
+      readPluginDetailForManagement: vi.fn(async () => ({
+        summary: remotePlugin,
+        skills: [{ name: 'remote-review', description: 'Review remotely', enabled: true }],
+        apps: [],
+        mcpServers: []
+      })),
+      listSkillsForManagement: vi.fn(async () => []),
+      readSkillFileContents: vi.fn(),
+      readRemotePluginSkillContents: vi.fn(async () => '# Remote Review')
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getSkillContents({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'remote@official', marketplaceId: 'official' },
+      skill: { id: 'plugin:remote@official:remote-review', name: 'remote-review' }
+    })
+
+    expect(result).toMatchObject({ status: 'ready', contents: '# Remote Review' })
+    expect(provider.readSkillFileContents).not.toHaveBeenCalled()
+    expect(provider.readRemotePluginSkillContents).toHaveBeenCalledWith({
+      remoteMarketplaceName: 'official',
+      remotePluginId: 'remote-plugin-id',
+      skillName: 'remote-review',
+      maxBytes: 524288
+    })
+  })
+
+  it('returns missing for unknown skill content requests without reading files', async () => {
+    const provider = createProvider()
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    await expect(
+      service.getSkillContents({
+        version: PLUGIN_CENTER_API_VERSION,
+        plugin: { id: 'git@official', marketplaceId: 'official' },
+        skill: { id: 'plugin:git@official:missing', name: 'missing' }
+      })
+    ).resolves.toMatchObject({ status: 'missing', missingReason: 'not_found' })
+    expect(provider.readSkillFileContents).not.toHaveBeenCalled()
+    expect(provider.readRemotePluginSkillContents).not.toHaveBeenCalled()
   })
 
   it('merges MCP edits with hidden fields and respects keep secret patches', async () => {
@@ -724,7 +907,18 @@ describe('PluginCenterService', () => {
     expect(provider.listInstalledPluginsForManagement!).toHaveBeenCalledTimes(5)
   })
 
-  it('installs using the cached catalog locator and verifies only installed state', async () => {
+  it('bypasses the installed-state cache when explicitly refreshed', async () => {
+    const provider = createProvider()
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    await service.getInstalledPlugins({ version: PLUGIN_CENTER_API_VERSION })
+    await service.getInstalledPlugins({ version: PLUGIN_CENTER_API_VERSION })
+    await service.getInstalledPlugins({ version: PLUGIN_CENTER_API_VERSION, forceRefresh: true })
+
+    expect(provider.listInstalledPluginsForManagement).toHaveBeenCalledTimes(2)
+  })
+
+  it('installs and uninstalls using the cached catalog locator without treating an asynchronous readback as failure', async () => {
     const provider = createProvider()
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
 
@@ -745,14 +939,120 @@ describe('PluginCenterService', () => {
       installAttemptId: expect.any(String),
       pluginName: 'git'
     })
+
+    await service.uninstallPlugin({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'git@official', marketplaceId: 'official' }
+    })
+
+    expect(provider.uninstallPlugin).toHaveBeenCalledWith({ pluginId: 'git@official' })
     expect(provider.listPluginCatalog).not.toHaveBeenCalled()
-    expect(provider.listInstalledPluginsForManagement).toHaveBeenCalledTimes(1)
+    expect(provider.listInstalledPluginsForManagement).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       status: 'applied',
       changedItemId: 'git@official',
       changedSections: ['installed']
     })
     expect(result.snapshot).toBeUndefined()
+  })
+
+  it('uses the opaque remote plugin id for remote catalog detail and mutation requests', async () => {
+    const remotePlugin = {
+      id: 'gmail@openai-curated-remote',
+      name: 'gmail',
+      remotePluginId: 'plugins~Plugin_gmail_123',
+      source: { type: 'remote' },
+      installed: false,
+      enabled: false,
+      installPolicy: 'AVAILABLE',
+      availability: 'AVAILABLE',
+      interface: { displayName: 'Gmail' }
+    }
+    const provider = createProvider({
+      listPluginCatalog: vi.fn(async () => ({
+        marketplaces: [{ name: 'openai-curated-remote', path: null, plugins: [remotePlugin] }],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      })),
+      listInstalledPluginsForManagement: vi.fn(async () => ({
+        marketplaces: [
+          {
+            name: 'openai-curated-remote',
+            path: null,
+            plugins: [{ ...remotePlugin, installed: true, enabled: true }]
+          }
+        ],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      })),
+      readPluginDetailForManagement: vi.fn(async () => ({
+        summary: remotePlugin,
+        skills: [],
+        apps: [],
+        mcpServers: []
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+    const input = {
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: remotePlugin.id, marketplaceId: 'openai-curated-remote' }
+    }
+
+    await service.getPluginDetail(input)
+    await service.installPlugin(input)
+    await service.uninstallPlugin(input)
+
+    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith({
+      remoteMarketplaceName: 'openai-curated-remote',
+      pluginName: 'plugins~Plugin_gmail_123'
+    })
+    expect(provider.installPlugin).toHaveBeenCalledWith({
+      remoteMarketplaceName: 'openai-curated-remote',
+      installAttemptId: expect.any(String),
+      pluginName: 'plugins~Plugin_gmail_123'
+    })
+    expect(provider.uninstallPlugin).toHaveBeenCalledWith({
+      pluginId: 'plugins~Plugin_gmail_123'
+    })
+  })
+
+  it('returns remote installation success before the asynchronous installed-state cache catches up', async () => {
+    const remotePlugin = {
+      id: 'gmail@openai-curated-remote',
+      name: 'gmail',
+      remotePluginId: 'plugins~Plugin_gmail_123',
+      source: { type: 'remote' },
+      installed: false,
+      enabled: false,
+      installPolicy: 'AVAILABLE',
+      availability: 'AVAILABLE',
+      interface: { displayName: 'Gmail' }
+    }
+    const provider = createProvider({
+      listPluginCatalog: vi.fn(async () => ({
+        marketplaces: [{ name: 'openai-curated-remote', path: null, plugins: [remotePlugin] }],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      })),
+      listInstalledPluginsForManagement: vi.fn(async () => ({
+        marketplaces: [],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.installPlugin({
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: remotePlugin.id, marketplaceId: 'openai-curated-remote' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'applied',
+      changedItemId: remotePlugin.id,
+      changedSections: ['installed']
+    })
+    expect(provider.listInstalledPluginsForManagement).not.toHaveBeenCalled()
   })
 
   it('keeps a fresh main-process catalog locator after the renderer gc window', async () => {
@@ -777,7 +1077,7 @@ describe('PluginCenterService', () => {
     })
 
     expect(provider.listPluginCatalog).toHaveBeenCalledTimes(1)
-    expect(provider.listInstalledPluginsForManagement!).toHaveBeenCalledTimes(1)
+    expect(provider.listInstalledPluginsForManagement!).not.toHaveBeenCalled()
   })
 
   it('awaits a stale main-process catalog refresh before returning data', async () => {
