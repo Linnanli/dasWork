@@ -2,8 +2,10 @@ import type {
   DesktopPluginCenterApi,
   PluginCenterGetAppToolsResult,
   PluginCenterGetPluginDetailResult,
+  PluginCenterGetRecommendedSkillsResult,
   PluginCenterGetSkillContentsResult,
   PluginCenterPlugin,
+  PluginCenterSkillListMode,
   PluginCenterSnapshot,
   PluginCenterSnapshotSection
 } from '../../../../shared/pluginCenterApi'
@@ -13,9 +15,10 @@ const CATALOG_FRESH_MS = 6 * 60 * 60 * 1_000
 const INSTALLED_FRESH_MS = 60_000
 const SKILLS_FRESH_MS = 60_000
 const APPS_FRESH_MS = 60_000
-const MCP_FRESH_MS = 30_000
+const MCP_FRESH_MS = 5 * 60_000
 const PLUGIN_DETAIL_FRESH_MS = 30_000
 const APP_TOOLS_FRESH_MS = 5 * 60_000
+const RECOMMENDED_SKILLS_FRESH_MS = 5 * 60_000
 const RESOURCE_GC_MS = 5 * 60_000
 const MAX_CWD_RESOURCES = 3
 const MAX_PLUGIN_DETAIL_RESOURCES = 20
@@ -29,6 +32,7 @@ type ResourceKind =
   | 'detail'
   | 'app-tools'
   | 'skill-contents'
+  | 'recommended-skills'
   | PluginCenterSupplementalSection
 export type PluginCenterSupplementalSection = Exclude<PluginCenterSnapshotSection, 'plugins'>
 type ResourceLogEvent =
@@ -70,6 +74,7 @@ type ApiResources = {
   details: Map<string, ResourceStore<PluginCenterGetPluginDetailResult>>
   appTools: Map<string, ResourceStore<PluginCenterGetAppToolsResult>>
   skillContents: Map<string, ResourceStore<PluginCenterGetSkillContentsResult>>
+  recommendedSkills: Map<string, ResourceStore<PluginCenterGetRecommendedSkillsResult>>
 }
 
 type InFlightRequest = {
@@ -94,11 +99,11 @@ function appToolsResourceKey(appId: string, cwd?: string, threadId?: string): st
 }
 
 function skillContentsResourceKey(
-  plugin: { id: string; marketplaceId?: string },
+  plugin: { id: string; marketplaceId?: string } | undefined,
   skill: { id: string },
   cwd?: string
 ): string {
-  return `${normalizeCwd(cwd)}\u0000${plugin.id}\u0000${plugin.marketplaceId ?? ''}\u0000${skill.id}`
+  return `${normalizeCwd(cwd)}\u0000${plugin?.id ?? 'local'}\u0000${plugin?.marketplaceId ?? ''}\u0000${skill.id}`
 }
 
 function errorMessage(error: unknown): string {
@@ -131,7 +136,8 @@ function resourcesForApi(api: DesktopPluginCenterApi): ApiResources {
     mcp: new Map(),
     details: new Map(),
     appTools: new Map(),
-    skillContents: new Map()
+    skillContents: new Map(),
+    recommendedSkills: new Map()
   }
   resourcesByApi.set(api, created)
   return created
@@ -335,15 +341,25 @@ function supplementalFreshMs(section: PluginCenterSupplementalSection): number {
   }
 }
 
+function unavailableMcpMessage(
+  snapshot: PluginCenterSnapshot,
+  section: PluginCenterSupplementalSection
+): string | null {
+  if (section !== 'mcp') return null
+  const capability = snapshot.capabilities?.mcp
+  if (!capability || capability.available) return null
+  return capability.restriction?.message ?? '该数据源暂时不可用'
+}
+
 export function getPluginCenterSupplementalResource(
   api: DesktopPluginCenterApi,
   section: PluginCenterSupplementalSection,
   cwd?: string,
-  threadId?: string
+  skillListMode?: PluginCenterSkillListMode
 ): PluginCenterResource<PluginCenterSnapshot> {
   const normalizedCwd = normalizeCwd(cwd)
-  const normalizedThreadId = threadId?.trim() ?? ''
-  const key = section === 'mcp' ? `${normalizedCwd}\u0000${normalizedThreadId}` : normalizedCwd
+  const normalizedSkillListMode = section === 'skills' ? skillListMode : undefined
+  const key = `${normalizedCwd}\u0000${normalizedSkillListMode ?? 'default'}`
   const resources = resourcesForApi(api)
   const resourceMap = resources[section]
   const existing = resourceMap.get(key)
@@ -357,14 +373,21 @@ export function getPluginCenterSupplementalResource(
     cwd: normalizedCwd,
     freshMs: supplementalFreshMs(section),
     load: async (forceRefresh) => {
-      const result = await api.getSnapshot({
+      const request = {
         version: PLUGIN_CENTER_API_VERSION,
         cwd: normalizedCwd || undefined,
-        threadId: section === 'mcp' ? normalizedThreadId || undefined : undefined,
         sections: [section],
         includePluginDetails: false,
+        ...(normalizedSkillListMode ? { skillListMode: normalizedSkillListMode } : {}),
         forceRefresh
-      })
+      }
+      let result = await api.getSnapshot(request)
+      let unavailableMessage = unavailableMcpMessage(result.snapshot, section)
+      if (unavailableMessage && !forceRefresh) {
+        result = await api.getSnapshot({ ...request, forceRefresh: true })
+        unavailableMessage = unavailableMcpMessage(result.snapshot, section)
+      }
+      if (unavailableMessage) throw new Error(unavailableMessage)
       return result.snapshot
     },
     onRelease: () => {
@@ -517,7 +540,7 @@ export function getPluginCenterAppToolsResource(
 
 export function getPluginCenterSkillContentsResource(
   api: DesktopPluginCenterApi,
-  plugin: { id: string; marketplaceId?: string },
+  plugin: { id: string; marketplaceId?: string } | undefined,
   skill: { id: string; name: string },
   cwd?: string
 ): PluginCenterResource<PluginCenterGetSkillContentsResult> {
@@ -538,7 +561,7 @@ export function getPluginCenterSkillContentsResource(
       api.getSkillContents({
         version: PLUGIN_CENTER_API_VERSION,
         cwd: normalizedCwd || undefined,
-        plugin,
+        ...(plugin ? { plugin } : {}),
         skill,
         ...(forceRefresh ? { forceRefresh: true } : {})
       }),
@@ -548,6 +571,34 @@ export function getPluginCenterSkillContentsResource(
   })
   resources.skillContents.set(key, resource)
   evictOldestCwdResource(resources.skillContents, MAX_SKILL_CONTENTS_RESOURCES)
+  return resource
+}
+
+/** Curated skills deliberately have a separate cache from skills/list. */
+export function getPluginCenterRecommendedSkillsResource(
+  api: DesktopPluginCenterApi
+): PluginCenterResource<PluginCenterGetRecommendedSkillsResult> {
+  const key = 'global'
+  const resources = resourcesForApi(api)
+  const existing = resources.recommendedSkills.get(key)
+  if (existing) {
+    existing.lastAccessedAt = now()
+    return existing
+  }
+
+  const resource = createResource({
+    kind: 'recommended-skills',
+    freshMs: RECOMMENDED_SKILLS_FRESH_MS,
+    load: (forceRefresh) =>
+      api.getRecommendedSkills({
+        version: PLUGIN_CENTER_API_VERSION,
+        forceRefresh
+      }),
+    onRelease: () => {
+      resources.recommendedSkills.delete(key)
+    }
+  })
+  resources.recommendedSkills.set(key, resource)
   return resource
 }
 
@@ -607,6 +658,9 @@ export function mergePluginCatalogWithInstalled(
       ...plugin,
       installed: installedPlugin.installed,
       enabled: installedPlugin.enabled,
+      ...(installedPlugin.installedAt !== undefined
+        ? { installedAt: installedPlugin.installedAt }
+        : {}),
       canInstall: installedPlugin.canInstall,
       canToggle: installedPlugin.canToggle,
       canUninstall: installedPlugin.canUninstall,
@@ -626,4 +680,58 @@ export function mergePluginCatalogWithInstalled(
     })
   }
   return merged
+}
+
+const BUNDLED_PLUGIN_MARKETPLACES = new Set(['openai-bundled', 'openai-primary-runtime'])
+
+const BROWSER_EXTENSION_PLUGIN_NAMES = new Set(['chrome', 'chrome-dev', 'chrome-internal'])
+const BROWSER_EXTENSION_UNIFICATION_ENABLED = true
+
+function pluginMarketplace(plugin: PluginCenterPlugin): string | undefined {
+  return plugin.marketplaceId ?? plugin.marketplaceName
+}
+
+function isVisibleInstalledPlugin(plugin: PluginCenterPlugin): boolean {
+  const marketplace = pluginMarketplace(plugin)
+  if (marketplace === 'openai-bundled' && plugin.name === 'codex-app-tools') return false
+  if (BROWSER_EXTENSION_UNIFICATION_ENABLED && BROWSER_EXTENSION_PLUGIN_NAMES.has(plugin.name)) {
+    return false
+  }
+  return true
+}
+
+function installedPluginDisplayGroup(plugin: PluginCenterPlugin): number {
+  if (plugin.restriction?.code === 'policy') return 2
+  const marketplaceId = pluginMarketplace(plugin)
+  if (marketplaceId && BUNDLED_PLUGIN_MARKETPLACES.has(marketplaceId)) return 1
+  return 0
+}
+
+/**
+ * Mirrors the reference app's installed-plugin visibility and stable ordering.
+ * Installation time owns the primary order with installed-list order as the
+ * stable fallback, then bundled and admin-disabled plugins move to the end.
+ */
+export function mergeInstalledPluginsForDisplay(
+  catalog: PluginCenterPlugin[],
+  installed: PluginCenterPlugin[]
+): PluginCenterPlugin[] {
+  const mergedById = new Map(
+    mergePluginCatalogWithInstalled(catalog, installed).map((plugin) => [plugin.id, plugin])
+  )
+  const orderedInstalledById = new Map<string, PluginCenterPlugin>()
+  for (const installedPlugin of installed) {
+    orderedInstalledById.set(
+      installedPlugin.id,
+      mergedById.get(installedPlugin.id) ?? installedPlugin
+    )
+  }
+
+  const plugins = Array.from(orderedInstalledById.values()).filter(
+    (plugin) => plugin.installed && isVisibleInstalledPlugin(plugin)
+  )
+
+  return plugins
+    .sort((left, right) => (right.installedAt ?? 0) - (left.installedAt ?? 0))
+    .sort((left, right) => installedPluginDisplayGroup(left) - installedPluginDisplayGroup(right))
 }

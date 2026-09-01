@@ -69,6 +69,20 @@ const SKILL_CONTENTS_RESULT = {
   localPath: '/trusted/skill-a/SKILL.md'
 } as const
 
+const RECOMMENDED_SKILLS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  fetchedAt: '2026-08-30T00:00:00.000Z',
+  source: 'cache',
+  skills: [
+    {
+      id: 'writer',
+      name: 'Writer',
+      description: 'Write docs',
+      repoPath: 'skills/.curated/writer'
+    }
+  ]
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -86,9 +100,12 @@ type ServiceMethod =
   | 'getPluginDetail'
   | 'getAppTools'
   | 'getSkillContents'
+  | 'getRecommendedSkills'
   | 'addMarketplace'
   | 'installPlugin'
+  | 'installRecommendedSkill'
   | 'uninstallPlugin'
+  | 'uninstallSkill'
   | 'setPluginEnabled'
   | 'setSkillEnabled'
   | 'setAppEnabled'
@@ -159,6 +176,14 @@ const cases: Case[] = [
     validResult: SKILL_CONTENTS_RESULT
   },
   {
+    channel: pluginCenterIpcChannels.getRecommendedSkills,
+    method: 'getRecommendedSkills',
+    validPayload: { ...VALID_CONTEXT, forceRefresh: true },
+    expectedPayload: { ...VALID_CONTEXT, forceRefresh: true },
+    invalidPayload: { ...VALID_CONTEXT, forceRefresh: 'true' },
+    validResult: RECOMMENDED_SKILLS_RESULT
+  },
+  {
     channel: pluginCenterIpcChannels.addMarketplace,
     method: 'addMarketplace',
     validPayload: {
@@ -185,11 +210,30 @@ const cases: Case[] = [
     validResult: MUTATION_RESULT
   },
   {
+    channel: pluginCenterIpcChannels.installRecommendedSkill,
+    method: 'installRecommendedSkill',
+    validPayload: { ...VALID_CONTEXT, id: 'writer', repoPath: 'skills/.curated/writer' },
+    expectedPayload: { ...VALID_CONTEXT, id: 'writer', repoPath: 'skills/.curated/writer' },
+    invalidPayload: { ...VALID_CONTEXT, id: 'writer', repoPath: '../writer' },
+    validResult: MUTATION_RESULT
+  },
+  {
     channel: pluginCenterIpcChannels.uninstallPlugin,
     method: 'uninstallPlugin',
     validPayload: { ...VALID_CONTEXT, plugin: { id: 'plugin-a' } },
     expectedPayload: { ...VALID_CONTEXT, plugin: { id: 'plugin-a' } },
     invalidPayload: { ...VALID_CONTEXT, plugin: { id: '' } },
+    validResult: MUTATION_RESULT
+  },
+  {
+    channel: pluginCenterIpcChannels.uninstallSkill,
+    method: 'uninstallSkill',
+    validPayload: { ...VALID_CONTEXT, skill: { id: '/skills/writer/SKILL.md', name: 'writer' } },
+    expectedPayload: {
+      ...VALID_CONTEXT,
+      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+    },
+    invalidPayload: { ...VALID_CONTEXT, skill: { id: '/skills/writer/SKILL.md' } },
     validResult: MUTATION_RESULT
   },
   {
@@ -280,9 +324,16 @@ function createService(
     getPluginDetail: vi.fn(async () => resultByMethod.getPluginDetail ?? PLUGIN_DETAIL_RESULT),
     getAppTools: vi.fn(async () => resultByMethod.getAppTools ?? APP_TOOLS_RESULT),
     getSkillContents: vi.fn(async () => resultByMethod.getSkillContents ?? SKILL_CONTENTS_RESULT),
+    getRecommendedSkills: vi.fn(
+      async () => resultByMethod.getRecommendedSkills ?? RECOMMENDED_SKILLS_RESULT
+    ),
     addMarketplace: vi.fn(async () => resultByMethod.addMarketplace ?? MARKETPLACE_RESULT),
     installPlugin: vi.fn(async () => resultByMethod.installPlugin ?? MUTATION_RESULT),
+    installRecommendedSkill: vi.fn(
+      async () => resultByMethod.installRecommendedSkill ?? MUTATION_RESULT
+    ),
     uninstallPlugin: vi.fn(async () => resultByMethod.uninstallPlugin ?? MUTATION_RESULT),
+    uninstallSkill: vi.fn(async () => resultByMethod.uninstallSkill ?? MUTATION_RESULT),
     setPluginEnabled: vi.fn(async () => resultByMethod.setPluginEnabled ?? MUTATION_RESULT),
     setSkillEnabled: vi.fn(async () => resultByMethod.setSkillEnabled ?? MUTATION_RESULT),
     setAppEnabled: vi.fn(async () => resultByMethod.setAppEnabled ?? MUTATION_RESULT),
@@ -305,9 +356,12 @@ describe('createPluginCenterIpcHandlers', () => {
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
       getSkillContents: 'codex:plugin-center:get-skill-contents',
+      getRecommendedSkills: 'codex:plugin-center:get-recommended-skills',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
+      installRecommendedSkill: 'codex:plugin-center:install-recommended-skill',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
+      uninstallSkill: 'codex:plugin-center:uninstall-skill',
       setPluginEnabled: 'codex:plugin-center:set-plugin-enabled',
       setSkillEnabled: 'codex:plugin-center:set-skill-enabled',
       setAppEnabled: 'codex:plugin-center:set-app-enabled',
@@ -370,7 +424,8 @@ describe('createPluginCenterIpcHandlers', () => {
         method === 'getInstalledPlugins' ||
         method === 'getPluginDetail' ||
         method === 'getAppTools' ||
-        method === 'getSkillContents'
+        method === 'getSkillContents' ||
+        method === 'getRecommendedSkills'
           ? '插件中心数据加载失败，请重试。'
           : '插件中心操作失败，请刷新后重试。'
       await expect(handlers[channel]({}, validPayload)).rejects.toThrow(expectedMessage)

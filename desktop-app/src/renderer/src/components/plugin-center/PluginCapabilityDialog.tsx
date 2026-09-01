@@ -15,7 +15,7 @@ type PluginCapabilityDialogProps = {
   onOpenChange: (open: boolean) => void
   icon: React.ReactNode
   title: string
-  typeLabel: string
+  typeLabel?: string
   description?: string
   status?: React.ReactNode
   actions?: React.ReactNode
@@ -49,7 +49,7 @@ export function PluginCapabilityDialog({
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <DialogTitle className="truncate text-lg leading-6">{title}</DialogTitle>
-                <CapabilityPill>{typeLabel}</CapabilityPill>
+                {typeLabel && <CapabilityPill>{typeLabel}</CapabilityPill>}
                 {status}
               </div>
               <DialogDescription className="line-clamp-2 leading-5">

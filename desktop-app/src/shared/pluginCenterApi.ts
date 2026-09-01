@@ -10,9 +10,12 @@ export const pluginCenterIpcChannels = {
   getPluginDetail: 'codex:plugin-center:get-plugin-detail',
   getAppTools: 'codex:plugin-center:get-app-tools',
   getSkillContents: 'codex:plugin-center:get-skill-contents',
+  getRecommendedSkills: 'codex:plugin-center:get-recommended-skills',
   addMarketplace: 'codex:plugin-center:add-marketplace',
   installPlugin: 'codex:plugin-center:install-plugin',
+  installRecommendedSkill: 'codex:plugin-center:install-recommended-skill',
   uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
+  uninstallSkill: 'codex:plugin-center:uninstall-skill',
   setPluginEnabled: 'codex:plugin-center:set-plugin-enabled',
   setSkillEnabled: 'codex:plugin-center:set-skill-enabled',
   setAppEnabled: 'codex:plugin-center:set-app-enabled',
@@ -30,6 +33,14 @@ const optionalDisplayStringSchema = z
   .optional()
 const idSchema = z.string().trim().min(1).max(300)
 const stringListSchema = z.array(nonEmptyStringSchema).default([])
+const recommendedSkillRepoPathSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1_000)
+  .regex(/^(?!\/)(?!.*\/\/)(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9._/-]+$/, {
+    message: 'Recommended skill path must be a relative POSIX path without traversal'
+  })
 
 const httpUrlSchema = z
   .string()
@@ -168,6 +179,10 @@ export const pluginCenterSnapshotSectionSchema = z.enum(['plugins', 'skills', 'a
 
 export type PluginCenterSnapshotSection = z.infer<typeof pluginCenterSnapshotSectionSchema>
 
+export const pluginCenterSkillListModeSchema = z.enum(['manage'])
+
+export type PluginCenterSkillListMode = z.infer<typeof pluginCenterSkillListModeSchema>
+
 export const pluginCenterSnapshotRequestSchema = pluginCenterRequestContextSchema.extend({
   forceRefresh: z.boolean().optional(),
   sections: z
@@ -176,7 +191,8 @@ export const pluginCenterSnapshotRequestSchema = pluginCenterRequestContextSchem
     .max(4)
     .transform((sections) => [...new Set(sections)])
     .optional(),
-  includePluginDetails: z.boolean().optional()
+  includePluginDetails: z.boolean().optional(),
+  skillListMode: pluginCenterSkillListModeSchema.optional()
 })
 
 export type PluginCenterSnapshotRequest = z.infer<typeof pluginCenterSnapshotRequestSchema>
@@ -205,6 +221,7 @@ const catalogItemBaseSchema = z
 
 export const pluginCenterPluginSchema = catalogItemBaseSchema.extend({
   kind: z.literal('plugin'),
+  installedAt: z.number().int().nonnegative().optional(),
   versionLabel: optionalDisplayStringSchema,
   author: optionalDisplayStringSchema,
   skillCount: z.number().int().nonnegative().optional(),
@@ -231,6 +248,8 @@ export const pluginCenterSkillSchema = z
     name: nonEmptyStringSchema,
     displayName: optionalDisplayStringSchema,
     description: optionalDisplayStringSchema,
+    iconSmall: pluginCenterIconSchema.optional(),
+    iconLarge: pluginCenterIconSchema.optional(),
     scope: pluginCenterSkillScopeSchema,
     sourceKind: pluginCenterSourceKindSchema,
     pluginId: idSchema.optional(),
@@ -239,12 +258,28 @@ export const pluginCenterSkillSchema = z
     installed: z.boolean().default(true),
     recommended: z.boolean().default(false),
     canToggle: z.boolean().default(true),
+    canUninstall: z.boolean().default(false),
     restriction: pluginCenterRestrictionSchema.optional(),
     tags: stringListSchema
   })
   .strict()
 
 export type PluginCenterSkill = z.infer<typeof pluginCenterSkillSchema>
+
+/** A curated skill fetched and installed wholly by the main process. */
+export const pluginCenterRecommendedSkillSchema = z
+  .object({
+    id: idSchema,
+    name: nonEmptyStringSchema,
+    description: optionalDisplayStringSchema,
+    shortDescription: optionalDisplayStringSchema,
+    iconSmall: pluginCenterIconSchema.optional(),
+    iconLarge: pluginCenterIconSchema.optional(),
+    repoPath: recommendedSkillRepoPathSchema
+  })
+  .strict()
+
+export type PluginCenterRecommendedSkill = z.infer<typeof pluginCenterRecommendedSkillSchema>
 
 export const pluginCenterAppSchema = z
   .object({
@@ -366,7 +401,7 @@ export const pluginCenterPluginMcpServerSchema = mcpServerBaseSchema
   .extend({
     origin: z.literal('plugin'),
     editable: z.literal(false),
-    pluginId: idSchema,
+    pluginId: idSchema.optional(),
     pluginDisplayName: optionalDisplayStringSchema,
     transport: z.enum(['stdio', 'streamable-http', 'unknown'])
   })
@@ -620,7 +655,9 @@ export type PluginCenterSkillRef = z.infer<typeof pluginCenterSkillRefSchema>
 
 export const pluginCenterGetSkillContentsRequestSchema = pluginCenterRequestContextSchema
   .extend({
-    plugin: pluginCenterPluginRefSchema,
+    // Plugin context is required only for remote or uninstalled plugin skills.
+    // Local skills are resolved from the server-owned skills/list result.
+    plugin: pluginCenterPluginRefSchema.optional(),
     skill: pluginCenterSkillRefSchema,
     forceRefresh: z.boolean().optional()
   })
@@ -635,7 +672,7 @@ export const pluginCenterGetSkillContentsResultSchema = z.discriminatedUnion('st
     .object({
       version: z.literal(PLUGIN_CENTER_API_VERSION),
       status: z.literal('ready'),
-      plugin: pluginCenterPluginRefSchema,
+      plugin: pluginCenterPluginRefSchema.optional(),
       skill: pluginCenterSkillRefSchema,
       contents: z.string().max(PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES),
       localPath: z.string().trim().min(1).max(4_000).optional()
@@ -645,7 +682,7 @@ export const pluginCenterGetSkillContentsResultSchema = z.discriminatedUnion('st
     .object({
       version: z.literal(PLUGIN_CENTER_API_VERSION),
       status: z.literal('missing'),
-      plugin: pluginCenterPluginRefSchema,
+      plugin: pluginCenterPluginRefSchema.optional(),
       skill: pluginCenterSkillRefSchema,
       missingReason: z.enum(['not_found', 'ambiguous', 'unavailable'])
     })
@@ -654,6 +691,49 @@ export const pluginCenterGetSkillContentsResultSchema = z.discriminatedUnion('st
 
 export type PluginCenterGetSkillContentsResult = z.infer<
   typeof pluginCenterGetSkillContentsResultSchema
+>
+
+export const pluginCenterGetRecommendedSkillsRequestSchema = pluginCenterRequestContextSchema
+  .extend({ forceRefresh: z.boolean().optional() })
+  .strict()
+
+export type PluginCenterGetRecommendedSkillsRequest = z.infer<
+  typeof pluginCenterGetRecommendedSkillsRequestSchema
+>
+
+export const pluginCenterGetRecommendedSkillsResultSchema = z
+  .object({
+    version: z.literal(PLUGIN_CENTER_API_VERSION),
+    skills: z.array(pluginCenterRecommendedSkillSchema).max(500),
+    fetchedAt: z.string().datetime(),
+    source: z.enum(['git', 'cache']),
+    error: optionalDisplayStringSchema
+  })
+  .strict()
+
+export type PluginCenterGetRecommendedSkillsResult = z.infer<
+  typeof pluginCenterGetRecommendedSkillsResultSchema
+>
+
+export const pluginCenterInstallRecommendedSkillRequestSchema = pluginCenterRequestContextSchema
+  .extend({
+    id: idSchema,
+    repoPath: recommendedSkillRepoPathSchema
+  })
+  .strict()
+
+export type PluginCenterInstallRecommendedSkillRequest = z.infer<
+  typeof pluginCenterInstallRecommendedSkillRequestSchema
+>
+
+export const pluginCenterUninstallSkillRequestSchema = pluginCenterRequestContextSchema
+  .extend({
+    skill: pluginCenterSkillRefSchema
+  })
+  .strict()
+
+export type PluginCenterUninstallSkillRequest = z.infer<
+  typeof pluginCenterUninstallSkillRequestSchema
 >
 
 export const pluginCenterInstallPluginRequestSchema = pluginCenterRequestContextSchema
@@ -865,11 +945,18 @@ export type DesktopPluginCenterApi = {
   getSkillContents(
     input: PluginCenterGetSkillContentsRequest
   ): Promise<PluginCenterGetSkillContentsResult>
+  getRecommendedSkills(
+    input: PluginCenterGetRecommendedSkillsRequest
+  ): Promise<PluginCenterGetRecommendedSkillsResult>
   addMarketplace(
     input: PluginCenterAddMarketplaceRequest
   ): Promise<PluginCenterAddMarketplaceResult>
   installPlugin(input: PluginCenterInstallPluginRequest): Promise<PluginCenterMutationResult>
+  installRecommendedSkill(
+    input: PluginCenterInstallRecommendedSkillRequest
+  ): Promise<PluginCenterMutationResult>
   uninstallPlugin(input: PluginCenterUninstallPluginRequest): Promise<PluginCenterMutationResult>
+  uninstallSkill(input: PluginCenterUninstallSkillRequest): Promise<PluginCenterMutationResult>
   setPluginEnabled(input: PluginCenterSetPluginEnabledRequest): Promise<PluginCenterMutationResult>
   setSkillEnabled(input: PluginCenterSetSkillEnabledRequest): Promise<PluginCenterMutationResult>
   setAppEnabled(input: PluginCenterSetAppEnabledRequest): Promise<PluginCenterMutationResult>

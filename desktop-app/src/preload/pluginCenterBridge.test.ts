@@ -70,6 +70,20 @@ const SKILL_CONTENTS_RESULT = {
   localPath: '/trusted/skill-a/SKILL.md'
 } as const
 
+const RECOMMENDED_SKILLS_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  fetchedAt: '2026-08-30T00:00:00.000Z',
+  source: 'cache',
+  skills: [
+    {
+      id: 'writer',
+      name: 'Writer',
+      description: 'Write docs',
+      repoPath: 'skills/.curated/writer'
+    }
+  ]
+} as const
+
 const MARKETPLACE_RESULT = {
   ...MUTATION_RESULT,
   marketplace: {
@@ -87,9 +101,12 @@ type BridgeMethod =
   | 'getPluginDetail'
   | 'getAppTools'
   | 'getSkillContents'
+  | 'getRecommendedSkills'
   | 'addMarketplace'
   | 'installPlugin'
+  | 'installRecommendedSkill'
   | 'uninstallPlugin'
+  | 'uninstallSkill'
   | 'setPluginEnabled'
   | 'setSkillEnabled'
   | 'setAppEnabled'
@@ -160,6 +177,14 @@ const cases: Case[] = [
     result: SKILL_CONTENTS_RESULT
   },
   {
+    method: 'getRecommendedSkills',
+    channel: pluginCenterIpcChannels.getRecommendedSkills,
+    input: { ...VALID_CONTEXT, forceRefresh: true },
+    expectedPayload: { ...VALID_CONTEXT, forceRefresh: true },
+    invalidInput: { ...VALID_CONTEXT, forceRefresh: 'true' },
+    result: RECOMMENDED_SKILLS_RESULT
+  },
+  {
     method: 'addMarketplace',
     channel: pluginCenterIpcChannels.addMarketplace,
     input: {
@@ -186,11 +211,30 @@ const cases: Case[] = [
     result: MUTATION_RESULT
   },
   {
+    method: 'installRecommendedSkill',
+    channel: pluginCenterIpcChannels.installRecommendedSkill,
+    input: { ...VALID_CONTEXT, id: 'writer', repoPath: 'skills/.curated/writer' },
+    expectedPayload: { ...VALID_CONTEXT, id: 'writer', repoPath: 'skills/.curated/writer' },
+    invalidInput: { ...VALID_CONTEXT, id: 'writer', repoPath: '../writer' },
+    result: MUTATION_RESULT
+  },
+  {
     method: 'uninstallPlugin',
     channel: pluginCenterIpcChannels.uninstallPlugin,
     input: { ...VALID_CONTEXT, plugin: { id: 'plugin-a' } },
     expectedPayload: { ...VALID_CONTEXT, plugin: { id: 'plugin-a' } },
     invalidInput: { ...VALID_CONTEXT, plugin: { id: '' } },
+    result: MUTATION_RESULT
+  },
+  {
+    method: 'uninstallSkill',
+    channel: pluginCenterIpcChannels.uninstallSkill,
+    input: { ...VALID_CONTEXT, skill: { id: '/skills/writer/SKILL.md', name: 'writer' } },
+    expectedPayload: {
+      ...VALID_CONTEXT,
+      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+    },
+    invalidInput: { ...VALID_CONTEXT, skill: { id: '/skills/writer/SKILL.md' } },
     result: MUTATION_RESULT
   },
   {
@@ -280,9 +324,12 @@ describe('createPluginCenterBridge', () => {
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
       getSkillContents: 'codex:plugin-center:get-skill-contents',
+      getRecommendedSkills: 'codex:plugin-center:get-recommended-skills',
       addMarketplace: 'codex:plugin-center:add-marketplace',
       installPlugin: 'codex:plugin-center:install-plugin',
+      installRecommendedSkill: 'codex:plugin-center:install-recommended-skill',
       uninstallPlugin: 'codex:plugin-center:uninstall-plugin',
+      uninstallSkill: 'codex:plugin-center:uninstall-skill',
       setPluginEnabled: 'codex:plugin-center:set-plugin-enabled',
       setSkillEnabled: 'codex:plugin-center:set-skill-enabled',
       setAppEnabled: 'codex:plugin-center:set-app-enabled',

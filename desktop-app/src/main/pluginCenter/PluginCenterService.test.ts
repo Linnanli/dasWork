@@ -1,10 +1,31 @@
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
   PLUGIN_CENTER_API_VERSION,
-  PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH
+  PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH,
+  type PluginCenterRecommendedSkill
 } from '../../shared/pluginCenterApi'
 import { PluginCenterService, type PluginCenterProvider } from './PluginCenterService'
+import type { RecommendedSkillsService } from './RecommendedSkillsService'
+
+function createRecommendedSkillsService(
+  skills: PluginCenterRecommendedSkill[],
+  error?: string
+): RecommendedSkillsService {
+  return {
+    getRecommendedSkills: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      skills,
+      fetchedAt: '2026-09-01T00:00:00.000Z',
+      source: 'cache',
+      ...(error ? { error } : {})
+    })),
+    installRecommendedSkill: vi.fn()
+  } as unknown as RecommendedSkillsService
+}
 
 function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCenterProvider {
   const mcpConfig = {
@@ -177,17 +198,6 @@ function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCe
       servers: [
         { name: 'local', connected: true, authStatus: 'unsupported', toolCount: 2 },
         { name: 'plugin-server', connected: false, authStatus: 'oAuth', toolCount: 1 }
-      ],
-      pluginDetails: [
-        {
-          summary: {
-            id: 'git@official',
-            name: 'git',
-            enabled: true,
-            interface: { displayName: 'Git helpers' }
-          },
-          mcpServers: ['plugin-server']
-        }
       ]
     })),
     installPlugin: vi.fn(async () => ({})),
@@ -256,8 +266,278 @@ describe('PluginCenterService', () => {
       })
     )
     expect(result.snapshot.mcp.pluginServers).toMatchObject([
-      { id: 'plugin-server', pluginId: 'git@official', editable: false, canToggle: true }
+      { id: 'plugin-server', pluginId: 'git@official', editable: false, canToggle: false }
     ])
+  })
+
+  it('lists MCP servers when config/read returns the camelCase mcpServers field', async () => {
+    const service = new PluginCenterService({
+      provider: createProvider({
+        readMcpManagementSnapshot: vi.fn(async () => ({
+          config: {
+            config: {
+              mcpServers: {
+                filesystem: {
+                  command: 'npx',
+                  args: ['-y', '@modelcontextprotocol/server-filesystem', '/workspace'],
+                  enabled: true
+                }
+              }
+            },
+            layers: [],
+            origins: {}
+          },
+          servers: [
+            { name: 'filesystem', connected: true, authStatus: 'unsupported', toolCount: 4 }
+          ]
+        }))
+      }),
+      defaultCwd: () => '/repo'
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['mcp']
+    })
+
+    expect(result.snapshot.mcp.userServers).toEqual([
+      expect.objectContaining({
+        id: 'filesystem',
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '/workspace'],
+        connected: true,
+        toolCount: 4
+      })
+    ])
+  })
+
+  it('classifies runtime-only MCP servers as plugin-provided without plugin metadata', async () => {
+    const service = new PluginCenterService({
+      provider: createProvider({
+        readMcpManagementSnapshot: vi.fn(async () => ({
+          config: {
+            config: {
+              mcp_servers: {
+                local: { command: 'local-mcp', name: 'local-runtime' }
+              }
+            },
+            layers: [],
+            origins: {}
+          },
+          servers: [
+            { name: 'local-runtime', connected: true, authStatus: 'unsupported', toolCount: 1 },
+            { name: 'plugin-server', connected: true, authStatus: 'oAuth', toolCount: 3 },
+            { name: 'codex_app', connected: true, authStatus: 'unsupported', toolCount: 2 }
+          ]
+        }))
+      }),
+      defaultCwd: () => '/repo'
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['mcp'],
+      includePluginDetails: false
+    })
+
+    expect(result.snapshot.mcp.userServers).toEqual([
+      expect.objectContaining({ id: 'local', connected: true, toolCount: 1 })
+    ])
+    expect(result.snapshot.mcp.pluginServers).toEqual([
+      expect.objectContaining({
+        id: 'plugin-server',
+        origin: 'plugin',
+        editable: false,
+        canToggle: false,
+        connected: true,
+        toolCount: 3
+      })
+    ])
+  })
+
+  it('uses a skill interface display name instead of its short description', async () => {
+    const service = new PluginCenterService({
+      provider: createProvider({
+        listSkillsForManagement: vi.fn(async () => [
+          {
+            name: 'review-workflow',
+            shortDescription: 'Review each pull request with the team workflow.',
+            description: 'Use the team review workflow.',
+            path: '/skills/review-workflow/SKILL.md',
+            scope: 'user',
+            enabled: true,
+            interface: { displayName: 'Review workflow' }
+          }
+        ])
+      }),
+      defaultCwd: () => '/repo'
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['skills']
+    })
+
+    expect(result.snapshot.skills).toContainEqual(
+      expect.objectContaining({
+        name: 'review-workflow',
+        displayName: 'Review workflow',
+        description: 'Use the team review workflow.'
+      })
+    )
+  })
+
+  it('keeps only standalone personal skills in the Codex manage skills tab', async () => {
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        {
+          name: 'writer',
+          path: '/skills/z-writer/SKILL.md',
+          scope: 'user',
+          enabled: true,
+          interface: { displayName: 'Writer' }
+        },
+        {
+          name: 'review',
+          path: '/system/skills/review/SKILL.md',
+          scope: 'system',
+          enabled: true,
+          interface: { displayName: 'Code Review' }
+        },
+        {
+          name: 'review',
+          path: '/repo/.codex/skills/review/SKILL.md',
+          scope: 'repo',
+          enabled: false,
+          interface: { displayName: 'Code Review' }
+        },
+        {
+          name: 'writer',
+          path: '/skills/a-writer/SKILL.md',
+          scope: 'user',
+          enabled: false,
+          interface: { displayName: 'Writer' }
+        },
+        {
+          name: 'alpha',
+          path: '/skills/alpha/SKILL.md',
+          scope: 'user',
+          enabled: true,
+          interface: { displayName: 'Alpha' }
+        },
+        {
+          name: 'documents',
+          path: '/Users/test/.codex/plugins/cache/openai-bundled/documents/1.0.0/skills/documents/SKILL.md',
+          scope: 'user',
+          enabled: true,
+          interface: { displayName: 'Documents' }
+        },
+        {
+          name: 'github',
+          path: '/Users/test/.codex/plugins/github/skills/github/SKILL.md',
+          scope: 'user',
+          enabled: true,
+          interface: { displayName: 'GitHub' }
+        },
+        {
+          name: 'admin-skill',
+          path: '/admin/skills/admin-skill/SKILL.md',
+          scope: 'admin',
+          enabled: true,
+          interface: { displayName: 'Admin skill' }
+        }
+      ])
+    })
+    const recommendedSkills = createRecommendedSkillsService([])
+    const service = new PluginCenterService({
+      provider,
+      defaultCwd: () => '/repo',
+      recommendedSkills
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['skills'],
+      skillListMode: 'manage'
+    })
+
+    expect(provider.listSkillsForManagement).toHaveBeenCalledWith({
+      cwd: '/repo',
+      forceReload: undefined
+    })
+    expect(recommendedSkills.getRecommendedSkills).toHaveBeenCalledWith(false)
+    expect(result.snapshot.skills.map(({ id, name, scope }) => ({ id, name, scope }))).toEqual([
+      { id: '/skills/alpha/SKILL.md', name: 'alpha', scope: 'personal' },
+      { id: '/skills/a-writer/SKILL.md', name: 'writer', scope: 'personal' }
+    ])
+  })
+
+  it('removes managed skills that match the recommended catalog', async () => {
+    const recommendedSkills = createRecommendedSkillsService([
+      {
+        id: 'aspnet-core',
+        name: 'aspnet-core',
+        description: 'Build ASP.NET Core applications.',
+        repoPath: 'skills/.curated/aspnet-core'
+      }
+    ])
+    const service = new PluginCenterService({
+      provider: createProvider({
+        listSkillsForManagement: vi.fn(async () => [
+          {
+            name: 'aspnet-core',
+            path: '/Users/test/.codex/skills/aspnet-core/SKILL.md',
+            scope: 'user',
+            enabled: false,
+            interface: { displayName: 'ASP.NET Core' }
+          },
+          {
+            name: 'writer',
+            path: '/Users/test/.codex/skills/writer/SKILL.md',
+            scope: 'user',
+            enabled: true,
+            interface: { displayName: 'Writer' }
+          }
+        ])
+      }),
+      defaultCwd: () => '/repo',
+      recommendedSkills
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['skills'],
+      skillListMode: 'manage'
+    })
+
+    expect(result.snapshot.skills.map((skill) => skill.name)).toEqual(['writer'])
+  })
+
+  it('keeps the managed skill list empty while the recommended catalog is unavailable', async () => {
+    const service = new PluginCenterService({
+      provider: createProvider({
+        listSkillsForManagement: vi.fn(async () => [
+          {
+            name: 'writer',
+            path: '/Users/test/.codex/skills/writer/SKILL.md',
+            scope: 'user',
+            enabled: true,
+            interface: { displayName: 'Writer' }
+          }
+        ])
+      }),
+      defaultCwd: () => '/repo',
+      recommendedSkills: createRecommendedSkillsService([], '推荐技能目录暂时不可用')
+    })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['skills'],
+      skillListMode: 'manage'
+    })
+
+    expect(result.snapshot.skills).toEqual([])
   })
 
   it('bounds remote display text before validating the renderer snapshot', async () => {
@@ -432,6 +712,42 @@ describe('PluginCenterService', () => {
     })
   })
 
+  it('preserves the installation timestamp returned by plugin/installed', async () => {
+    const installedAt = 1_788_062_387
+    const provider = createProvider({
+      listInstalledPluginsForManagement: vi.fn(async () => ({
+        marketplaces: [
+          {
+            name: 'openai-curated-remote',
+            path: null,
+            plugins: [
+              {
+                id: 'gmail@openai-curated-remote',
+                name: 'gmail',
+                source: { type: 'remote' },
+                installed: true,
+                installedAt,
+                enabled: true,
+                installPolicy: 'AVAILABLE',
+                availability: 'AVAILABLE',
+                interface: { displayName: 'Gmail' }
+              }
+            ]
+          }
+        ],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      }))
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getInstalledPlugins({ version: PLUGIN_CENTER_API_VERSION })
+
+    expect(result.plugins).toEqual([
+      expect.objectContaining({ id: 'gmail@openai-curated-remote', installedAt })
+    ])
+  })
+
   it('rejects writes to MCP servers outside the user config layer', async () => {
     const provider = createProvider()
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
@@ -446,22 +762,18 @@ describe('PluginCenterService', () => {
     expect(provider.setMcpServerEnabled).not.toHaveBeenCalled()
   })
 
-  it('allows plugin MCP servers to be toggled when no managed config layer owns enabled', async () => {
+  it('keeps runtime-only plugin MCP servers read-only', async () => {
     const provider = createProvider()
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
 
-    const result = await service.setMcpServerEnabled({
-      version: PLUGIN_CENTER_API_VERSION,
-      server: { id: 'plugin-server' },
-      enabled: true
-    })
-
-    expect(provider.setMcpServerEnabled).toHaveBeenCalledWith({
-      cwd: '/repo',
-      serverName: 'plugin-server',
-      enabled: true
-    })
-    expect(result.status).toBe('applied')
+    await expect(
+      service.setMcpServerEnabled({
+        version: PLUGIN_CENTER_API_VERSION,
+        server: { id: 'plugin-server' },
+        enabled: true
+      })
+    ).rejects.toThrow('Only user-toggleable MCP servers')
+    expect(provider.setMcpServerEnabled).not.toHaveBeenCalled()
   })
 
   it('blocks plugin MCP toggles when a higher-priority config layer owns enabled', async () => {
@@ -481,18 +793,7 @@ describe('PluginCenterService', () => {
             }
           }
         },
-        servers: [{ name: 'plugin-server', connected: false, authStatus: 'oAuth', toolCount: 1 }],
-        pluginDetails: [
-          {
-            summary: {
-              id: 'git@official',
-              name: 'git',
-              enabled: true,
-              interface: { displayName: 'Git helpers' }
-            },
-            mcpServers: ['plugin-server']
-          }
-        ]
+        servers: [{ name: 'plugin-server', connected: false, authStatus: 'oAuth', toolCount: 1 }]
       }))
     })
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
@@ -536,6 +837,136 @@ describe('PluginCenterService', () => {
       path: '/trusted/installed/review/SKILL.md',
       maxBytes: 524288
     })
+  })
+
+  it('reads a local skill by matching the server-owned skills list when no plugin is supplied', async () => {
+    const provider = createProvider()
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getSkillContents({
+      version: PLUGIN_CENTER_API_VERSION,
+      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+    })
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      contents: '# Review\nUse the trusted local file.',
+      localPath: '/skills/writer/SKILL.md'
+    })
+    expect(provider.readPluginDetailForManagement).not.toHaveBeenCalled()
+    expect(provider.readSkillFileContents).toHaveBeenCalledWith({
+      path: '/skills/writer/SKILL.md',
+      maxBytes: 524288
+    })
+  })
+
+  it('uninstalls only the independently managed skill directory resolved by the server', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'dascowork-plugin-center-skills-'))
+    const skillDirectory = join(codexHome, 'skills', 'writer')
+    const removeSkillDirectory = vi.fn(async () => undefined)
+    try {
+      await mkdir(skillDirectory, { recursive: true })
+      await writeFile(join(skillDirectory, 'SKILL.md'), '# Writer')
+      const skillPath = join(skillDirectory, 'SKILL.md')
+      const service = new PluginCenterService({
+        provider: createProvider({
+          listSkillsForManagement: vi.fn(async () => [
+            { name: 'writer', path: skillPath, scope: 'user', enabled: true }
+          ])
+        }),
+        defaultCwd: () => '/repo',
+        codexHome,
+        removeSkillDirectory
+      })
+
+      await expect(
+        service.uninstallSkill({
+          version: PLUGIN_CENTER_API_VERSION,
+          skill: { id: skillPath, name: 'writer' }
+        })
+      ).resolves.toMatchObject({
+        status: 'applied',
+        changedItemId: skillPath,
+        changedSections: ['skills']
+      })
+      expect(removeSkillDirectory).toHaveBeenCalledWith(await realpath(skillDirectory))
+    } finally {
+      await rm(codexHome, { recursive: true, force: true })
+    }
+  })
+
+  it('does not remove a skill path outside the configured skills root', async () => {
+    const codexHome = await mkdtemp(join(tmpdir(), 'dascowork-plugin-center-skills-'))
+    const outsideRoot = await mkdtemp(join(tmpdir(), 'dascowork-plugin-center-outside-'))
+    const skillDirectory = join(outsideRoot, 'writer')
+    const removeSkillDirectory = vi.fn(async () => undefined)
+    try {
+      await mkdir(skillDirectory, { recursive: true })
+      const skillPath = join(skillDirectory, 'SKILL.md')
+      await writeFile(skillPath, '# Writer')
+      const service = new PluginCenterService({
+        provider: createProvider({
+          listSkillsForManagement: vi.fn(async () => [
+            { name: 'writer', path: skillPath, scope: 'user', enabled: true }
+          ])
+        }),
+        defaultCwd: () => '/repo',
+        codexHome,
+        removeSkillDirectory
+      })
+
+      await expect(
+        service.uninstallSkill({
+          version: PLUGIN_CENTER_API_VERSION,
+          skill: { id: skillPath, name: 'writer' }
+        })
+      ).rejects.toThrow('Only independent user or project skills')
+      expect(removeSkillDirectory).not.toHaveBeenCalled()
+    } finally {
+      await Promise.all([
+        rm(codexHome, { recursive: true, force: true }),
+        rm(outsideRoot, { recursive: true, force: true })
+      ])
+    }
+  })
+
+  it('refuses to uninstall plugin, system, or admin skills', async () => {
+    const removeSkillDirectory = vi.fn(async () => undefined)
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        {
+          name: 'git:review',
+          path: '/plugins/git/skills/review/SKILL.md',
+          scope: 'user',
+          enabled: true
+        },
+        {
+          name: 'system-skill',
+          path: '/system/skills/system-skill/SKILL.md',
+          scope: 'system',
+          enabled: true
+        }
+      ])
+    })
+    const service = new PluginCenterService({
+      provider,
+      defaultCwd: () => '/repo',
+      removeSkillDirectory
+    })
+
+    await expect(
+      service.uninstallSkill({
+        version: PLUGIN_CENTER_API_VERSION,
+        skill: { id: '/plugins/git/skills/review/SKILL.md', name: 'git:review' }
+      })
+    ).rejects.toThrow('Only independent user or project skills')
+    await expect(
+      service.uninstallSkill({
+        version: PLUGIN_CENTER_API_VERSION,
+        skill: { id: '/system/skills/system-skill/SKILL.md', name: 'system-skill' }
+      })
+    ).rejects.toThrow('Only independent user or project skills')
+    expect(removeSkillDirectory).not.toHaveBeenCalled()
   })
 
   it('reads remote plugin skill contents from a server-resolved plugin locator', async () => {
@@ -720,6 +1151,51 @@ describe('PluginCenterService', () => {
     })
   })
 
+  it('reads MCP management data by cwd without forwarding the active thread', async () => {
+    const provider = createProvider()
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['mcp'],
+      threadId: 'thread-secret'
+    })
+
+    expect(provider.readMcpManagementSnapshot).toHaveBeenCalledWith({ cwd: '/repo' })
+  })
+
+  it('preserves local skill interface images through the app media protocol', async () => {
+    const provider = createProvider({
+      listSkillsForManagement: vi.fn(async () => [
+        {
+          name: 'writer',
+          description: 'Write docs',
+          path: '/skills/writer/SKILL.md',
+          scope: 'user',
+          enabled: true,
+          interface: {
+            iconSmall: '/skills/writer/assets/icon-small.png',
+            iconLarge: '/skills/writer/assets/icon-large.png'
+          }
+        }
+      ])
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+
+    const result = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['skills']
+    })
+
+    expect(result.snapshot.skills).toContainEqual(
+      expect.objectContaining({
+        id: '/skills/writer/SKILL.md',
+        iconSmall: { kind: 'url', value: 'app://fs/@fs/skills/writer/assets/icon-small.png' },
+        iconLarge: { kind: 'url', value: 'app://fs/@fs/skills/writer/assets/icon-large.png' }
+      })
+    )
+  })
+
   it('keeps catalog-only recommended skills disabled until their plugin is installed', async () => {
     const provider = createProvider({
       listPluginCatalog: vi.fn(async () => ({
@@ -746,15 +1222,23 @@ describe('PluginCenterService', () => {
       readPluginDetailsForManagement: vi.fn(async () => [
         {
           summary: { id: 'suggested@official', name: 'suggested' },
-          skills: [{ name: 'catalog-skill', enabled: true }],
+          skills: [
+            {
+              name: 'catalog-skill',
+              enabled: true,
+              interface: {
+                iconSmall: 'https://cdn.example.test/catalog-skill-small.png',
+                iconLarge: 'https://cdn.example.test/catalog-skill-large.png'
+              }
+            }
+          ],
           apps: [],
           mcpServers: []
         }
       ]),
       readMcpManagementSnapshot: vi.fn(async () => ({
         config: { config: {}, layers: [], origins: {} },
-        servers: [],
-        pluginDetails: []
+        servers: []
       }))
     })
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
@@ -768,6 +1252,8 @@ describe('PluginCenterService', () => {
         enabled: false,
         recommended: true,
         canToggle: false,
+        iconSmall: { kind: 'url', value: 'https://cdn.example.test/catalog-skill-small.png' },
+        iconLarge: { kind: 'url', value: 'https://cdn.example.test/catalog-skill-large.png' },
         restriction: { code: 'unavailable', message: '请先安装所属插件' }
       })
     )

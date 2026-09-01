@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve } from 'node:path'
+import { realpath, rm as removeDirectory } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -8,6 +9,7 @@ import {
   pluginCenterAddMarketplaceResultSchema,
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetRecommendedSkillsResultSchema,
   pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterMutationResultSchema,
@@ -23,8 +25,11 @@ import {
   type PluginCenterGetAppToolsResult,
   type PluginCenterGetPluginDetailRequest,
   type PluginCenterGetPluginDetailResult,
+  type PluginCenterGetRecommendedSkillsRequest,
+  type PluginCenterGetRecommendedSkillsResult,
   type PluginCenterGetSkillContentsRequest,
   type PluginCenterGetSkillContentsResult,
+  type PluginCenterUninstallSkillRequest,
   type PluginCenterHttpMcpServer,
   type PluginCenterInstalledPluginsRequest,
   type PluginCenterInstalledPluginsResult,
@@ -43,6 +48,7 @@ import {
   type PluginCenterUpsertMcpServerRequest
 } from '../../shared/pluginCenterApi'
 import { toAppMediaUrl } from '../localMediaProtocol'
+import { RecommendedSkillsService } from './RecommendedSkillsService'
 
 type JsonRecord = Record<string, unknown>
 
@@ -74,7 +80,7 @@ export type PluginCenterProvider = {
   }): Promise<unknown>
   listAppsForManagement(input?: { forceRefetch?: boolean }): Promise<unknown>
   readConfigForManagement?(input: { cwd?: string }): Promise<unknown>
-  readMcpManagementSnapshot(input: { cwd?: string; threadId?: string }): Promise<unknown>
+  readMcpManagementSnapshot(input: { cwd?: string }): Promise<unknown>
   installPlugin(input: {
     marketplacePath?: string | null
     remoteMarketplaceName?: string | null
@@ -108,7 +114,6 @@ type McpRawSnapshot = {
   userConfig: JsonRecord
   origins: JsonRecord
   servers: unknown[]
-  pluginDetails: unknown[]
 }
 
 type ConfigReadSnapshot = {
@@ -134,6 +139,7 @@ type SnapshotReadName =
   | 'plugin/installed'
   | 'plugin-details'
   | 'skills/list'
+  | 'recommended-skills'
   | 'app/list'
   | 'mcp'
 type CachedReadName = 'catalog' | 'installed'
@@ -216,6 +222,9 @@ export class PluginCenterService {
       now?: () => Date
       nowMs?: () => number
       logger?: PluginCenterPerformanceLogger
+      removeSkillDirectory?: (path: string) => Promise<void>
+      recommendedSkills?: RecommendedSkillsService
+      codexHome?: string
     }
   ) {}
 
@@ -228,8 +237,11 @@ export class PluginCenterService {
     const includeSkills = sections.has('skills')
     const includeApps = sections.has('apps')
     const includeMcp = sections.has('mcp')
+    const isManagedSkillList = input.skillListMode === 'manage'
+    const needsManagedRecommendedSkills = isManagedSkillList && includeSkills
     const includePluginDetails =
-      input.includePluginDetails ?? (input.sections === undefined || includeSkills)
+      !isManagedSkillList &&
+      (input.includePluginDetails ?? (input.sections === undefined || includeSkills))
     this.logPerformance('snapshot:start', {
       requestId,
       sections: [...sections].join(','),
@@ -243,6 +255,7 @@ export class PluginCenterService {
       installedResult,
       catalogPluginDetails,
       skillsResult,
+      recommendedSkillsResult,
       appsResult,
       mcpResult
     ] = await Promise.all([
@@ -269,6 +282,14 @@ export class PluginCenterService {
             })
           )
         : Promise.resolve({ ok: true, value: [] } satisfies SafeResult<unknown>),
+      needsManagedRecommendedSkills && this.dependencies.recommendedSkills
+        ? this.readSnapshotSection(requestId, 'recommended-skills', () =>
+            this.dependencies.recommendedSkills!.getRecommendedSkills(input.forceRefresh === true)
+          )
+        : Promise.resolve({
+            ok: true,
+            value: null
+          } satisfies SafeResult<PluginCenterGetRecommendedSkillsResult | null>),
       includeApps
         ? this.readSnapshotSection(requestId, 'app/list', () =>
             this.dependencies.provider.listAppsForManagement({ forceRefetch: input.forceRefresh })
@@ -277,8 +298,7 @@ export class PluginCenterService {
       includeMcp
         ? this.readSnapshotSection(requestId, 'mcp', () =>
             this.dependencies.provider.readMcpManagementSnapshot({
-              cwd,
-              threadId: input.threadId
+              cwd
             })
           )
         : Promise.resolve({ ok: true, value: {} } satisfies SafeResult<unknown>)
@@ -286,11 +306,21 @@ export class PluginCenterService {
     const catalog = catalogResult.ok ? objectValue(catalogResult.value) : {}
     const mcp = mcpResult.ok
       ? normalizeMcpSnapshot(mcpResult.value)
-      : { config: {}, userConfig: {}, origins: {}, servers: [], pluginDetails: [] }
-    const pluginDetails = [
-      ...arrayValue(catalogResult.ok && catalogPluginDetails.ok ? catalogPluginDetails.value : []),
-      ...mcp.pluginDetails
-    ]
+      : { config: {}, userConfig: {}, origins: {}, servers: [] }
+    const pluginDetails = arrayValue(
+      catalogResult.ok && catalogPluginDetails.ok ? catalogPluginDetails.value : []
+    )
+    let recommendedSkills: PluginCenterGetRecommendedSkillsResult['skills'] | null = null
+    if (needsManagedRecommendedSkills && recommendedSkillsResult.ok) {
+      const recommendedCatalog = recommendedSkillsResult.value
+      if (recommendedCatalog !== null && !recommendedCatalog.error) {
+        recommendedSkills = recommendedCatalog.skills
+      }
+    }
+    const rawSkills = skillsResult.ok ? skillsResult.value : []
+    const skills = isManagedSkillList
+      ? preferredManagedRawSkills(rawSkills, recommendedSkills)
+      : rawSkills
     const plugins = mergePluginsWithInstalled(
       normalizePlugins(catalog, pluginDetails),
       installedResult.ok ? installedResult.value : []
@@ -306,9 +336,9 @@ export class PluginCenterService {
       version: PLUGIN_CENTER_API_VERSION,
       generatedAt: (this.dependencies.now ?? (() => new Date()))().toISOString(),
       plugins,
-      skills: normalizeSkills(skillsResult.ok ? skillsResult.value : [], pluginDetails, plugins),
+      skills: normalizeSkills(skills, isManagedSkillList ? [] : pluginDetails, plugins),
       apps: normalizeApps(appsResult.ok ? appsResult.value : []),
-      mcp: normalizeMcpForUi(mcp),
+      mcp: normalizeMcpForUi(mcp, pluginDetails),
       marketplaces: normalizeMarketplaces(catalog),
       capabilities: {
         plugins: capabilityFor(catalogResult, catalogPluginDetails),
@@ -498,7 +528,11 @@ export class PluginCenterService {
   async getSkillContents(
     input: PluginCenterGetSkillContentsRequest
   ): Promise<PluginCenterGetSkillContentsResult> {
-    const located = await this.resolvePluginLocator(input)
+    const plugin = input.plugin
+    if (!plugin) return this.getLocalSkillContents(input)
+
+    const pluginInput = { ...input, plugin }
+    const located = await this.resolvePluginLocator(pluginInput)
     if (located.status === 'missing') {
       return pluginCenterGetSkillContentsResultSchema.parse({
         version: PLUGIN_CENTER_API_VERSION,
@@ -581,6 +615,73 @@ export class PluginCenterService {
       plugin: input.plugin,
       skill: input.skill,
       contents
+    })
+  }
+
+  async getRecommendedSkills(
+    input: PluginCenterGetRecommendedSkillsRequest
+  ): Promise<PluginCenterGetRecommendedSkillsResult> {
+    const service = this.dependencies.recommendedSkills
+    if (!service) {
+      return pluginCenterGetRecommendedSkillsResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        skills: [],
+        fetchedAt: new Date(this.nowMs()).toISOString(),
+        source: 'cache',
+        error: '推荐技能目录暂时不可用，请重试。'
+      })
+    }
+    return pluginCenterGetRecommendedSkillsResultSchema.parse(
+      await service.getRecommendedSkills(input.forceRefresh === true)
+    )
+  }
+
+  async installRecommendedSkill(input: {
+    id: string
+    repoPath: string
+  }): Promise<PluginCenterMutationResult> {
+    const service = this.dependencies.recommendedSkills
+    if (!service) throw new Error('Recommended skills are unavailable')
+    return this.queue(`recommended-skill:${input.id}`, async () => {
+      const status = await service.installRecommendedSkill(input)
+      return pluginCenterMutationResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: status === 'installed' ? 'applied' : 'unchanged',
+        message: status === 'installed' ? '技能已安装' : '技能已安装，无需重复安装',
+        changedItemId: input.id,
+        changedSections: status === 'installed' ? ['skills'] : []
+      })
+    })
+  }
+
+  private async getLocalSkillContents(
+    input: PluginCenterGetSkillContentsRequest
+  ): Promise<PluginCenterGetSkillContentsResult> {
+    const readSkillFileContents = this.dependencies.provider.readSkillFileContents
+    if (!readSkillFileContents) return this.missingSkillContents(input, 'unavailable')
+
+    const cwd = this.cwdFor(input)
+    const rawSkills = await safeRead(() =>
+      this.dependencies.provider.listSkillsForManagement({
+        ...(cwd ? { cwd } : {}),
+        forceReload: input.forceRefresh
+      })
+    )
+    if (!rawSkills.ok) return this.missingSkillContents(input, 'unavailable')
+
+    const localPath = findTrustedLocalSkillPath(rawSkills.value, input.skill)
+    if (!localPath) return this.missingSkillContents(input, 'not_found')
+
+    const contents = await readSkillFileContents.call(this.dependencies.provider, {
+      path: localPath,
+      maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+    })
+    return pluginCenterGetSkillContentsResultSchema.parse({
+      version: PLUGIN_CENTER_API_VERSION,
+      status: 'ready',
+      skill: input.skill,
+      contents,
+      localPath
     })
   }
 
@@ -971,6 +1072,33 @@ export class PluginCenterService {
     })
   }
 
+  async uninstallSkill(
+    input: PluginCenterUninstallSkillRequest
+  ): Promise<PluginCenterMutationResult> {
+    return this.queue(`skill:${input.skill.id}`, async () => {
+      const cwd = this.cwdFor(input)
+      const rawSkills = await this.dependencies.provider.listSkillsForManagement({
+        ...(cwd ? { cwd } : {}),
+        forceReload: true
+      })
+      const directory = await findRemovableLocalSkillDirectory(rawSkills, input.skill, {
+        codexHome: this.dependencies.codexHome,
+        cwd
+      })
+      if (!directory) {
+        throw new Error('Only independent user or project skills can be uninstalled')
+      }
+      const remove = this.dependencies.removeSkillDirectory ?? removeSkillDirectory
+      await remove(directory)
+      return pluginCenterMutationResultSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'applied',
+        changedItemId: input.skill.id,
+        changedSections: ['skills']
+      })
+    })
+  }
+
   async setAppEnabled(
     input: PluginCenterRequestContext & { app: { id: string }; enabled: boolean }
   ): Promise<PluginCenterMutationResult> {
@@ -1024,8 +1152,7 @@ export class PluginCenterService {
       const cwd = this.cwdFor(input)
       const raw = normalizeMcpSnapshot(
         await this.dependencies.provider.readMcpManagementSnapshot({
-          cwd,
-          threadId: input.threadId
+          cwd
         })
       )
       const existingEntries = mcpConfigEntries(raw.config)
@@ -1875,6 +2002,90 @@ function findTrustedPluginSkill(
   return undefined
 }
 
+function findTrustedLocalSkillPath(
+  rawSkills: unknown,
+  requestSkill: { id: string; name: string }
+): string | undefined {
+  for (const value of arrayValue(rawSkills)) {
+    const skill = objectValue(value)
+    const path = stringValue(skill.path)
+    const name = stringValue(skill.name)
+    if (!path || !name) continue
+    if (requestSkill.id === path && requestSkill.name === name) return path
+  }
+  return undefined
+}
+
+async function findRemovableLocalSkillDirectory(
+  rawSkills: unknown,
+  requestSkill: { id: string; name: string },
+  roots: { codexHome?: string; cwd?: string }
+): Promise<string | undefined> {
+  for (const value of arrayValue(rawSkills)) {
+    const skill = objectValue(value)
+    if (
+      stringValue(skill.path) !== requestSkill.id ||
+      stringValue(skill.name) !== requestSkill.name
+    ) {
+      continue
+    }
+    return resolveRemovableLocalSkillDirectory(skill, roots)
+  }
+  return undefined
+}
+
+function hasRemovableLocalSkillShape(skill: JsonRecord): boolean {
+  const scope = stringValue(skill.scope)
+  const name = stringValue(skill.name)
+  const path = stringValue(skill.path)
+  return (
+    (scope === 'user' || scope === 'repo') &&
+    safeSkillDirectoryName(name) &&
+    isAbsolute(path) &&
+    basename(path) === 'SKILL.md'
+  )
+}
+
+async function resolveRemovableLocalSkillDirectory(
+  skill: JsonRecord,
+  roots: { codexHome?: string; cwd?: string }
+): Promise<string | undefined> {
+  const scope = stringValue(skill.scope)
+  const name = stringValue(skill.name)
+  const path = stringValue(skill.path)
+  if (!hasRemovableLocalSkillShape(skill)) return undefined
+  const directory = dirname(path)
+  const root =
+    scope === 'user'
+      ? roots.codexHome && join(roots.codexHome, 'skills')
+      : roots.cwd && join(roots.cwd, '.codex', 'skills')
+  if (!root) return undefined
+  try {
+    const [realRoot, realDirectory] = await Promise.all([realpath(root), realpath(directory)])
+    const expectedDirectory = join(realRoot, name)
+    if (realDirectory !== expectedDirectory) return undefined
+    const distance = relative(realRoot, realDirectory)
+    if (
+      !distance ||
+      distance === '..' ||
+      distance.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)
+    ) {
+      return undefined
+    }
+    return realDirectory
+  } catch {
+    return undefined
+  }
+}
+
+function safeSkillDirectoryName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,149}$/.test(name)
+}
+
+async function removeSkillDirectory(path: string): Promise<void> {
+  await removeDirectory(path, { recursive: true, force: false })
+}
+
 function trustedLocalSkillPath(
   locator: PluginLocator,
   detailSummary: JsonRecord,
@@ -1927,10 +2138,12 @@ function normalizePlugins(catalog: JsonRecord, pluginDetails: unknown[]): Plugin
       const displayName = displayTextValue(interfaceInfo.displayName)
       const description = displayTextValue(interfaceInfo.shortDescription)
       const versionLabel = displayTextValue(plugin.version)
+      const installedAt = optionalNonNegativeInteger(plugin.installedAt)
       return {
         kind: 'plugin' as const,
         id,
         name,
+        ...(installedAt !== undefined ? { installedAt } : {}),
         ...(displayName ? { displayName } : {}),
         ...(description ? { description } : {}),
         ...(iconUrl ? { icon: { kind: 'url' as const, value: iconUrl } } : {}),
@@ -2006,6 +2219,7 @@ function mergePluginsWithInstalled(
       ...plugin,
       installed: true,
       enabled: installed.enabled,
+      ...(installed.installedAt !== undefined ? { installedAt: installed.installedAt } : {}),
       canInstall: false,
       canUninstall: true,
       canToggle: true
@@ -2030,19 +2244,23 @@ function normalizeSkills(
       const path = stringValue(skill.path)
       const name = stringValue(skill.name) || path
       const scope = stringValue(skill.scope)
-      const displayName = displayTextValue(skill.shortDescription)
+      const interfaceInfo = objectValue(skill.interface)
+      const displayName = displayTextValue(interfaceInfo.displayName)
       const description = displayTextValue(skill.description)
+      const icons = localSkillIcons(interfaceInfo)
       return {
         id: path || name,
         name,
         ...(displayName ? { displayName } : {}),
         ...(description ? { description } : {}),
+        ...icons,
         scope: normalizeSkillScope(scope),
         sourceKind: scope === 'system' ? 'builtin' : 'personal',
         enabled: booleanValue(skill.enabled),
         installed: true,
         recommended: false,
         canToggle: true,
+        canUninstall: hasRemovableLocalSkillShape(skill),
         tags: []
       }
     })
@@ -2061,10 +2279,13 @@ function normalizeSkills(
       if (!name) continue
       const path = stringValue(skill.path)
       const id = path || `plugin:${pluginId}:${name}`
+      const interfaceInfo = objectValue(skill.interface)
+      const icons = pluginSkillIcons(summary, interfaceInfo)
       const existingIndex = skills.findIndex((candidate) => candidate.id === id)
       if (existingIndex >= 0) {
         skills[existingIndex] = {
           ...skills[existingIndex],
+          ...icons,
           recommended: true,
           pluginId,
           pluginDisplayName
@@ -2072,7 +2293,6 @@ function normalizeSkills(
         continue
       }
       if (existingSkillIds.has(id)) continue
-      const interfaceInfo = objectValue(skill.interface)
       const installed = owningPlugin?.installed === true
       const displayName = displayTextValue(interfaceInfo.displayName)
       const description = displayTextValue(skill.description)
@@ -2081,6 +2301,7 @@ function normalizeSkills(
         name,
         ...(displayName ? { displayName } : {}),
         ...(description ? { description } : {}),
+        ...icons,
         scope: 'plugin',
         sourceKind: 'marketplace',
         pluginId,
@@ -2089,6 +2310,7 @@ function normalizeSkills(
         installed,
         recommended: true,
         canToggle: installed,
+        canUninstall: false,
         tags: [],
         ...(!installed
           ? {
@@ -2103,6 +2325,126 @@ function normalizeSkills(
     }
   }
   return skills
+}
+
+/** Mirrors the Codex manage-skills projection before it renders cards. */
+function preferredManagedRawSkills(
+  raw: unknown,
+  recommendedSkills: PluginCenterGetRecommendedSkillsResult['skills'] | null
+): JsonRecord[] {
+  if (recommendedSkills === null) return []
+
+  const byName = new Map<string, JsonRecord>()
+  for (const candidate of arrayValue(raw).map(objectValue)) {
+    if (stringValue(candidate.scope) !== 'user') continue
+    if (pluginIdFromRawSkillPath(stringValue(candidate.path)) !== null) continue
+
+    const name = stringValue(candidate.name) || stringValue(candidate.path)
+    if (!name) continue
+
+    const existing = byName.get(name)
+    if (!existing || rawSkillPrecedes(candidate, existing)) {
+      byName.set(name, candidate)
+    }
+  }
+
+  const recommendedKeys = new Set(
+    recommendedSkills.flatMap((skill) => recommendedSkillMatchKeys(skill))
+  )
+  return [...byName.values()]
+    .filter((skill) => !rawSkillMatchesRecommended(skill, recommendedKeys))
+    .sort(
+      (left, right) =>
+        rawSkillDisplayName(left).localeCompare(rawSkillDisplayName(right)) ||
+        stringValue(left.name).localeCompare(stringValue(right.name))
+    )
+}
+
+function rawSkillPrecedes(candidate: JsonRecord, current: JsonRecord): boolean {
+  return stringValue(candidate.path).localeCompare(stringValue(current.path)) < 0
+}
+
+function pluginIdFromRawSkillPath(path: string): string | null {
+  const segments = path
+    .trim()
+    .replace(/^\.\/+/, '')
+    .replaceAll('\\', '/')
+    .replace(/\/+$/, '')
+    .split('/')
+    .filter(Boolean)
+
+  for (let index = 0; index < segments.length; index += 1) {
+    if (segments[index]?.toLowerCase() !== 'plugins') continue
+
+    const isCachedPlugin = segments[index + 1]?.toLowerCase() === 'cache'
+    const pluginIndex = index + (isCachedPlugin ? 3 : 1)
+    const pluginId = segments[pluginIndex]
+    if (!pluginId) continue
+
+    const searchAfter = pluginIndex + Number(isCachedPlugin)
+    const skillsIndex = segments.findIndex(
+      (segment, segmentIndex) => segmentIndex > searchAfter && segment.toLowerCase() === 'skills'
+    )
+    const skillIndex = skillsIndex < 0 ? searchAfter : skillsIndex + 1
+    const skillId = segments[skillIndex]
+    const relativePath = segments.slice(skillIndex + 1)
+    if (
+      skillId &&
+      (skillsIndex >= 0 ||
+        (relativePath.length === 1 && relativePath[0]?.toLowerCase() === 'skill.md'))
+    ) {
+      return pluginId
+    }
+  }
+
+  return null
+}
+
+function rawSkillDisplayName(skill: JsonRecord): string {
+  return displayTextValue(objectValue(skill.interface).displayName) || stringValue(skill.name)
+}
+
+function rawSkillMatchesRecommended(skill: JsonRecord, recommendedKeys: Set<string>): boolean {
+  return rawSkillMatchKeys(skill).some((key) => recommendedKeys.has(key))
+}
+
+function rawSkillMatchKeys(skill: JsonRecord): string[] {
+  const path = stringValue(skill.path)
+  return skillMatchKeys([
+    rawSkillNameFromPath(path),
+    stringValue(skill.name),
+    formattedSkillName(stringValue(skill.name)),
+    rawSkillDisplayName(skill)
+  ])
+}
+
+function recommendedSkillMatchKeys(
+  skill: PluginCenterGetRecommendedSkillsResult['skills'][number]
+): string[] {
+  return skillMatchKeys([skill.id, skill.name, formattedSkillName(skill.name)])
+}
+
+function skillMatchKeys(values: Array<string | undefined>): string[] {
+  const keys = new Set<string>()
+  for (const value of values) {
+    const normalized = value?.trim().toLowerCase()
+    if (!normalized) continue
+    keys.add(normalized)
+    const compact = normalized.replace(/[^a-z0-9]+/g, '')
+    if (compact) keys.add(compact)
+  }
+  return [...keys]
+}
+
+function rawSkillNameFromPath(path: string): string | undefined {
+  const segments = path.replaceAll('\\', '/').split('/').filter(Boolean)
+  const lastSegment = segments.at(-1)
+  if (!lastSegment) return undefined
+  return lastSegment.toLowerCase() === 'skill.md' ? segments.at(-2) : lastSegment
+}
+
+function formattedSkillName(name: string): string {
+  return name.replaceAll(/[-_]+/g, ' ')
 }
 
 function normalizeApps(raw: unknown): PluginCenterApp[] {
@@ -2220,17 +2562,19 @@ function normalizeMcpSnapshot(raw: unknown): McpRawSnapshot {
     config: objectValue(configResponse.config),
     userConfig: userConfigFromReadResponse(configResponse),
     origins: objectValue(configResponse.origins),
-    servers: arrayValue(source.servers),
-    pluginDetails: arrayValue(source.pluginDetails)
+    servers: arrayValue(source.servers)
   }
 }
 
-function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
+function normalizeMcpForUi(
+  raw: McpRawSnapshot,
+  pluginDetails: unknown[] = []
+): PluginCenterSnapshot['mcp'] {
   const statuses = new Map(
     raw.servers.map(objectValue).map((server) => [stringValue(server.name), server] as const)
   )
-  const pluginServers: PluginCenterPluginMcpServer[] = []
-  for (const rawDetail of raw.pluginDetails) {
+  const pluginMetadata = new Map<string, { pluginId: string; pluginDisplayName?: string }>()
+  for (const rawDetail of pluginDetails) {
     const detail = objectValue(rawDetail)
     const summary = objectValue(detail.summary)
     const pluginId = stringValue(summary.id)
@@ -2238,48 +2582,42 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
     const pluginDisplayName =
       displayTextValue(objectValue(summary.interface).displayName) || displayTextValue(summary.name)
     for (const name of arrayValue(detail.mcpServers).map(stringValue).filter(Boolean)) {
-      const status = statuses.get(name) ?? {}
-      const configEntry = mcpConfigEntries(raw.config)[name]
-      const enabled =
-        configEntry?.enabled === undefined
-          ? booleanValue(summary.enabled)
-          : configEntry.enabled !== false
-      const source = configOriginSource(
-        raw.origins,
-        configPathKey(['mcp_servers', name, 'enabled'])
-      )
-      const canToggle = source === undefined || source === 'user'
-      const restriction = canToggle
-        ? undefined
-        : {
-            code: 'readonly' as const,
-            source,
-            editable: false,
-            message: `此 MCP 服务器由${configSourceLabel(source)}配置管理，无法在此处更改。`
-          }
-      pluginServers.push({
-        id: name,
-        name,
-        enabled,
-        connected: booleanValue(status.connected),
-        authStatus: normalizeAuthStatus(status.authStatus),
-        toolCount: nonNegativeInteger(status.toolCount),
-        origin: 'plugin' as const,
-        editable: false as const,
-        canToggle,
+      pluginMetadata.set(name, {
         pluginId,
-        ...(pluginDisplayName ? { pluginDisplayName } : {}),
-        transport: 'unknown' as const,
-        ...(restriction ? { restriction } : {})
+        ...(pluginDisplayName ? { pluginDisplayName } : {})
       })
     }
   }
-  const pluginServerNames = new Set(pluginServers.map((server) => server.id))
+  const configuredServerNames = mcpConfiguredServerNames(raw.config)
+  const pluginServers: PluginCenterPluginMcpServer[] = []
+  for (const rawServer of raw.servers) {
+    const status = objectValue(rawServer)
+    const name = stringValue(status.name)
+    if (!name || name === 'codex_app' || configuredServerNames.has(name)) continue
+    const metadata = pluginMetadata.get(name)
+    pluginServers.push({
+      id: name,
+      name,
+      enabled: true,
+      connected: booleanValue(status.connected),
+      authStatus: normalizeAuthStatus(status.authStatus),
+      toolCount: nonNegativeInteger(status.toolCount),
+      origin: 'plugin',
+      editable: false,
+      canToggle: false,
+      ...(metadata ?? {}),
+      transport: 'unknown',
+      restriction: {
+        code: 'readonly',
+        editable: false,
+        message: '此 MCP 服务器由插件提供，请通过所属插件管理。'
+      }
+    })
+  }
   const userServers: PluginCenterSnapshot['mcp']['userServers'] = []
   const userEntries = mcpConfigEntries(raw.userConfig)
   for (const [id, value] of Object.entries(mcpConfigEntries(raw.config))) {
-    if (pluginServerNames.has(id)) continue
-    const status = statuses.get(id) ?? {}
+    const status = statuses.get(id) ?? statuses.get(stringValue(value.name)) ?? {}
     const enabled = value.enabled !== false
     const origin = mcpOrigin(raw.origins, id, Boolean(userEntries[id]))
     const editable = origin === 'user'
@@ -2333,8 +2671,22 @@ function normalizeMcpForUi(raw: McpRawSnapshot): PluginCenterSnapshot['mcp'] {
   return { userServers, pluginServers }
 }
 
+function mcpConfiguredServerNames(config: JsonRecord): Set<string> {
+  const names = new Set<string>()
+  for (const [id, value] of Object.entries(mcpConfigEntries(config))) {
+    names.add(id)
+    const runtimeName = stringValue(value.name)
+    if (runtimeName) names.add(runtimeName)
+  }
+  return names
+}
+
 function mcpConfigEntries(config: JsonRecord): Record<string, JsonRecord> {
-  const entries = objectValue(config.mcp_servers)
+  // Codex App Server may expose MCP configuration with either its protocol
+  // field (`mcp_servers`) or the legacy/imported JSON field (`mcpServers`).
+  // Keep the protocol form authoritative when both are present, matching the
+  // reference desktop implementation.
+  const entries = objectValue(config.mcp_servers ?? config.mcpServers)
   return Object.fromEntries(
     Object.entries(entries).flatMap(([name, value]) => {
       const entry = objectValue(value)
@@ -2589,17 +2941,48 @@ function pluginSkillIcon(
   detailSummary: JsonRecord,
   interfaceInfo: JsonRecord
 ): { kind: 'url'; value: string } | undefined {
+  const { iconSmall, iconLarge } = pluginSkillIcons(detailSummary, interfaceInfo)
+  return iconSmall ?? iconLarge
+}
+
+type SkillIconFields = {
+  iconSmall?: { kind: 'url'; value: string }
+  iconLarge?: { kind: 'url'; value: string }
+}
+
+function pluginSkillIcons(detailSummary: JsonRecord, interfaceInfo: JsonRecord): SkillIconFields {
   const source = objectValue(detailSummary.source)
   const sourcePath = stringValue(source.path)
-  const icon = interfaceInfo.iconSmall ?? interfaceInfo.iconLarge
-
   if (stringValue(source.type) === 'local' && sourcePath) {
-    const value = localPluginMediaUrl(icon, sourcePath)
-    return value ? { kind: 'url', value } : undefined
+    return skillIconFields(interfaceInfo, (icon) => {
+      const value = localPluginMediaUrl(icon, sourcePath)
+      return value ? { kind: 'url', value } : undefined
+    })
   }
 
-  const value = safeHttpsUrl(icon)
-  return value ? { kind: 'url', value } : undefined
+  return skillIconFields(interfaceInfo, (icon) => {
+    const value = safeHttpsUrl(icon)
+    return value ? { kind: 'url', value } : undefined
+  })
+}
+
+function localSkillIcons(interfaceInfo: JsonRecord): SkillIconFields {
+  return skillIconFields(interfaceInfo, (icon) => {
+    const value = toAppMediaUrl(stringValue(icon))
+    return value ? { kind: 'url', value } : undefined
+  })
+}
+
+function skillIconFields(
+  interfaceInfo: JsonRecord,
+  toIcon: (value: unknown) => { kind: 'url'; value: string } | undefined
+): SkillIconFields {
+  const iconSmall = toIcon(interfaceInfo.iconSmall)
+  const iconLarge = toIcon(interfaceInfo.iconLarge)
+  return {
+    ...(iconSmall ? { iconSmall } : {}),
+    ...(iconLarge ? { iconLarge } : {})
+  }
 }
 
 function localPluginMediaUrl(value: unknown, sourcePath: string): string | undefined {
@@ -2719,6 +3102,10 @@ function booleanValue(value: unknown): boolean {
 
 function nonNegativeInteger(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0
+}
+
+function optionalNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined
 }
 
 function requiredString(value: unknown, label: string): string {

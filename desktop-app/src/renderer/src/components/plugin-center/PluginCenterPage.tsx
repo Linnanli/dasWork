@@ -1,11 +1,13 @@
 import * as React from 'react'
 import {
   AppWindowIcon,
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CircleAlertIcon,
   DatabaseIcon,
   Loader2Icon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   PlugIcon,
   PlusIcon,
@@ -13,7 +15,8 @@ import {
   RefreshCwIcon,
   SearchIcon,
   SettingsIcon,
-  SparklesIcon
+  SparklesIcon,
+  Trash2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -22,12 +25,12 @@ import type {
   PluginCenterAddMarketplaceResult,
   PluginCenterApp,
   PluginCenterGetPluginDetailResult,
-  PluginCenterMcpServerInput,
+  PluginCenterGetRecommendedSkillsResult,
   PluginCenterMutationResult,
-  PluginCenterNamedSecretPatch,
   PluginCenterPlugin,
   PluginCenterPluginDetail,
   PluginCenterPluginMcpServer,
+  PluginCenterRecommendedSkill,
   PluginCenterRequestContext,
   PluginCenterSnapshotSection,
   PluginCenterSkill,
@@ -61,16 +64,20 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
-import { OptimisticSkillSwitch } from './OptimisticSkillSwitch'
+import { PluginCard } from './PluginCard'
+import { PluginDetailSkillIcon } from './PluginDetailSkillIcon'
 import { PluginImage } from './PluginImage'
+import { PluginSkillCard } from './PluginSkillCard'
 import {
   getPluginCenterCatalogResource,
   getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
+  getPluginCenterRecommendedSkillsResource,
   getPluginCenterSkillContentsResource,
   getPluginCenterSupplementalResource,
   invalidatePluginCenterAppToolsResource,
+  mergeInstalledPluginsForDisplay,
   mergePluginCatalogWithInstalled,
   type PluginCenterResource,
   type PluginCenterResourceSnapshot,
@@ -79,11 +86,13 @@ import {
 import { PluginAppToolsDialog } from './PluginAppToolsDialog'
 import { PluginDetailPage } from './PluginDetailPage'
 import { PluginSkillPreviewDialog } from './PluginSkillPreviewDialog'
+import { McpServerEditor, type McpServerEditorSaveInput } from './McpServerEditor'
 
 export type PluginCenterPageKind = 'browse' | 'manage' | 'detail'
 export type PluginCenterBrowseTab = 'plugins' | 'skills'
 export type PluginCenterManageTab = 'plugins' | 'apps' | 'mcp' | 'skills'
 export type PluginCenterTab = PluginCenterBrowseTab | PluginCenterManageTab
+export type PluginCenterSkillBrowseCategory = 'personal' | 'system' | 'recommended'
 
 export type PluginCenterBrowseContext = {
   tab: PluginCenterBrowseTab
@@ -144,9 +153,18 @@ type BrowsePluginsLoadingState = {
   catalog: boolean
   installed: boolean
 }
+type SelectedSkillPreview = {
+  skill: Pick<
+    PluginCenterSkill,
+    'id' | 'name' | 'displayName' | 'description' | 'enabled' | 'canToggle'
+  > & { icon?: PluginCenterPluginDetail['skills'][number]['icon'] }
+  plugin?: { id: string; marketplaceId?: string }
+  installPlugin?: PluginCenterPlugin
+  uninstallSkill?: PluginCenterSkill
+}
 type ConfirmState =
   | { kind: 'plugin'; plugin: PluginCenterPlugin }
-  | { kind: 'mcp'; server: PluginCenterUserMcpServer }
+  | { kind: 'skill'; skill: PluginCenterSkill }
   | null
 const FEATURED_CATEGORY_ID = '__featured__'
 const CATEGORY_PREVIEW_LIMIT = 6
@@ -229,19 +247,169 @@ function itemTitle(item: { displayName?: string; name: string }): string {
   return item.displayName ?? item.name
 }
 
+const SKILL_ACRONYMS = new Set([
+  'API',
+  'CI',
+  'CLI',
+  'CPU',
+  'GH',
+  'GPU',
+  'IA',
+  'LLM',
+  'MCP',
+  'PDF',
+  'PR',
+  'SQL',
+  'TW',
+  'UI',
+  'URL'
+])
+
+const SKILL_WORD_MARKS = new Map([
+  ['openai', 'OpenAI'],
+  ['openaideveloperdocs', 'OpenAI Developer Docs'],
+  ['openapi', 'OpenAPI'],
+  ['github', 'GitHub'],
+  ['pagerduty', 'PagerDuty'],
+  ['datadog', 'DataDog'],
+  ['sharepoint', 'SharePoint'],
+  ['sqlite', 'SQLite'],
+  ['fastapi', 'FastAPI']
+])
+
+const LOWERCASE_SKILL_TITLE_WORDS = new Set(['and', 'or', 'to', 'up', 'with'])
+
+function skillTitle(skill: { displayName?: string; name: string }): string {
+  return skill.displayName?.trim() || formatSkillName(skill.name)
+}
+
+function formatSkillName(name: string): string {
+  return name
+    .split(':')
+    .map((segment) =>
+      segment
+        .replace(/[_-]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word, index) => formatSkillNameWord(word, index))
+        .join(' ')
+    )
+    .join(': ')
+}
+
+function formatSkillNameWord(word: string, index: number): string {
+  const acronym = word.toUpperCase()
+  if (SKILL_ACRONYMS.has(acronym)) return acronym
+
+  const lowercaseWord = word.toLowerCase()
+  const brandedWord = SKILL_WORD_MARKS.get(lowercaseWord)
+  if (brandedWord) return brandedWord
+  if (index > 0 && LOWERCASE_SKILL_TITLE_WORDS.has(lowercaseWord)) return lowercaseWord
+  return `${lowercaseWord.slice(0, 1).toUpperCase()}${lowercaseWord.slice(1)}`
+}
+
 function itemDescription(item: { description?: string }): string {
   return item.description ?? '暂无说明'
 }
 
 function matchesSearch(
-  item: { id: string; name: string; displayName?: string; description?: string; tags?: string[] },
+  item: {
+    id: string
+    name: string
+    displayName?: string
+    description?: string
+    shortDescription?: string
+    tags?: string[]
+  },
   search: string
 ): boolean {
   const query = search.trim().toLowerCase()
   if (!query) return true
-  return [item.id, item.name, item.displayName, item.description, ...(item.tags ?? [])]
+  return [
+    item.id,
+    item.name,
+    item.displayName,
+    item.description,
+    item.shortDescription,
+    ...(item.tags ?? [])
+  ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query))
+}
+
+function isManagedAppVisible(app: PluginCenterApp): boolean {
+  return app.accessible && app.enabled
+}
+
+function skillBrowseCategory(value: string | undefined): PluginCenterSkillBrowseCategory {
+  if (value === 'system' || value === 'recommended') return value
+  return 'personal'
+}
+
+function skillCategoryTitle(category: PluginCenterSkillBrowseCategory): string {
+  switch (category) {
+    case 'personal':
+      return '个人技能'
+    case 'system':
+      return '系统技能'
+    case 'recommended':
+      return '推荐技能'
+  }
+}
+
+function isPluginOwnedSkillPath(path: string): boolean {
+  const segments = path.replaceAll('\\', '/').split('/').filter(Boolean)
+  for (let index = 0; index < segments.length; index += 1) {
+    if (segments[index]?.toLowerCase() !== 'plugins') continue
+
+    const cacheRoot = segments[index + 1]?.toLowerCase() === 'cache'
+    const pluginIndex = index + (cacheRoot ? 3 : 1)
+    if (!segments[pluginIndex]) continue
+
+    const skillDirectoryIndex = segments.findIndex(
+      (segment, segmentIndex) => segmentIndex > pluginIndex && segment.toLowerCase() === 'skills'
+    )
+    if (skillDirectoryIndex >= 0 && segments[skillDirectoryIndex + 1]) return true
+
+    const remainingSegments = segments.slice(pluginIndex + 1)
+    if (remainingSegments.length === 1 && remainingSegments[0]?.toLowerCase() === 'skill.md') {
+      return true
+    }
+  }
+  return false
+}
+
+function isStandaloneSkill(skill: PluginCenterSkill): boolean {
+  return !skill.pluginId && !isPluginOwnedSkillPath(skill.id)
+}
+
+function normalizedSkillMatchKeys(
+  skill: Pick<PluginCenterSkill, 'id' | 'name' | 'displayName'> | PluginCenterRecommendedSkill
+): Set<string> {
+  const keys = new Set<string>()
+  const displayName = 'displayName' in skill ? skill.displayName : undefined
+  for (const value of [skill.id, skill.name, displayName]) {
+    if (!value) continue
+    const normalized = value.trim().toLocaleLowerCase()
+    if (!normalized) continue
+    keys.add(normalized)
+    const basename = normalized.split(/[\\/]/).at(-1)
+    if (basename && basename !== 'skill.md') keys.add(basename)
+  }
+  return keys
+}
+
+function recommendedSkillIsInstalled(
+  skill: PluginCenterRecommendedSkill,
+  installedSkills: PluginCenterSkill[]
+): boolean {
+  const recommendedKeys = normalizedSkillMatchKeys(skill)
+  return installedSkills.some((installed) => {
+    for (const key of normalizedSkillMatchKeys(installed)) {
+      if (recommendedKeys.has(key)) return true
+    }
+    return false
+  })
 }
 
 function sourceLabel(sourceKind: string): string {
@@ -256,38 +424,6 @@ function sourceLabel(sourceKind: string): string {
       return '本地'
     default:
       return '未知来源'
-  }
-}
-
-function scopeLabel(scope: PluginCenterSkill['scope']): string {
-  switch (scope) {
-    case 'personal':
-      return '个人'
-    case 'workspace':
-      return '工作区'
-    case 'project':
-      return '项目'
-    case 'plugin':
-      return '插件'
-    case 'system':
-      return '系统'
-    default:
-      return '未知'
-  }
-}
-
-function authLabel(status: string): string {
-  switch (status) {
-    case 'notLoggedIn':
-      return '未登录'
-    case 'bearerToken':
-      return 'Token'
-    case 'oAuth':
-      return 'OAuth'
-    case 'unsupported':
-      return '无需认证'
-    default:
-      return '认证未知'
   }
 }
 
@@ -310,23 +446,34 @@ function resolveContentView({
   browseTab,
   manageTab,
   snapshot,
+  recommendedSkills,
+  recommendedState,
+  installedPlugins,
   search,
   mutation,
   requestContext,
   api,
   runMutation,
-  setMcpDialog,
+  onMcpEdit,
+  onMcpAdd,
   setConfirm,
   onManageInstalledPlugins,
-  onConnectApp,
+  onTryPlugin,
   onOpenCategory,
+  onOpenSkillCategory,
   onOpenDetails,
+  onOpenSkill,
+  onInstallRecommendedSkill,
+  onRetryRecommendedSkills,
   browsePluginsLoading
 }: {
   surface: PluginCenterSurface
   browseTab: PluginCenterBrowseTab
   manageTab: PluginCenterManageTab
   snapshot: PluginCenterSnapshot
+  recommendedSkills: PluginCenterRecommendedSkill[]
+  recommendedState: PluginCenterResourceSnapshot<PluginCenterGetRecommendedSkillsResult>
+  installedPlugins: PluginCenterPlugin[]
   search: string
   mutation: MutationStatus
   requestContext: PluginCenterRequestContext
@@ -337,18 +484,24 @@ function resolveContentView({
     action: () => Promise<PluginCenterMutationResult>,
     options?: MutationOptions
   ) => Promise<boolean>
-  setMcpDialog: React.Dispatch<React.SetStateAction<McpDialogState>>
+  onMcpEdit: (server: PluginCenterUserMcpServer) => void
+  onMcpAdd: () => void
   setConfirm: React.Dispatch<React.SetStateAction<ConfirmState>>
   onManageInstalledPlugins: () => void
-  onConnectApp: (app: PluginCenterApp) => void
+  onTryPlugin: (plugin: PluginCenterPlugin) => void
   onOpenCategory: (category: string) => void
+  onOpenSkillCategory: (category: PluginCenterSkillBrowseCategory) => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
+  onOpenSkill: (skill: PluginCenterSkill) => void
+  onInstallRecommendedSkill: (skill: PluginCenterRecommendedSkill) => void
+  onRetryRecommendedSkills: () => void
   browsePluginsLoading: BrowsePluginsLoadingState
 }): React.ReactNode {
   if (surface.page === 'browse' && browseTab === 'plugins') {
     return (
       <BrowsePlugins
         plugins={snapshot.plugins.filter((item) => matchesSearch(item, search))}
+        installedPlugins={installedPlugins.filter((item) => matchesSearch(item, search))}
         category={surface.category}
         catalogUnavailableReason={snapshot.catalogUnavailableReason}
         loading={browsePluginsLoading}
@@ -361,13 +514,9 @@ function resolveContentView({
             })
           )
         }
-        onToggle={(plugin, enabled) =>
-          void runMutation(plugin.id, enabled ? '启用插件' : '停用插件', () =>
-            api!.setPluginEnabled({ ...requestContext, plugin: { id: plugin.id }, enabled })
-          )
-        }
         onUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
         onManageInstalledPlugins={onManageInstalledPlugins}
+        onTryPlugin={onTryPlugin}
         onOpenCategory={onOpenCategory}
         onOpenDetails={onOpenDetails}
       />
@@ -377,16 +526,16 @@ function resolveContentView({
   if (surface.page === 'browse') {
     return (
       <BrowseSkills
-        skills={snapshot.skills.filter((item) => matchesSearch(item, search))}
+        skills={snapshot.skills}
+        recommendedSkills={recommendedSkills}
+        category={skillBrowseCategory(surface.category)}
+        search={search}
         pendingId={mutation?.id}
-        onToggle={(skill, enabled) =>
-          runMutation(
-            skill.id,
-            enabled ? '启用技能' : '停用技能',
-            () => api!.setSkillEnabled({ ...requestContext, skill: { id: skill.id }, enabled }),
-            { refreshInBackground: true }
-          )
-        }
+        onOpenSkill={onOpenSkill}
+        onCategoryChange={onOpenSkillCategory}
+        onInstallRecommendedSkill={onInstallRecommendedSkill}
+        recommendedState={recommendedState}
+        onRetry={onRetryRecommendedSkills}
       />
     )
   }
@@ -395,15 +544,16 @@ function resolveContentView({
     <ManagePanel
       tab={manageTab}
       snapshot={snapshot}
+      installedPlugins={installedPlugins}
       search={search}
       pendingId={mutation?.id}
+      uninstallingPluginId={mutation?.label === '卸载插件' ? mutation.id : undefined}
       onPluginToggle={(plugin, enabled) =>
         void runMutation(plugin.id, enabled ? '启用插件' : '停用插件', () =>
           api!.setPluginEnabled({ ...requestContext, plugin: { id: plugin.id }, enabled })
         )
       }
       onPluginUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
-      onConnectApp={onConnectApp}
       onAppToggle={(app, enabled) =>
         void runMutation(app.id, enabled ? '启用应用' : '停用应用', () =>
           api!.setAppEnabled({ ...requestContext, app: { id: app.id }, enabled })
@@ -417,13 +567,14 @@ function resolveContentView({
           { refreshInBackground: true }
         )
       }
+      onOpenSkill={onOpenSkill}
       onMcpToggle={(server, enabled) =>
         void runMutation(server.id, enabled ? '启用 MCP' : '停用 MCP', () =>
           api!.setMcpServerEnabled({ ...requestContext, server: { id: server.id }, enabled })
         )
       }
-      onMcpEdit={(server) => setMcpDialog({ open: true, server })}
-      onMcpRemove={(server) => setConfirm({ kind: 'mcp', server })}
+      onMcpEdit={onMcpEdit}
+      onMcpAdd={onMcpAdd}
       onOpenDetails={onOpenDetails}
     />
   )
@@ -438,78 +589,6 @@ function parseMultilineList(value: string): string[] {
         .filter(Boolean)
     )
   ]
-}
-
-function parseArgs(value: string): string[] {
-  return value
-    .split('\n')
-    .map((part) => part.trim())
-    .filter(Boolean)
-}
-
-function parseKeyValues(value: string): Array<{ name: string; value: string }> {
-  return value
-    .split('\n')
-    .map((line) => {
-      const index = line.indexOf('=')
-      if (index < 0) return null
-      const name = line.slice(0, index).trim()
-      const secretValue = line.slice(index + 1).trim()
-      if (!name || !secretValue) return null
-      return { name, value: secretValue }
-    })
-    .filter((entry): entry is { name: string; value: string } => entry !== null)
-}
-
-function buildSecretPatches(
-  actions: SecretActions,
-  setValues: Array<{ name: string; value: string }>
-): PluginCenterNamedSecretPatch[] {
-  const patches = Object.entries(actions).map<PluginCenterNamedSecretPatch>(([name, action]) => ({
-    name,
-    value: { action }
-  }))
-  for (const entry of setValues) {
-    const index = patches.findIndex((patch) => patch.name === entry.name)
-    const patch = { name: entry.name, value: { action: 'set' as const, value: entry.value } }
-    if (index >= 0) patches[index] = patch
-    else patches.push(patch)
-  }
-  return patches
-}
-
-function secretKeepActions(
-  entries: Array<{ name: string; hasValue: boolean; editable: boolean }>
-): SecretActions {
-  return Object.fromEntries(entries.map((entry) => [entry.name, 'keep' as const]))
-}
-
-function initialMcpFormKey(editing: PluginCenterUserMcpServer | null): string {
-  if (!editing) return ''
-  if (editing.transport === 'stdio') {
-    return JSON.stringify({
-      transport: 'stdio',
-      displayName: editing.displayName ?? editing.name,
-      command: editing.command ?? '',
-      args: editing.args.join('\n'),
-      cwd: editing.cwd ?? '',
-      envVars: editing.envVars
-        .filter((entry) => entry.editable)
-        .map((entry) => entry.name)
-        .join('\n'),
-      envSecretActions: secretKeepActions(editing.env)
-    })
-  }
-  return JSON.stringify({
-    transport: 'streamable-http',
-    displayName: editing.displayName ?? editing.name,
-    url: editing.url ?? '',
-    bearerTokenEnvVar: editing.bearerTokenEnvVar ?? '',
-    envHttpHeaders: editing.envHttpHeaders
-      .map((entry) => `${entry.name}=${entry.envVarName}`)
-      .join('\n'),
-    httpSecretActions: secretKeepActions(editing.httpHeaders)
-  })
 }
 
 const emptyResourceSnapshot = {
@@ -578,6 +657,9 @@ export function PluginCenterPage({
   const snapshotSections = React.useMemo(() => snapshotSectionsForSurface(surface), [surface])
   const isDetailSurface = surface.page === 'detail'
   const usesPluginResources = !isDetailSurface && snapshotSections.length === 0
+  const needsSkillPluginContext = !isDetailSurface && snapshotSections.includes('skills')
+  const skillListMode =
+    surface.page === 'manage' && surface.tab === 'skills' ? ('manage' as const) : undefined
   const catalogResource = React.useMemo(
     () => (api ? getPluginCenterCatalogResource(api, cwd) : null),
     [api, cwd]
@@ -587,16 +669,20 @@ export function PluginCenterPage({
     [api, cwd]
   )
   const skillsResource = React.useMemo(
-    () => (api ? getPluginCenterSupplementalResource(api, 'skills', cwd) : null),
-    [api, cwd]
+    () => (api ? getPluginCenterSupplementalResource(api, 'skills', cwd, skillListMode) : null),
+    [api, cwd, skillListMode]
+  )
+  const recommendedSkillsResource = React.useMemo(
+    () => (api ? getPluginCenterRecommendedSkillsResource(api) : null),
+    [api]
   )
   const appsResource = React.useMemo(
     () => (api ? getPluginCenterSupplementalResource(api, 'apps', cwd) : null),
     [api, cwd]
   )
   const mcpResource = React.useMemo(
-    () => (api ? getPluginCenterSupplementalResource(api, 'mcp', cwd, threadId) : null),
-    [api, cwd, threadId]
+    () => (api ? getPluginCenterSupplementalResource(api, 'mcp', cwd) : null),
+    [api, cwd]
   )
   const detailResource = React.useMemo(
     () =>
@@ -606,9 +692,19 @@ export function PluginCenterPage({
     [api, cwd, surface]
   )
   const supplementalSection = activeSupplementalSection(snapshotSections)
-  const catalogState = usePluginCenterResource(catalogResource, usesPluginResources)
-  const installedState = usePluginCenterResource(installedResource, usesPluginResources)
+  const catalogState = usePluginCenterResource(
+    catalogResource,
+    usesPluginResources || needsSkillPluginContext
+  )
+  const installedState = usePluginCenterResource(
+    installedResource,
+    usesPluginResources || needsSkillPluginContext
+  )
   const skillsState = usePluginCenterResource(skillsResource, supplementalSection === 'skills')
+  const recommendedSkillsState = usePluginCenterResource(
+    recommendedSkillsResource,
+    surface.page === 'browse' && surface.tab === 'skills'
+  )
   const appsState = usePluginCenterResource(
     appsResource,
     supplementalSection === 'apps' || isDetailSurface
@@ -628,11 +724,6 @@ export function PluginCenterPage({
     const directoryApp = appsState.data?.apps.find((app) => app.id === selectedAppId)
     return directoryApp ? directoryAppAsPluginDetailApp(directoryApp) : null
   }, [appsState.data, detailState.data, selectedAppId])
-  const selectedSkill = React.useMemo<PluginCenterPluginDetail['skills'][number] | null>(() => {
-    const result = detailState.data
-    if (!selectedSkillId || result?.status !== 'ready') return null
-    return result.detail.skills.find((skill) => skill.id === selectedSkillId) ?? null
-  }, [detailState.data, selectedSkillId])
   const appToolsResource = React.useMemo(
     () =>
       api && selectedApp
@@ -641,19 +732,6 @@ export function PluginCenterPage({
     [api, cwd, selectedApp, threadId]
   )
   const appToolsState = usePluginCenterResource(appToolsResource, selectedApp !== null)
-  const skillContentsResource = React.useMemo(
-    () =>
-      api && selectedSkill && surface.page === 'detail'
-        ? getPluginCenterSkillContentsResource(
-            api,
-            surface.pluginRef,
-            { id: selectedSkill.id, name: selectedSkill.name },
-            cwd
-          )
-        : null,
-    [api, cwd, selectedSkill, surface]
-  )
-  const skillContentsState = usePluginCenterResource(skillContentsResource, selectedSkill !== null)
   const supplementalSnapshot = React.useMemo(() => {
     let merged = emptySnapshot
     if (skillsState.data) merged = mergeSnapshotSections(merged, skillsState.data, ['skills'])
@@ -696,6 +774,45 @@ export function PluginCenterPage({
         : {})
     }
   }, [catalogState.data, installedState.data, supplementalSnapshot])
+  const installedPlugins = React.useMemo(
+    () => mergeInstalledPluginsForDisplay(snapshot.plugins, installedState.data ?? []),
+    [installedState.data, snapshot.plugins]
+  )
+  const selectedSkill = React.useMemo<SelectedSkillPreview | null>(() => {
+    if (!selectedSkillId) return null
+
+    const detail = detailState.data
+    if (surface.page === 'detail' && detail?.status === 'ready') {
+      const skill = detail.detail.skills.find((candidate) => candidate.id === selectedSkillId)
+      if (skill) return { skill, plugin: surface.pluginRef }
+    }
+
+    const skill = snapshot.skills.find((candidate) => candidate.id === selectedSkillId)
+    if (!skill) return null
+    const owner = skill.pluginId
+      ? snapshot.plugins.find((plugin) => plugin.id === skill.pluginId)
+      : undefined
+    return {
+      skill,
+      ...(!skill.installed && owner
+        ? { plugin: { id: owner.id, marketplaceId: owner.marketplaceId }, installPlugin: owner }
+        : {}),
+      ...(skill.canUninstall ? { uninstallSkill: skill } : {})
+    }
+  }, [detailState.data, selectedSkillId, snapshot.plugins, snapshot.skills, surface])
+  const skillContentsResource = React.useMemo(
+    () =>
+      api && selectedSkill
+        ? getPluginCenterSkillContentsResource(
+            api,
+            selectedSkill.plugin,
+            { id: selectedSkill.skill.id, name: selectedSkill.skill.name },
+            cwd
+          )
+        : null,
+    [api, cwd, selectedSkill]
+  )
+  const skillContentsState = usePluginCenterResource(skillContentsResource, selectedSkill !== null)
   const hasVisiblePluginData = catalogState.data !== null || (installedState.data?.length ?? 0) > 0
   const catalogLoading = isInitialResourceLoading(catalogState)
   const installedLoading = isInitialResourceLoading(installedState)
@@ -720,10 +837,19 @@ export function PluginCenterPage({
   const [mutation, setMutation] = React.useState<MutationStatus>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [marketplaceOpen, setMarketplaceOpen] = React.useState(false)
-  const [mcpDialog, setMcpDialog] = React.useState<McpDialogState>({ open: false, server: null })
+  const [mcpEditor, setMcpEditor] = React.useState<McpEditorState>(null)
   const [confirm, setConfirm] = React.useState<ConfirmState>(null)
   const [browseScrollTop, setBrowseScrollTop] = React.useState(0)
   const scrollViewportRef = React.useRef<HTMLDivElement>(null)
+  const pluginTrialInFlightIds = React.useRef(new Set<string>())
+
+  const editingMcpServer =
+    mcpEditor?.kind === 'edit'
+      ? (snapshot.mcp.userServers.find((server) => server.id === mcpEditor.serverId) ?? null)
+      : null
+  const activeMcpEditor = mcpEditor?.kind === 'edit' && !editingMcpServer ? null : mcpEditor
+  const mcpEditorActive =
+    surface.page === 'manage' && surface.tab === 'mcp' && activeMcpEditor !== null
 
   const requestContext = React.useMemo<PluginCenterRequestContext>(
     () => ({ version: PLUGIN_CENTER_API_VERSION, cwd, threadId }),
@@ -782,7 +908,15 @@ export function PluginCenterPage({
         return
       }
       if (supplementalSection) {
-        await refreshSupplementalSections([supplementalSection], forceRefresh, false)
+        await Promise.all([
+          refreshSupplementalSections([supplementalSection], forceRefresh, false),
+          ...(supplementalSection === 'skills'
+            ? [recommendedSkillsResource?.refresh(forceRefresh)]
+            : []),
+          ...(needsSkillPluginContext
+            ? [catalogResource?.refresh(forceRefresh), installedResource?.refresh(forceRefresh)]
+            : [])
+        ])
       }
     },
     [
@@ -792,6 +926,8 @@ export function PluginCenterPage({
       installedResource,
       isDetailSurface,
       mcpResource,
+      needsSkillPluginContext,
+      recommendedSkillsResource,
       refreshSupplementalSections,
       supplementalSection,
       usesPluginResources
@@ -928,6 +1064,37 @@ export function PluginCenterPage({
     [api, applyMutationResult, setActionError, setMutation]
   )
 
+  const installRecommendedSkill = React.useCallback(
+    async (skill: PluginCenterRecommendedSkill): Promise<void> => {
+      if (!api) return
+      const installed = await runMutation(`recommended-skill:${skill.id}`, '安装技能', () =>
+        api.installRecommendedSkill({
+          ...requestContext,
+          id: skill.id,
+          repoPath: skill.repoPath
+        })
+      )
+      if (!installed) return
+      recommendedSkillsResource?.invalidate()
+      await recommendedSkillsResource?.refresh(true)
+    },
+    [api, recommendedSkillsResource, requestContext, runMutation]
+  )
+
+  const installSkillOwningPlugin = React.useCallback(
+    async (plugin: PluginCenterPlugin): Promise<void> => {
+      if (!api) return
+      const installed = await runMutation(plugin.id, '安装插件', () =>
+        api.installPlugin({
+          ...requestContext,
+          plugin: { id: plugin.id, marketplaceId: plugin.marketplaceId }
+        })
+      )
+      if (installed) await refreshSupplementalSections(['skills'], true, true)
+    },
+    [api, refreshSupplementalSections, requestContext, runMutation]
+  )
+
   const openExternal = React.useCallback(async (url: string): Promise<boolean> => {
     try {
       await window.desktopApp.codex.openExternalHttpUrl(url)
@@ -1062,40 +1229,6 @@ export function PluginCenterPage({
     usesPluginResources && hasVisiblePluginData && !error
       ? snapshot.catalogUnavailableReason
       : undefined
-  const contentView =
-    loading && !separatesPluginLoading ? (
-      <PluginCategoriesSkeleton />
-    ) : (
-      resolveContentView({
-        surface,
-        browseTab: currentBrowseTab,
-        manageTab: currentManageTab,
-        snapshot,
-        search,
-        mutation,
-        requestContext,
-        api,
-        runMutation,
-        setMcpDialog,
-        setConfirm,
-        onManageInstalledPlugins: () => navigateManage('plugins'),
-        onConnectApp: (app) => {
-          if (app.installUrl) void openAppExternal(app, app.installUrl)
-        },
-        onOpenCategory: (category) => navigateBrowse('plugins', category),
-        onOpenDetails: (plugin) =>
-          onSurfaceChange({
-            page: 'detail',
-            pluginRef: { id: plugin.id, marketplaceId: plugin.marketplaceId },
-            pluginName: itemTitle(plugin),
-            returnTo: {
-              ...browseContext,
-              scrollTop: browseScrollTop
-            }
-          }),
-        browsePluginsLoading: { catalog: catalogLoading, installed: installedLoading }
-      })
-    )
 
   React.useEffect(() => {
     if (surface.page !== 'browse') return
@@ -1109,10 +1242,11 @@ export function PluginCenterPage({
   const ensurePluginReadyForPrompt = React.useCallback(
     async (detail: PluginCenterGetPluginDetailResult & { status: 'ready' }, prompt: string) => {
       if (!api || mutation) return
-      setMutation({ id: detail.detail.plugin.id, label: '准备插件' })
       setActionError(null)
       try {
         let current = detail.detail
+        const needsPreparation = !current.plugin.installed || !current.plugin.enabled
+        if (needsPreparation) setMutation({ id: current.plugin.id, label: '准备插件' })
         if (!current.plugin.installed) {
           await applyMutationResult(
             await api.installPlugin({
@@ -1159,6 +1293,187 @@ export function PluginCenterPage({
       setMutation
     ]
   )
+
+  const tryInstalledPlugin = React.useCallback(
+    async (plugin: PluginCenterPlugin) => {
+      if (!api || mutation || !plugin.enabled || pluginTrialInFlightIds.current.has(plugin.id)) {
+        return
+      }
+
+      pluginTrialInFlightIds.current.add(plugin.id)
+      setActionError(null)
+      try {
+        const result = await api.getPluginDetail({
+          ...requestContext,
+          plugin: { id: plugin.id, marketplaceId: plugin.marketplaceId }
+        })
+        if (
+          result.status !== 'ready' ||
+          !result.detail.plugin.installed ||
+          !result.detail.plugin.enabled
+        ) {
+          throw new Error('插件当前不可立即试用')
+        }
+        onActivatePluginPrompt?.({
+          mention: result.detail.mention,
+          prompt: result.detail.defaultPrompts[0] ?? ''
+        })
+      } catch (nextError) {
+        const message = nextError instanceof Error ? nextError.message : '无法立即试用插件'
+        setActionError(message)
+        toast.error(message)
+      } finally {
+        pluginTrialInFlightIds.current.delete(plugin.id)
+      }
+    },
+    [api, mutation, onActivatePluginPrompt, requestContext, setActionError]
+  )
+
+  const skillPreviewDialog = selectedSkill ? (
+    <PluginSkillPreviewDialog
+      key={`${selectedSkill.plugin?.id ?? 'local'}:${selectedSkill.skill.id}`}
+      skill={selectedSkill.skill}
+      open
+      state={skillContentsState}
+      pending={
+        mutation !== null &&
+        (mutation.id === selectedSkill.skill.id || mutation.id === selectedSkill.installPlugin?.id)
+      }
+      onOpenChange={(open) => {
+        if (!open) setSelectedSkillId(null)
+      }}
+      onToggle={(enabled) =>
+        void runMutation(
+          selectedSkill.skill.id,
+          enabled ? '启用技能' : '停用技能',
+          () =>
+            api!.setSkillEnabled({
+              ...requestContext,
+              skill: { id: selectedSkill.skill.id },
+              enabled
+            }),
+          { refreshInBackground: true }
+        )
+      }
+      onTrySkill={() => {
+        const contents = skillContentsState.data
+        if (contents?.status !== 'ready' || !contents.localPath || !selectedSkill.skill.enabled) {
+          return
+        }
+        setSelectedSkillId(null)
+        onTrySkill?.({
+          mention: {
+            path: contents.localPath,
+            name: selectedSkill.skill.displayName ?? selectedSkill.skill.name
+          }
+        })
+      }}
+      onOpenLocalPath={(path) => {
+        void window.desktopApp.codex.openLocalPath({ path, ...(cwd ? { cwd } : {}) })
+      }}
+      onRetry={() => {
+        skillContentsResource?.invalidate()
+        void skillContentsResource?.refresh(true)
+      }}
+      {...(selectedSkill.installPlugin
+        ? {
+            installAction: {
+              pending: mutation?.id === selectedSkill.installPlugin.id,
+              onInstall: () => void installSkillOwningPlugin(selectedSkill.installPlugin!)
+            }
+          }
+        : {})}
+      {...(selectedSkill.uninstallSkill
+        ? {
+            uninstallAction: {
+              pending: mutation?.id === selectedSkill.uninstallSkill.id,
+              onUninstall: () => {
+                setConfirm({ kind: 'skill', skill: selectedSkill.uninstallSkill! })
+                setSelectedSkillId(null)
+              }
+            }
+          }
+        : {})}
+    />
+  ) : null
+
+  const mcpEditorDialog = mcpEditorActive ? (
+    <McpServerEditor
+      server={activeMcpEditor.kind === 'edit' ? editingMcpServer : null}
+      pending={Boolean(mutation)}
+      error={actionError}
+      onBack={() => {
+        setActionError(null)
+        setMcpEditor(null)
+      }}
+      onSave={(input: McpServerEditorSaveInput) => {
+        void (async () => {
+          const saved = await runMutation(
+            input.serverId ?? input.displayName ?? 'new-mcp',
+            input.serverId ? '保存 MCP' : '添加 MCP',
+            () => api!.upsertMcpServer({ ...requestContext, ...input })
+          )
+          if (saved) setMcpEditor(null)
+        })()
+      }}
+      onUninstall={() => {
+        if (!editingMcpServer) return
+        void (async () => {
+          const removed = await runMutation(editingMcpServer.id, '卸载 MCP', () =>
+            api!.removeMcpServer({ ...requestContext, server: { id: editingMcpServer.id } })
+          )
+          if (removed) setMcpEditor(null)
+        })()
+      }}
+      onOpenDocumentation={() => void openExternal('https://modelcontextprotocol.io/introduction')}
+    />
+  ) : null
+
+  const contentView =
+    loading && !separatesPluginLoading ? (
+      <PluginCategoriesSkeleton />
+    ) : (
+      // The resolver only creates element trees; callbacks are invoked by their controls.
+      // eslint-disable-next-line react-hooks/refs
+      resolveContentView({
+        surface,
+        browseTab: currentBrowseTab,
+        manageTab: currentManageTab,
+        snapshot,
+        recommendedSkills: recommendedSkillsState.data?.skills ?? [],
+        recommendedState: recommendedSkillsState,
+        installedPlugins,
+        search,
+        mutation,
+        requestContext,
+        api,
+        runMutation,
+        onMcpEdit: (server) => setMcpEditor({ kind: 'edit', serverId: server.id }),
+        onMcpAdd: () => setMcpEditor({ kind: 'new' }),
+        setConfirm,
+        onManageInstalledPlugins: () => navigateManage('plugins'),
+        onTryPlugin: (plugin) => void tryInstalledPlugin(plugin),
+        onOpenCategory: (category) => navigateBrowse('plugins', category),
+        onOpenSkillCategory: (category) => navigateBrowse('skills', category),
+        onOpenDetails: (plugin) =>
+          onSurfaceChange({
+            page: 'detail',
+            pluginRef: { id: plugin.id, marketplaceId: plugin.marketplaceId },
+            pluginName: itemTitle(plugin),
+            returnTo: {
+              ...browseContext,
+              scrollTop: browseScrollTop
+            }
+          }),
+        onOpenSkill: (skill) => setSelectedSkillId(skill.id),
+        onInstallRecommendedSkill: (skill) => void installRecommendedSkill(skill),
+        onRetryRecommendedSkills: () => {
+          recommendedSkillsResource?.invalidate()
+          void recommendedSkillsResource?.refresh(true)
+        },
+        browsePluginsLoading: { catalog: catalogLoading, installed: installedLoading }
+      })
+    )
 
   if (isDetailSurface) {
     const detailResult = detailState.data
@@ -1207,7 +1522,7 @@ export function PluginCenterPage({
         </header>
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto w-full max-w-3xl px-6">
-            {(error || actionError) && (
+            {!mcpEditorActive && (error || actionError) && (
               <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <CircleAlertIcon className="mt-0.5 size-4 shrink-0" />
                 <span>{actionError ?? error}</span>
@@ -1257,6 +1572,12 @@ export function PluginCenterPage({
                 }
                 onUninstall={(plugin) => setConfirm({ kind: 'plugin', plugin })}
                 onActivatePrompt={(prompt) => void ensurePluginReadyForPrompt(readyDetail, prompt)}
+                onTry={() =>
+                  onActivatePluginPrompt?.({
+                    mention: readyDetail.detail.mention,
+                    prompt: readyDetail.detail.defaultPrompts[0] ?? ''
+                  })
+                }
                 onConnectApp={(app) => void connectApp(app)}
                 onReconnectApp={reconnectApp}
                 onDisconnectApp={disconnectApp}
@@ -1296,6 +1617,13 @@ export function PluginCenterPage({
                   plugin: { id: current.plugin.id, marketplaceId: current.plugin.marketplaceId }
                 })
               )
+            } else if (current?.kind === 'skill') {
+              void runMutation(current.skill.id, '卸载技能', () =>
+                api!.uninstallSkill({
+                  ...requestContext,
+                  skill: { id: current.skill.id, name: current.skill.name }
+                })
+              )
             }
           }}
         />
@@ -1327,50 +1655,7 @@ export function PluginCenterPage({
             }}
           />
         )}
-        {selectedSkill && (
-          <PluginSkillPreviewDialog
-            key={selectedSkill.id}
-            skill={selectedSkill}
-            open
-            state={skillContentsState}
-            pending={mutation?.id === selectedSkill.id}
-            onOpenChange={(open) => {
-              if (!open) setSelectedSkillId(null)
-            }}
-            onToggle={(enabled) =>
-              void runMutation(
-                selectedSkill.id,
-                enabled ? '启用技能' : '停用技能',
-                () =>
-                  api!.setSkillEnabled({
-                    ...requestContext,
-                    skill: { id: selectedSkill.id },
-                    enabled
-                  }),
-                { refreshInBackground: true }
-              )
-            }
-            onTrySkill={() => {
-              const contents = skillContentsState.data
-              if (contents?.status !== 'ready' || !contents.localPath || !selectedSkill.enabled)
-                return
-              setSelectedSkillId(null)
-              onTrySkill?.({
-                mention: {
-                  path: contents.localPath,
-                  name: selectedSkill.displayName ?? selectedSkill.name
-                }
-              })
-            }}
-            onOpenLocalPath={(path) => {
-              void window.desktopApp.codex.openLocalPath({ path, ...(cwd ? { cwd } : {}) })
-            }}
-            onRetry={() => {
-              skillContentsResource?.invalidate()
-              void skillContentsResource?.refresh(true)
-            }}
-          />
-        )}
+        {skillPreviewDialog}
         <Toaster position="top-center" richColors closeButton />
       </main>
     )
@@ -1408,7 +1693,10 @@ export function PluginCenterPage({
           </Button>
           <AddMenu
             onAddMarketplace={() => setMarketplaceOpen(true)}
-            onAddMcp={() => setMcpDialog({ open: true, server: null })}
+            onAddMcp={() => {
+              onSurfaceChange({ page: 'manage', tab: 'mcp' })
+              setMcpEditor({ kind: 'new' })
+            }}
           />
         </div>
       </header>
@@ -1423,9 +1711,13 @@ export function PluginCenterPage({
             <div data-slot="plugin-center-list-header" className="pt-6 pb-6">
               {surface.page === 'browse' && (
                 <div data-slot="plugin-center-intro" className="mb-6">
-                  <h1 className="text-xl leading-[1.2] font-normal">插件</h1>
+                  <h1 className="text-xl leading-[1.2] font-normal">
+                    {currentBrowseTab === 'skills' ? '技能' : '插件'}
+                  </h1>
                   <p className="mt-2 text-lg leading-6 text-muted-foreground">
-                    在你常用的工具中使用 Codex
+                    {currentBrowseTab === 'skills'
+                      ? '通过任务专用技能扩展 Codex'
+                      : '在你常用的工具中使用 Codex'}
                   </p>
                 </div>
               )}
@@ -1438,12 +1730,13 @@ export function PluginCenterPage({
                   <TabsList>
                     <TabsTrigger value="plugins">
                       插件
-                      {hasVisiblePluginData
-                        ? ` ${snapshot.plugins.filter((item) => item.installed).length}`
-                        : ''}
+                      {hasVisiblePluginData ? ` ${installedPlugins.length}` : ''}
                     </TabsTrigger>
                     <TabsTrigger value="apps">
-                      应用{loadedSections.has('apps') ? ` ${snapshot.apps.length}` : ''}
+                      应用
+                      {loadedSections.has('apps')
+                        ? ` ${snapshot.apps.filter(isManagedAppVisible).length}`
+                        : ''}
                     </TabsTrigger>
                     <TabsTrigger value="mcp">
                       MCP
@@ -1477,7 +1770,20 @@ export function PluginCenterPage({
                     }
                   }}
                   className="h-8 rounded-full pl-9 text-base"
-                  placeholder={surface.page === 'browse' ? '搜索插件' : '搜索当前管理项'}
+                  aria-label={
+                    surface.page === 'browse'
+                      ? currentBrowseTab === 'skills'
+                        ? '搜索技能'
+                        : '搜索插件'
+                      : '搜索当前管理项'
+                  }
+                  placeholder={
+                    surface.page === 'browse'
+                      ? currentBrowseTab === 'skills'
+                        ? '搜索技能'
+                        : '搜索插件'
+                      : '搜索当前管理项'
+                  }
                 />
               </div>
             </div>
@@ -1508,13 +1814,6 @@ export function PluginCenterPage({
               </div>
             )}
 
-            {mutation && (
-              <div className="mb-3 flex items-center gap-2 rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                <Loader2Icon className="size-4 animate-spin" />
-                <span>{mutation.label}中</span>
-              </div>
-            )}
-
             {contentView}
           </div>
         </ScrollArea>
@@ -1535,17 +1834,7 @@ export function PluginCenterPage({
           return result
         }}
       />
-      <McpServerDialog
-        state={mcpDialog}
-        onOpenChange={(open) => setMcpDialog((current) => ({ ...current, open }))}
-        onSubmit={async (serverId, displayName, server) => {
-          await runMutation(
-            serverId ?? displayName ?? 'new-mcp',
-            serverId ? '保存 MCP' : '新增 MCP',
-            () => api!.upsertMcpServer({ ...requestContext, serverId, displayName, server })
-          )
-        }}
-      />
+      {mcpEditorDialog}
       <ConfirmDialog
         state={confirm}
         onOpenChange={(open) => {
@@ -1562,13 +1851,17 @@ export function PluginCenterPage({
                 plugin: { id: current.plugin.id, marketplaceId: current.plugin.marketplaceId }
               })
             )
-          } else {
-            void runMutation(current.server.id, '删除 MCP', () =>
-              api!.removeMcpServer({ ...requestContext, server: { id: current.server.id } })
+          } else if (current.kind === 'skill') {
+            void runMutation(current.skill.id, '卸载技能', () =>
+              api!.uninstallSkill({
+                ...requestContext,
+                skill: { id: current.skill.id, name: current.skill.name }
+              })
             )
           }
         }}
       />
+      {skillPreviewDialog}
       <Toaster position="top-center" richColors closeButton />
     </main>
   )
@@ -1643,7 +1936,9 @@ function ConfirmDialog({
   const description =
     state?.kind === 'plugin'
       ? '卸载后会刷新插件和技能目录。'
-      : '删除后会刷新 MCP 配置；如果其他配置层仍提供同名服务器，会以只读项显示。'
+      : state?.kind === 'skill'
+        ? '这会删除该独立技能的本地目录，无法撤销。'
+        : '删除后会刷新 MCP 配置；如果其他配置层仍提供同名服务器，会以只读项显示。'
 
   return (
     <Dialog open={Boolean(state)} onOpenChange={onOpenChange}>
@@ -1669,7 +1964,7 @@ function ConfirmDialog({
 
 function confirmTitle(state: ConfirmState): string {
   if (state?.kind === 'plugin') return `卸载 ${itemTitle(state.plugin)}？`
-  if (state?.kind === 'mcp') return `删除 ${state.server.displayName ?? state.server.name}？`
+  if (state?.kind === 'skill') return `卸载 ${itemTitle(state.skill)}？`
   return '确认操作'
 }
 
@@ -1751,11 +2046,13 @@ function PluginCardSkeleton(): React.JSX.Element {
 function EmptyState({
   icon,
   title,
-  description
+  description,
+  action
 }: {
   icon: React.ReactNode
   title: string
   description: string
+  action?: { label: string; onClick: () => void }
 }): React.JSX.Element {
   return (
     <div className="flex min-h-60 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
@@ -1764,6 +2061,11 @@ function EmptyState({
       </div>
       <h2 className="text-sm font-medium">{title}</h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
+      {action && (
+        <Button type="button" size="sm" variant="outline" className="mt-4" onClick={action.onClick}>
+          {action.label}
+        </Button>
+      )}
     </div>
   )
 }
@@ -1784,34 +2086,33 @@ function ItemIcon({
 
 function BrowsePlugins({
   plugins,
+  installedPlugins,
   category,
   catalogUnavailableReason,
   loading,
   pendingId,
   onInstall,
-  onToggle,
   onUninstall,
   onManageInstalledPlugins,
+  onTryPlugin,
   onOpenCategory,
   onOpenDetails
 }: {
   plugins: PluginCenterPlugin[]
+  installedPlugins: PluginCenterPlugin[]
   category?: string
   catalogUnavailableReason?: string
   loading: BrowsePluginsLoadingState
   pendingId?: string
   onInstall: (plugin: PluginCenterPlugin) => void
-  onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
   onUninstall: (plugin: PluginCenterPlugin) => void
   onManageInstalledPlugins: () => void
+  onTryPlugin: (plugin: PluginCenterPlugin) => void
   onOpenCategory: (category: string) => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
 }): React.JSX.Element {
-  const installed = plugins.filter((plugin) => plugin.installed)
-  const featured = plugins.filter((plugin) => plugin.featured && !plugin.installed)
-  const catalogGroups = groupCatalogPlugins(
-    plugins.filter((plugin) => !plugin.installed && !plugin.featured)
-  )
+  const featured = plugins.filter((plugin) => plugin.featured)
+  const catalogGroups = groupCatalogPlugins(plugins.filter((plugin) => !plugin.featured))
 
   if (!loading.catalog && !loading.installed && plugins.length === 0) {
     return (
@@ -1845,8 +2146,9 @@ function BrowsePlugins({
           plugins={categoryPlugins}
           pendingId={pendingId}
           onInstall={onInstall}
-          onToggle={onToggle}
           onUninstall={onUninstall}
+          onManage={onOpenDetails}
+          onTry={onTryPlugin}
           onOpenDetails={onOpenDetails}
         />
       </BrowseSection>
@@ -1856,10 +2158,10 @@ function BrowsePlugins({
   let installedContent: React.ReactNode = null
   if (loading.installed) {
     installedContent = <InstalledPluginsSkeleton />
-  } else if (installed.length > 0) {
+  } else if (installedPlugins.length > 0) {
     installedContent = (
       <InstalledPluginsSection
-        plugins={installed}
+        plugins={installedPlugins}
         onManage={onManageInstalledPlugins}
         onOpenDetails={onOpenDetails}
       />
@@ -1876,8 +2178,9 @@ function BrowsePlugins({
               plugins={featured}
               pendingId={pendingId}
               onInstall={onInstall}
-              onToggle={onToggle}
               onUninstall={onUninstall}
+              onManage={onOpenDetails}
+              onTry={onTryPlugin}
               onOpenDetails={onOpenDetails}
               onSeeMore={() => onOpenCategory(FEATURED_CATEGORY_ID)}
             />
@@ -1889,8 +2192,9 @@ function BrowsePlugins({
               plugins={categoryPlugins}
               pendingId={pendingId}
               onInstall={onInstall}
-              onToggle={onToggle}
               onUninstall={onUninstall}
+              onManage={onOpenDetails}
+              onTry={onTryPlugin}
               onOpenDetails={onOpenDetails}
               onSeeMore={() => onOpenCategory(category)}
             />
@@ -2064,16 +2368,18 @@ function PluginCategoryPreview({
   plugins,
   pendingId,
   onInstall,
-  onToggle,
   onUninstall,
+  onManage,
+  onTry,
   onOpenDetails,
   onSeeMore
 }: {
   plugins: PluginCenterPlugin[]
   pendingId?: string
   onInstall: (plugin: PluginCenterPlugin) => void
-  onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
   onUninstall: (plugin: PluginCenterPlugin) => void
+  onManage: (plugin: PluginCenterPlugin) => void
+  onTry: (plugin: PluginCenterPlugin) => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
   onSeeMore: () => void
 }): React.JSX.Element {
@@ -2087,8 +2393,9 @@ function PluginCategoryPreview({
         plugins={visiblePlugins}
         pendingId={pendingId}
         onInstall={onInstall}
-        onToggle={onToggle}
         onUninstall={onUninstall}
+        onManage={onManage}
+        onTry={onTry}
         onOpenDetails={onOpenDetails}
       />
       {hiddenPlugins.length > 0 && (
@@ -2140,27 +2447,30 @@ function PluginCardGrid({
   plugins,
   pendingId,
   onInstall,
-  onToggle,
   onUninstall,
+  onManage,
+  onTry,
   onOpenDetails
 }: {
   plugins: PluginCenterPlugin[]
   pendingId?: string
   onInstall: (plugin: PluginCenterPlugin) => void
-  onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
   onUninstall: (plugin: PluginCenterPlugin) => void
+  onManage: (plugin: PluginCenterPlugin) => void
+  onTry: (plugin: PluginCenterPlugin) => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
 }): React.JSX.Element {
   return (
     <div className="grid gap-x-6 gap-y-2 md:grid-cols-2">
       {plugins.map((plugin) => (
-        <PluginCard
+        <CatalogPluginCard
           key={plugin.id}
           plugin={plugin}
           pending={pendingId === plugin.id}
           onInstall={onInstall}
-          onToggle={onToggle}
           onUninstall={onUninstall}
+          onManage={onManage}
+          onTry={onTry}
           onOpenDetails={onOpenDetails}
         />
       ))}
@@ -2172,293 +2482,581 @@ function BrowseSection({
   title,
   description,
   dataSlot,
+  action,
   children
 }: {
   title: string
   description?: string
   dataSlot?: string
+  action?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <section data-slot={dataSlot}>
-      <div className="mb-3 border-b border-border/40 px-2 pb-3">
-        <h2 className="text-lg leading-6 font-medium">{title}</h2>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+      <div className="mb-3 flex items-start justify-between gap-3 border-b border-border/40 px-2 pb-3">
+        <div>
+          <h2 className="text-lg leading-6 font-medium">{title}</h2>
+          {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        </div>
+        {action}
       </div>
       {children}
     </section>
   )
 }
 
-function PluginCard({
+type InstallActionButtonProps = {
+  pending: boolean
+  disabled: boolean
+  ariaLabel?: string
+  title?: string
+  onClick: () => void
+}
+
+function InstallActionButton({
+  pending,
+  disabled,
+  ariaLabel,
+  title,
+  onClick
+}: InstallActionButtonProps): React.JSX.Element {
+  return (
+    <Button
+      variant="outline"
+      size="composer"
+      type="button"
+      className="shrink-0 gap-1 rounded-lg px-2 text-base leading-[18px]"
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={title}
+      onClick={onClick}
+    >
+      {pending && <Loader2Icon className="size-4 animate-spin" />}
+      安装
+    </Button>
+  )
+}
+
+function CatalogPluginCard({
   plugin,
   pending,
+  uninstalling = false,
   onInstall,
   onToggle,
   onUninstall,
+  onManage,
+  onTry,
   onOpenDetails
 }: {
   plugin: PluginCenterPlugin
   pending: boolean
+  uninstalling?: boolean
   onInstall: (plugin: PluginCenterPlugin) => void
-  onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
+  onToggle?: (plugin: PluginCenterPlugin, enabled: boolean) => void
   onUninstall: (plugin: PluginCenterPlugin) => void
+  onManage?: (plugin: PluginCenterPlugin) => void
+  onTry?: (plugin: PluginCenterPlugin) => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
 }): React.JSX.Element {
+  const handleUninstall = (): void => onUninstall(plugin)
+  let actions: React.ReactNode
+  if (!plugin.installed) {
+    actions = (
+      <InstallActionButton
+        pending={pending}
+        disabled={pending || !plugin.canInstall}
+        title={plugin.restriction?.message}
+        onClick={() => onInstall(plugin)}
+      />
+    )
+  } else if (onToggle) {
+    actions = (
+      <ManagePluginCardActions
+        plugin={plugin}
+        pending={pending}
+        uninstalling={uninstalling}
+        onToggle={(enabled) => onToggle(plugin, enabled)}
+        onUninstall={handleUninstall}
+      />
+    )
+  } else if (onManage && onTry) {
+    actions = (
+      <InstalledPluginCardActions
+        plugin={plugin}
+        pending={pending}
+        uninstalling={pending}
+        onUninstall={handleUninstall}
+        onManage={() => onManage(plugin)}
+        onTry={() => onTry(plugin)}
+      />
+    )
+  }
+
   return (
-    <article
-      data-slot="plugin-card"
-      className="group flex rounded-2xl p-2 transition-colors hover:bg-foreground/5"
-    >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`查看 ${itemTitle(plugin)} 详情`}
-        onClick={() => onOpenDetails(plugin)}
-      >
+    <PluginCard
+      title={itemTitle(plugin)}
+      description={itemDescription(plugin)}
+      icon={
         <ItemIcon
           icon={plugin.icon}
           title={itemTitle(plugin)}
           fallback={<PuzzleIcon className="size-4" />}
           className="size-10 rounded-lg bg-transparent object-contain"
         />
-        <span className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-medium text-foreground">{itemTitle(plugin)}</h3>
-          <p className="truncate text-[12px] leading-relaxed font-normal text-muted-foreground">
-            {itemDescription(plugin)}
-          </p>
-        </span>
-      </button>
-      <div className="ml-3 flex shrink-0 items-center">
-        {plugin.installed ? (
-          <ItemActions
-            enabled={plugin.enabled}
-            canToggle={plugin.canToggle}
-            canUninstall={plugin.canUninstall}
-            pending={pending}
-            restriction={plugin.restriction?.message}
-            onToggle={(enabled) => onToggle(plugin, enabled)}
-            onUninstall={() => onUninstall(plugin)}
-            compact
-          />
-        ) : (
-          <Button
-            variant="outline"
-            size="composer"
-            type="button"
-            className="shrink-0 gap-1 rounded-lg px-2 text-base leading-[18px]"
-            disabled={pending || !plugin.canInstall}
-            title={plugin.restriction?.message}
-            onClick={() => onInstall(plugin)}
-          >
-            {pending && <Loader2Icon className="size-4 animate-spin" />}
-            安装
-          </Button>
-        )}
-      </div>
-    </article>
+      }
+      actions={actions}
+      ariaLabel={`查看 ${itemTitle(plugin)} 详情`}
+      onClick={() => onOpenDetails(plugin)}
+    />
   )
 }
 
-function ItemActions({
-  enabled,
-  canToggle,
-  canUninstall,
+function ManagePluginCardActions({
+  plugin,
   pending,
-  restriction,
+  uninstalling,
   onToggle,
-  onUninstall,
-  compact = false
+  onUninstall
 }: {
-  enabled: boolean
-  canToggle: boolean
-  canUninstall: boolean
+  plugin: PluginCenterPlugin
   pending: boolean
-  restriction?: string
+  uninstalling: boolean
   onToggle: (enabled: boolean) => void
   onUninstall: () => void
-  compact?: boolean
 }): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {!compact && (
-        <Switch
-          checked={enabled}
-          disabled={pending || !canToggle}
-          title={restriction}
-          aria-label={enabled ? '停用' : '启用'}
-          onCheckedChange={onToggle}
-        />
-      )}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            type="button"
-            disabled={pending}
-            aria-label="更多插件操作"
-            title="更多操作"
-          >
-            <MoreHorizontalIcon className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {compact && (
-            <DropdownMenuItem disabled={!canToggle} onSelect={() => onToggle(!enabled)}>
-              {enabled ? '停用' : '启用'}
+      {uninstalling ? (
+        <PluginUninstallStatus />
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              type="button"
+              className="pointer-events-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100"
+              disabled={pending}
+              aria-label="更多插件操作"
+              title="更多操作"
+            >
+              <MoreHorizontalIcon className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={!plugin.canUninstall} onSelect={onUninstall}>
+              卸载
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem disabled={!canUninstall} onSelect={onUninstall}>
-            卸载
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <Switch
+        checked={plugin.enabled}
+        disabled={pending || !plugin.canToggle}
+        title={plugin.restriction?.message}
+        aria-label={plugin.enabled ? '停用' : '启用'}
+        onCheckedChange={onToggle}
+      />
     </div>
   )
 }
 
-function ItemMeta({ values }: { values: Array<string | undefined> }): React.JSX.Element {
-  const compactValues = values.filter((value): value is string => Boolean(value))
-  if (compactValues.length === 0) return <></>
+function PluginUninstallStatus(): React.JSX.Element {
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
-      {compactValues.map((value) => (
-        <span key={value} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          {value}
-        </span>
-      ))}
-    </div>
+    <span data-slot="plugin-uninstall-status" className="text-xs text-muted-foreground">
+      正在卸载
+    </span>
+  )
+}
+
+function InstalledPluginCardActions({
+  plugin,
+  pending,
+  uninstalling,
+  onUninstall,
+  onManage,
+  onTry
+}: {
+  plugin: PluginCenterPlugin
+  pending: boolean
+  uninstalling: boolean
+  onUninstall: () => void
+  onManage: () => void
+  onTry: () => void
+}): React.JSX.Element {
+  if (uninstalling) return <PluginUninstallStatus />
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          type="button"
+          disabled={pending}
+          aria-label="更多插件操作"
+          title="更多操作"
+        >
+          <MoreHorizontalIcon className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {plugin.enabled && (
+          <DropdownMenuItem onSelect={onTry}>
+            <MessageSquareIcon className="size-4" />
+            立即试用
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={onManage}>
+          <SettingsIcon className="size-4" />
+          管理
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+          disabled={!plugin.canUninstall}
+          onSelect={onUninstall}
+        >
+          <Trash2Icon className="size-4" />
+          卸载
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 function BrowseSkills({
   skills,
+  recommendedSkills,
+  category,
+  search,
   pendingId,
-  onToggle
+  onOpenSkill,
+  onCategoryChange,
+  onInstallRecommendedSkill,
+  recommendedState,
+  onRetry
 }: {
   skills: PluginCenterSkill[]
+  recommendedSkills: PluginCenterRecommendedSkill[]
+  category: PluginCenterSkillBrowseCategory
+  search: string
   pendingId?: string
-  onToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
+  onOpenSkill: (skill: PluginCenterSkill) => void
+  onCategoryChange: (category: PluginCenterSkillBrowseCategory) => void
+  onInstallRecommendedSkill: (skill: PluginCenterRecommendedSkill) => void
+  recommendedState: PluginCenterResourceSnapshot<PluginCenterGetRecommendedSkillsResult>
+  onRetry: () => void
 }): React.JSX.Element {
-  if (skills.length === 0) {
-    return (
-      <EmptyState
-        icon={<SparklesIcon className="size-5" />}
-        title="没有匹配的技能"
-        description="当前快照没有返回可浏览技能。请刷新、添加市场或调整搜索条件。"
-      />
+  const [isOverviewExpanded, setIsOverviewExpanded] = React.useState(false)
+  const allInstalled = skills.filter((skill) => skill.installed)
+  const installed = allInstalled
+    .filter(isStandaloneSkill)
+    .sort((left, right) =>
+      skillTitle(left).localeCompare(skillTitle(right), undefined, { sensitivity: 'base' })
     )
-  }
-  const installed = skills.filter((skill) => skill.installed)
-  const recommended = skills.filter((skill) => skill.recommended)
+  const overviewSkills = installed.filter((skill) => matchesSearch(skill, search))
+  const hiddenOverviewSkills = overviewSkills.slice(6)
+  const visibleOverviewSkills = isOverviewExpanded ? overviewSkills : overviewSkills.slice(0, 6)
+  const categorySkills =
+    category === 'system'
+      ? installed.filter((skill) => skill.scope === 'system' && matchesSearch(skill, search))
+      : installed.filter((skill) => skill.scope !== 'system' && matchesSearch(skill, search))
+  const availableRecommendedSkills = recommendedSkills.filter(
+    (skill) => !recommendedSkillIsInstalled(skill, allInstalled) && matchesSearch(skill, search)
+  )
+  const categoryTitle = skillCategoryTitle(category)
+  const hasSearch = Boolean(search.trim())
 
   return (
     <div className="space-y-8">
-      <BrowseSection title="已安装技能" description="来自真实 skills/list 快照。">
-        <div className="grid gap-2 lg:grid-cols-2">
-          {installed.map((skill) => (
-            <SkillRow
-              key={skill.id}
-              skill={skill}
-              pending={pendingId === skill.id}
-              onToggle={onToggle}
-            />
-          ))}
-        </div>
-      </BrowseSection>
-      <BrowseSection title="推荐来源" description="只展示后端返回的真实推荐技能。">
-        {recommended.length > 0 ? (
-          <div className="grid gap-2 lg:grid-cols-2">
-            {recommended.map((skill) => (
-              <SkillRow
-                key={skill.id}
-                skill={skill}
-                pending={pendingId === skill.id}
-                onToggle={onToggle}
-              />
-            ))}
-          </div>
+      <BrowseSection title="已安装">
+        {overviewSkills.length > 0 ? (
+          <>
+            <div data-slot="installed-skills-overview" className="grid gap-2 lg:grid-cols-2">
+              {visibleOverviewSkills.map((skill) => (
+                <InstalledSkillBrowseRow key={skill.id} skill={skill} onOpenSkill={onOpenSkill} />
+              ))}
+            </div>
+            {hiddenOverviewSkills.length > 0 && (
+              <button
+                type="button"
+                data-slot="installed-skills-summary"
+                className="mt-4 flex min-h-[31px] w-full cursor-pointer items-center gap-3 self-start rounded-lg px-2.5 py-[5px] text-left text-[12px] leading-relaxed font-normal text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                aria-expanded={isOverviewExpanded}
+                onClick={() => setIsOverviewExpanded((expanded) => !expanded)}
+              >
+                {isOverviewExpanded ? '收起' : hiddenSkillSummary(hiddenOverviewSkills)}
+              </button>
+            )}
+          </>
         ) : (
-          <p className="text-sm text-muted-foreground">暂无推荐技能。</p>
+          <p className="px-2 text-sm text-muted-foreground">
+            {hasSearch ? '没有与搜索词匹配的已安装技能。' : '暂未安装任何技能。'}
+          </p>
         )}
       </BrowseSection>
+
+      <Tabs
+        value={category}
+        onValueChange={(value) => onCategoryChange(value as PluginCenterSkillBrowseCategory)}
+      >
+        <TabsList aria-label="技能分类">
+          <TabsTrigger value="personal">个人</TabsTrigger>
+          <TabsTrigger value="system">系统</TabsTrigger>
+          <TabsTrigger value="recommended">推荐</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {category === 'recommended' ? (
+        <RecommendedSkillsState
+          skills={availableRecommendedSkills}
+          search={search}
+          state={recommendedState}
+          pendingId={pendingId}
+          onInstall={onInstallRecommendedSkill}
+          onRetry={onRetry}
+        />
+      ) : (
+        <BrowseSection title={categoryTitle}>
+          {categorySkills.length > 0 ? (
+            <div data-slot="skill-category-grid" className="grid gap-2 lg:grid-cols-2">
+              {categorySkills.map((skill) => (
+                <InstalledSkillBrowseRow key={skill.id} skill={skill} onOpenSkill={onOpenSkill} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<SparklesIcon className="size-5" />}
+              title={hasSearch ? '没有匹配的技能' : `没有${categoryTitle}`}
+              description={
+                hasSearch
+                  ? '请尝试其他关键词，搜索会匹配名称、描述和标签。'
+                  : '安装或创建技能后会显示在这里。'
+              }
+            />
+          )}
+        </BrowseSection>
+      )}
     </div>
   )
 }
 
-function SkillRow({
+function hiddenSkillSummary(skills: PluginCenterSkill[]): string {
+  const namedSkills = skills.slice(0, 2).map(skillTitle)
+  const remaining = skills.length - namedSkills.length
+  return `查看 ${namedSkills.join('、')}${remaining > 0 ? `，另有 ${remaining} 项` : ''}`
+}
+
+function InstalledSkillBrowseRow({
+  skill,
+  onOpenSkill
+}: {
+  skill: PluginCenterSkill
+  onOpenSkill: (skill: PluginCenterSkill) => void
+}): React.JSX.Element {
+  return (
+    <PluginCard
+      dataSlot="skill-card"
+      title={skillTitle(skill)}
+      description={itemDescription(skill)}
+      ariaLabel={`预览技能 ${skillTitle(skill)}`}
+      onClick={() => onOpenSkill(skill)}
+      icon={
+        <PluginImage
+          icon={skill.iconLarge ?? skill.iconSmall}
+          title={skillTitle(skill)}
+          fallback={<PluginDetailSkillIcon />}
+          className="size-10 shrink-0 rounded-lg border-0 bg-transparent object-contain"
+        />
+      }
+      actions={
+        <span aria-label={`${skillTitle(skill)} 已安装`} title="已安装">
+          <CheckIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        </span>
+      }
+    />
+  )
+}
+
+function RecommendedSkillsState({
+  skills,
+  search,
+  state,
+  pendingId,
+  onInstall,
+  onRetry
+}: {
+  skills: PluginCenterRecommendedSkill[]
+  search: string
+  state: PluginCenterResourceSnapshot<PluginCenterGetRecommendedSkillsResult>
+  pendingId?: string
+  onInstall: (skill: PluginCenterRecommendedSkill) => void
+  onRetry: () => void
+}): React.JSX.Element {
+  const initialLoading = isInitialResourceLoading(state)
+  const hasSearch = Boolean(search.trim())
+  if (initialLoading) return <SkillBrowseLoading label="正在加载推荐技能" />
+  if (state.data === null && state.error) {
+    return (
+      <EmptyState
+        icon={<CircleAlertIcon className="size-5" />}
+        title="无法加载推荐技能"
+        description={state.error}
+        action={{ label: '重试', onClick: onRetry }}
+      />
+    )
+  }
+
+  return (
+    <BrowseSection title="推荐技能" description="由精选目录提供，可直接安装到你的个人技能中。">
+      {state.data?.error && (
+        <div
+          data-slot="recommended-skills-warning"
+          className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm"
+        >
+          <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="text-muted-foreground">{state.data.error}</span>
+        </div>
+      )}
+      {skills.length > 0 ? (
+        <div data-slot="recommended-skills-grid" className="grid gap-2 lg:grid-cols-2">
+          {skills.map((skill) => (
+            <RecommendedSkillBrowseRow
+              key={skill.id}
+              skill={skill}
+              pending={pendingId === `recommended-skill:${skill.id}`}
+              onInstall={onInstall}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={<SparklesIcon className="size-5" />}
+          title={hasSearch ? '没有匹配的推荐技能' : '暂无推荐技能'}
+          description={hasSearch ? '请尝试其他关键词。' : '已安装的推荐技能不会重复显示在这里。'}
+        />
+      )}
+    </BrowseSection>
+  )
+}
+
+function SkillBrowseLoading({ label }: { label: string }): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-2 px-2 py-4 text-sm text-muted-foreground">
+      <Loader2Icon className="size-4 animate-spin" />
+      {label}
+    </div>
+  )
+}
+
+function RecommendedSkillBrowseRow({
   skill,
   pending,
+  onInstall
+}: {
+  skill: PluginCenterRecommendedSkill
+  pending: boolean
+  onInstall: (skill: PluginCenterRecommendedSkill) => void
+}): React.JSX.Element {
+  const description = skill.shortDescription ?? skill.description ?? '暂无说明'
+  return (
+    <PluginCard
+      dataSlot="recommended-skill-card"
+      title={skill.name}
+      description={description}
+      icon={
+        <PluginImage
+          icon={skill.iconLarge ?? skill.iconSmall}
+          title={skill.name}
+          fallback={<PluginDetailSkillIcon />}
+          className="size-10 shrink-0 rounded-lg border-0 bg-transparent object-contain"
+        />
+      }
+      actions={
+        <InstallActionButton
+          pending={pending}
+          disabled={pending}
+          ariaLabel={`安装技能 ${skill.name}`}
+          onClick={() => onInstall(skill)}
+        />
+      }
+    />
+  )
+}
+
+function ManagedSkillCard({
+  skill,
+  pending,
+  onOpenSkill,
   onToggle
 }: {
   skill: PluginCenterSkill
   pending: boolean
+  onOpenSkill: (skill: PluginCenterSkill) => void
   onToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
 }): React.JSX.Element {
+  const title = skillTitle(skill)
   return (
-    <article className="flex items-center gap-3 rounded-lg border bg-card p-3">
-      <div className="flex size-9 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-        <SparklesIcon className="size-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{itemTitle(skill)}</div>
-        <p className="truncate text-sm text-muted-foreground">{itemDescription(skill)}</p>
-        <ItemMeta
-          values={[scopeLabel(skill.scope), skill.pluginDisplayName, sourceLabel(skill.sourceKind)]}
-        />
-      </div>
-      <OptimisticSkillSwitch
-        enabled={skill.enabled}
-        disabled={pending || !skill.canToggle}
-        getAriaLabel={(enabled) => `${itemTitle(skill)} ${enabled ? '停用' : '启用'}`}
-        title={skill.restriction?.message}
-        onToggle={(enabled) => onToggle(skill, enabled)}
-      />
-    </article>
+    <PluginSkillCard
+      dataSlot="managed-skill-card"
+      ariaLabel={`查看技能 ${title}`}
+      title={title}
+      description={skill.description}
+      icon={skill.iconLarge ?? skill.iconSmall}
+      enabled={skill.enabled}
+      canToggle={skill.canToggle}
+      pending={pending}
+      disabledMessage={skill.restriction?.message}
+      onOpen={() => onOpenSkill(skill)}
+      onToggle={(enabled) => onToggle(skill, enabled)}
+    />
   )
 }
 
 function ManagePanel({
   tab,
   snapshot,
+  installedPlugins,
   search,
   pendingId,
+  uninstallingPluginId,
   onPluginToggle,
   onPluginUninstall,
-  onConnectApp,
   onAppToggle,
   onSkillToggle,
+  onOpenSkill,
   onMcpToggle,
   onMcpEdit,
-  onMcpRemove,
+  onMcpAdd,
   onOpenDetails
 }: {
   tab: PluginCenterManageTab
   snapshot: PluginCenterSnapshot
+  installedPlugins: PluginCenterPlugin[]
   search: string
   pendingId?: string
+  uninstallingPluginId?: string
   onPluginToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
   onPluginUninstall: (plugin: PluginCenterPlugin) => void
-  onConnectApp: (app: PluginCenterApp) => void
   onAppToggle: (app: PluginCenterApp, enabled: boolean) => void
   onSkillToggle: (skill: PluginCenterSkill, enabled: boolean) => Promise<boolean>
+  onOpenSkill: (skill: PluginCenterSkill) => void
   onMcpToggle: (server: PluginCenterUserMcpServer, enabled: boolean) => void
   onMcpEdit: (server: PluginCenterUserMcpServer) => void
-  onMcpRemove: (server: PluginCenterUserMcpServer) => void
+  onMcpAdd: () => void
   onOpenDetails: (plugin: PluginCenterPlugin) => void
 }): React.JSX.Element {
   if (tab === 'plugins') {
-    const plugins = snapshot.plugins
-      .filter((plugin) => plugin.installed)
-      .filter((plugin) => matchesSearch(plugin, search))
+    const plugins = installedPlugins.filter((plugin) => matchesSearch(plugin, search))
     return plugins.length ? (
       <div className="grid gap-3">
         {plugins.map((plugin) => (
-          <PluginCard
+          <CatalogPluginCard
             key={plugin.id}
             plugin={plugin}
             pending={pendingId === plugin.id}
+            uninstalling={uninstallingPluginId === plugin.id}
             onInstall={() => undefined}
             onToggle={onPluginToggle}
             onUninstall={onPluginUninstall}
@@ -2475,17 +3073,13 @@ function ManagePanel({
     )
   }
   if (tab === 'apps') {
-    const apps = snapshot.apps.filter((app) => matchesSearch(app, search))
+    const apps = snapshot.apps.filter(
+      (app) => isManagedAppVisible(app) && matchesSearch(app, search)
+    )
     return apps.length ? (
-      <div className="grid gap-2">
+      <div className="grid min-w-0 grid-cols-1 gap-y-2">
         {apps.map((app) => (
-          <AppRow
-            key={app.id}
-            app={app}
-            pending={pendingId === app.id}
-            onConnect={onConnectApp}
-            onToggle={onAppToggle}
-          />
+          <AppRow key={app.id} app={app} pending={pendingId === app.id} onToggle={onAppToggle} />
         ))}
       </div>
     ) : (
@@ -2497,14 +3091,20 @@ function ManagePanel({
     )
   }
   if (tab === 'skills') {
-    const skills = snapshot.skills.filter((skill) => matchesSearch(skill, search))
+    const skills = snapshot.skills
+      .filter((skill) => matchesSearch(skill, search))
+      .sort(
+        (left, right) =>
+          skillTitle(left).localeCompare(skillTitle(right)) || left.name.localeCompare(right.name)
+      )
     return skills.length ? (
-      <div className="grid gap-2">
+      <div className="grid gap-2 [--detail-page-inline-inset:0.5rem]">
         {skills.map((skill) => (
-          <SkillRow
+          <ManagedSkillCard
             key={skill.id}
             skill={skill}
             pending={pendingId === skill.id}
+            onOpenSkill={onOpenSkill}
             onToggle={onSkillToggle}
           />
         ))}
@@ -2524,7 +3124,7 @@ function ManagePanel({
       pendingId={pendingId}
       onToggle={onMcpToggle}
       onEdit={onMcpEdit}
-      onRemove={onMcpRemove}
+      onAdd={onMcpAdd}
     />
   )
 }
@@ -2532,51 +3132,36 @@ function ManagePanel({
 function AppRow({
   app,
   pending,
-  onConnect,
   onToggle
 }: {
   app: PluginCenterApp
   pending: boolean
-  onConnect: (app: PluginCenterApp) => void
   onToggle: (app: PluginCenterApp, enabled: boolean) => void
 }): React.JSX.Element {
-  const needsConnection = !app.accessible && Boolean(app.installUrl)
   return (
-    <article className="flex items-center gap-3 rounded-lg border bg-card p-3">
-      <ItemIcon
-        icon={app.icon}
-        title={itemTitle(app)}
-        fallback={<AppWindowIcon className="size-4" />}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{itemTitle(app)}</div>
-        <p className="truncate text-sm text-muted-foreground">{itemDescription(app)}</p>
-        <ItemMeta values={[sourceLabel(app.sourceKind), ...app.pluginDisplayNames]} />
-      </div>
-      {app.accessible && (
+    <PluginCard
+      dataSlot="app-card"
+      className="min-w-0"
+      title={itemTitle(app)}
+      description={itemDescription(app)}
+      icon={
+        <ItemIcon
+          icon={app.icon}
+          title={itemTitle(app)}
+          fallback={<AppWindowIcon className="size-4" />}
+          className="size-10 rounded-lg bg-transparent object-contain"
+        />
+      }
+      actions={
         <Switch
           checked={app.enabled}
           disabled={pending || !app.canToggle}
           title={app.restriction?.message}
-          aria-label={`${itemTitle(app)} ${app.enabled ? '停用' : '启用'}`}
+          aria-label={`${itemTitle(app)} 停用`}
           onCheckedChange={(enabled) => onToggle(app, enabled)}
         />
-      )}
-      {needsConnection && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="rounded-full px-4"
-          disabled={pending || Boolean(app.restriction)}
-          aria-label={`连接 ${itemTitle(app)}`}
-          title={app.restriction?.message}
-          onClick={() => onConnect(app)}
-        >
-          连接
-        </Button>
-      )}
-    </article>
+      }
+    />
   )
 }
 
@@ -2586,27 +3171,26 @@ function McpPanel({
   pendingId,
   onToggle,
   onEdit,
-  onRemove
+  onAdd
 }: {
   userServers: PluginCenterUserMcpServer[]
   pluginServers: PluginCenterPluginMcpServer[]
   pendingId?: string
   onToggle: (server: PluginCenterUserMcpServer, enabled: boolean) => void
   onEdit: (server: PluginCenterUserMcpServer) => void
-  onRemove: (server: PluginCenterUserMcpServer) => void
+  onAdd: () => void
 }): React.JSX.Element {
-  if (userServers.length === 0 && pluginServers.length === 0) {
-    return (
-      <EmptyState
-        icon={<PlugIcon className="size-5" />}
-        title="没有 MCP 服务器"
-        description="暂无匹配的普通或插件提供 MCP。"
-      />
-    )
-  }
   return (
     <div className="space-y-7">
-      <BrowseSection title="普通服务器" description="可编辑的用户级 MCP 配置。">
+      <BrowseSection
+        title="普通服务器"
+        action={
+          <Button type="button" size="sm" onClick={onAdd}>
+            <PlusIcon className="size-4" />
+            添加服务器
+          </Button>
+        }
+      >
         {userServers.length > 0 ? (
           <div className="grid gap-2">
             {userServers.map((server) => (
@@ -2616,7 +3200,6 @@ function McpPanel({
                 pending={pendingId === server.id}
                 onToggle={onToggle}
                 onEdit={onEdit}
-                onRemove={onRemove}
               />
             ))}
           </div>
@@ -2624,7 +3207,7 @@ function McpPanel({
           <p className="text-sm text-muted-foreground">暂无普通服务器。</p>
         )}
       </BrowseSection>
-      <BrowseSection title="来自插件" description="由所属插件控制，不能在此处单独编辑。">
+      <BrowseSection title="来自插件">
         {pluginServers.length > 0 ? (
           <div className="grid gap-2">
             {pluginServers.map((server) => (
@@ -2643,14 +3226,12 @@ function McpUserRow({
   server,
   pending,
   onToggle,
-  onEdit,
-  onRemove
+  onEdit
 }: {
   server: PluginCenterUserMcpServer
   pending: boolean
   onToggle: (server: PluginCenterUserMcpServer, enabled: boolean) => void
   onEdit: (server: PluginCenterUserMcpServer) => void
-  onRemove: (server: PluginCenterUserMcpServer) => void
 }): React.JSX.Element {
   return (
     <article className="flex items-center gap-3 rounded-lg border bg-card p-3">
@@ -2659,11 +3240,6 @@ function McpUserRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{server.displayName ?? server.name}</div>
-        <p className="truncate text-sm text-muted-foreground">
-          {server.connected ? '已连接' : '未连接'} · {server.toolCount} 个工具 ·{' '}
-          {authLabel(server.authStatus)}
-        </p>
-        <ItemMeta values={[server.transport, server.origin, server.restriction?.message]} />
       </div>
       <Switch
         checked={server.enabled}
@@ -2672,29 +3248,25 @@ function McpUserRow({
         aria-label={`${server.displayName ?? server.name} ${server.enabled ? '停用' : '启用'}`}
         onCheckedChange={(enabled) => onToggle(server, enabled)}
       />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            type="button"
-            disabled={pending || !server.editable}
-            aria-label={`${server.displayName ?? server.name} 更多 MCP 操作`}
-            title="更多操作"
-          >
-            <MoreHorizontalIcon className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => onEdit(server)}>编辑</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onRemove(server)}>删除</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        type="button"
+        disabled={pending || !server.editable}
+        aria-label={`打开 ${server.displayName ?? server.name} MCP 设置`}
+        title="设置"
+        onClick={() => {
+          if (server.origin === 'user' && server.editable) onEdit(server)
+        }}
+      >
+        <SettingsIcon className="size-4" />
+      </Button>
     </article>
   )
 }
 
 function McpPluginRow({ server }: { server: PluginCenterPluginMcpServer }): React.JSX.Element {
+  const pluginName = server.pluginDisplayName ?? server.pluginId
   return (
     <article className="flex items-center gap-3 rounded-lg border bg-card p-3 opacity-90">
       <div className="flex size-9 items-center justify-center rounded-md border bg-muted text-muted-foreground">
@@ -2703,10 +3275,8 @@ function McpPluginRow({ server }: { server: PluginCenterPluginMcpServer }): Reac
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{server.displayName ?? server.name}</div>
         <p className="truncate text-sm text-muted-foreground">
-          来自 {server.pluginDisplayName ?? server.pluginId} ·{' '}
-          {server.connected ? '已连接' : '未连接'} · {server.toolCount} 个工具
+          {pluginName ? `来自 ${pluginName}` : '来自插件'} · {server.toolCount} 个工具
         </p>
-        <ItemMeta values={[server.transport, authLabel(server.authStatus)]} />
       </div>
       <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">只读</span>
     </article>
@@ -2803,330 +3373,7 @@ function MarketplaceDialog({
   )
 }
 
-type McpDialogState = {
-  open: boolean
-  server: PluginCenterUserMcpServer | null
-}
-
-type SecretActions = Record<string, 'keep' | 'remove'>
-
-function McpServerDialog({
-  state,
-  onOpenChange,
-  onSubmit
-}: {
-  state: McpDialogState
-  onOpenChange: (open: boolean) => void
-  onSubmit: (
-    serverId: string | undefined,
-    displayName: string | undefined,
-    server: PluginCenterMcpServerInput
-  ) => Promise<void>
-}): React.JSX.Element {
-  const editing = state.server
-  const [transport, setTransport] = React.useState<'stdio' | 'streamable-http'>('stdio')
-  const [displayName, setDisplayName] = React.useState('')
-  const [command, setCommand] = React.useState('')
-  const [args, setArgs] = React.useState('')
-  const [cwd, setCwd] = React.useState('')
-  const [env, setEnv] = React.useState('')
-  const [envVars, setEnvVars] = React.useState('')
-  const [url, setUrl] = React.useState('')
-  const [bearerTokenEnvVar, setBearerTokenEnvVar] = React.useState('')
-  const [httpHeaders, setHttpHeaders] = React.useState('')
-  const [envHttpHeaders, setEnvHttpHeaders] = React.useState('')
-  const [envSecretActions, setEnvSecretActions] = React.useState<SecretActions>({})
-  const [httpSecretActions, setHttpSecretActions] = React.useState<SecretActions>({})
-  const [submitting, setSubmitting] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    if (!state.open) return
-    const server = state.server
-    queueMicrotask(() => {
-      setTransport(server?.transport === 'streamable-http' ? 'streamable-http' : 'stdio')
-      setDisplayName(server?.displayName ?? server?.name ?? '')
-      setCommand(server?.transport === 'stdio' ? (server.command ?? '') : '')
-      setArgs(server?.transport === 'stdio' ? server.args.join('\n') : '')
-      setCwd(server?.transport === 'stdio' ? (server.cwd ?? '') : '')
-      setEnv('')
-      setEnvVars(
-        server?.transport === 'stdio'
-          ? server.envVars
-              .filter((entry) => entry.editable)
-              .map((entry) => entry.name)
-              .join('\n')
-          : ''
-      )
-      setUrl(server?.transport === 'streamable-http' ? (server.url ?? '') : '')
-      setBearerTokenEnvVar(
-        server?.transport === 'streamable-http' ? (server.bearerTokenEnvVar ?? '') : ''
-      )
-      setHttpHeaders('')
-      setEnvHttpHeaders(
-        server?.transport === 'streamable-http'
-          ? server.envHttpHeaders.map((entry) => `${entry.name}=${entry.envVarName}`).join('\n')
-          : ''
-      )
-      setEnvSecretActions(server?.transport === 'stdio' ? secretKeepActions(server.env) : {})
-      setHttpSecretActions(
-        server?.transport === 'streamable-http' ? secretKeepActions(server.httpHeaders) : {}
-      )
-      setError(null)
-    })
-  }, [state.open, state.server])
-
-  const trimmedDisplayName = displayName.trim()
-  const initialForm = initialMcpFormKey(editing)
-  const currentForm =
-    transport === 'stdio'
-      ? JSON.stringify({
-          transport,
-          displayName: trimmedDisplayName,
-          command: command.trim(),
-          args: parseArgs(args).join('\n'),
-          cwd: cwd.trim(),
-          envVars: parseMultilineList(envVars).join('\n'),
-          env: parseKeyValues(env),
-          envSecretActions
-        })
-      : JSON.stringify({
-          transport,
-          displayName: trimmedDisplayName,
-          url: url.trim(),
-          bearerTokenEnvVar: bearerTokenEnvVar.trim(),
-          httpHeaders: parseKeyValues(httpHeaders),
-          envHttpHeaders: parseKeyValues(envHttpHeaders),
-          httpSecretActions
-        })
-  const isDirty = !editing || currentForm !== initialForm
-  const isValid =
-    Boolean(editing || trimmedDisplayName) &&
-    (transport === 'stdio' ? command.trim().length > 0 : url.trim().length > 0)
-
-  const submit = async (): Promise<void> => {
-    setSubmitting(true)
-    setError(null)
-    try {
-      let server: PluginCenterMcpServerInput
-      if (transport === 'stdio') {
-        const newSecretValues = parseKeyValues(env)
-        server = {
-          transport,
-          command: command.trim(),
-          args: parseArgs(args),
-          cwd: cwd.trim() || undefined,
-          env: buildSecretPatches(envSecretActions, newSecretValues),
-          envVars: parseMultilineList(envVars)
-        }
-      } else {
-        const newHeaderValues = parseKeyValues(httpHeaders)
-        server = {
-          transport,
-          url: url.trim(),
-          bearerTokenEnvVar: bearerTokenEnvVar.trim() || undefined,
-          httpHeaders: buildSecretPatches(httpSecretActions, newHeaderValues),
-          envHttpHeaders: parseKeyValues(envHttpHeaders).map((entry) => ({
-            name: entry.name,
-            envVarName: entry.value
-          }))
-        }
-      }
-      await onSubmit(editing?.id, displayName.trim() || undefined, server)
-      onOpenChange(false)
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : '保存 MCP 失败')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <Dialog open={state.open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-5rem)] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{editing ? '编辑 MCP 服务器' : '添加 MCP 服务器'}</DialogTitle>
-          <DialogDescription>
-            {editing
-              ? '名称和传输类型保持不变，只保存可见字段。'
-              : '新增配置默认启用，保存后会刷新 MCP 状态。'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4">
-          <Field label="显示名称" required={!editing}>
-            <Input
-              value={displayName}
-              disabled={Boolean(editing)}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-          </Field>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={transport === 'stdio' ? 'secondary' : 'outline'}
-              disabled={Boolean(editing)}
-              onClick={() => setTransport('stdio')}
-            >
-              STDIO
-            </Button>
-            <Button
-              type="button"
-              variant={transport === 'streamable-http' ? 'secondary' : 'outline'}
-              disabled={Boolean(editing)}
-              onClick={() => setTransport('streamable-http')}
-            >
-              Streamable HTTP
-            </Button>
-          </div>
-          {transport === 'stdio' ? (
-            <>
-              <Field label="Command to launch" required>
-                <Input value={command} onChange={(event) => setCommand(event.target.value)} />
-              </Field>
-              <Field label="Arguments">
-                <Textarea
-                  value={args}
-                  onChange={(event) => setArgs(event.target.value)}
-                  placeholder="每行一个参数"
-                />
-              </Field>
-              <Field label="Environment variables">
-                {editing?.transport === 'stdio' && editing.env.length > 0 ? (
-                  <SecretPatchList
-                    entries={editing.env}
-                    actions={envSecretActions}
-                    onChange={setEnvSecretActions}
-                  />
-                ) : null}
-                <Textarea
-                  value={env}
-                  onChange={(event) => setEnv(event.target.value)}
-                  placeholder="新增或更新：KEY=value"
-                />
-              </Field>
-              <Field label="Environment variable passthrough">
-                {editing?.transport === 'stdio' &&
-                editing.envVars.some((entry) => !entry.editable) ? (
-                  <p className="text-xs text-muted-foreground">
-                    只读 passthrough：
-                    {editing.envVars
-                      .filter((entry) => !entry.editable)
-                      .map((entry) => entry.name)
-                      .join('、')}
-                  </p>
-                ) : null}
-                <Textarea
-                  value={envVars}
-                  onChange={(event) => setEnvVars(event.target.value)}
-                  placeholder="每行一个变量名"
-                />
-              </Field>
-              <Field label="Working directory">
-                <Input value={cwd} onChange={(event) => setCwd(event.target.value)} />
-              </Field>
-            </>
-          ) : (
-            <>
-              <Field label="URL" required>
-                <Input
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  placeholder="https://example.com/mcp"
-                />
-              </Field>
-              <Field label="Bearer token env var">
-                <Input
-                  value={bearerTokenEnvVar}
-                  onChange={(event) => setBearerTokenEnvVar(event.target.value)}
-                  placeholder="TOKEN_ENV_NAME"
-                />
-              </Field>
-              <Field label="Headers">
-                {editing?.transport === 'streamable-http' && editing.httpHeaders.length > 0 ? (
-                  <SecretPatchList
-                    entries={editing.httpHeaders}
-                    actions={httpSecretActions}
-                    onChange={setHttpSecretActions}
-                  />
-                ) : null}
-                <Textarea
-                  value={httpHeaders}
-                  onChange={(event) => setHttpHeaders(event.target.value)}
-                  placeholder="Header-Name=value"
-                />
-              </Field>
-              <Field label="Headers from environment variables">
-                <Textarea
-                  value={envHttpHeaders}
-                  onChange={(event) => setEnvHttpHeaders(event.target.value)}
-                  placeholder="Header-Name=ENV_VAR_NAME"
-                />
-              </Field>
-            </>
-          )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" type="button" disabled={submitting}>
-              取消
-            </Button>
-          </DialogClose>
-          <Button
-            type="button"
-            disabled={!isValid || !isDirty || submitting}
-            onClick={() => void submit()}
-          >
-            {submitting && <Loader2Icon className="size-4 animate-spin" />}
-            保存
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function SecretPatchList({
-  entries,
-  actions,
-  onChange
-}: {
-  entries: Array<{ name: string; hasValue: boolean; editable: boolean }>
-  actions: SecretActions
-  onChange: (actions: SecretActions) => void
-}): React.JSX.Element {
-  return (
-    <div className="grid gap-1 rounded-md border bg-muted/30 p-2">
-      {entries.map((entry) => (
-        <div key={entry.name} className="flex items-center justify-between gap-2 text-xs">
-          <span className="min-w-0 truncate">
-            {entry.name} · {entry.hasValue ? '已有值' : '空值'}
-          </span>
-          <div className="flex shrink-0 gap-1">
-            <Button
-              type="button"
-              size="xs"
-              variant={actions[entry.name] !== 'remove' ? 'secondary' : 'ghost'}
-              disabled={!entry.editable}
-              onClick={() => onChange({ ...actions, [entry.name]: 'keep' })}
-            >
-              keep
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant={actions[entry.name] === 'remove' ? 'destructive' : 'ghost'}
-              disabled={!entry.editable}
-              onClick={() => onChange({ ...actions, [entry.name]: 'remove' })}
-            >
-              remove
-            </Button>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
+type McpEditorState = { kind: 'new' } | { kind: 'edit'; serverId: string } | null
 
 function Field({
   label,

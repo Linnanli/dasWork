@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -67,19 +67,15 @@ test('renders a non-empty Plugin Center snapshot from the app-server catalog wit
     await expect(page.getByRole('button', { name: '刷新插件中心' })).toBeVisible()
     await expect(page.getByRole('button', { name: '添加' })).toBeVisible()
     await page.getByRole('tab', { name: '技能', exact: true }).click()
-    await expect(page.getByText('Workspace Skill')).toBeVisible()
+    await expect(page.getByRole('button', { name: '预览技能 Workspace Skill' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '预览技能 Plugin Cache Skill' })).toHaveCount(0)
     await page.getByRole('tab', { name: '插件', exact: true }).click()
     await page.getByRole('button', { name: '设置已安装插件' }).click()
     await expect(page.getByRole('tab', { name: /插件 1/ })).toHaveAttribute('data-state', 'active')
     await page.getByRole('tab', { name: /应用/ }).click()
-    await expect(page.getByText('E2E App from app/read', { exact: true }).last()).toBeVisible()
-    await expect(
-      page.getByText('Short description returned by app/read.', { exact: true })
-    ).toBeVisible()
-    await expect(page.getByRole('switch', { name: 'E2E App from app/read 启用' })).toBeVisible()
-    await expect(page.locator('[data-slot="plugin-center-page"]')).not.toContainText(
-      '此应用当前不可访问或需要连接帐户'
-    )
+    await expect(page.getByRole('tab', { name: '应用 0' })).toHaveAttribute('data-state', 'active')
+    await expect(page.locator('[data-slot="app-card"]')).toHaveCount(0)
+    await expect(page.getByText('没有应用', { exact: true })).toBeVisible()
     await page.getByRole('tab', { name: /MCP/ }).click()
     await expect(page.getByText('local_tools')).toBeVisible()
 
@@ -110,6 +106,11 @@ test('installs a marketplace plugin through the Plugin Center app-server RPC pat
     const pluginCard = page.locator('article').filter({ hasText: 'E2E Installable Plugin' })
     await pluginCard.getByRole('button', { name: '安装' }).click()
     await expect(pluginCard.getByRole('button', { name: '安装' })).toHaveCount(0)
+    await expect(pluginCard).toBeVisible()
+    await pluginCard.getByRole('button', { name: '更多插件操作' }).click()
+    await expect(page.getByRole('menuitem', { name: '立即试用' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '管理' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: '卸载' })).toBeVisible()
 
     await expect
       .poll(() => rpcMethods(rpcLogPath))
@@ -130,6 +131,80 @@ test('installs a marketplace plugin through the Plugin Center app-server RPC pat
       )
       .toHaveLength(installedCountBefore + 1)
   })
+})
+
+test('browses and directly installs cached curated skills without network access', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  await withPluginCenterServer(
+    testInfo,
+    async ({ page, codexHomeDir }) => {
+      await openPluginCenter(page)
+      await page.getByRole('tab', { name: '技能', exact: true }).click()
+
+      const search = page.getByRole('textbox', { name: '搜索技能' })
+      await expect(search).toHaveAttribute('placeholder', '搜索技能')
+      await expect(page.locator('[data-slot="installed-skills-overview"]')).toContainText(
+        'Alpha Personal'
+      )
+      await expect(
+        page.locator('[data-slot="installed-skills-overview"] [data-slot="skill-card"]')
+      ).toHaveCount(6)
+      await expect(page.locator('[data-slot="installed-skills-summary"]')).toHaveText(
+        '查看 Workspace Skill、Writing，另有 1 项'
+      )
+      await expect(page.getByRole('tab', { name: '个人', exact: true })).toHaveAttribute(
+        'data-state',
+        'active'
+      )
+      await page.getByRole('tab', { name: '系统', exact: true }).click()
+      const systemGrid = page.locator('[data-slot="skill-category-grid"]')
+      await expect(systemGrid).toContainText('System Audit')
+      await expect(systemGrid).toContainText('System Shell')
+      await expect(systemGrid).not.toContainText('Workspace Skill')
+
+      await page.getByRole('tab', { name: '推荐', exact: true }).click()
+      await expect(page.getByRole('tab', { name: '推荐', exact: true })).toHaveAttribute(
+        'data-state',
+        'active'
+      )
+      await expect(page.locator('[data-slot="recommended-skill-card"]')).toHaveCount(2)
+      await search.fill('curated writer')
+
+      const curatedSkill = page
+        .locator('[data-slot="recommended-skill-card"]')
+        .filter({ hasText: 'E2E Curated Writer' })
+      await expect(curatedSkill).toBeVisible()
+      await curatedSkill.getByRole('button', { name: '安装技能 E2E Curated Writer' }).click()
+      await search.fill('')
+
+      const installedCuratedSkill = page
+        .locator('[data-slot="installed-skills-overview"] [data-slot="skill-card"]')
+        .filter({ hasText: 'Installed directly from the offline curated fixture.' })
+      await expect(installedCuratedSkill).toContainText('E2e Writer')
+      await expect(curatedSkill).toHaveCount(0)
+      await expect
+        .poll(async () =>
+          readFile(join(codexHomeDir, 'skills', 'e2e-writer', 'SKILL.md'), 'utf8').catch(() => '')
+        )
+        .toContain('# E2E writer')
+
+      await expect(page.locator('[data-slot="recommended-skill-card"]')).toHaveCount(1)
+      await expect(
+        page.locator('[data-slot="recommended-skill-card"]').filter({ hasText: 'Playwright' })
+      ).toBeVisible()
+
+      await page.setViewportSize({ width: 420, height: 900 })
+      const width = await page.locator('body').evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth
+      }))
+      expect(width.scrollWidth).toBeLessThanOrEqual(width.clientWidth + 1)
+    },
+    { recommendedSkills: true }
+  )
 })
 
 test('opens one plugin detail, preserves the detail action context, and creates an unsent app draft', async ({
@@ -402,16 +477,16 @@ test('writes and reloads MCP config through the Plugin Center app-server RPC pat
     await existingServer.getByRole('switch', { name: 'local_tools 停用' }).click()
     await expect(existingServer.getByRole('switch', { name: 'local_tools 启用' })).toBeVisible()
 
-    await page.getByRole('button', { name: '添加' }).click()
-    await page.getByRole('menuitem', { name: '添加 MCP 服务器' }).click()
-    const dialog = page.getByRole('dialog', { name: '添加 MCP 服务器' })
-    await expect(dialog).toBeVisible()
-    await dialog.getByLabel('显示名称').fill('New Tools')
-    await dialog.getByLabel('Command to launch').fill('node')
-    await dialog.getByLabel('Arguments').fill('new-tools-server.js')
-    await dialog.getByLabel('Environment variable passthrough').fill('PATH')
-    await dialog.getByRole('button', { name: '保存' }).click()
-    await expect(dialog).toBeHidden()
+    await page.getByRole('button', { name: '添加服务器' }).click()
+    const editor = page.locator('[data-slot="mcp-server-editor"]')
+    await expect(editor).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await editor.getByPlaceholder('例如：本地工具').fill('New Tools')
+    await editor.getByPlaceholder('npx').fill('node')
+    await editor.getByPlaceholder('参数').fill('new-tools-server.js')
+    await editor.getByPlaceholder('变量名').fill('PATH')
+    await editor.getByRole('button', { name: '保存' }).click()
+    await expect(editor).toBeHidden()
     await expect(page.getByText('new_tools')).toBeVisible()
 
     await expect
@@ -451,15 +526,138 @@ test('writes and reloads MCP config through the Plugin Center app-server RPC pat
   })
 })
 
+test('edits and uninstalls a user MCP server through the inline editor', async ({ browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  await withPluginCenterServer(testInfo, async ({ page, rpcLogPath }) => {
+    await openPluginCenter(page)
+    await page.getByRole('button', { name: '管理' }).click()
+    await page.getByRole('tab', { name: /MCP/ }).click()
+
+    const existingServer = page.locator('article').filter({ hasText: 'local_tools' })
+    await existingServer.getByRole('button', { name: '打开 local_tools MCP 设置' }).click()
+
+    const editor = page.locator('[data-slot="mcp-server-editor"]')
+    await expect(editor).toBeVisible()
+    await expect(page.locator('[data-slot="plugin-center-list-header"]')).toHaveCount(0)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(editor.getByRole('heading', { name: '更新 Local_tools MCP' })).toBeVisible()
+    await expect(editor.getByText('如需切换 MCP 服务器类型，请先卸载当前配置。')).toBeVisible()
+    await expect(editor.getByRole('button', { name: '卸载' })).toBeVisible()
+    await expect(editor.getByRole('group', { name: 'MCP 服务器类型' })).toHaveCount(0)
+    await expect(editor.locator('input[value="secret"]')).toHaveCount(0)
+
+    await page.setViewportSize({ width: 1490, height: 1462 })
+    await page.evaluate(() => document.documentElement.classList.add('dark'))
+    await editor.screenshot({ path: testInfo.outputPath('mcp-server-editor-dark.png') })
+    await editor.getByPlaceholder('npx').fill(' node ')
+    await editor.locator('input[placeholder="参数"]').nth(1).fill(' @scope/updated-server ')
+    await editor.getByRole('button', { name: '保存' }).click()
+
+    await expect(editor).toBeHidden()
+    await expect
+      .poll(() => rpcMethods(rpcLogPath))
+      .toContainEqual(
+        expect.objectContaining({
+          method: 'config/batchWrite',
+          params: expect.objectContaining({
+            edits: expect.arrayContaining([
+              expect.objectContaining({
+                keyPath: 'mcp_servers."local_tools"',
+                value: expect.objectContaining({
+                  command: 'node',
+                  args: ['-y', '@scope/updated-server'],
+                  cwd: '/tmp/e2e-plugin-center'
+                })
+              })
+            ])
+          })
+        })
+      )
+
+    await page
+      .locator('article')
+      .filter({ hasText: 'local_tools' })
+      .getByRole('button', { name: '打开 local_tools MCP 设置' })
+      .click()
+    await editor.getByRole('button', { name: '卸载' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(editor).toBeHidden()
+    await expect(page.locator('article').filter({ hasText: 'local_tools' })).toHaveCount(0)
+  })
+})
+
+test('keeps HTTP secrets redacted and readonly MCP servers unavailable for editing', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  await withPluginCenterServer(testInfo, async ({ page }) => {
+    await openPluginCenter(page)
+    await page.getByRole('button', { name: '管理' }).click()
+    await page.getByRole('tab', { name: /MCP/ }).click()
+
+    await page
+      .locator('article')
+      .filter({ hasText: 'remote_tools' })
+      .getByRole('button', { name: '打开 remote_tools MCP 设置' })
+      .click()
+    const editor = page.locator('[data-slot="mcp-server-editor"]')
+    await expect(editor.getByText('Bearer Token 环境变量')).toBeVisible()
+    await expect(editor.getByText('从环境变量读取的请求头')).toBeVisible()
+    await expect(editor.locator('input[value="REMOTE_MCP_TOKEN"]')).toBeVisible()
+    await expect(editor.locator('input[value="secret"]')).toHaveCount(0)
+    await editor.getByRole('button', { name: '返回' }).click()
+
+    const readonlyServer = page.locator('article').filter({ hasText: 'managed_tools' })
+    const readonlySettings = readonlyServer.getByRole('button', { name: '打开 managed_tools MCP 设置' })
+    await expect(readonlySettings).toBeDisabled()
+    await expect(readonlyServer.getByRole('switch')).toBeDisabled()
+  })
+})
+
+test('keeps inline MCP input after a failed write and allows one retry', async ({ browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  await withPluginCenterServer(
+    testInfo,
+    async ({ page }) => {
+      await openPluginCenter(page)
+      await page.getByRole('button', { name: '管理' }).click()
+      await page.getByRole('tab', { name: /MCP/ }).click()
+      await page.getByRole('button', { name: '添加服务器' }).click()
+
+      const editor = page.locator('[data-slot="mcp-server-editor"]')
+      await editor.getByPlaceholder('例如：本地工具').fill('Retry tools')
+      await editor.getByPlaceholder('npx').fill('node')
+      await editor.getByRole('button', { name: '保存' }).click()
+
+      await expect(editor).toBeVisible()
+      await expect(editor.getByText('插件中心操作失败，请刷新后重试。')).toBeVisible()
+      await expect(editor.locator('input[value="Retry tools"]')).toBeVisible()
+      await expect(editor.locator('input[value="node"]')).toBeVisible()
+
+      await editor.getByRole('button', { name: '保存' }).click()
+      await expect(editor).toBeHidden()
+      await expect(page.getByText('retry_tools')).toBeVisible()
+    },
+    { mcpWriteFailures: 1 }
+  )
+})
+
 type PluginCenterRunInput = {
   page: Awaited<ReturnType<ElectronApplication['firstWindow']>>
   rpcLogPath: string
+  codexHomeDir: string
 }
 
 type PluginCenterServerOptions = {
   pluginListDelayMs?: number
   extraPluginCount?: number
   appReadUnsupported?: boolean
+  recommendedSkills?: boolean
+  mcpWriteDelayMs?: number
+  mcpWriteFailures?: number
 }
 
 async function withPluginCenterServer(
@@ -475,27 +673,88 @@ async function withPluginCenterServer(
   })
   const logs: string[] = []
   let app: ElectronApplication | undefined
+  let codexHomeDir: string | undefined
 
   try {
     app = await launchApp(backend, logs, {
+      configureCodexHome: async (directory) => {
+        codexHomeDir = directory
+        if (options.recommendedSkills) await writeOfflineRecommendedSkillsFixture(directory)
+      },
       environment: {
         CODEX_APP_SERVER_BIN: join(appRoot, 'tests/e2e/support/plugin-center-app-server.mjs'),
         DASCOWORK_E2E_PLUGIN_CENTER_RPC_LOG_PATH: rpcLogPath,
         DASCOWORK_E2E_PLUGIN_CENTER_STATE_PATH: statePath,
         DASCOWORK_E2E_PLUGIN_CENTER_APP_READ_UNSUPPORTED: options.appReadUnsupported ? '1' : '0',
         DASCOWORK_E2E_PLUGIN_CENTER_LIST_DELAY_MS: String(options.pluginListDelayMs ?? 0),
-        DASCOWORK_E2E_PLUGIN_CENTER_EXTRA_PLUGIN_COUNT: String(options.extraPluginCount ?? 0)
+        DASCOWORK_E2E_PLUGIN_CENTER_EXTRA_PLUGIN_COUNT: String(options.extraPluginCount ?? 0),
+        DASCOWORK_E2E_PLUGIN_CENTER_MCP_WRITE_DELAY_MS: String(options.mcpWriteDelayMs ?? 0),
+        DASCOWORK_E2E_PLUGIN_CENTER_MCP_WRITE_FAILURES: String(options.mcpWriteFailures ?? 0)
       }
     })
     const page = await app.firstWindow()
     collectRendererLogs(page, logs)
-    await run({ page, rpcLogPath })
+    if (!codexHomeDir) throw new Error('E2E CODEX_HOME was not configured')
+    await run({ page, rpcLogPath, codexHomeDir })
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)
     await backend.close()
     await cleanupTempDirs([serverStateDir])
   }
+}
+
+async function writeOfflineRecommendedSkillsFixture(codexHomeDir: string): Promise<void> {
+  const curatedRoot = join(codexHomeDir, 'vendor_imports', 'skills', 'skills')
+  const fixtures = [
+    {
+      id: 'e2e-writer',
+      name: 'E2E Curated Writer',
+      description: 'Offline E2E curated skill',
+      shortDescription: 'A network-free curated skill fixture.',
+      repoPath: 'skills/.curated/e2e-writer',
+      contents: '# E2E writer'
+    },
+    {
+      id: 'playwright',
+      name: 'Playwright',
+      description: 'Automate real browsers',
+      shortDescription: 'Automate real browsers',
+      repoPath: 'skills/.experimental/playwright',
+      contents: '# Playwright'
+    }
+  ]
+
+  await Promise.all(
+    fixtures.map(async (fixture) => {
+      const skillDirectory = join(curatedRoot, fixture.repoPath.replace(/^skills\//, ''))
+      await mkdir(skillDirectory, { recursive: true })
+      await writeFile(
+        join(skillDirectory, 'SKILL.md'),
+        [
+          '---',
+          `name: ${fixture.id}`,
+          `description: ${fixture.description}`,
+          '---',
+          '',
+          fixture.contents
+        ].join('\n')
+      )
+    })
+  )
+  await writeFile(
+    join(codexHomeDir, 'vendor_imports', 'skills-curated-cache.json'),
+    JSON.stringify({
+      fetchedAt: new Date().toISOString(),
+      skills: fixtures.map(({ id, name, description, shortDescription, repoPath }) => ({
+        id,
+        name,
+        description,
+        shortDescription,
+        repoPath
+      }))
+    })
+  )
 }
 
 async function openPluginCenter(

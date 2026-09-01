@@ -9,6 +9,9 @@ export {
   type PluginCenterTab
 } from './PluginCenterPage'
 
+export { PluginCard, type PluginCardProps } from './PluginCard'
+export { PluginDetailSkillIcon } from './PluginDetailSkillIcon'
+
 export {
   getPluginCenterCatalogResource,
   getPluginCenterInstalledResource,

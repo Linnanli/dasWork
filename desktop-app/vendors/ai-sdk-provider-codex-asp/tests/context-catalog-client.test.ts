@@ -909,7 +909,7 @@ describe("CodexContextCatalogClient", () =>
         });
     });
 
-    it("reads MCP management snapshot with config, status summaries, and installed plugin details", async () =>
+    it("reads MCP management snapshot from config and status without reading plugin metadata", async () =>
     {
         const mock = new CatalogMockClient((method) =>
         {
@@ -921,48 +921,11 @@ describe("CodexContextCatalogClient", () =>
             {
                 return { data: [mcpStatus("plain")], nextCursor: null };
             }
-            if (method === "plugin/installed")
-            {
-                return {
-                    marketplaceLoadErrors: [],
-                    marketplaces: [{
-                        name: "local",
-                        path: "/market/local",
-                        interface: null,
-                        plugins: [{
-                            id: "sample",
-                            name: "sample",
-                            installed: true,
-                            enabled: true,
-                            source: { type: "local", path: "/plugins/sample" },
-                            interface: null,
-                        }],
-                    }],
-                };
-            }
-            if (method === "plugin/read")
-            {
-                return {
-                    plugin: {
-                        marketplaceName: "local",
-                        marketplacePath: "/market/local",
-                        summary: { id: "sample", name: "sample", installed: true, enabled: true },
-                        shareUrl: null,
-                        description: null,
-                        skills: [],
-                        hooks: [],
-                        apps: [],
-                        appTemplates: [],
-                        mcpServers: ["plugin-server"],
-                        scheduledTasks: null,
-                    },
-                };
-            }
             throw new Error(`unexpected method: ${method}`);
         });
         const client = new CodexContextCatalogClient({ createClient: () => mock });
 
-        const snapshot = await client.readMcpManagementSnapshot({ cwd: "/repo", threadId: "thread-1" });
+        const snapshot = await client.readMcpManagementSnapshot({ cwd: "/repo" });
 
         expect(snapshot.servers).toEqual([{
             name: "plain",
@@ -970,15 +933,47 @@ describe("CodexContextCatalogClient", () =>
             authStatus: "oAuth",
             toolCount: 1,
         }]);
-        expect(snapshot.pluginDetails.map((plugin) => plugin.mcpServers)).toEqual([["plugin-server"]]);
         expect(mock.requests.find(({ method }) => method === "config/read")?.params).toEqual({
             includeLayers: true,
             cwd: "/repo",
         });
-        expect(mock.requests.find(({ method }) => method === "plugin/read")?.params).toEqual({
-            marketplacePath: "/market/local",
-            pluginName: "sample",
+        expect(mock.requests.find(({ method }) => method === "mcpServerStatus/list")?.params).toEqual({
+            limit: 100,
+            detail: "toolsAndAuthOnly",
         });
+        expect(mock.requests.some(({ method }) => method.startsWith("plugin/"))).toBe(false);
+    });
+
+    it("keeps MCP configuration when status is temporarily unavailable", async () =>
+    {
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "config/read")
+            {
+                return {
+                    config: {
+                        mcp_servers: {
+                            local: { command: "local-mcp" },
+                        },
+                    },
+                    origins: {},
+                    layers: null,
+                };
+            }
+            if (method === "mcpServerStatus/list")
+            {
+                throw new Error("management data is still starting");
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const snapshot = await client.readMcpManagementSnapshot({ cwd: "/repo" });
+
+        expect(snapshot.config.config.mcp_servers).toEqual({
+            local: { command: "local-mcp" },
+        });
+        expect(snapshot.servers).toEqual([]);
     });
 
     it("auto-pages apps and filters inaccessible or disabled entries", async () =>
@@ -1125,6 +1120,38 @@ describe("CodexContextCatalogClient", () =>
         ]);
         expect(JSON.stringify(result)).not.toContain("private");
         expect(JSON.stringify(result)).not.toContain("secret://");
+    });
+
+    it("coalesces identical in-flight MCP status requests", async () =>
+    {
+        let resolveStatus: ((value: unknown) => void) | undefined;
+        const statusResponse = new Promise<unknown>((resolve) =>
+        {
+            resolveStatus = resolve;
+        });
+        const mock = new CatalogMockClient((method) =>
+        {
+            if (method === "mcpServerStatus/list")
+            {
+                return statusResponse;
+            }
+            throw new Error(`unexpected method: ${method}`);
+        });
+        const client = new CodexContextCatalogClient({ createClient: () => mock });
+
+        const first = client.listMcpServerStatus({ pageSize: 100 });
+        const second = client.listMcpServerStatus({ pageSize: 100 });
+
+        await vi.waitFor(() =>
+        {
+            expect(mock.requests.filter(({ method }) => method === "mcpServerStatus/list")).toHaveLength(1);
+        });
+        resolveStatus?.({ data: [mcpStatus("plugin-server")], nextCursor: null });
+
+        await expect(Promise.all([first, second])).resolves.toEqual([
+            [expect.objectContaining({ name: "plugin-server" })],
+            [expect.objectContaining({ name: "plugin-server" })],
+        ]);
     });
 
     it("auto-pages MCP server status and advances cursors", async () =>

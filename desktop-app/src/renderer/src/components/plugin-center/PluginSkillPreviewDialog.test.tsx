@@ -112,6 +112,18 @@ describe('PluginSkillPreviewDialog', () => {
     expect(markdown).toBe('Use short sentences.')
   })
 
+  it('uses the same fallback logo as skill cards without rendering the skill type pill', async () => {
+    await renderDialog(resourceState('loading'))
+
+    const dialog = document.body.querySelector('[data-slot="plugin-skill-preview-dialog"]')
+    const typePill = [...(dialog?.querySelectorAll('span') ?? [])].find(
+      (element) => element.textContent === '技能'
+    )
+
+    expect(dialog?.querySelector('[data-slot="plugin-detail-skill-icon"]')).not.toBeNull()
+    expect(typePill).toBeUndefined()
+  })
+
   it('keeps the raw markdown available for copy', async () => {
     const writeText = vi.fn(async () => undefined)
     Object.assign(navigator, { clipboard: { writeText } })
@@ -209,6 +221,44 @@ describe('PluginSkillPreviewDialog', () => {
     })
 
     expect(onTrySkill).not.toHaveBeenCalled()
+  })
+
+  it('offers to install the owning plugin for an uninstalled skill', async () => {
+    const onInstall = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <PluginSkillPreviewDialog
+          skill={{ ...skill, enabled: false, canToggle: false }}
+          open
+          state={resourceState('ready', {
+            version: PLUGIN_CENTER_API_VERSION,
+            status: 'ready',
+            skill: skillRef,
+            contents: '# Writer'
+          })}
+          pending={false}
+          onOpenChange={() => undefined}
+          onToggle={() => undefined}
+          onTrySkill={() => undefined}
+          onOpenLocalPath={() => undefined}
+          onRetry={() => undefined}
+          installAction={{ pending: false, onInstall }}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      buttonWithText('安装所属插件')?.click()
+    })
+
+    expect(onInstall).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain('安装所属插件后，即可启用并试用此技能。')
   })
 
   it('renders loading and missing states', async () => {

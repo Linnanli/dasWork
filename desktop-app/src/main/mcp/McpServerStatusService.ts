@@ -32,7 +32,7 @@ export class McpServerStatusService {
       await providerList.call(this.dependencies.provider, {
         ...(input.threadId ? { threadId: input.threadId } : {}),
         detail: 'toolsAndAuthOnly',
-        pageSize: 200
+        pageSize: 100
       })
     )
 

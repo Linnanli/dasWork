@@ -5,11 +5,14 @@ import {
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetRecommendedSkillsRequestSchema,
+  pluginCenterGetRecommendedSkillsResultSchema,
   pluginCenterGetSkillContentsRequestSchema,
   pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterInstallPluginRequestSchema,
+  pluginCenterInstallRecommendedSkillRequestSchema,
   pluginCenterMutationResultSchema,
   pluginCenterRemoveMcpServerRequestSchema,
   pluginCenterSetAppEnabledRequestSchema,
@@ -19,6 +22,7 @@ import {
   pluginCenterSnapshotRequestSchema,
   pluginCenterSnapshotResultSchema,
   pluginCenterUninstallPluginRequestSchema,
+  pluginCenterUninstallSkillRequestSchema,
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcChannels,
   type DesktopPluginCenterApi,
@@ -55,6 +59,13 @@ export function createPluginCenterBridge(invoke: Invoke): DesktopPluginCenterApi
         pluginCenterIpcChannels.getSkillContents,
         pluginCenterGetSkillContentsRequestSchema.parse(input, { jitless: true })
       ).then((result) => pluginCenterGetSkillContentsResultSchema.parse(result, { jitless: true })),
+    getRecommendedSkills: (input) =>
+      invoke(
+        pluginCenterIpcChannels.getRecommendedSkills,
+        pluginCenterGetRecommendedSkillsRequestSchema.parse(input, { jitless: true })
+      ).then((result) =>
+        pluginCenterGetRecommendedSkillsResultSchema.parse(result, { jitless: true })
+      ),
     addMarketplace: (input) =>
       invoke(
         pluginCenterIpcChannels.addMarketplace,
@@ -67,11 +78,25 @@ export function createPluginCenterBridge(invoke: Invoke): DesktopPluginCenterApi
         pluginCenterInstallPluginRequestSchema,
         input
       ),
+    installRecommendedSkill: (input) =>
+      mutation(
+        invoke,
+        pluginCenterIpcChannels.installRecommendedSkill,
+        pluginCenterInstallRecommendedSkillRequestSchema,
+        input
+      ),
     uninstallPlugin: (input) =>
       mutation(
         invoke,
         pluginCenterIpcChannels.uninstallPlugin,
         pluginCenterUninstallPluginRequestSchema,
+        input
+      ),
+    uninstallSkill: (input) =>
+      mutation(
+        invoke,
+        pluginCenterIpcChannels.uninstallSkill,
+        pluginCenterUninstallSkillRequestSchema,
         input
       ),
     setPluginEnabled: (input) =>

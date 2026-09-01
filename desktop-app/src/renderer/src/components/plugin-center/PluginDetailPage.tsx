@@ -6,9 +6,12 @@ import {
   ExternalLinkIcon,
   LockKeyholeIcon,
   Loader2Icon,
+  MessageSquareIcon,
+  MoreHorizontalIcon,
   PuzzleIcon,
   ServerIcon,
-  SettingsIcon
+  SettingsIcon,
+  Trash2Icon
 } from 'lucide-react'
 
 import type {
@@ -29,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils'
 import { OptimisticSkillSwitch } from './OptimisticSkillSwitch'
 import { PluginImage } from './PluginImage'
+import { PluginSkillCard } from './PluginSkillCard'
 
 type PluginDetailSkill = PluginCenterPluginDetail['skills'][number]
 type PluginDetailApp = PluginCenterPluginDetail['apps'][number]
@@ -49,6 +53,7 @@ export function PluginDetailPage({
   onSkillToggle,
   onUninstall,
   onActivatePrompt,
+  onTry,
   onConnectApp,
   onReconnectApp,
   onDisconnectApp,
@@ -69,6 +74,7 @@ export function PluginDetailPage({
   onSkillToggle: (skill: PluginDetailSkill, enabled: boolean) => Promise<boolean>
   onUninstall: (plugin: PluginCenterPlugin) => void
   onActivatePrompt: (prompt: string) => void
+  onTry: () => void
   onConnectApp: (app: PluginDetailApp) => void
   onReconnectApp: (app: PluginDetailApp) => void
   onDisconnectApp: (app: PluginDetailApp) => void
@@ -102,6 +108,7 @@ export function PluginDetailPage({
           pending={pending}
           onInstall={onInstall}
           onToggle={onToggle}
+          onTry={onTry}
           onUninstall={onUninstall}
         />
       </section>
@@ -230,12 +237,14 @@ function PluginActions({
   pending,
   onInstall,
   onToggle,
+  onTry,
   onUninstall
 }: {
   plugin: PluginCenterPlugin
   pending: boolean
   onInstall: (plugin: PluginCenterPlugin) => void
   onToggle: (plugin: PluginCenterPlugin, enabled: boolean) => void
+  onTry: () => void
   onUninstall: (plugin: PluginCenterPlugin) => void
 }): React.JSX.Element {
   if (!plugin.installed) {
@@ -252,25 +261,58 @@ function PluginActions({
       </Button>
     )
   }
+
+  const actionDisabled = pending || !plugin.enabled
   return (
     <div className="flex flex-wrap gap-2 sm:justify-end">
+      {!plugin.enabled && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending || !plugin.canToggle}
+          title={plugin.restriction?.message}
+          onClick={() => onToggle(plugin, true)}
+        >
+          {pending && <Loader2Icon className="size-4 animate-spin" />}
+          启用
+        </Button>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={pending}
+            aria-label="更多插件操作"
+            title="更多操作"
+          >
+            <MoreHorizontalIcon className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+            disabled={!plugin.canUninstall}
+            onSelect={() => onUninstall(plugin)}
+          >
+            <Trash2Icon className="size-4" />
+            卸载
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Button
         type="button"
-        variant="outline"
-        disabled={pending || !plugin.canToggle}
-        title={plugin.restriction?.message}
-        onClick={() => onToggle(plugin, !plugin.enabled)}
+        disabled={actionDisabled}
+        title={!plugin.enabled ? '请先启用插件' : undefined}
+        onClick={onTry}
       >
-        {pending && <Loader2Icon className="size-4 animate-spin" />}
-        {plugin.enabled ? '停用' : '启用'}
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={pending || !plugin.canUninstall}
-        onClick={() => onUninstall(plugin)}
-      >
-        卸载
+        {pending ? (
+          <Loader2Icon className="size-4 animate-spin" />
+        ) : (
+          <MessageSquareIcon className="size-4" />
+        )}
+        立即试用
       </Button>
     </div>
   )
@@ -393,33 +435,17 @@ function Includes({
             getItemKey={(skill) => skill.id}
             getItemPreview={(skill) => skill.displayName ?? skill.name}
             renderItem={(skill) => (
-              <PreviewableCapabilityRow
+              <PluginSkillCard
                 dataSlot="plugin-detail-skill-row"
                 ariaLabel={`查看技能 ${skill.displayName ?? skill.name}`}
-                onOpen={() => onOpenSkill(skill)}
-                icon={
-                  <PluginImage
-                    icon={skill.icon}
-                    title={skill.displayName ?? skill.name}
-                    fallback={<SkillCubeIcon />}
-                    className="size-8 shrink-0 rounded-none border-0 bg-transparent object-contain"
-                  />
-                }
                 title={skill.displayName ?? skill.name}
                 description={skill.description}
-                actions={
-                  <div onClick={stopCapabilityPreview} onKeyDown={stopCapabilityPreview}>
-                    <OptimisticSkillSwitch
-                      enabled={skill.enabled}
-                      disabled={pendingSkillId === skill.id || !skill.canToggle}
-                      getAriaLabel={(enabled) =>
-                        `${skill.displayName ?? skill.name} ${enabled ? '停用' : '启用'}`
-                      }
-                      title={skill.canToggle ? undefined : '请先安装并启用所属插件'}
-                      onToggle={(enabled) => onSkillToggle(skill, enabled)}
-                    />
-                  </div>
-                }
+                icon={skill.icon}
+                enabled={skill.enabled}
+                canToggle={skill.canToggle}
+                pending={pendingSkillId === skill.id}
+                onOpen={() => onOpenSkill(skill)}
+                onToggle={(enabled) => onSkillToggle(skill, enabled)}
               />
             )}
           />
@@ -751,47 +777,6 @@ function ExpandableIncludedList<T>({
   )
 }
 
-function PreviewableCapabilityRow({
-  dataSlot,
-  ariaLabel,
-  icon,
-  title,
-  description,
-  actions,
-  onOpen
-}: {
-  dataSlot: string
-  ariaLabel: string
-  icon: React.ReactNode
-  title: string
-  description?: string
-  actions?: React.ReactNode
-  onOpen: () => void
-}): React.JSX.Element {
-  return (
-    <div
-      data-slot={dataSlot}
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      className="group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-[var(--detail-page-inline-inset)] py-3 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
-      onKeyDown={(event) => handleCapabilityRowKeyDown(event, onOpen)}
-    >
-      {icon}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-base font-medium">{title}</div>
-        {description && (
-          <p className="line-clamp-1 text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
-        )}
-      </div>
-      {actions}
-    </div>
-  )
-}
-
 function handleCapabilityRowKeyDown(
   event: React.KeyboardEvent<HTMLElement>,
   onOpen: () => void
@@ -855,39 +840,6 @@ function ConnectedAppMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function SkillCubeIcon(): React.JSX.Element {
-  return (
-    <svg
-      data-slot="plugin-detail-skill-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className="size-6"
-    >
-      <path
-        fill="#F7D57C"
-        d="M10.56 11.133v11.939h-.035a2.318 2.318 0 0 1-1.288-.412l-4.175-2.85a2.555 2.555 0 0 1-.787-.876A2.392 2.392 0 0 1 4 17.81V7.96c0-.374.08-.725.242-1.052l6.318 4.226Z"
-      />
-      <path
-        fill="#FF8082"
-        d="M19.725 5.447A2.2 2.2 0 0 1 20 6.522v9.862c0 .409-.104.796-.313 1.163-.2.366-.48.658-.837.875l-7 4.3c-.399.243-.828.36-1.29.35V11.121l9.144-5.711.02.037Z"
-      />
-      <path
-        fill="#9279D8"
-        d="M20 16.384c0 .409-.104.796-.313 1.163-.2.366-.48.658-.837.875l-7 4.3c-.399.243-.828.36-1.29.35v-5.75l9.144-5.71c.01.01.296-.175.296-.175v4.947Z"
-      />
-      <path
-        fill="#C1ACFF"
-        d="M10.56 17.335v5.737h-.035a2.318 2.318 0 0 1-1.288-.412l-4.175-2.85a2.555 2.555 0 0 1-.787-.876A2.392 2.392 0 0 1 4 17.81v-4.84l6.56 4.366Z"
-      />
-      <path
-        fill="#FBC484"
-        d="M4.242 6.907a2.285 2.285 0 0 1 .896-.985L12.1 1.646c.4-.25.834-.37 1.3-.362.467 0 .896.132 1.287.399l4.288 2.925c.312.216.554.484.728.8l-9.143 5.712v.012L4.242 6.907Z"
-      />
-    </svg>
   )
 }
 

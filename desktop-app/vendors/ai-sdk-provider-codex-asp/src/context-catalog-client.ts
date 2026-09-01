@@ -239,7 +239,6 @@ export interface CodexMcpManagementSnapshot
 {
     config: ConfigReadResponse;
     servers: CodexMcpServerStatusSummary[];
-    pluginDetails: PluginDetail[];
 }
 
 export interface CodexSkillFileReadParams
@@ -260,6 +259,7 @@ export class CodexContextCatalogClient
 {
     private clientPromise: Promise<CodexContextCatalogJsonRpcClientLike> | undefined;
     private readonly fuzzyFileSearchSessionStops = new Set<() => Promise<void>>();
+    private readonly mcpServerStatusRequests = new Map<string, Promise<CodexMcpServerStatusSummary[]>>();
     private fuzzyFileSearchSessionSupport: "unknown" | "supported" | "unsupported" = "unknown";
 
     constructor(private readonly settings: CodexContextCatalogClientSettings = {}) {}
@@ -532,17 +532,13 @@ export class CodexContextCatalogClient
         return this.withClient((client) => this.readConfig(client, params.cwd));
     }
 
-    async readMcpManagementSnapshot(params: { cwd?: string; threadId?: string | null } = {}): Promise<CodexMcpManagementSnapshot>
+    async readMcpManagementSnapshot(params: { cwd?: string } = {}): Promise<CodexMcpManagementSnapshot>
     {
-        return this.withClient(async (client) =>
-        {
-            const [config, servers, pluginDetails] = await Promise.all([
-                this.readConfig(client, params.cwd),
-                this.listMcpServerStatusWithClient(client, stripUndefined({ threadId: params.threadId })),
-                this.readInstalledPluginDetailsWithClient(client, params.cwd),
-            ]);
-            return { config, servers, pluginDetails };
-        });
+        const [config, servers] = await Promise.all([
+            this.readConfigForManagement(params),
+            this.listMcpServerStatus().catch(() => []),
+        ]);
+        return { config, servers };
     }
 
     async installPlugin(params: CodexPluginInstallRequest): Promise<PluginInstallResponse>
@@ -669,7 +665,17 @@ export class CodexContextCatalogClient
         params: CodexMcpServerStatusListParams = {},
     ): Promise<CodexMcpServerStatusSummary[]>
     {
-        return this.withClient(async (client) =>
+        const requestKey = JSON.stringify([
+            params.threadId ?? null,
+            params.pageSize ?? 100,
+        ]);
+        const existingRequest = this.mcpServerStatusRequests.get(requestKey);
+        if (existingRequest)
+        {
+            return existingRequest;
+        }
+
+        const request = this.withClient(async (client) =>
         {
             const servers: CodexMcpServerStatusSummary[] = [];
             let cursor: string | undefined;
@@ -684,6 +690,16 @@ export class CodexContextCatalogClient
 
             return servers;
         });
+        this.mcpServerStatusRequests.set(requestKey, request);
+        const clearRequest = (): void =>
+        {
+            if (this.mcpServerStatusRequests.get(requestKey) === request)
+            {
+                this.mcpServerStatusRequests.delete(requestKey);
+            }
+        };
+        void request.then(clearRequest, clearRequest);
+        return request;
     }
 
     async createFuzzyFileSearchSession(params: {
@@ -929,25 +945,6 @@ export class CodexContextCatalogClient
             data: response.data.map(normalizeMcpServerStatus),
             nextCursor: response.nextCursor ?? undefined,
         });
-    }
-
-    private async listMcpServerStatusWithClient(
-        client: CodexContextCatalogJsonRpcClientLike,
-        params: CodexMcpServerStatusListParams = {},
-    ): Promise<CodexMcpServerStatusSummary[]>
-    {
-        const servers: CodexMcpServerStatusSummary[] = [];
-        let cursor: string | undefined;
-
-        do
-        {
-            const response = await this.requestMcpServerStatusPage(client, params, cursor);
-            servers.push(...response.data);
-            cursor = nextCursor(response.nextCursor, cursor, "mcpServerStatus/list");
-        }
-        while (cursor);
-
-        return servers;
     }
 
     private async readInstalledPluginDetailsWithClient(

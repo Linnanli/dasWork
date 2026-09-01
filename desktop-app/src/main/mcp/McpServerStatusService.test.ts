@@ -34,7 +34,7 @@ describe('McpServerStatusService', () => {
     expect(provider.listMcpServerStatus).toHaveBeenCalledWith({
       threadId: 'thread-1',
       detail: 'toolsAndAuthOnly',
-      pageSize: 200
+      pageSize: 100
     })
   })
 

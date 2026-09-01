@@ -14,9 +14,11 @@ import {
   getPluginCenterAppToolsResource,
   getPluginCenterInstalledResource,
   getPluginCenterPluginDetailResource,
+  getPluginCenterRecommendedSkillsResource,
   getPluginCenterSkillContentsResource,
   getPluginCenterSupplementalResource,
   invalidatePluginCenterAppToolsResource,
+  mergeInstalledPluginsForDisplay,
   mergePluginCatalogWithInstalled,
   prefetchPluginCenterData,
   subscribePluginCenterData
@@ -77,6 +79,33 @@ function snapshot(plugins: PluginCenterPlugin[]): PluginCenterSnapshot {
   }
 }
 
+function mcpSnapshot(
+  available: boolean,
+  options: {
+    message?: string
+    userServers?: PluginCenterSnapshot['mcp']['userServers']
+  } = {}
+): PluginCenterSnapshot {
+  return {
+    ...snapshot([]),
+    mcp: { userServers: options.userServers ?? [], pluginServers: [] },
+    capabilities: {
+      plugins: { available: true },
+      skills: { available: true },
+      apps: { available: true },
+      mcp: available
+        ? { available: true }
+        : {
+            available: false,
+            restriction: {
+              code: 'error',
+              message: options.message ?? '该数据源暂时不可用'
+            }
+          }
+    }
+  }
+}
+
 function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterApi {
   return {
     getSnapshot: vi.fn(async () => ({
@@ -106,8 +135,15 @@ function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterA
       skill: input.skill,
       contents: '# GitHub review\nUse GitHub.'
     })),
+    getRecommendedSkills: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      fetchedAt: new Date(Date.now()).toISOString(),
+      source: 'cache' as const,
+      skills: []
+    })),
     addMarketplace: vi.fn(),
     installPlugin: vi.fn(),
+    installRecommendedSkill: vi.fn(),
     uninstallPlugin: vi.fn(),
     setPluginEnabled: vi.fn(),
     setSkillEnabled: vi.fn(),
@@ -355,6 +391,26 @@ describe('pluginCenterDataResource', () => {
     } satisfies Partial<PluginCenterGetSkillContentsResult>)
   })
 
+  it('caches recommended skills for five minutes and passes force refresh through', async () => {
+    const api = createApi()
+    const resource = getPluginCenterRecommendedSkillsResource(api)
+
+    await resource.prefetch()
+    await resource.prefetch()
+    expect(api.getRecommendedSkills).toHaveBeenCalledTimes(1)
+    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      forceRefresh: false
+    })
+
+    await resource.refresh(true)
+    expect(api.getRecommendedSkills).toHaveBeenCalledTimes(2)
+    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      forceRefresh: true
+    })
+  })
+
   it('ignores an older installed-state response after invalidation starts a readback', async () => {
     const oldRequest = deferred<PluginCenterInstalledPluginsResult>()
     const readbackRequest = deferred<PluginCenterInstalledPluginsResult>()
@@ -391,10 +447,28 @@ describe('pluginCenterDataResource', () => {
     })
   })
 
+  it('lazily reads a local skill preview without inventing plugin context', async () => {
+    const api = createApi()
+    const resource = getPluginCenterSkillContentsResource(
+      api,
+      undefined,
+      { id: '/skills/writer/SKILL.md', name: 'writer' },
+      '/repo/'
+    )
+
+    await resource.prefetch()
+
+    expect(api.getSkillContents).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+    })
+  })
+
   it.each([
     ['skills', 60_001],
     ['apps', 60_001],
-    ['mcp', 30_001]
+    ['mcp', 5 * 60_000 + 1]
   ] as const)(
     'keeps stale %s data visible while refreshing after its ttl',
     async (section, ttlMs) => {
@@ -408,7 +482,7 @@ describe('pluginCenterDataResource', () => {
       vi.mocked(api.getSnapshot)
         .mockResolvedValueOnce({ version: PLUGIN_CENTER_API_VERSION, snapshot: first })
         .mockReturnValueOnce(refresh.promise)
-      const resource = getPluginCenterSupplementalResource(api, section, '/repo', 'thread-a')
+      const resource = getPluginCenterSupplementalResource(api, section, '/repo')
 
       await resource.prefetch()
       await resource.prefetch()
@@ -437,18 +511,96 @@ describe('pluginCenterDataResource', () => {
     }
   )
 
-  it('keys MCP data by thread while sharing skills and apps across threads', () => {
+  it('retries an unavailable MCP snapshot instead of caching it as an empty list', async () => {
+    const unavailable = mcpSnapshot(false)
+    const recovered = mcpSnapshot(true, {
+      userServers: [
+        {
+          id: 'local',
+          name: 'local',
+          enabled: true,
+          connected: false,
+          authStatus: 'unknown',
+          toolCount: 0,
+          origin: 'user',
+          editable: true,
+          canToggle: true,
+          transport: 'stdio',
+          command: 'local-mcp',
+          args: [],
+          env: [],
+          envVars: []
+        }
+      ]
+    })
+    const api = createApi(unavailable)
+    vi.mocked(api.getSnapshot)
+      .mockResolvedValueOnce({ version: PLUGIN_CENTER_API_VERSION, snapshot: unavailable })
+      .mockResolvedValueOnce({ version: PLUGIN_CENTER_API_VERSION, snapshot: recovered })
+    const resource = getPluginCenterSupplementalResource(api, 'mcp', '/repo')
+
+    await resource.prefetch()
+
+    expect(api.getSnapshot).toHaveBeenCalledTimes(2)
+    expect(api.getSnapshot).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sections: ['mcp'], forceRefresh: true })
+    )
+    expect(resource.getSnapshot()).toMatchObject({
+      status: 'ready',
+      error: null,
+      data: { mcp: { userServers: [{ id: 'local' }] } }
+    })
+  })
+
+  it('reports an unavailable MCP snapshot as an error instead of a valid empty list', async () => {
+    const unavailable = mcpSnapshot(false, { message: 'MCP 暂时不可用' })
+    const api = createApi(unavailable)
+    const resource = getPluginCenterSupplementalResource(api, 'mcp', '/repo')
+
+    await resource.prefetch()
+
+    expect(resource.getSnapshot()).toMatchObject({
+      data: null,
+      status: 'error',
+      error: 'MCP 暂时不可用'
+    })
+  })
+
+  it('shares supplemental data by cwd without a thread-scoped MCP cache', async () => {
     const api = createApi()
 
-    expect(getPluginCenterSupplementalResource(api, 'skills', '/repo', 'thread-a')).toBe(
-      getPluginCenterSupplementalResource(api, 'skills', '/repo', 'thread-b')
-    )
-    expect(getPluginCenterSupplementalResource(api, 'apps', '/repo', 'thread-a')).toBe(
-      getPluginCenterSupplementalResource(api, 'apps', '/repo', 'thread-b')
-    )
-    expect(getPluginCenterSupplementalResource(api, 'mcp', '/repo', 'thread-a')).not.toBe(
-      getPluginCenterSupplementalResource(api, 'mcp', '/repo', 'thread-b')
-    )
+    const resource = getPluginCenterSupplementalResource(api, 'mcp', '/repo')
+    expect(resource).toBe(getPluginCenterSupplementalResource(api, 'mcp', '/repo/'))
+
+    await resource.prefetch()
+
+    expect(api.getSnapshot).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      sections: ['mcp'],
+      includePluginDetails: false,
+      forceRefresh: false
+    })
+  })
+
+  it('uses a separate, filtered resource for managed skills', async () => {
+    const api = createApi()
+    const browseResource = getPluginCenterSupplementalResource(api, 'skills', '/repo')
+    const managedResource = getPluginCenterSupplementalResource(api, 'skills', '/repo', 'manage')
+
+    expect(managedResource).not.toBe(browseResource)
+
+    await managedResource.prefetch()
+
+    expect(api.getSnapshot).toHaveBeenCalledWith({
+      version: PLUGIN_CENTER_API_VERSION,
+      cwd: '/repo',
+      sections: ['skills'],
+      includePluginDetails: false,
+      skillListMode: 'manage',
+      forceRefresh: false
+    })
   })
 
   it('prefetches catalog and installed state together and keeps both subscribed', async () => {
@@ -551,6 +703,290 @@ describe('pluginCenterDataResource', () => {
         canToggle: false,
         canUninstall: false
       }
+    ])
+  })
+
+  it('sorts installed plugins by installation time before applying the reference grouping', () => {
+    const notion = {
+      ...githubPlugin,
+      id: 'notion@openai-curated-remote',
+      name: 'notion',
+      displayName: 'Notion',
+      marketplaceId: 'personal-marketplace',
+      marketplaceName: 'Personal marketplace',
+      installed: true,
+      enabled: true,
+      installedAt: 200
+    }
+    const atlassianRovo = {
+      ...notion,
+      id: 'atlassian-rovo@openai-curated-remote',
+      name: 'atlassian-rovo',
+      displayName: 'Atlassian Rovo',
+      installedAt: 300
+    }
+    const bundled = {
+      ...notion,
+      id: 'plugin:bundled',
+      name: 'bundled',
+      installedAt: 500,
+      marketplaceId: 'openai-bundled',
+      marketplaceName: 'openai-bundled'
+    }
+    const primaryRuntime = {
+      ...notion,
+      id: 'plugin:primary-runtime',
+      name: 'primary-runtime',
+      installedAt: 400,
+      marketplaceId: 'openai-primary-runtime',
+      marketplaceName: 'openai-primary-runtime'
+    }
+    const adminDisabled = {
+      ...notion,
+      id: 'plugin:admin-disabled',
+      name: 'admin-disabled',
+      installedAt: 600,
+      restriction: {
+        code: 'policy' as const,
+        message: '此插件已被管理员禁用'
+      }
+    }
+    const installedOnly = {
+      ...notion,
+      id: 'plugin:installed-only',
+      name: 'installed-only',
+      installedAt: 100
+    }
+
+    const result = mergeInstalledPluginsForDisplay(
+      [bundled, adminDisabled, notion, atlassianRovo, primaryRuntime],
+      [atlassianRovo, bundled, adminDisabled, notion, primaryRuntime, notion, installedOnly]
+    )
+
+    expect(result).toHaveLength(6)
+    expect(result.map((plugin) => plugin.id)).toEqual([
+      'atlassian-rovo@openai-curated-remote',
+      'notion@openai-curated-remote',
+      'plugin:installed-only',
+      'plugin:bundled',
+      'plugin:primary-runtime',
+      'plugin:admin-disabled'
+    ])
+  })
+
+  it('uses installed-list order as the stable fallback when installation times tie', () => {
+    const first = {
+      ...githubPlugin,
+      id: 'plugin:first',
+      name: 'first',
+      displayName: 'First',
+      installed: true,
+      enabled: true
+    }
+    const second = {
+      ...first,
+      id: 'plugin:second',
+      name: 'second',
+      displayName: 'Second'
+    }
+    const third = {
+      ...first,
+      id: 'plugin:third',
+      name: 'third',
+      displayName: 'Third'
+    }
+
+    const result = mergeInstalledPluginsForDisplay([third, first, second], [first, second, third])
+
+    expect(result.map((plugin) => plugin.id)).toEqual([
+      'plugin:first',
+      'plugin:second',
+      'plugin:third'
+    ])
+  })
+
+  it('matches the reference installed-plugin sequence without hard-coded remote hiding', () => {
+    const installedPlugin = ({
+      id,
+      name,
+      displayName,
+      marketplaceId,
+      installedAt
+    }: {
+      id: string
+      name: string
+      displayName: string
+      marketplaceId: string
+      installedAt?: number
+    }): PluginCenterPlugin => ({
+      ...githubPlugin,
+      id,
+      name,
+      displayName,
+      marketplaceId,
+      marketplaceName: marketplaceId,
+      installed: true,
+      enabled: true,
+      ...(installedAt !== undefined ? { installedAt } : {})
+    })
+    const remoteMarketplace = 'openai-curated-remote'
+    const remote = [
+      installedPlugin({
+        id: `gmail@${remoteMarketplace}`,
+        name: 'gmail',
+        displayName: 'Gmail',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_062_387
+      }),
+      installedPlugin({
+        id: `notion@${remoteMarketplace}`,
+        name: 'notion',
+        displayName: 'Notion',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_008_087
+      }),
+      installedPlugin({
+        id: `google-calendar@${remoteMarketplace}`,
+        name: 'google-calendar',
+        displayName: 'Google Calendar',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_002_069
+      }),
+      installedPlugin({
+        id: `granola@${remoteMarketplace}`,
+        name: 'granola',
+        displayName: 'Granola',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_002_051
+      }),
+      installedPlugin({
+        id: `atlassian-rovo@${remoteMarketplace}`,
+        name: 'atlassian-rovo',
+        displayName: 'Atlassian Rovo',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_001_985
+      }),
+      installedPlugin({
+        id: `teams@${remoteMarketplace}`,
+        name: 'teams',
+        displayName: 'Teams',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_001_957
+      }),
+      installedPlugin({
+        id: `canva@${remoteMarketplace}`,
+        name: 'canva',
+        displayName: 'Canva',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_001_264
+      }),
+      installedPlugin({
+        id: `outlook-email@${remoteMarketplace}`,
+        name: 'outlook-email',
+        displayName: 'Outlook Email',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_788_001_245
+      }),
+      installedPlugin({
+        id: `google-drive@${remoteMarketplace}`,
+        name: 'google-drive',
+        displayName: 'Google Drive',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_787_722_519
+      }),
+      installedPlugin({
+        id: `codex-security@${remoteMarketplace}`,
+        name: 'codex-security',
+        displayName: 'Codex Security',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_786_528_283
+      }),
+      installedPlugin({
+        id: `slack@${remoteMarketplace}`,
+        name: 'slack',
+        displayName: 'Slack',
+        marketplaceId: remoteMarketplace,
+        installedAt: 1_782_811_708
+      })
+    ]
+    const builtIn = [
+      ['documents', 'Documents', 'openai-primary-runtime'],
+      ['pdf', 'PDF', 'openai-primary-runtime'],
+      ['spreadsheets', 'Spreadsheets', 'openai-primary-runtime'],
+      ['presentations', 'Presentations', 'openai-primary-runtime'],
+      ['template-creator', 'Template Creator', 'openai-primary-runtime'],
+      ['sites', 'Sites', 'openai-bundled'],
+      ['visualize', 'Visualize', 'openai-bundled']
+    ].map(([name, displayName, marketplaceId]) =>
+      installedPlugin({
+        id: `${name}@${marketplaceId}`,
+        name,
+        displayName,
+        marketplaceId
+      })
+    )
+    const bundledVisibilityCases = [
+      ['codex-app-tools', 'Codex App Tools', 'openai-bundled'],
+      ['browser', 'Browser', 'openai-bundled'],
+      ['chrome', 'Chrome', 'openai-bundled']
+    ].map(([name, displayName, marketplaceId]) =>
+      installedPlugin({
+        id: `${name}@${marketplaceId}`,
+        name,
+        displayName,
+        marketplaceId
+      })
+    )
+    const visibleRemote = [
+      ['github', 'GitHub'],
+      ['openai-templates', 'OpenAI Templates'],
+      ['plugin-management', 'Plugin Management']
+    ].map(([name, displayName]) =>
+      installedPlugin({
+        id: `${name}@${remoteMarketplace}`,
+        name,
+        displayName,
+        marketplaceId: remoteMarketplace
+      })
+    )
+    const catalog = [
+      ...builtIn.slice(0, 5),
+      ...bundledVisibilityCases,
+      ...builtIn.slice(5),
+      ...remote,
+      ...visibleRemote
+    ]
+
+    const result = mergeInstalledPluginsForDisplay(catalog, [
+      ...bundledVisibilityCases,
+      ...remote,
+      ...visibleRemote,
+      ...builtIn
+    ])
+
+    expect(result.map((plugin) => plugin.displayName)).toEqual([
+      'Gmail',
+      'Notion',
+      'Google Calendar',
+      'Granola',
+      'Atlassian Rovo',
+      'Teams',
+      'Canva',
+      'Outlook Email',
+      'Google Drive',
+      'Codex Security',
+      'Slack',
+      'GitHub',
+      'OpenAI Templates',
+      'Plugin Management',
+      'Browser',
+      'Documents',
+      'PDF',
+      'Spreadsheets',
+      'Presentations',
+      'Template Creator',
+      'Sites',
+      'Visualize'
     ])
   })
 })

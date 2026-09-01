@@ -54,3 +54,12 @@
 ## 工具说明
 
 assistant-ui组件可以使用assistant-ui mcp获取文档和示例信息
+
+## 参考项目分析规则
+
+- 只要任务涉及 `reference-projects/` 下的 Electron 解包项目，必须先加载项目技能 `.codex/skills/reference-electron-analysis/SKILL.md`，按其中的低 token 索引流程执行。
+- 人工使用说明见 `docs/reference-electron-analysis.md`。
+- 默认先运行完整的 `reference:chatgpt:validate`，再用 `reference:chatgpt:query` 返回不超过 8 个候选；禁止把大 bundle 或无上限的图概览直接塞进模型上下文。
+- 跨文件关系才生成最多 30 个文件的语义切片，并只在切片上使用 LSP 或 code-review-graph。
+- 图、索引、LSP 和反编译结果都只是定位工具。最终行为结论必须回查原参考文件并给出精确行号；新解包版本还要给出 `_analysis/raw/` 中排版前原包的行、列和 SHA256。
+- 新版本统一通过 `npm --prefix desktop-app run reference:chatgpt -- --force` 解包；该命令会自动保留原包文本镜像并生成索引。

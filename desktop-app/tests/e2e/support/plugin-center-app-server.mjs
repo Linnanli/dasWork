@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Test-only JSON-RPC peer. */
 
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 const statePath = process.env.DASCOWORK_E2E_PLUGIN_CENTER_STATE_PATH
@@ -10,6 +11,10 @@ const pluginListDelayMs = nonNegativeInteger(process.env.DASCOWORK_E2E_PLUGIN_CE
 const appReadUnsupported = process.env.DASCOWORK_E2E_PLUGIN_CENTER_APP_READ_UNSUPPORTED === '1'
 const extraPluginCount = nonNegativeInteger(
   process.env.DASCOWORK_E2E_PLUGIN_CENTER_EXTRA_PLUGIN_COUNT
+)
+const mcpWriteDelayMs = nonNegativeInteger(process.env.DASCOWORK_E2E_PLUGIN_CENTER_MCP_WRITE_DELAY_MS)
+let remainingMcpWriteFailures = nonNegativeInteger(
+  process.env.DASCOWORK_E2E_PLUGIN_CENTER_MCP_WRITE_FAILURES
 )
 
 if (!statePath || !rpcLogPath) {
@@ -70,7 +75,10 @@ input.on('line', (line) => {
         respond(message.id, configRead(loadState()))
         return
       case 'config/batchWrite':
-        respond(message.id, applyConfigWrite(message.params))
+        if (shouldFailMcpWrite(message.params)) {
+          throw new Error('Injected MCP write failure')
+        }
+        respondDelayed(message.id, applyConfigWrite(message.params), mcpWriteDelayMs)
         return
       case 'config/mcpServer/reload':
         respond(message.id, {})
@@ -144,10 +152,25 @@ function defaultState() {
     marketplaces: ['e2e-market'],
     mcpServers: {
       local_tools: {
-        command: 'node',
-        args: ['tools-server.js'],
+        command: 'npx',
+        args: ['-y', '@assistant-ui/mcp-docs-server'],
         env: { EXISTING_TOKEN: 'secret' },
         env_vars: ['PATH'],
+        cwd: '/tmp/e2e-plugin-center',
+        enabled: true
+      },
+      remote_tools: {
+        url: 'https://mcp.example.test/stream',
+        bearer_token_env_var: 'REMOTE_MCP_TOKEN',
+        http_headers: { Authorization: 'secret' },
+        env_http_headers: { 'X-Trace-Id': 'TRACE_ID' },
+        enabled: true
+      }
+    },
+    readonlyMcpServers: {
+      managed_tools: {
+        command: 'managed-mcp',
+        args: [],
         enabled: true
       }
     },
@@ -306,20 +329,109 @@ function installPlugin(params) {
 }
 
 function skillsList() {
+  const skills = [
+    {
+      name: 'alpha-personal',
+      path: '/tmp/e2e-plugin-center/skills/alpha-personal/SKILL.md',
+      shortDescription: 'Alpha Personal',
+      description: 'Personal E2E skill Alpha.',
+      scope: 'user',
+      enabled: true
+    },
+    {
+      name: 'beta-workspace',
+      path: '/tmp/e2e-plugin-center/.codex/skills/beta-workspace/SKILL.md',
+      shortDescription: 'Beta Workspace',
+      description: 'Workspace E2E skill Beta.',
+      scope: 'repo',
+      enabled: true
+    },
+    {
+      name: 'gamma-planner',
+      path: '/tmp/e2e-plugin-center/skills/gamma-planner/SKILL.md',
+      shortDescription: 'Gamma Planner',
+      description: 'Personal E2E skill Gamma.',
+      scope: 'user',
+      enabled: true
+    },
+    {
+      name: 'system-audit',
+      path: '/tmp/e2e-plugin-center/system-skills/system-audit/SKILL.md',
+      shortDescription: 'System Audit',
+      description: 'System E2E skill Audit.',
+      scope: 'system',
+      enabled: true
+    },
+    {
+      name: 'system-shell',
+      path: '/tmp/e2e-plugin-center/system-skills/system-shell/SKILL.md',
+      shortDescription: 'System Shell',
+      description: 'System E2E skill Shell.',
+      scope: 'system',
+      enabled: true
+    },
+    {
+      name: 'workspace-skill',
+      path: '/tmp/e2e-plugin-center/.codex/skills/workspace-skill/SKILL.md',
+      shortDescription: 'Workspace Skill',
+      description: 'Skill returned by skills/list.',
+      scope: 'repo',
+      enabled: true
+    },
+    {
+      name: 'workflows',
+      path: '/tmp/e2e-plugin-center/skills/workflows/SKILL.md',
+      shortDescription: 'Workflows',
+      description: 'Personal E2E workflows skill.',
+      scope: 'user',
+      enabled: true
+    },
+    {
+      name: 'writing',
+      path: '/tmp/e2e-plugin-center/skills/writing/SKILL.md',
+      shortDescription: 'Writing',
+      description: 'Personal E2E writing skill.',
+      scope: 'user',
+      enabled: true
+    },
+    {
+      name: 'zeta',
+      path: '/tmp/e2e-plugin-center/skills/zeta/SKILL.md',
+      shortDescription: 'Zeta',
+      description: 'Personal E2E Zeta skill.',
+      scope: 'user',
+      enabled: true
+    },
+    {
+      name: 'plugin-cache-skill',
+      path: '/tmp/e2e-plugin-center/.codex/plugins/cache/official/fixture-plugin/skills/plugin-cache-skill/SKILL.md',
+      shortDescription: 'Plugin Cache Skill',
+      description: 'A plugin-provided skill that must not appear as standalone.',
+      scope: 'user',
+      enabled: true
+    }
+  ]
+  const installedCuratedSkill = join(
+    process.env.CODEX_HOME || '/tmp',
+    'skills',
+    'e2e-writer',
+    'SKILL.md'
+  )
+  if (existsSync(installedCuratedSkill)) {
+    skills.push({
+      name: 'e2e-writer',
+      path: installedCuratedSkill,
+      shortDescription: 'E2E Curated Writer',
+      description: 'Installed directly from the offline curated fixture.',
+      scope: 'user',
+      enabled: true
+    })
+  }
   return {
     data: [
       {
         cwd: '/tmp/e2e-plugin-center',
-        skills: [
-          {
-            name: 'workspace-skill',
-            path: '/tmp/e2e-plugin-center/.codex/skills/workspace-skill/SKILL.md',
-            shortDescription: 'Workspace Skill',
-            description: 'Skill returned by skills/list.',
-            scope: 'repo',
-            enabled: true
-          }
-        ]
+        skills
       }
     ]
   }
@@ -395,7 +507,7 @@ function appsRead(params) {
 
 function mcpServerStatus(state) {
   return {
-    data: Object.keys(state.mcpServers).map((name) => ({
+    data: Object.keys({ ...state.mcpServers, ...state.readonlyMcpServers }).map((name) => ({
       name,
       serverInfo: { name, version: '1.0.0' },
       authStatus: 'unsupported',
@@ -406,10 +518,11 @@ function mcpServerStatus(state) {
 }
 
 function configRead(state) {
+  const mcpServers = { ...state.mcpServers, ...state.readonlyMcpServers }
   return {
     config: {
       apps: { 'e2e-app': { enabled: state.e2eAppEnabled } },
-      mcp_servers: state.mcpServers
+      mcp_servers: mcpServers
     },
     layers: [
       {
@@ -422,9 +535,24 @@ function configRead(state) {
       }
     ],
     origins: {
-      'apps."e2e-app".enabled': { name: { type: 'user' }, version: state.configVersion }
+      'apps."e2e-app".enabled': { name: { type: 'user' }, version: state.configVersion },
+      'mcp_servers."managed_tools"': {
+        name: { type: 'enterpriseManaged' },
+        version: state.configVersion
+      }
     }
   }
+}
+
+function shouldFailMcpWrite(params) {
+  if (remainingMcpWriteFailures <= 0) return false
+  const edits = Array.isArray(params?.edits) ? params.edits : []
+  const mutatesServer = edits.some(
+    (edit) => /^mcp_servers\.(".*"|[^.]+)$/.test(edit?.keyPath ?? '')
+  )
+  if (!mutatesServer) return false
+  remainingMcpWriteFailures -= 1
+  return true
 }
 
 function applyConfigWrite(params) {

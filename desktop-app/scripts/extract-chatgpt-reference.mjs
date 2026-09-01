@@ -17,6 +17,8 @@ import {
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 
+import { buildReferenceIndex, preserveRawAnalysisSources } from './lib/reference-analysis.mjs'
+
 const require = createRequire(import.meta.url)
 const { extractAll, listPackage } = require('@electron/asar')
 const prettier = require('prettier')
@@ -84,6 +86,8 @@ console.log('Copying external readable resources')
 const externalResources = copyExternalTextResources(resourcesPath, outputPath)
 
 if (!options.skipFormat) {
+  console.log('Preserving exact pre-format sources for line and column provenance')
+  preserveRawAnalysisSources(outputPath)
   console.log(`Beautifying extracted code with Prettier ${prettier.version}`)
   runPrettier(outputPath)
 }
@@ -100,6 +104,12 @@ writeAnalysisMetadata({
   skipFormat: options.skipFormat,
   externalResources
 })
+
+console.log('Building low-token reference index')
+const referenceIndex = buildReferenceIndex(outputPath)
+console.log(
+  `Indexed ${referenceIndex.counts.files} files, ${referenceIndex.counts.imports} imports, and ${referenceIndex.counts.signals} search signals (${referenceIndex.sourceMode})`
+)
 
 console.log(`Reference project ready: ${outputPath}`)
 
@@ -293,6 +303,8 @@ function writeAnalysisMetadata({
 - 页面代码与样式：\`webview/assets/\`
 - 外置 Skill、Plugin 和 Computer Use JavaScript：\`external/\`
 - 文件清单与版本信息：\`_analysis/\`
+- 低 token 文件、导入与搜索索引：\`_analysis/reference-index/\`
+- Prettier 之前的原包文本镜像：\`_analysis/raw/\`
 
 ## 外置可读资源
 
@@ -306,6 +318,8 @@ ${externalResourceSummary}
 
 - JavaScript/CSS/HTML/JSON 只做了 Prettier 排版，没有恢复原变量名、模块名、类型和注释。
 - 发布包没有携带 source map，因此不能可靠还原成原始源码目录。
+- 每个索引命中都记录可读文件位置、SHA256；默认解包流程还会记录 Prettier 之前原包文本的行、列和 SHA256。
+- 索引和语义切片只用于缩小候选范围，行为结论必须回查可读文件；存在 \`_analysis/raw/\` 时还必须核对原包位置。
 - \`.node\`、Mach-O、WASM、字体和图片保持二进制原样，只能另行使用对应工具分析。
 - 原生 \`codex\` 可执行文件和 \`app.asar.unpacked/\` 不在此目录中；它们不适合作为首轮 AI 业务逻辑分析输入。
 - 该目录位于仓库已忽略的 \`reference-projects/\` 下，适合本地行为分析，不应作为可构建源码或对外分发物。
@@ -315,6 +329,10 @@ ${externalResourceSummary}
 在仓库根目录运行：
 
 \`npm --prefix desktop-app run reference:chatgpt -- --force\`
+
+仅重建索引：
+
+\`npm --prefix desktop-app run reference:chatgpt:index -- --root ${outputPath}\`
 `
   writeFileSync(join(analysisPath, 'README.md'), readme)
 }

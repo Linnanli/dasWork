@@ -4,13 +4,15 @@ import {
   FolderOpenIcon,
   Loader2Icon,
   MoreHorizontalIcon,
-  RefreshCwIcon
+  RefreshCwIcon,
+  Trash2Icon
 } from 'lucide-react'
 import { Streamdown } from 'streamdown'
 
 import type {
   PluginCenterGetSkillContentsResult,
-  PluginCenterPluginDetail
+  PluginCenterPluginDetail,
+  PluginCenterSkill
 } from '../../../../shared/pluginCenterApi'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,15 +25,24 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CapabilityPill, PluginCapabilityDialog } from './PluginCapabilityDialog'
+import { PluginDetailSkillIcon } from './PluginDetailSkillIcon'
 import { PluginImage } from './PluginImage'
 import type { PluginCenterResourceSnapshot } from './pluginCenterDataResource'
 import { cleanSkillMarkdown } from './pluginSkillPreviewMarkdown'
 
 type PluginDetailSkill = PluginCenterPluginDetail['skills'][number]
+type PluginSkillPreviewSkill = Pick<
+  PluginCenterSkill,
+  'id' | 'name' | 'displayName' | 'description' | 'enabled' | 'canToggle'
+> & {
+  icon?: PluginDetailSkill['icon']
+  iconSmall?: PluginCenterSkill['iconSmall']
+  iconLarge?: PluginCenterSkill['iconLarge']
+}
 export type PluginSkillPreviewContentsResult = PluginCenterGetSkillContentsResult
 
 type PluginSkillPreviewDialogProps = {
-  skill: PluginDetailSkill
+  skill: PluginSkillPreviewSkill
   open: boolean
   state: PluginCenterResourceSnapshot<PluginSkillPreviewContentsResult>
   pending: boolean
@@ -40,6 +51,14 @@ type PluginSkillPreviewDialogProps = {
   onTrySkill: () => void
   onOpenLocalPath: (path: string) => void
   onRetry: () => void
+  installAction?: {
+    pending: boolean
+    onInstall: () => void
+  }
+  uninstallAction?: {
+    pending: boolean
+    onUninstall: () => void
+  }
 }
 
 export function PluginSkillPreviewDialog({
@@ -51,7 +70,9 @@ export function PluginSkillPreviewDialog({
   onToggle,
   onTrySkill,
   onOpenLocalPath,
-  onRetry
+  onRetry,
+  installAction,
+  uninstallAction
 }: PluginSkillPreviewDialogProps): React.JSX.Element {
   const title = skill.displayName ?? skill.name
   const result = state.data
@@ -68,14 +89,13 @@ export function PluginSkillPreviewDialog({
       dataSlot="plugin-skill-preview-dialog"
       icon={
         <PluginImage
-          icon={skill.icon}
+          icon={skill.iconLarge ?? skill.iconSmall ?? skill.icon}
           title={title}
-          fallback={<span className="text-sm">{title.slice(0, 1)}</span>}
+          fallback={<PluginDetailSkillIcon />}
           className="size-12 shrink-0 rounded-xl border bg-transparent object-contain"
         />
       }
       title={title}
-      typeLabel="技能"
       description={skill.description ?? '此技能未提供简短说明。'}
       status={
         !skill.enabled ? <CapabilityPill className="text-amber-700">停用</CapabilityPill> : null
@@ -94,15 +114,29 @@ export function PluginSkillPreviewDialog({
             markdown={readyResult?.contents}
             localPath={readyResult?.localPath}
             onOpenLocalPath={onOpenLocalPath}
+            uninstallAction={uninstallAction}
           />
         </div>
       }
       footer={
         <>
           <p className="text-xs text-muted-foreground">
-            {footerDescription(canTry, Boolean(trustedLocalPath), tryDisabledReason)}
+            {footerDescription(
+              canTry,
+              Boolean(trustedLocalPath),
+              tryDisabledReason,
+              Boolean(installAction)
+            )}
           </p>
-          {trustedLocalPath ? (
+          {installAction ? (
+            <Button
+              type="button"
+              disabled={installAction.pending}
+              onClick={installAction.onInstall}
+            >
+              安装所属插件
+            </Button>
+          ) : trustedLocalPath ? (
             <TooltipHint enabled={!canTry} message={tryDisabledReason}>
               <Button type="button" disabled={!canTry} onClick={onTrySkill}>
                 立即试用
@@ -124,9 +158,11 @@ export function PluginSkillPreviewDialog({
 function footerDescription(
   canTry: boolean,
   hasTrustedLocalPath: boolean,
-  disabledReason: string
+  disabledReason: string,
+  canInstallOwningPlugin: boolean
 ): string {
   if (canTry) return '会新建对话并预填技能引用，不会自动发送。'
+  if (canInstallOwningPlugin) return '安装所属插件后，即可启用并试用此技能。'
   if (!hasTrustedLocalPath) return '远程或未安装技能只能预览说明，安装到本地后才能试用。'
   return disabledReason
 }
@@ -163,11 +199,16 @@ function SkillPreviewBody({
 function SkillActionsMenu({
   markdown,
   localPath,
-  onOpenLocalPath
+  onOpenLocalPath,
+  uninstallAction
 }: {
   markdown?: string
   localPath?: string
   onOpenLocalPath: (path: string) => void
+  uninstallAction?: {
+    pending: boolean
+    onUninstall: () => void
+  }
 }): React.JSX.Element {
   async function copyMarkdown(): Promise<void> {
     if (!markdown || !navigator.clipboard?.writeText) return
@@ -196,6 +237,19 @@ function SkillActionsMenu({
           <FolderOpenIcon className="size-4" />
           打开本地文件
         </DropdownMenuItem>
+        {uninstallAction && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              disabled={uninstallAction.pending}
+              onSelect={uninstallAction.onUninstall}
+            >
+              <Trash2Icon className="size-4" />
+              卸载技能
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

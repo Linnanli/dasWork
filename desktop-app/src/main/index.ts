@@ -66,6 +66,7 @@ import { validateQueuedLocalAttachments } from './followUps/validateQueuedLocalA
 import { McpServerStatusService } from './mcp/McpServerStatusService'
 import { createListMcpServersHandler } from './mcp/mcpServerStatusIpc'
 import { PluginCenterService } from './pluginCenter/PluginCenterService'
+import { RecommendedSkillsService } from './pluginCenter/RecommendedSkillsService'
 import { createPluginCenterIpcHandlers } from './pluginCenter/registerPluginCenterIpc'
 import type { ProjectApiService } from './projects/ProjectApiService'
 import type { ProjectService } from './projects/ProjectService'
@@ -187,8 +188,9 @@ function createCodexRuntime(
       rightWorkspaceIpc?.terminalManager.closeForConversation(conversationId) ?? Promise.resolve()
   })
   const liveAgents = new LiveAgentRegistry(threadClient)
+  const codexHome = resolveCodexHome(launch.env)
   const agentRoles = new LocalAgentRoleCatalog({
-    codexHome: resolveCodexHome(launch.env),
+    codexHome,
     projectService: projectRuntimeServices.projectService,
     warn: (message) => console.warn(`[agent-role-catalog] ${message}`)
   })
@@ -207,6 +209,8 @@ function createCodexRuntime(
   pluginCenterService = new PluginCenterService({
     provider: composerContextClient,
     defaultCwd: () => undefined,
+    codexHome,
+    recommendedSkills: new RecommendedSkillsService({ codexHome }),
     logger: (event, details) =>
       console.info(`[plugin-center:perf:${event}]`, { atMs: Date.now(), ...details })
   })

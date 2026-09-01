@@ -5,11 +5,14 @@ import {
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetRecommendedSkillsRequestSchema,
+  pluginCenterGetRecommendedSkillsResultSchema,
   pluginCenterGetSkillContentsRequestSchema,
   pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterInstallPluginRequestSchema,
+  pluginCenterInstallRecommendedSkillRequestSchema,
   pluginCenterMutationResultSchema,
   pluginCenterRemoveMcpServerRequestSchema,
   pluginCenterSetAppEnabledRequestSchema,
@@ -19,12 +22,11 @@ import {
   pluginCenterSnapshotRequestSchema,
   pluginCenterSnapshotResultSchema,
   pluginCenterUninstallPluginRequestSchema,
+  pluginCenterUninstallSkillRequestSchema,
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcChannels,
   type PluginCenterGetAppToolsRequest,
   type PluginCenterGetAppToolsResult,
-  type PluginCenterGetSkillContentsRequest,
-  type PluginCenterGetSkillContentsResult,
   type PluginCenterInstalledPluginsRequest,
   type PluginCenterInstalledPluginsResult
 } from '../../shared/pluginCenterApi'
@@ -40,9 +42,12 @@ type PluginCenterServiceLike = Pick<
   | 'getSnapshot'
   | 'getPluginDetail'
   | 'getSkillContents'
+  | 'getRecommendedSkills'
   | 'addMarketplace'
   | 'installPlugin'
+  | 'installRecommendedSkill'
   | 'uninstallPlugin'
+  | 'uninstallSkill'
   | 'setPluginEnabled'
   | 'setSkillEnabled'
   | 'setAppEnabled'
@@ -54,9 +59,6 @@ type PluginCenterServiceLike = Pick<
     input: PluginCenterInstalledPluginsRequest
   ): Promise<PluginCenterInstalledPluginsResult>
   getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
-  getSkillContents(
-    input: PluginCenterGetSkillContentsRequest
-  ): Promise<PluginCenterGetSkillContentsResult>
 }
 
 export function createPluginCenterIpcHandlers(
@@ -104,6 +106,16 @@ export function createPluginCenterIpcHandlers(
         SNAPSHOT_ERROR_MESSAGE
       )
     },
+    [pluginCenterIpcChannels.getRecommendedSkills]: async (_event, payload) => {
+      const input = pluginCenterGetRecommendedSkillsRequestSchema.parse(payload)
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterGetRecommendedSkillsResultSchema.parse(
+            await service.getRecommendedSkills(input)
+          ),
+        SNAPSHOT_ERROR_MESSAGE
+      )
+    },
     [pluginCenterIpcChannels.addMarketplace]: async (_event, payload) => {
       const input = pluginCenterAddMarketplaceRequestSchema.parse(payload)
       return safePluginCenterCall(
@@ -119,10 +131,25 @@ export function createPluginCenterIpcHandlers(
         MUTATION_ERROR_MESSAGE
       )
     },
+    [pluginCenterIpcChannels.installRecommendedSkill]: async (_event, payload) => {
+      const input = pluginCenterInstallRecommendedSkillRequestSchema.parse(payload)
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterMutationResultSchema.parse(await service.installRecommendedSkill(input)),
+        MUTATION_ERROR_MESSAGE
+      )
+    },
     [pluginCenterIpcChannels.uninstallPlugin]: async (_event, payload) => {
       const input = pluginCenterUninstallPluginRequestSchema.parse(payload)
       return safePluginCenterCall(
         async () => pluginCenterMutationResultSchema.parse(await service.uninstallPlugin(input)),
+        MUTATION_ERROR_MESSAGE
+      )
+    },
+    [pluginCenterIpcChannels.uninstallSkill]: async (_event, payload) => {
+      const input = pluginCenterUninstallSkillRequestSchema.parse(payload)
+      return safePluginCenterCall(
+        async () => pluginCenterMutationResultSchema.parse(await service.uninstallSkill(input)),
         MUTATION_ERROR_MESSAGE
       )
     },

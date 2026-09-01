@@ -7,11 +7,13 @@ import {
   pluginCenterGetAppToolsResultSchema,
   pluginCenterGetPluginDetailRequestSchema,
   pluginCenterGetPluginDetailResultSchema,
+  pluginCenterGetRecommendedSkillsResultSchema,
   pluginCenterGetSkillContentsRequestSchema,
   pluginCenterGetSkillContentsResultSchema,
   pluginCenterInstalledPluginsRequestSchema,
   pluginCenterInstalledPluginsResultSchema,
   pluginCenterMutationResultSchema,
+  pluginCenterInstallRecommendedSkillRequestSchema,
   pluginCenterSetAppEnabledRequestSchema,
   pluginCenterSnapshotRequestSchema,
   pluginCenterSnapshotSchema,
@@ -24,11 +26,13 @@ describe('plugin center API schemas', () => {
       pluginCenterSnapshotRequestSchema.parse({
         version: PLUGIN_CENTER_API_VERSION,
         sections: ['plugins', 'plugins', 'skills'],
-        includePluginDetails: false
+        includePluginDetails: false,
+        skillListMode: 'manage'
       })
     ).toMatchObject({
       sections: ['plugins', 'skills'],
-      includePluginDetails: false
+      includePluginDetails: false,
+      skillListMode: 'manage'
     })
   })
 
@@ -117,8 +121,6 @@ describe('plugin center API schemas', () => {
             toolCount: 12,
             origin: 'plugin',
             editable: false,
-            pluginId: 'plugin:github',
-            pluginDisplayName: 'GitHub',
             transport: 'streamable-http'
           }
         ]
@@ -194,6 +196,39 @@ describe('plugin center API schemas', () => {
         generatedAt: '2026-08-24T00:00:00.000Z',
         plugins: [],
         configPath: '/Users/me/.codex/config.toml'
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts curated skills but rejects traversal and unexpected implementation details', () => {
+    expect(
+      pluginCenterGetRecommendedSkillsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        fetchedAt: '2026-08-30T00:00:00.000Z',
+        source: 'cache',
+        skills: [
+          {
+            id: 'writer',
+            name: 'Writer',
+            description: 'Write docs',
+            shortDescription: 'Write clear docs',
+            repoPath: 'skills/.curated/writer'
+          }
+        ]
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterInstallRecommendedSkillRequestSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        id: 'writer',
+        repoPath: '../private/skill'
+      }).success
+    ).toBe(false)
+    expect(
+      pluginCenterInstallRecommendedSkillRequestSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        id: 'writer',
+        repoPath: '/skills/.curated/writer'
       }).success
     ).toBe(false)
   })
@@ -510,7 +545,7 @@ describe('plugin center API schemas', () => {
     ).toBe(false)
   })
 
-  it('loads skill contents through plugin and skill identity only', () => {
+  it('loads skill contents through server-owned plugin or local skill identity only', () => {
     expect(
       pluginCenterGetSkillContentsRequestSchema.parse({
         version: PLUGIN_CENTER_API_VERSION,
@@ -525,6 +560,15 @@ describe('plugin center API schemas', () => {
       plugin: { id: 'github@official', marketplaceId: 'official' },
       skill: { id: 'plugin:github@official:review', name: 'review' },
       forceRefresh: true
+    })
+    expect(
+      pluginCenterGetSkillContentsRequestSchema.parse({
+        version: PLUGIN_CENTER_API_VERSION,
+        skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+      })
+    ).toEqual({
+      version: PLUGIN_CENTER_API_VERSION,
+      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
     })
     expect(
       pluginCenterGetSkillContentsRequestSchema.safeParse({
@@ -550,6 +594,15 @@ describe('plugin center API schemas', () => {
         skill: { id: 'plugin:github@official:review', name: 'review' },
         contents: '# Review\nUse carefully.',
         localPath: '/trusted/SKILL.md'
+      }).success
+    ).toBe(true)
+    expect(
+      pluginCenterGetSkillContentsResultSchema.safeParse({
+        version: PLUGIN_CENTER_API_VERSION,
+        status: 'ready',
+        skill: { id: '/skills/writer/SKILL.md', name: 'writer' },
+        contents: '# Writer',
+        localPath: '/skills/writer/SKILL.md'
       }).success
     ).toBe(true)
     expect(
