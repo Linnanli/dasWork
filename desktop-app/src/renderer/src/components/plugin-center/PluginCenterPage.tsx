@@ -170,13 +170,6 @@ const FEATURED_CATEGORY_ID = '__featured__'
 const CATEGORY_PREVIEW_LIMIT = 6
 const MORE_PLUGIN_PREVIEW_LIMIT = 3
 
-function logPluginCenterPerformance(
-  event: string,
-  details: Record<string, string | number | boolean>
-): void {
-  console.info(`[plugin-center:perf:${event}]`, { atMs: Date.now(), ...details })
-}
-
 const emptySnapshot: PluginCenterSnapshot = {
   version: PLUGIN_CENTER_API_VERSION,
   generatedAt: new Date(0).toISOString(),
@@ -1000,34 +993,6 @@ export function PluginCenterPage({
       threadId
     ]
   )
-
-  const rendererStartedAt = React.useRef<number | null>(null)
-  const contentReadyLogged = React.useRef(false)
-  React.useEffect(() => {
-    rendererStartedAt.current = performance.now()
-    contentReadyLogged.current = false
-    logPluginCenterPerformance('renderer-start', {
-      sections: usesPluginResources ? 'catalog,installed' : snapshotSections.join(','),
-      includePluginDetails: false,
-      forceRefresh: false,
-      hasCwd: Boolean(cwd),
-      hasThreadId: Boolean(threadId)
-    })
-  }, [cwd, snapshotSections, threadId, usesPluginResources])
-  React.useEffect(() => {
-    if (loading || contentReadyLogged.current) return
-    contentReadyLogged.current = true
-    const startedAt = rendererStartedAt.current ?? performance.now()
-    logPluginCenterPerformance('renderer-content-ready', {
-      durationMs: Math.round(performance.now() - startedAt),
-      pluginCount: snapshot.plugins.length,
-      skillCount: snapshot.skills.length,
-      appCount: snapshot.apps.length,
-      mcpServerCount: snapshot.mcp.userServers.length + snapshot.mcp.pluginServers.length,
-      hasCwd: Boolean(cwd),
-      hasThreadId: Boolean(threadId)
-    })
-  }, [cwd, loading, snapshot, threadId])
 
   const runMutation = React.useCallback(
     async (

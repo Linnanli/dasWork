@@ -210,9 +210,7 @@ function createCodexRuntime(
     provider: composerContextClient,
     defaultCwd: () => undefined,
     codexHome,
-    recommendedSkills: new RecommendedSkillsService({ codexHome }),
-    logger: (event, details) =>
-      console.info(`[plugin-center:perf:${event}]`, { atMs: Date.now(), ...details })
+    recommendedSkills: new RecommendedSkillsService({ codexHome })
   })
   composerContextCatalog = new ComposerContextCatalogService({
     provider: composerContextClient,

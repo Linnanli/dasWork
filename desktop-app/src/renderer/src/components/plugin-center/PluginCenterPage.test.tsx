@@ -2,7 +2,7 @@
 
 import { act, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   DesktopPluginCenterApi,
@@ -30,10 +30,6 @@ function deferred<T>(): Deferred<T> {
   })
   return { promise, resolve, reject }
 }
-
-beforeEach(() => {
-  vi.spyOn(console, 'info').mockImplementation(() => undefined)
-})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -557,14 +553,6 @@ describe('PluginCenterPage', () => {
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('GitHub')
     expect(container.textContent).toContain('精选')
-    expect(console.info).toHaveBeenCalledWith(
-      '[plugin-center:perf:renderer-content-ready]',
-      expect.objectContaining({
-        atMs: expect.any(Number),
-        pluginCount: 1
-      })
-    )
-
     const installButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === '安装'
     )

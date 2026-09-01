@@ -26,21 +26,7 @@ const MAX_APP_TOOLS_RESOURCES = 40
 const MAX_SKILL_CONTENTS_RESOURCES = 40
 
 type ResourceStatus = 'idle' | 'loading' | 'ready' | 'error'
-type ResourceKind =
-  | 'catalog'
-  | 'installed'
-  | 'detail'
-  | 'app-tools'
-  | 'skill-contents'
-  | 'recommended-skills'
-  | PluginCenterSupplementalSection
 export type PluginCenterSupplementalSection = Exclude<PluginCenterSnapshotSection, 'plugins'>
-type ResourceLogEvent =
-  | 'prefetch-start'
-  | 'prefetch-complete'
-  | 'cache-hit-fresh'
-  | 'cache-hit-stale'
-  | 'inflight-joined'
 
 export type PluginCenterResourceSnapshot<T> = {
   data: T | null
@@ -110,21 +96,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '读取插件中心失败'
 }
 
-function logResourceEvent(
-  event: ResourceLogEvent,
-  details: {
-    kind: ResourceKind
-    cacheStatus?: 'fresh' | 'stale' | 'miss'
-    durationMs?: number
-    hasCwd?: boolean
-  }
-): void {
-  console.info(`[plugin-center:perf:${event}]`, {
-    atMs: now(),
-    ...details
-  })
-}
-
 function resourcesForApi(api: DesktopPluginCenterApi): ApiResources {
   const existing = resourcesByApi.get(api)
   if (existing) return existing
@@ -163,14 +134,10 @@ function evictOldestCwdResource<T>(
 }
 
 function createResource<T>({
-  kind,
-  cwd,
   freshMs,
   load,
   onRelease
 }: {
-  kind: ResourceKind
-  cwd?: string
   freshMs: number | ((data: T) => number)
   load(forceRefresh: boolean): Promise<T>
   onRelease(): void
@@ -214,26 +181,13 @@ function createResource<T>({
     reason: 'prefetch' | 'refresh'
   ): Promise<void> {
     resource.lastAccessedAt = now()
-    if (!forceRefresh && isFresh()) {
-      logResourceEvent('cache-hit-fresh', { kind, cacheStatus: 'fresh', hasCwd: Boolean(cwd) })
-      return
-    }
-    if (!forceRefresh && snapshot.data !== null) {
-      logResourceEvent('cache-hit-stale', { kind, cacheStatus: 'stale', hasCwd: Boolean(cwd) })
-    }
+    if (!forceRefresh && isFresh()) return
     const requestGeneration = generation
     if (inFlight?.generation === requestGeneration) {
-      logResourceEvent('inflight-joined', { kind, hasCwd: Boolean(cwd) })
       await inFlight.promise
       return
     }
 
-    const startedAt = performance.now()
-    logResourceEvent('prefetch-start', {
-      kind,
-      cacheStatus: snapshot.data === null ? 'miss' : 'stale',
-      hasCwd: Boolean(cwd)
-    })
     snapshot = {
       ...snapshot,
       error: null,
@@ -263,11 +217,6 @@ function createResource<T>({
         }
       })
       .finally(() => {
-        logResourceEvent('prefetch-complete', {
-          kind,
-          durationMs: Math.round(performance.now() - startedAt),
-          hasCwd: Boolean(cwd)
-        })
         if (inFlight?.promise !== requestPromise) return
         inFlight = null
         if (listeners.size === 0) scheduleGc()
@@ -369,8 +318,6 @@ export function getPluginCenterSupplementalResource(
   }
 
   const resource = createResource({
-    kind: section,
-    cwd: normalizedCwd,
     freshMs: supplementalFreshMs(section),
     load: async (forceRefresh) => {
       const request = {
@@ -412,8 +359,6 @@ export function getPluginCenterCatalogResource(
   }
 
   const resource = createResource<PluginCenterSnapshot>({
-    kind: 'catalog',
-    cwd: key,
     freshMs: (snapshot) => (snapshot.catalogUnavailableReason ? 0 : CATALOG_FRESH_MS),
     load: async (forceRefresh) => {
       const result = await api.getSnapshot({
@@ -447,8 +392,6 @@ export function getPluginCenterInstalledResource(
   }
 
   const resource = createResource({
-    kind: 'installed',
-    cwd: key,
     freshMs: INSTALLED_FRESH_MS,
     load: async (forceRefresh) => {
       const result = await api.getInstalledPlugins({
@@ -482,8 +425,6 @@ export function getPluginCenterPluginDetailResource(
   }
 
   const resource = createResource({
-    kind: 'detail',
-    cwd: normalizedCwd,
     freshMs: PLUGIN_DETAIL_FRESH_MS,
     load: (forceRefresh) =>
       api.getPluginDetail({
@@ -518,8 +459,6 @@ export function getPluginCenterAppToolsResource(
   }
 
   const resource = createResource({
-    kind: 'app-tools',
-    cwd: normalizedCwd,
     freshMs: APP_TOOLS_FRESH_MS,
     load: (forceRefresh) =>
       api.getAppTools({
@@ -554,8 +493,6 @@ export function getPluginCenterSkillContentsResource(
   }
 
   const resource = createResource({
-    kind: 'skill-contents',
-    cwd: normalizedCwd,
     freshMs: APP_TOOLS_FRESH_MS,
     load: (forceRefresh) =>
       api.getSkillContents({
@@ -587,7 +524,6 @@ export function getPluginCenterRecommendedSkillsResource(
   }
 
   const resource = createResource({
-    kind: 'recommended-skills',
     freshMs: RECOMMENDED_SKILLS_FRESH_MS,
     load: (forceRefresh) =>
       api.getRecommendedSkills({
