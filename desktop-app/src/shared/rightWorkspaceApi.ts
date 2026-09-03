@@ -1,6 +1,17 @@
 import { z } from 'zod'
 
 import type {
+  ArtifactPreviewComposerAttachmentResult,
+  ArtifactPreviewMetadataResult,
+  ArtifactPreviewReadBinaryResult,
+  ArtifactPreviewRegisterAuthorizedLocalSourceRequest,
+  ArtifactPreviewRegisterSourceResult,
+  ArtifactPreviewRegisterWorkspaceSourceRequest,
+  ArtifactPreviewSourceRequest,
+  ArtifactPreviewSourceChangeEvent
+} from './artifactPreviewApi'
+
+import type {
   BrowserWorkspaceCreateRequest,
   BrowserWorkspaceEvent,
   BrowserWorkspaceListRequest,
@@ -60,6 +71,14 @@ export const rightWorkspaceIpcChannels = {
   stopFileSearch: 'right-workspace:files:search-stop',
   fileSearchEvent: 'right-workspace:files:search-event',
   openWithSystem: 'right-workspace:files:open-with-system',
+  registerArtifactWorkspaceSource: 'right-workspace:artifacts:register-workspace-source',
+  registerArtifactLocalSource: 'right-workspace:artifacts:register-local-source',
+  createArtifactComposerAttachment: 'right-workspace:artifacts:create-composer-attachment',
+  artifactMetadata: 'right-workspace:artifacts:metadata',
+  readArtifactBinary: 'right-workspace:artifacts:read-binary',
+  releaseArtifactSource: 'right-workspace:artifacts:release-source',
+  openArtifactWithSystem: 'right-workspace:artifacts:open-with-system',
+  artifactEvent: 'right-workspace:artifacts:event',
   fileEvent: 'right-workspace:files:event'
 } as const
 
@@ -105,6 +124,22 @@ export type DesktopRightWorkspaceApi = {
     onSearchEvent(callback: (event: FileWorkspaceSearchSessionEvent) => void): () => void
     openWithSystem(input: FileWorkspaceMetadataRequest): Promise<void>
     onEvent(callback: (event: FileWorkspaceEvent) => void): () => void
+  }
+  artifacts: {
+    registerWorkspaceSource(
+      input: ArtifactPreviewRegisterWorkspaceSourceRequest
+    ): Promise<ArtifactPreviewRegisterSourceResult>
+    registerAuthorizedLocalSource(
+      input: ArtifactPreviewRegisterAuthorizedLocalSourceRequest
+    ): Promise<ArtifactPreviewRegisterSourceResult>
+    createComposerAttachment(
+      input: ArtifactPreviewSourceRequest
+    ): Promise<ArtifactPreviewComposerAttachmentResult>
+    metadata(input: ArtifactPreviewSourceRequest): Promise<ArtifactPreviewMetadataResult>
+    readBinary(input: ArtifactPreviewSourceRequest): Promise<ArtifactPreviewReadBinaryResult>
+    release(input: ArtifactPreviewSourceRequest): Promise<void>
+    openWithSystem(input: ArtifactPreviewSourceRequest): Promise<void>
+    onEvent(callback: (event: ArtifactPreviewSourceChangeEvent) => void): () => void
   }
   terminal: {
     create(input: TerminalWorkspaceCreateRequest): Promise<TerminalWorkspaceSessionSnapshot>

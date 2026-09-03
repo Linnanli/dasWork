@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createWorkspaceDescriptor } from './workspaceOpenTargets'
+import { createWorkspaceDescriptor, isPptxArtifactPath } from './workspaceOpenTargets'
 
 describe('createWorkspaceDescriptor', () => {
   it('creates a stable file identity and a preview by default', () => {
@@ -56,5 +56,76 @@ describe('createWorkspaceDescriptor', () => {
     expect(createWorkspaceDescriptor({ type: 'review' }).isPreview).toBe(false)
     expect(createWorkspaceDescriptor({ type: 'terminal', id: 'terminal:1' }).isPreview).toBe(false)
     expect(createWorkspaceDescriptor({ type: 'browser', id: 'browser:1' }).isPreview).toBe(false)
+  })
+
+  it('classifies only modern PPTX files as presentation artifacts', () => {
+    expect(isPptxArtifactPath('slides/季度汇报.PPTX')).toBe(true)
+    expect(isPptxArtifactPath('slides/quarterly.pptx')).toBe(true)
+    expect(isPptxArtifactPath('slides/legacy.ppt')).toBe(false)
+    expect(isPptxArtifactPath('slides/macro.pptm')).toBe(false)
+    expect(isPptxArtifactPath('slides/show.ppsx')).toBe(false)
+    expect(isPptxArtifactPath('slides/presentation.pptx.exe')).toBe(false)
+  })
+
+  it('creates a stable artifact tab and retains one sanitized navigation command', () => {
+    expect(
+      createWorkspaceDescriptor({
+        type: 'artifact',
+        artifactType: 'slides',
+        importKind: 'pptx',
+        source: { kind: 'workspace-file', relativePath: './slides\\roadmap.PPTX' },
+        title: '  路线图  ',
+        openSource: 'generated-resource',
+        originatingTurn: { threadId: 'thread-1', turnId: 'turn-1' },
+        navigation: {
+          requestId: 'request-1',
+          artifactKind: 'presentation',
+          slideNumber: 3,
+          objectId: 'shape-5'
+        }
+      })
+    ).toMatchObject({
+      id: 'artifact:workspace:slides/roadmap.PPTX',
+      kind: 'artifact',
+      title: '路线图',
+      isPreview: true,
+      props: {
+        artifactType: 'slides',
+        importKind: 'pptx',
+        source: { kind: 'workspace-file', relativePath: 'slides/roadmap.PPTX' },
+        navigation: {
+          requestId: 'request-1',
+          artifactKind: 'presentation',
+          slideNumber: 3,
+          objectId: 'shape-5'
+        }
+      }
+    })
+  })
+
+  it('uses opaque local source ids and rejects a forged identifier', () => {
+    const sourceId = 'impossible-to-guess-source-id'
+    expect(
+      createWorkspaceDescriptor({
+        type: 'artifact',
+        artifactType: 'slides',
+        importKind: 'pptx',
+        source: { kind: 'authorized-local', sourceId },
+        title: '附件.pptx',
+        openSource: 'composer-attachment',
+        attachmentPreview: { origin: 'composer', requestId: 'preview-request' }
+      })
+    ).toMatchObject({ id: `artifact:local:${sourceId}`, props: { source: { sourceId } } })
+
+    expect(() =>
+      createWorkspaceDescriptor({
+        type: 'artifact',
+        artifactType: 'slides',
+        importKind: 'pptx',
+        source: { kind: 'authorized-local', sourceId: '../../not-a-capability' },
+        title: '附件.pptx',
+        openSource: 'composer-attachment'
+      })
+    ).toThrow('Artifact source id is invalid')
   })
 })

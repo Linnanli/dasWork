@@ -9,6 +9,12 @@ import { watch, type FSWatcher } from 'node:fs'
 import { basename, sep } from 'node:path'
 
 import {
+  artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
+  artifactPreviewRegisterWorkspaceSourceRequestSchema,
+  artifactPreviewSourceRequestSchema
+} from '../../shared/artifactPreviewApi'
+
+import {
   browserWorkspaceIpcChannels,
   browserWorkspaceCreateRequestSchema,
   browserWorkspaceListRequestSchema,
@@ -63,6 +69,12 @@ import {
   FileWorkspaceService,
   type FileWorkspacePathSearchProviderLike
 } from './FileWorkspaceService'
+import {
+  ArtifactPreviewSourceService,
+  WorkspaceUnavailableError,
+  type ArtifactPreviewAuthorizedLocalFile
+} from '../artifacts/ArtifactPreviewSourceService'
+import { ArtifactPreviewSourceManifest } from '../artifacts/ArtifactPreviewSourceManifest'
 
 type WorkspaceRoot = { path: string; label: string }
 
@@ -71,6 +83,7 @@ type WindowWorkspaceServices = {
   roots: Map<string, WorkspaceRoot>
   rootWatchers: Map<string, FSWatcher>
   files: FileWorkspaceService
+  artifacts: ArtifactPreviewSourceService
   browser: BrowserWorkspaceService
   dispose(): void
 }
@@ -86,13 +99,30 @@ export type RightWorkspaceIpcRegistration = {
 export function registerRightWorkspaceIpc({
   ipcMain,
   projectService,
+  redeemAuthorizedLocalPreview,
+  issueArtifactComposerAttachment,
+  artifactPreviewManifest,
   fileSearchProvider,
   terminalBackendFactory,
   terminalCommand,
-  terminalManager = createTerminalSessionManager(projectService, terminalBackendFactory, terminalCommand)
+  terminalManager = createTerminalSessionManager(
+    projectService,
+    terminalBackendFactory,
+    terminalCommand
+  )
 }: {
   ipcMain: IpcMain
   projectService: ProjectService
+  redeemAuthorizedLocalPreview(
+    token: string
+  ): Promise<ArtifactPreviewAuthorizedLocalFile> | ArtifactPreviewAuthorizedLocalFile
+  issueArtifactComposerAttachment(input: {
+    sourceId: string
+    absolutePath: string
+    identity: import('../../shared/artifactPreviewApi').ArtifactPreviewFileIdentity
+    label: string
+  }): import('../../shared/artifactPreviewApi').ArtifactPreviewComposerAttachment
+  artifactPreviewManifest?: ArtifactPreviewSourceManifest
   fileSearchProvider: FileWorkspacePathSearchProviderLike
   terminalBackendFactory?: Pick<TerminalBackendFactory, 'create'>
   terminalCommand?: string
@@ -190,6 +220,49 @@ export function registerRightWorkspaceIpc({
     const error = await shell.openPath(path)
     if (error) throw new Error(`Unable to open workspace file: ${error}`)
   })
+  ipcMain.handle(
+    rightWorkspaceIpcChannels.registerArtifactWorkspaceSource,
+    (event, payload: unknown) => {
+      const request = artifactPreviewRegisterWorkspaceSourceRequestSchema.parse(payload)
+      const services = requireOwnedRoot(event, request.rootId)
+      return services.artifacts.registerWorkspaceSource(request)
+    }
+  )
+  ipcMain.handle(
+    rightWorkspaceIpcChannels.createArtifactComposerAttachment,
+    async (event, payload: unknown) => {
+      const request = artifactPreviewSourceRequestSchema.parse(payload)
+      return requireServices(event).artifacts.createComposerAttachment(request.sourceId)
+    }
+  )
+  ipcMain.handle(
+    rightWorkspaceIpcChannels.registerArtifactLocalSource,
+    (event, payload: unknown) => {
+      const request = artifactPreviewRegisterAuthorizedLocalSourceRequestSchema.parse(payload)
+      return requireServices(event).artifacts.registerAuthorizedLocalSource(request)
+    }
+  )
+  ipcMain.handle(rightWorkspaceIpcChannels.artifactMetadata, (event, payload: unknown) => {
+    const request = artifactPreviewSourceRequestSchema.parse(payload)
+    return requireServices(event).artifacts.metadata(request.sourceId)
+  })
+  ipcMain.handle(rightWorkspaceIpcChannels.readArtifactBinary, (event, payload: unknown) => {
+    const request = artifactPreviewSourceRequestSchema.parse(payload)
+    return requireServices(event).artifacts.readBinary(request.sourceId)
+  })
+  ipcMain.handle(rightWorkspaceIpcChannels.releaseArtifactSource, (event, payload: unknown) => {
+    const request = artifactPreviewSourceRequestSchema.parse(payload)
+    requireServices(event).artifacts.release(request.sourceId)
+  })
+  ipcMain.handle(
+    rightWorkspaceIpcChannels.openArtifactWithSystem,
+    async (event, payload: unknown) => {
+      const request = artifactPreviewSourceRequestSchema.parse(payload)
+      const path = await requireServices(event).artifacts.resolveFileForSystemOpen(request.sourceId)
+      const error = await shell.openPath(path)
+      if (error) throw new Error(`Unable to open artifact source: ${error}`)
+    }
+  )
 
   ipcMain.handle(terminalWorkspaceIpcChannels.create, (event, payload: unknown) => {
     const request = terminalWorkspaceCreateRequestSchema.parse(payload)
@@ -295,7 +368,16 @@ export function registerRightWorkspaceIpc({
       const ownerId = window.webContents.id
       const existing = servicesByOwner.get(ownerId)
       existing?.dispose()
-      servicesByOwner.set(ownerId, createWindowServices(window, fileSearchProvider))
+      servicesByOwner.set(
+        ownerId,
+        createWindowServices(
+          window,
+          fileSearchProvider,
+          redeemAuthorizedLocalPreview,
+          issueArtifactComposerAttachment,
+          artifactPreviewManifest
+        )
+      )
     },
     detachWindow(webContentsId) {
       const services = servicesByOwner.get(webContentsId)
@@ -344,7 +426,8 @@ function createTerminalSessionManager(
         allowActiveProjectFallback: true,
         allowActiveProjectFallbackForUnboundThread: true
       })
-      if (!resolved?.cwd || !resolved.hostId) throw new Error('This task does not have a workspace available.')
+      if (!resolved?.cwd || !resolved.hostId)
+        throw new Error('This task does not have a workspace available.')
       return {
         hostId: resolved.hostId,
         cwd: resolved.cwd,
@@ -354,7 +437,8 @@ function createTerminalSessionManager(
     ...(appTerminalCommand ? { appTerminalCommand } : {}),
     createBackend: (input) => {
       if (terminalBackendFactory) return terminalBackendFactory.create(input)
-      if (input.target.hostId !== 'local') throw new Error('Remote terminal support is not configured for this host.')
+      if (input.target.hostId !== 'local')
+        throw new Error('Remote terminal support is not configured for this host.')
       const command = input.actionCommand
         ? commandForTerminalAction(input.shell, input.actionCommand)
         : input.shell
@@ -372,13 +456,52 @@ function createTerminalSessionManager(
 
 function createWindowServices(
   window: BrowserWindow,
-  fileSearchProvider: FileWorkspacePathSearchProviderLike
+  fileSearchProvider: FileWorkspacePathSearchProviderLike,
+  redeemAuthorizedLocalPreview: (
+    token: string
+  ) => Promise<ArtifactPreviewAuthorizedLocalFile> | ArtifactPreviewAuthorizedLocalFile,
+  issueArtifactComposerAttachment: (input: {
+    sourceId: string
+    absolutePath: string
+    identity: import('../../shared/artifactPreviewApi').ArtifactPreviewFileIdentity
+    label: string
+  }) => import('../../shared/artifactPreviewApi').ArtifactPreviewComposerAttachment,
+  artifactPreviewManifest?: ArtifactPreviewSourceManifest
 ): WindowWorkspaceServices {
   const roots = new Map<string, WorkspaceRoot>()
   const rootWatchers = new Map<string, FSWatcher>()
   const files = new FileWorkspaceService({
     resolveRoot: async (rootId) => roots.get(rootId)?.path ?? null,
     pathSearch: fileSearchProvider
+  })
+  const artifacts = new ArtifactPreviewSourceService({
+    resolveWorkspaceFile: async ({ rootId, path }) => {
+      try {
+        return await files.resolveFileForArtifact({ version: 1, rootId, path })
+      } catch (error) {
+        if (error instanceof Error && /root is not available/u.test(error.message)) {
+          throw new WorkspaceUnavailableError()
+        }
+        throw error
+      }
+    },
+    redeemAuthorizedLocalPreview,
+    issueComposerAttachment: issueArtifactComposerAttachment,
+    ...(artifactPreviewManifest
+      ? {
+          loadAuthorizedLocalSources: () => artifactPreviewManifest.load(),
+          persistAuthorizedLocalSource: (source) => artifactPreviewManifest.upsert(source),
+          removeAuthorizedLocalSource: (sourceId) => artifactPreviewManifest.remove(sourceId)
+        }
+      : {})
+  })
+  const removeArtifactListener = artifacts.onChange((sourceId) => {
+    if (!window.isDestroyed()) {
+      sendToActiveRenderer(window.webContents, rightWorkspaceIpcChannels.artifactEvent, {
+        version: 1,
+        sourceId
+      })
+    }
   })
   const browser = new BrowserWorkspaceService({ host: createBrowserHost(window) })
   const removeBrowserListener = browser.onEvent((event) => {
@@ -392,9 +515,12 @@ function createWindowServices(
     roots,
     rootWatchers,
     files,
+    artifacts,
     browser,
     dispose() {
       removeBrowserListener()
+      removeArtifactListener()
+      artifacts.dispose()
       browser.dispose()
       void files.dispose()
       for (const watcher of rootWatchers.values()) watcher.close()
@@ -458,7 +584,6 @@ function toWorkspaceRelativePath(filename: string | Buffer | null): string | und
   const value = filename.toString().split(sep).join('/')
   return fileWorkspaceRelativePathSchema.safeParse(value).success ? value : undefined
 }
-
 
 function createBrowserHost(window: BrowserWindow): BrowserWorkspaceHostAdapter {
   const nativeViews = new WeakMap<BrowserWorkspaceViewAdapter, WebContentsView>()

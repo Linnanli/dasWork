@@ -8,13 +8,20 @@ const legacyDraftStorageKey = 'das-cowork.conversation-drafts.v1'
 export type ConversationComposerModeKind = 'default' | 'plan'
 export type ConversationApprovalModeKind = ApprovalModeKind
 
-export type ConversationDraftAttachment = {
-  capabilityToken?: string
-  fileUrl: string
-  kind: 'file' | 'folder'
-  label: string
-  path: string
-}
+export type ConversationDraftAttachment =
+  | {
+      artifactPreviewToken?: string
+      capabilityToken?: string
+      fileUrl: string
+      kind: 'file' | 'folder'
+      label: string
+      path: string
+    }
+  | {
+      kind: 'artifact'
+      label: string
+      sourceId: string
+    }
 
 type ConversationDraftRecord = {
   approvalModeKind: ConversationApprovalModeKind
@@ -315,6 +322,14 @@ function normalizeApprovalModeKind(value: unknown): ConversationApprovalModeKind
 function isDraftAttachment(value: unknown): value is ConversationDraftAttachment {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const attachment = value as Partial<ConversationDraftAttachment>
+  if (
+    attachment.kind === 'artifact' &&
+    typeof attachment.label === 'string' &&
+    typeof attachment.sourceId === 'string' &&
+    /^[A-Za-z0-9_-]{16,256}$/u.test(attachment.sourceId)
+  ) {
+    return true
+  }
   return (
     (attachment.kind === 'file' || attachment.kind === 'folder') &&
     typeof attachment.path === 'string' &&
@@ -322,6 +337,9 @@ function isDraftAttachment(value: unknown): value is ConversationDraftAttachment
     typeof attachment.fileUrl === 'string' &&
     (attachment.capabilityToken === undefined ||
       (typeof attachment.capabilityToken === 'string' && attachment.capabilityToken.length > 0)) &&
+    (attachment.artifactPreviewToken === undefined ||
+      (typeof attachment.artifactPreviewToken === 'string' &&
+        attachment.artifactPreviewToken.length >= 16)) &&
     attachment.fileUrl.startsWith('file:')
   )
 }
@@ -336,7 +354,10 @@ function dedupeAttachments(
 ): ConversationDraftAttachment[] {
   const seen = new Set<string>()
   return attachments.filter((attachment) => {
-    const key = `${attachment.kind}:${attachment.path}`
+    const key =
+      attachment.kind === 'artifact'
+        ? `artifact:${attachment.sourceId}`
+        : `${attachment.kind}:${attachment.path}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

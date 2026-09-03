@@ -20,7 +20,11 @@ export {
 } from './WorkspaceContainerProvider'
 export {
   createWorkspaceDescriptor,
+  isPptxArtifactPath,
   normalizeRelativePath,
+  type ArtifactNavigationTarget,
+  type ArtifactOpenTarget,
+  type ArtifactPreviewSource,
   type WorkspaceFileLocation,
   type WorkspaceOpenMode,
   type WorkspaceOpenOptions,

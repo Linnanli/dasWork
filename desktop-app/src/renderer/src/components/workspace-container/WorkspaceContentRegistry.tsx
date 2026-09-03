@@ -7,6 +7,8 @@ import { repositionBrowserWorkspaceView } from '../right-workspace/browser/brows
 import { FileWorkspace } from '../right-workspace/files/FileWorkspace'
 import { ReviewWorkspace } from '../right-workspace/review/ReviewWorkspace'
 import { TerminalWorkspace } from '../right-workspace/terminal/TerminalWorkspace'
+import { ArtifactTabContent } from '../artifacts/ArtifactTabContent'
+import { artifactTabDescriptor } from '../artifacts/artifactTabDescriptor'
 import {
   closeTerminalSession,
   terminalSessionIdFromTabId
@@ -18,6 +20,7 @@ import type {
   WorkspaceOpenOptions,
   WorkspaceOpenTarget
 } from './workspaceOpenTargets'
+import { isPptxArtifactPath } from './workspaceOpenTargets'
 import type {
   WorkspacePanelId,
   WorkspacePanelState,
@@ -123,12 +126,46 @@ export function createWorkspaceContentRegistry(): WorkspaceContentRegistry {
           target={context.target}
           onOpenFile={(relativePath, title, mode = 'preview') =>
             context.openTarget(
-              { type: 'file', relativePath, title },
+              isPptxArtifactPath(relativePath)
+                ? {
+                    type: 'artifact',
+                    artifactType: 'slides',
+                    importKind: 'pptx',
+                    source: { kind: 'workspace-file', relativePath },
+                    title: title ?? relativePath,
+                    openSource: 'file-workspace'
+                  }
+                : { type: 'file', relativePath, title },
               fileOpenOptions(tab, context.panelId, mode)
             )
           }
         />
       )
+    })
+    .register({
+      kind: 'artifact',
+      render: (tab, context) => {
+        const artifact = artifactTabDescriptor(tab)
+        return artifact ? (
+          <ArtifactTabContent
+            artifact={artifact}
+            workspaceId={context.workspaceId}
+            target={context.target}
+            runtime={context.runtime}
+            onRuntimeChange={(runtime) => context.setRuntime(tab.id, runtime)}
+          />
+        ) : (
+          <WorkspaceRestoreFailure title={tab.title} />
+        )
+      },
+      onClose: (_tab, context) => {
+        const sourceId = context.runtime?.artifactSourceId
+        if (typeof sourceId !== 'string') return
+        return window.desktopApp.workspace.artifacts
+          .release({ version: 1, sourceId })
+          .then(() => undefined)
+          .catch(() => undefined)
+      }
     })
     .register({
       kind: 'terminal',

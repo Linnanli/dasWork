@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import JSZip from 'jszip'
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
 import type { ElectronApplication } from '@playwright/test'
@@ -421,6 +422,50 @@ test('RW-E2E-04 replaces the empty Files tab, then reuses preview file tabs', as
   }
 })
 
+test('ARTIFACT-E2E-01 opens a workspace PPTX in its own Artifact tab and adds an opaque context attachment', async ({
+  browserName
+}, testInfo) => {
+  test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+
+  const projectRoot = await mkdtemp(join(tmpdir(), 'dascowork-e2e-artifact-pptx-'))
+  const backend = await startMockBackend({
+    responses: [assistantMessageResponse('artifact-pptx-thread', 'artifact-pptx-message', 'Ready')]
+  })
+  const logs: string[] = []
+  let app: ElectronApplication | undefined
+
+  try {
+    await initializeProject(projectRoot)
+    await writePresentationFixture(join(projectRoot, 'deck.pptx'))
+    app = await launchApp(backend, logs)
+    const page = await app.firstWindow()
+    await page.evaluate(() => window.localStorage.clear())
+    collectRendererLogs(page, logs)
+    await createLocalProject(page, `Artifact PPTX ${Date.now().toString(36)}`, projectRoot)
+    await sendComposerMessage(page, 'Open the Artifact PPTX fixture.')
+    await openRightWorkspace(page)
+    await page.getByRole('button', { name: 'Open Files', exact: true }).click()
+
+    const rightPanel = page.locator('[data-slot="right-workspace-shell"]')
+    await rightPanel.getByRole('treeitem', { name: 'deck.pptx', exact: true }).click()
+    await expect(
+      rightPanel.locator('[role="tab"][data-workspace-tab-id="artifact:workspace:deck.pptx"]')
+    ).toBeVisible()
+    await expect(rightPanel.locator('[data-slot="artifact-tab-content"]')).toBeVisible()
+    await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 1')
+    await expect(rightPanel).toContainText('Artifact PPTX')
+
+    await rightPanel.getByRole('button', { name: '添加到会话上下文', exact: true }).click()
+    await expect(page.locator('[data-attachment-name="deck.pptx"]')).toBeVisible()
+    await captureWorkspaceScreenshot(page, testInfo, 'RW-09-artifact-pptx')
+  } finally {
+    await attachDiagnostics(testInfo, logs, backend, app)
+    await closeApp(app)
+    await backend.close()
+    await cleanupTempDirs([projectRoot])
+  }
+})
+
 test('RW-E2E-05 asks before closing a running terminal from its tab close control', async ({
   browserName
 }, testInfo) => {
@@ -591,6 +636,39 @@ async function initializeProject(projectRoot: string): Promise<void> {
     'export const workspace = false\n',
     'utf8'
   )
+}
+
+async function writePresentationFixture(path: string): Promise<void> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8"?>
+    <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+      <Default Extension="xml" ContentType="application/xml"/>
+    </Types>`
+  )
+  zip.file(
+    'ppt/presentation.xml',
+    `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
+    </p:presentation>`
+  )
+  zip.file(
+    'ppt/_rels/presentation.xml.rels',
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+    </Relationships>`
+  )
+  zip.file(
+    'ppt/slides/slide1.xml',
+    `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+      <p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="标题"/></p:nvSpPr>
+      <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="6096000" cy="914400"/></a:xfrm></p:spPr>
+      <p:txBody><a:p><a:r><a:t>Artifact PPTX</a:t></a:r></a:p></p:txBody>
+      </p:sp></p:spTree></p:cSld>
+    </p:sld>`
+  )
+  await writeFile(path, await zip.generateAsync({ type: 'nodebuffer' }))
 }
 
 async function openRightWorkspace(page: Page): Promise<void> {

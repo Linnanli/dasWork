@@ -53,6 +53,19 @@ describe('ConversationDraftStore', () => {
     expect(storage.getItem(conversationDraftStorageKey)).not.toContain('file contents')
   })
 
+  it('persists Artifact source ids without serializing a local path', () => {
+    const storage = new MemoryStorage()
+    const store = new ConversationDraftStore(storage)
+    store.setAttachments('thread-a', [
+      { kind: 'artifact', sourceId: 'source-id-12345678', label: 'deck.pptx' }
+    ])
+
+    expect(new ConversationDraftStore(storage).getAttachments('thread-a')).toEqual([
+      { kind: 'artifact', sourceId: 'source-id-12345678', label: 'deck.pptx' }
+    ])
+    expect(storage.getItem(conversationDraftStorageKey)).not.toContain('/deck.pptx')
+  })
+
   it('migrates legacy text-only drafts into the v4 in-memory shape with safe approval mode', () => {
     const storage = new MemoryStorage()
     storage.setItem(

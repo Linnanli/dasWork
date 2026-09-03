@@ -1,6 +1,13 @@
 'use client'
 
-import { type FC, type PropsWithChildren, useEffect, useState } from 'react'
+import {
+  type FC,
+  type KeyboardEvent,
+  type PropsWithChildren,
+  useCallback,
+  useEffect,
+  useState
+} from 'react'
 import { AlertCircleIcon, FileText, Loader2Icon, PlusIcon, XIcon } from 'lucide-react'
 import {
   AttachmentPrimitive,
@@ -15,6 +22,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
+import { useOptionalRightWorkspace } from '@/components/right-workspace'
+import { isPptxArtifactPath } from '@/components/workspace-container'
+import {
+  artifactSourceAttachmentIdentityFromId,
+  artifactSourceIdFromUrl,
+  localPathAttachmentIdentityFromId
+} from '@/composer/imageAttachmentAdapter'
 import { cn } from '@/lib/utils'
 
 const useFileSrc = (file: File | undefined): string | undefined => {
@@ -126,8 +140,16 @@ const AttachmentThumb: FC = () => {
 
 const AttachmentUI: FC = () => {
   const aui = useAui()
+  const workspace = useOptionalRightWorkspace()
   const isComposer = aui.attachment.source !== 'message'
+  const attachmentId = useAuiState((state) => state.attachment.id)
   const attachmentName = useAuiState((state) => state.attachment.name)
+  const attachmentArtifactSourceId = useAuiState((state) => {
+    const content = state.attachment.content?.find((item) => item.type === 'file')
+    return content ? artifactSourceIdFromUrl(content.data) : undefined
+  })
+  const [registeredArtifactSourceId, setRegisteredArtifactSourceId] = useState<string>()
+  const [artifactOpenError, setArtifactOpenError] = useState<string>()
   const typeLabel = useAuiState((state) => {
     switch (state.attachment.type) {
       case 'image':
@@ -154,6 +176,64 @@ const AttachmentUI: FC = () => {
   )
   const isUploading = uploadState === 'uploading'
   const isError = uploadState === 'error'
+  const localPathAttachment = localPathAttachmentIdentityFromId(attachmentId)
+  const artifactAttachment = artifactSourceAttachmentIdentityFromId(attachmentId)
+  const artifactAttachmentSourceId = artifactAttachment?.sourceId ?? attachmentArtifactSourceId
+  const isPptxAttachment =
+    Boolean(artifactAttachmentSourceId) ||
+    (localPathAttachment?.kind === 'file' &&
+      isPptxArtifactPath(localPathAttachment.path || attachmentName))
+
+  const openPresentation = useCallback(async (): Promise<void> => {
+    if (!isPptxAttachment) return
+    if (!workspace) {
+      setArtifactOpenError('当前工作区不可用。')
+      return
+    }
+    try {
+      setArtifactOpenError(undefined)
+      const sourceId =
+        artifactAttachmentSourceId ??
+        registeredArtifactSourceId ??
+        (
+          await window.desktopApp.workspace.artifacts.registerAuthorizedLocalSource({
+            version: 1,
+            capabilityToken: localPathAttachment?.artifactPreviewToken ?? ''
+          })
+        ).sourceId
+      setRegisteredArtifactSourceId(sourceId)
+      workspace.openArtifact(
+        {
+          artifactType: 'slides',
+          importKind: 'pptx',
+          source: { kind: 'authorized-local', sourceId },
+          title: attachmentName || '演示文稿',
+          openSource: isComposer ? 'composer-attachment' : 'message-attachment',
+          attachmentPreview: {
+            origin: isComposer ? 'composer' : 'sent-message',
+            requestId: requestId()
+          }
+        },
+        { mode: 'pinned' }
+      )
+    } catch (error) {
+      setArtifactOpenError(error instanceof Error ? error.message : '无法打开 PPTX 预览。')
+    }
+  }, [
+    artifactAttachmentSourceId,
+    registeredArtifactSourceId,
+    attachmentName,
+    isComposer,
+    isPptxAttachment,
+    localPathAttachment,
+    workspace
+  ])
+
+  const onPresentationKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (!isPptxAttachment || (event.key !== 'Enter' && event.key !== ' ')) return
+    event.preventDefault()
+    void openPresentation()
+  }
 
   return (
     <TooltipProvider>
@@ -169,9 +249,11 @@ const AttachmentUI: FC = () => {
                 data-attachment-name={attachmentName}
                 role="button"
                 tabIndex={0}
-                aria-label={`${typeLabel} attachment${
+                aria-label={`${isPptxAttachment ? '打开 PPTX 预览' : typeLabel} attachment${
                   isError ? '，附件不可用' : isUploading ? '，正在检查' : ''
                 }`}
+                onClick={isPptxAttachment ? () => void openPresentation() : undefined}
+                onKeyDown={onPresentationKeyDown}
               >
                 <AttachmentThumb />
                 {isUploading && (
@@ -198,10 +280,17 @@ const AttachmentUI: FC = () => {
         <TooltipContent side="top">
           <AttachmentPrimitive.Name />
           {errorMessage && <p className="aui-attachment-error-message">{errorMessage}</p>}
+          {artifactOpenError && <p className="aui-attachment-error-message">{artifactOpenError}</p>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
+}
+
+function requestId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 const AttachmentRemove: FC = () => {

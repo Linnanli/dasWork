@@ -26,6 +26,13 @@ import type {
   SidebarPreferences
 } from '../shared/codexIpcApi'
 import {
+  artifactPreviewSourceRequestSchema,
+  artifactPreviewComposerAttachmentResultSchema,
+  artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
+  artifactPreviewRegisterWorkspaceSourceRequestSchema,
+  artifactPreviewSourceChangeEventSchema,
+} from '../shared/artifactPreviewApi'
+import {
   browserWorkspaceCreateRequestSchema,
   browserWorkspaceEventSchema,
   browserWorkspaceIpcChannels,
@@ -544,6 +551,51 @@ const desktopRightWorkspace: DesktopRightWorkspaceApi = {
       subscribeWorkspaceEvent(
         rightWorkspaceIpcChannels.fileEvent,
         fileWorkspaceEventSchema,
+        callback
+      )
+  },
+  artifacts: {
+    registerWorkspaceSource: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.registerArtifactWorkspaceSource,
+        parseWorkspacePayload(artifactPreviewRegisterWorkspaceSourceRequestSchema, input)
+      ),
+    registerAuthorizedLocalSource: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.registerArtifactLocalSource,
+        parseWorkspacePayload(artifactPreviewRegisterAuthorizedLocalSourceRequestSchema, input)
+      ),
+    createComposerAttachment: (input) =>
+      ipcRenderer
+        .invoke(
+          rightWorkspaceIpcChannels.createArtifactComposerAttachment,
+          parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
+        )
+        .then((result) => artifactPreviewComposerAttachmentResultSchema.parse(result, { jitless: true })),
+    metadata: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.artifactMetadata,
+        parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
+      ),
+    readBinary: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.readArtifactBinary,
+        parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
+      ),
+    release: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.releaseArtifactSource,
+        parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
+      ) as Promise<void>,
+    openWithSystem: (input) =>
+      ipcRenderer.invoke(
+        rightWorkspaceIpcChannels.openArtifactWithSystem,
+        parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
+      ) as Promise<void>,
+    onEvent: (callback) =>
+      subscribeWorkspaceEvent(
+        rightWorkspaceIpcChannels.artifactEvent,
+        artifactPreviewSourceChangeEventSchema,
         callback
       )
   },

@@ -52,12 +52,19 @@ import {
   useRightWorkspace
 } from '@/components/right-workspace'
 import {
+  ArtifactConversationBridgeProvider,
+  useArtifactConversationBridge
+} from '@/components/artifacts/ArtifactConversationBridge'
+import { artifactConversationText } from '@/components/artifacts/artifactConversationText'
+import type { ArtifactAnnotation } from '@/components/artifacts/annotations/artifactAnnotationTypes'
+import {
   CLEAR_ACTIVE_TERMINAL_EVENT,
   clearActiveTerminalView
 } from '@/components/right-workspace/terminal/terminalActiveView'
 import {
   adjacentWorkspaceTabId,
   createWorkspaceContentRegistry,
+  isPptxArtifactPath,
   isWorkspaceEditableTarget,
   useWorkspaceContainer,
   WorkspacePanelController,
@@ -261,9 +268,12 @@ import {
   useComposerContextIdentityIndex
 } from './composer/composerContextIdentity'
 import {
+  artifactSourceAttachmentIdentityFromId,
+  createArtifactSourceAttachment,
   createLocalImageAttachment,
   createLocalPathAttachment,
   imageAttachmentAdapter,
+  localFileAttachmentMediaType,
   localPathAttachmentIdentityFromId
 } from './composer/imageAttachmentAdapter'
 
@@ -310,7 +320,9 @@ type ComposerProps = {
   onSteerFollowUp: (
     itemId: string,
     message:
-      MaterializedQueuedUserMessage | QueuedUserMessageSnapshot | QueuedUserMessageSnapshotInput
+      | MaterializedQueuedUserMessage
+      | QueuedUserMessageSnapshot
+      | QueuedUserMessageSnapshotInput
   ) => Promise<void>
   onStartCodeReview: (prompt: string) => Promise<void>
   onCreateNewTask: () => void
@@ -859,59 +871,61 @@ function App(): React.JSX.Element {
           projectScope={workspaceProjectScope}
           fallbackProjectScopes={fallbackWorkspaceProjectScopes}
         >
-          <GitRepositoryProvider
-            identity={gitRepositoryIdentity}
-            preSendProjectKey={preSendProjectKey}
-          >
-            <LocalGitReviewProvider>
-              <CommitOrPushControlProvider>
-                <section
-                  data-slot="app-main-section"
-                  className={cn(
-                    'relative flex min-w-0 flex-1 overflow-hidden',
-                    nativeBackdrop && nativeBackdropSurfaceClass
-                  )}
-                >
-                  <ConversationWorkspaceLayout
-                    target={gitRepositoryIdentity}
-                    workspaceId={`conversation:${workspaceProjectScope}`}
+          <ArtifactConversationBridgeProvider>
+            <GitRepositoryProvider
+              identity={gitRepositoryIdentity}
+              preSendProjectKey={preSendProjectKey}
+            >
+              <LocalGitReviewProvider>
+                <CommitOrPushControlProvider>
+                  <section
+                    data-slot="app-main-section"
+                    className={cn(
+                      'relative flex min-w-0 flex-1 overflow-hidden',
+                      nativeBackdrop && nativeBackdropSurfaceClass
+                    )}
                   >
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/50 bg-background shadow-[0_18px_60px_-48px_rgba(15,23,42,0.75)]">
-                      <ActiveConversationPane
-                        key={activeEntry.localId}
-                        activeConversation={activeConversation}
-                        entry={activeEntry}
-                        approvalRequests={visibleApprovalRequests}
-                        hasBlockingRequest={visibleApprovalRequests.length > 0}
-                        models={models}
-                        selectedModelId={selectedModelId}
-                        modelSelectionError={modelSelectionError}
-                        onDraftChange={setActiveDraft}
-                        onDraftAttachmentsChange={setActiveDraftAttachments}
-                        onComposerModeKindChange={setActiveComposerModeKind}
-                        onApprovalModeKindChange={setActiveApprovalModeKind}
-                        onGoalEditorActiveChange={setActiveGoalEditorActive}
-                        onThreadGoalChange={setActiveThreadGoal}
-                        onGoalOperationChange={setActiveGoalOperation}
-                        onRetryLoad={() => {
-                          void openConversation({ conversationId: activeEntry.localId })
-                        }}
-                        onOpenConversation={handleOpenConversation}
-                        onScrollSnapshotChange={setActiveScroll}
-                        onSelectedModelChange={handleSelectedModelChange}
-                        onCreateNewTask={handleStartNewConversation}
-                        onRejectApproval={rejectServerRequest}
-                        onSnoozeApproval={snoozeServerRequest}
-                        onRespondApproval={respondToServerRequest}
-                        projectState={projectState}
-                        sidebarCollapsed={sidebarCollapsed}
-                      />
-                    </div>
-                  </ConversationWorkspaceLayout>
-                </section>
-              </CommitOrPushControlProvider>
-            </LocalGitReviewProvider>
-          </GitRepositoryProvider>
+                    <ConversationWorkspaceLayout
+                      target={gitRepositoryIdentity}
+                      workspaceId={`conversation:${workspaceProjectScope}`}
+                    >
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/50 bg-background shadow-[0_18px_60px_-48px_rgba(15,23,42,0.75)]">
+                        <ActiveConversationPane
+                          key={activeEntry.localId}
+                          activeConversation={activeConversation}
+                          entry={activeEntry}
+                          approvalRequests={visibleApprovalRequests}
+                          hasBlockingRequest={visibleApprovalRequests.length > 0}
+                          models={models}
+                          selectedModelId={selectedModelId}
+                          modelSelectionError={modelSelectionError}
+                          onDraftChange={setActiveDraft}
+                          onDraftAttachmentsChange={setActiveDraftAttachments}
+                          onComposerModeKindChange={setActiveComposerModeKind}
+                          onApprovalModeKindChange={setActiveApprovalModeKind}
+                          onGoalEditorActiveChange={setActiveGoalEditorActive}
+                          onThreadGoalChange={setActiveThreadGoal}
+                          onGoalOperationChange={setActiveGoalOperation}
+                          onRetryLoad={() => {
+                            void openConversation({ conversationId: activeEntry.localId })
+                          }}
+                          onOpenConversation={handleOpenConversation}
+                          onScrollSnapshotChange={setActiveScroll}
+                          onSelectedModelChange={handleSelectedModelChange}
+                          onCreateNewTask={handleStartNewConversation}
+                          onRejectApproval={rejectServerRequest}
+                          onSnoozeApproval={snoozeServerRequest}
+                          onRespondApproval={respondToServerRequest}
+                          projectState={projectState}
+                          sidebarCollapsed={sidebarCollapsed}
+                        />
+                      </div>
+                    </ConversationWorkspaceLayout>
+                  </section>
+                </CommitOrPushControlProvider>
+              </LocalGitReviewProvider>
+            </GitRepositoryProvider>
+          </ArtifactConversationBridgeProvider>
         </RightWorkspaceProvider>
       )}
     </main>
@@ -1110,7 +1124,9 @@ function ActiveConversationPane({
     async (
       itemId: string,
       message:
-        MaterializedQueuedUserMessage | QueuedUserMessageSnapshot | QueuedUserMessageSnapshotInput
+        | MaterializedQueuedUserMessage
+        | QueuedUserMessageSnapshot
+        | QueuedUserMessageSnapshotInput
     ): Promise<void> => {
       await steerFollowUpItemWithTranscript(message, entry, () => followUps.steerItem(itemId))
     },
@@ -1125,6 +1141,7 @@ function ActiveConversationPane({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      <ArtifactConversationActionsRegistrar entry={entry} />
       <ConversationDraftBridge
         draft={entry.draft}
         draftAttachments={entry.draftAttachments}
@@ -1179,6 +1196,69 @@ function ActiveConversationPane({
       />
     </AssistantRuntimeProvider>
   )
+}
+
+function ArtifactConversationActionsRegistrar({ entry }: { entry: ConversationChatEntry }): null {
+  const aui = useAui()
+  const { register } = useArtifactConversationBridge()
+  const composerText = useAuiState((state) => state.composer.text)
+  const composerAttachments = useAuiState((state) => state.composer.attachments)
+  const composerAttachmentIds = useMemo(
+    () => composerAttachments.map((attachment) => attachment.id),
+    [composerAttachments]
+  )
+  const composerTextRef = useRef(composerText)
+
+  useEffect(() => {
+    composerTextRef.current = composerText
+  }, [composerText])
+
+  useEffect(
+    () =>
+      register({
+        conversationId: entry.context.conversationId,
+        addToComposer: async (reference, annotation) => {
+          if (
+            !composerAttachmentIds.some(
+              (id) => artifactSourceAttachmentIdentityFromId(id)?.sourceId === reference.sourceId
+            )
+          ) {
+            const result = await window.desktopApp.workspace.artifacts.createComposerAttachment({
+              version: 1,
+              sourceId: reference.sourceId
+            })
+            await aui.composer().addAttachment(createArtifactSourceAttachment(result.attachment))
+          }
+          const context = artifactConversationText(reference, annotation)
+          const current = composerTextRef.current.trim()
+          if (current.includes(context)) return
+          aui.composer().setText(current ? `${current}\n\n${context}` : context)
+        },
+        directSubmit: async (reference, annotation: ArtifactAnnotation) => {
+          const result = await window.desktopApp.workspace.artifacts.createComposerAttachment({
+            version: 1,
+            sourceId: reference.sourceId
+          })
+          await runTranscriptAction(entry.controller, () =>
+            entry.controller.sendMessage({
+              id: `artifact-direct-${annotation.id}`,
+              role: 'user',
+              parts: [
+                { type: 'text', text: artifactConversationText(reference, annotation) },
+                {
+                  type: 'file',
+                  filename: result.attachment.label,
+                  mediaType: localFileAttachmentMediaType,
+                  url: result.attachment.url
+                }
+              ]
+            })
+          )
+        }
+      }),
+    [aui, composerAttachmentIds, entry, register]
+  )
+  return null
 }
 
 function ConversationWorkspaceLayout({
@@ -2058,15 +2138,7 @@ function ConversationDraftBridge({
     }
     void Promise.all(
       initialDraftAttachments.current.map((attachment) =>
-        aui.composer().addAttachment(
-          createLocalPathAttachment({
-            capabilityToken: attachment.capabilityToken,
-            fileUrl: attachment.fileUrl,
-            kind: attachment.kind,
-            label: attachment.label,
-            path: attachment.path
-          })
-        )
+        addDraftAttachment(aui, attachment)
       )
     ).then(markHydrated, markHydrated)
   }, [aui])
@@ -2117,7 +2189,7 @@ function ConversationDraftBridge({
     }
     void Promise.all(
       snapshot.attachments.map((attachment) =>
-        aui.composer().addAttachment(createLocalPathAttachment(attachment))
+        addDraftAttachment(aui, attachment)
       )
     ).then(restoreDraft, restoreDraft)
   }, [
@@ -2138,10 +2210,27 @@ function localDraftAttachments(
   attachments: readonly { id: string; name: string }[]
 ): ConversationDraftAttachment[] {
   return attachments.flatMap((attachment): ConversationDraftAttachment[] => {
+    const artifact = artifactSourceAttachmentIdentityFromId(attachment.id)
+    if (artifact) return [{ kind: 'artifact', sourceId: artifact.sourceId, label: attachment.name }]
     const identity = localPathAttachmentIdentityFromId(attachment.id)
     if (!identity) return []
     return [{ ...identity, label: attachment.name }]
   })
+}
+
+async function addDraftAttachment(
+  aui: ReturnType<typeof useAui>,
+  attachment: ConversationDraftAttachment
+): Promise<void> {
+  if (attachment.kind === 'artifact') {
+    const result = await window.desktopApp.workspace.artifacts.createComposerAttachment({
+      version: 1,
+      sourceId: attachment.sourceId
+    })
+    await aui.composer().addAttachment(createArtifactSourceAttachment(result.attachment))
+    return
+  }
+  await aui.composer().addAttachment(createLocalPathAttachment(attachment))
 }
 
 function ConversationFocusBridge({ entryId }: { entryId: string }): null {
@@ -3006,6 +3095,19 @@ function AssistantText({
       execute: (action: InlineReferenceAction): void => {
         switch (action.type) {
           case 'workspace-file':
+            if (isPptxArtifactPath(action.relativePath)) {
+              workspace.openArtifact(
+                {
+                  artifactType: 'slides',
+                  importKind: 'pptx',
+                  source: { kind: 'workspace-file', relativePath: action.relativePath },
+                  title: action.relativePath.split('/').at(-1) ?? '演示文稿',
+                  openSource: 'inline-link'
+                },
+                { mode: action.mode }
+              )
+              return
+            }
             workspace.openFile(action.relativePath, undefined, {
               location: {
                 ...(action.line ? { line: action.line } : {}),
@@ -3632,6 +3734,7 @@ function ComposerBody({
         }
         await composer.addAttachment(
           createLocalPathAttachment({
+            artifactPreviewToken: reference.artifactPreviewToken,
             capabilityToken: reference.capabilityToken,
             fileUrl: reference.fileUrl,
             kind: reference.kind,

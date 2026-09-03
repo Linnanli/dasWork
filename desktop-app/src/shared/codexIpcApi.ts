@@ -485,6 +485,7 @@ export type LocalContextReference =
       label: string
       fileUrl: string
       capabilityToken?: string
+      artifactPreviewToken?: string
     }
   | {
       kind: 'image'
@@ -620,7 +621,8 @@ const localContextPathSchema = z.object({
 
 const localContextFileSystemPathSchema = localContextPathSchema.extend({
   fileUrl: z.string().refine(isLocalFileUrl, 'file URL must use the file: scheme'),
-  capabilityToken: z.string().min(1).optional()
+  capabilityToken: z.string().min(1).optional(),
+  artifactPreviewToken: z.string().min(16).optional()
 })
 
 export const localContextReferenceSchema = z.discriminatedUnion('kind', [

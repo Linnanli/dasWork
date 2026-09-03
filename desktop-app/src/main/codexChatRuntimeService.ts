@@ -246,6 +246,7 @@ export type CodexChatRuntimeServiceOptions = {
   ) => Promise<'completed' | 'interrupted' | 'failed' | undefined>
   collaborationModeClient?: Pick<CodexHistoryClient, 'listCollaborationModes'>
   turnDiffStore?: TurnDiffStoreWriter
+  restoreArtifactAttachments?: (messages: readonly UIMessage[]) => Promise<UIMessage[]>
 }
 
 export type CodexChatRunResult = {
@@ -298,6 +299,7 @@ export class CodexChatRuntimeService {
     turnId: string
   ) => Promise<'completed' | 'interrupted' | 'failed' | undefined>
   private readonly turnDiffStore: TurnDiffStoreWriter | undefined
+  private readonly restoreArtifactAttachments: (messages: readonly UIMessage[]) => Promise<UIMessage[]>
   private readonly collaborationModeClient:
     | Pick<CodexHistoryClient, 'listCollaborationModes'>
     | undefined
@@ -338,6 +340,8 @@ export class CodexChatRuntimeService {
     this.projectService = options.projectService
     this.projectStore = options.projectStore
     this.turnDiffStore = options.turnDiffStore
+    this.restoreArtifactAttachments =
+      options.restoreArtifactAttachments ?? (async (messages) => [...messages])
     this.collaborationModeClient = options.collaborationModeClient
     const historyClient = options.connection
       ? createCodexHistoryClient({
@@ -653,9 +657,12 @@ export class CodexChatRuntimeService {
         effectiveRequest.body?.composerModeKind ?? 'default',
         streamModelId
       )
+      const messagesWithResolvedArtifactAttachments = await this.restoreArtifactAttachments(
+        effectiveRequest.messages
+      )
       const localAttachmentCount = threadGoalControl
         ? 0
-        : await validateLocalAttachmentsInLatestUserMessage(effectiveRequest.messages)
+        : await validateLocalAttachmentsInLatestUserMessage(messagesWithResolvedArtifactAttachments)
       const conversation = await startConversation({
         request: effectiveRequest,
         projectService: this.projectService
@@ -764,7 +771,7 @@ export class CodexChatRuntimeService {
               }
             }
           : {}),
-        messages: restoreLocalMediaFileUrlsForModel(effectiveRequest.messages)
+        messages: restoreLocalMediaFileUrlsForModel(messagesWithResolvedArtifactAttachments)
       }
       const onTurnLifecycle = (event: ProviderTurnLifecycleEvent): Promise<void> => {
         if (activeRun.terminalDelivered) return Promise.resolve()
@@ -1297,8 +1304,9 @@ export class CodexChatRuntimeService {
       )
     }
 
+    const resolvedMessage = (await this.restoreArtifactAttachments([message]))[0] ?? message
     const prompt = userMessageToLanguageModelV3Prompt(
-      restoreLocalMediaFileUrlsForModel([message])[0] ?? message
+      restoreLocalMediaFileUrlsForModel([resolvedMessage])[0] ?? resolvedMessage
     )
     return run.session.steerPrompt(prompt, { clientUserMessageId })
   }

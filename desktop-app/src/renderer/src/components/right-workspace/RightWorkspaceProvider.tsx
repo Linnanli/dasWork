@@ -6,6 +6,7 @@ import {
   createWorkspaceDescriptor,
   WorkspaceContainerProvider,
   useWorkspaceContainer,
+  type ArtifactOpenTarget,
   type WorkspaceFileLocation,
   type WorkspaceOpenMode,
   type WorkspaceTabRecord
@@ -26,6 +27,10 @@ type RightWorkspaceContextValue = {
     relativePath: string,
     title?: string,
     options?: { location?: WorkspaceFileLocation; mode?: WorkspaceOpenMode; revealPath?: string }
+  ): void
+  openArtifact(
+    target: Omit<ArtifactOpenTarget, 'type'>,
+    options?: { mode?: WorkspaceOpenMode }
   ): void
   activateTab(tabId: string): void
   closeTab(tabId: string): void
@@ -114,6 +119,12 @@ function RightWorkspaceBridge({ children }: { children: ReactNode }): React.JSX.
             },
             { mode: options?.mode }
           )
+        }),
+      openArtifact: (target, options) =>
+        container.dispatch({
+          type: 'open-tab',
+          panelId: 'right',
+          tab: createWorkspaceDescriptor({ type: 'artifact', ...target }, { mode: options?.mode })
         }),
       activateTab: (tabId) => container.dispatch({ type: 'activate-tab', panelId: 'right', tabId }),
       closeTab: (tabId) => container.dispatch({ type: 'close-tab', panelId: 'right', tabId }),

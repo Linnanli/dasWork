@@ -6,6 +6,7 @@ const appRoot = resolve(import.meta.dirname, '..')
 
 run('npm', ['run', 'build'])
 run('npm', ['run', 'verify:pdf-worker-bundle'])
+run('npm', ['run', 'verify:pptx-worker-bundle'])
 run('npm', ['run', 'verify:review-diff-worker-bundle'])
 run('npx', ['electron-builder', '--dir'])
 

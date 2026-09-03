@@ -10,6 +10,7 @@ import {
 } from '../shared/codexIpcApi'
 import type { LocalImageFileIdentity } from './localImageCapabilityStore'
 import type { LocalPathFileIdentity } from './localPathCapabilityStore'
+import type { ArtifactPreviewFileIdentity } from '../shared/artifactPreviewApi'
 import { mediaTypeForPath, toAppMediaUrl } from './localMediaProtocol'
 
 type LocalContextDialogKind = LocalContextPickerKind | 'files' | 'folders'
@@ -30,6 +31,7 @@ export type LocalContextPickerDependencies = {
     kind: 'file' | 'folder',
     identity: LocalPathFileIdentity
   ) => string
+  issueArtifactPreviewCapability?: (path: string, identity: ArtifactPreviewFileIdentity) => string
   showOpenDialog(options: LocalContextPickerDialogOptions): Promise<{
     canceled: boolean
     filePaths: string[]
@@ -110,12 +112,17 @@ export async function pickLocalContext(
         identity && dependencies.issueLocalPathCapability
           ? dependencies.issueLocalPathCapability(path, selectedKind, identity)
           : undefined
+      const artifactPreviewToken =
+        selectedKind === 'file' && identity && dependencies.issueArtifactPreviewCapability
+          ? dependencies.issueArtifactPreviewCapability(path, identity)
+          : undefined
       references.push({
         kind: selectedKind,
         path,
         label,
         fileUrl,
-        ...(capabilityToken ? { capabilityToken } : {})
+        ...(capabilityToken ? { capabilityToken } : {}),
+        ...(artifactPreviewToken ? { artifactPreviewToken } : {})
       })
     }
   }

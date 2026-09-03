@@ -81,5 +81,6 @@ function openWithRightWorkspace(
 ): void {
   if (target.type === 'review') return actions.openReview(target.source)
   if (target.type === 'file') return actions.openFile(target.relativePath, target.title)
+  if (target.type === 'artifact') return actions.openArtifact(target)
   actions.openTab(target.type)
 }

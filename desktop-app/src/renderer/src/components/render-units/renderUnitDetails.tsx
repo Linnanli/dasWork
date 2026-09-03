@@ -48,6 +48,7 @@ import {
   type LocalGitReviewLastTurn
 } from '@/components/local-git-review/LocalGitReviewProvider'
 import { useOptionalRightWorkspace } from '@/components/right-workspace'
+import { isPptxArtifactPath } from '@/components/workspace-container'
 import { toolGroupIconMap } from '@/components/assistant-ui/tool-group'
 import type { AssistantRenderUnit, McpSourceMetadata } from '@/lib/assistantRenderUnits'
 import type { CodeComment } from '@/lib/codeCommentDirectives'
@@ -1213,6 +1214,19 @@ function ResourceCard({
     switch (nextAction.type) {
       case 'workspace-file':
         if (!workspace) return
+        if (isPptxArtifactPath(nextAction.relativePath)) {
+          workspace.openArtifact(
+            {
+              artifactType: 'slides',
+              importKind: 'pptx',
+              source: { kind: 'workspace-file', relativePath: nextAction.relativePath },
+              title: resource.label,
+              openSource: 'generated-resource'
+            },
+            { mode: nextAction.mode }
+          )
+          return
+        }
         workspace.openFile(nextAction.relativePath, resource.label, {
           location: {
             ...(nextAction.line ? { line: nextAction.line } : {}),

@@ -32,6 +32,9 @@ import {
 } from './conversations/ConversationApiService'
 import { createNativeContextMenuHandler, installWindowContextMenu } from './contextMenu'
 import { createPickLocalContextHandler } from './localContextPicker'
+import { ArtifactPreviewCapabilityStore } from './artifacts/ArtifactPreviewCapabilityStore'
+import { ArtifactComposerAttachmentStore } from './artifacts/ArtifactComposerAttachmentStore'
+import { ArtifactPreviewSourceManifest } from './artifacts/ArtifactPreviewSourceManifest'
 import { LocalImageCapabilityStore } from './localImageCapabilityStore'
 import { LocalPathCapabilityStore } from './localPathCapabilityStore'
 import { createListExistingLocalPathsHandler } from './localPathExistence'
@@ -145,12 +148,17 @@ let codexHostConnectionRegistry: CodexHostConnectionRegistry | undefined
 let rightWorkspaceIpc: RightWorkspaceIpcRegistration | undefined
 const localImageCapabilities = new LocalImageCapabilityStore()
 const localPathCapabilities = new LocalPathCapabilityStore()
+const artifactPreviewCapabilities = new ArtifactPreviewCapabilityStore()
+const artifactComposerAttachments = new ArtifactComposerAttachmentStore()
 const convergingConversationThreadIds = new Set<string>()
 
 const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
 if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
 const e2eDocumentsPath = process.env.DASCOWORK_E2E_DOCUMENTS_DIR?.trim()
 if (e2eDocumentsPath) app.setPath('documents', e2eDocumentsPath)
+const artifactPreviewManifest = new ArtifactPreviewSourceManifest(
+  join(app.getPath('userData'), 'artifact-preview-sources.json')
+)
 registerAppSchemePrivileges(protocol)
 
 function createCodexRuntime(
@@ -273,6 +281,7 @@ function createCodexRuntime(
     turnDiffStore,
     collaborationModeClient: historyClient,
     followUpQueue,
+    restoreArtifactAttachments: (messages) => artifactComposerAttachments.restoreInMessages(messages),
     onTurnCompleted: () => manager.handleAppEvent({ type: 'turnComplete' }),
     onAgentLifecycle: (event) => {
       liveAgents.observe(event)
@@ -593,6 +602,9 @@ app.whenReady().then(() => {
   rightWorkspaceIpc = registerRightWorkspaceIpc({
     ipcMain,
     projectService: requireProjectService(),
+    redeemAuthorizedLocalPreview: (token) => artifactPreviewCapabilities.redeem(token),
+    issueArtifactComposerAttachment: (input) => artifactComposerAttachments.issue(input),
+    artifactPreviewManifest,
     fileSearchProvider: requireComposerContextClient(),
     terminalBackendFactory: new TerminalBackendFactory(terminalHosts),
     terminalCommand: runtimeConfig.terminalCommand
@@ -684,6 +696,8 @@ app.whenReady().then(() => {
         localImageCapabilities.issue(path, mediaType, identity),
       issueLocalPathCapability: (path, kind, identity) =>
         localPathCapabilities.issue(path, kind, identity),
+      issueArtifactPreviewCapability: (path, identity) =>
+        artifactPreviewCapabilities.issue(path, identity),
       showOpenDialog: (options) => dialog.showOpenDialog(options),
       stat
     })

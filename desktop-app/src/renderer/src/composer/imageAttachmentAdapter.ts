@@ -87,12 +87,14 @@ export function localImageAttachmentIdentityFromId(
 }
 
 export function createLocalPathAttachment({
+  artifactPreviewToken,
   capabilityToken,
   fileUrl,
   kind,
   label,
   path
 }: {
+  artifactPreviewToken?: string
   capabilityToken?: string
   fileUrl: string
   kind: 'file' | 'folder'
@@ -101,7 +103,13 @@ export function createLocalPathAttachment({
 }): CreateAttachment {
   const contentType =
     kind === 'folder' ? localFolderAttachmentMediaType : localFileAttachmentMediaType
-  const identity = { capabilityToken, fileUrl, kind, path } satisfies LocalPathAttachmentIdentity
+  const identity = {
+    artifactPreviewToken,
+    capabilityToken,
+    fileUrl,
+    kind,
+    path
+  } satisfies LocalPathAttachmentIdentity
   return {
     id: `local-context:${encodeURIComponent(JSON.stringify(identity))}`,
     type: 'file',
@@ -119,10 +127,77 @@ export function createLocalPathAttachment({
 }
 
 export type LocalPathAttachmentIdentity = {
+  artifactPreviewToken?: string
   capabilityToken?: string
   fileUrl: string
   kind: 'file' | 'folder'
   path: string
+}
+
+export type ArtifactSourceAttachmentIdentity = {
+  sourceId: string
+  url: string
+}
+
+export function createArtifactSourceAttachment({
+  sourceId,
+  label,
+  url
+}: {
+  sourceId: string
+  label: string
+  url: string
+}): CreateAttachment {
+  const identity = { sourceId, url } satisfies ArtifactSourceAttachmentIdentity
+  return {
+    id: `artifact-source:${encodeURIComponent(JSON.stringify(identity))}`,
+    type: 'file',
+    name: label,
+    contentType: localFileAttachmentMediaType,
+    content: [
+      {
+        type: 'file',
+        filename: label,
+        mimeType: localFileAttachmentMediaType,
+        data: url
+      }
+    ]
+  }
+}
+
+export function artifactSourceAttachmentIdentityFromId(
+  attachmentId: string
+): ArtifactSourceAttachmentIdentity | undefined {
+  const prefix = 'artifact-source:'
+  if (!attachmentId.startsWith(prefix)) return undefined
+  try {
+    const value = JSON.parse(decodeURIComponent(attachmentId.slice(prefix.length))) as unknown
+    if (!value || typeof value !== 'object') return undefined
+    const identity = value as Partial<ArtifactSourceAttachmentIdentity>
+    if (
+      typeof identity.sourceId !== 'string' ||
+      !/^[A-Za-z0-9_-]{16,256}$/u.test(identity.sourceId) ||
+      typeof identity.url !== 'string' ||
+      !identity.url.startsWith(`dascowork-artifact://${identity.sourceId}/`)
+    ) {
+      return undefined
+    }
+    return identity as ArtifactSourceAttachmentIdentity
+  } catch {
+    return undefined
+  }
+}
+
+export function artifactSourceIdFromUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  try {
+    const url = new URL(value)
+    return url.protocol === 'dascowork-artifact:' && /^[A-Za-z0-9_-]{16,256}$/u.test(url.hostname)
+      ? url.hostname
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function localPathAttachmentIdentityFromId(
@@ -140,6 +215,9 @@ export function localPathAttachmentIdentityFromId(
       typeof identity.fileUrl !== 'string' ||
       (identity.capabilityToken !== undefined &&
         (typeof identity.capabilityToken !== 'string' || identity.capabilityToken.length === 0)) ||
+      (identity.artifactPreviewToken !== undefined &&
+        (typeof identity.artifactPreviewToken !== 'string' ||
+          identity.artifactPreviewToken.length < 16)) ||
       !identity.fileUrl.startsWith('file:')
     ) {
       return undefined

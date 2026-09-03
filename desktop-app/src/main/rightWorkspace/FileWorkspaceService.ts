@@ -4,6 +4,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Dirent, Stats } from 'node:fs'
 
 import { mediaTypeForPath, toAppMediaUrl } from '../localMediaProtocol'
+import type { ArtifactPreviewFileIdentity } from '../../shared/artifactPreviewApi'
 
 import {
   FILE_WORKSPACE_API_VERSION,
@@ -45,6 +46,13 @@ import {
 export type FileWorkspaceResolvedRoot = {
   rootId: string
   path: string
+}
+
+/** Main-process-only result used by ArtifactPreviewSourceService. */
+export type FileWorkspaceArtifactFile = {
+  absolutePath: string
+  relativePath: string
+  identity: ArtifactPreviewFileIdentity
 }
 
 export type FileWorkspaceServiceOptions = {
@@ -154,6 +162,28 @@ export class FileWorkspaceService {
     const entry = await this.entryForPath(path)
     if (entry.kind !== 'file') throw new Error('Workspace path is not a file.')
     return path.absolutePath
+  }
+
+  /**
+   * Resolves an Artifact source through the same realpath and owned-root gate
+   * as Files.  This intentionally stays out of the renderer-facing Files API.
+   */
+  async resolveFileForArtifact(
+    input: FileWorkspaceMetadataRequest
+  ): Promise<FileWorkspaceArtifactFile> {
+    const path = await this.resolveSafePath(input.rootId, input.path)
+    const fileStats = await stat(path.absolutePath)
+    if (!fileStats.isFile()) throw new Error('Workspace path is not a file.')
+    return {
+      absolutePath: path.absolutePath,
+      relativePath: path.relativePath,
+      identity: {
+        dev: fileStats.dev,
+        ino: fileStats.ino,
+        size: fileStats.size,
+        mtimeMs: fileStats.mtimeMs
+      }
+    }
   }
 
   async readFile(input: FileWorkspaceReadFileRequest): Promise<FileWorkspaceReadFileResult> {
