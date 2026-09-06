@@ -1,10 +1,11 @@
+import type { Thread } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread'
+import type { TurnItemsView } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnItemsView'
+import type { TurnsPage } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnsPage'
+
 import { AppServerClient } from './client/app-server-client'
 import { StdioTransport } from './client/transport-stdio'
 import { WebSocketTransport } from './client/transport-websocket'
 import { PACKAGE_NAME, PACKAGE_VERSION } from './package-info'
-import type { Thread } from './protocol/app-server-protocol/v2/Thread'
-import type { TurnItemsView } from './protocol/app-server-protocol/v2/TurnItemsView'
-import type { TurnsPage } from './protocol/app-server-protocol/v2/TurnsPage'
 import type {
   CodexInitializeParams,
   CodexInitializeResult,

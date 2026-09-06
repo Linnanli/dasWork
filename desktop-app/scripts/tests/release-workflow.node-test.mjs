@@ -26,7 +26,10 @@ test('release workflows use the locked Codex CLI without remote script execution
   const pinnedVersion = packageJson.devDependencies['@openai/codex']
   const lockedCodex = packageLock.packages['node_modules/@openai/codex']
 
-  assert.match(pinnedVersion, /^\d+\.\d+\.\d+$/u)
+  assert.match(
+    pinnedVersion,
+    /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u
+  )
   assert.equal(packageLock.packages[''].devDependencies['@openai/codex'], pinnedVersion)
   assert.equal(lockedCodex.version, pinnedVersion)
   assert.match(lockedCodex.integrity, /^sha512-/u)
@@ -38,6 +41,30 @@ test('release workflows use the locked Codex CLI without remote script execution
   assert.match(releaseWorkflow, /^permissions:\n {2}contents: read$/mu)
   assert.match(releaseWorkflow, /release:\n(?:.|\n)*?permissions:\n {6}contents: write/u)
   assert.match(testPlanWorkflow, /- "\.github\/workflows\/desktop-release\.yml"/u)
+  for (const workflow of [releaseWorkflow, testPlanWorkflow]) {
+    assert.match(workflow, /Build AI-free Codex app-server client/u)
+    assert.match(workflow, /npm run build:codex-app-server-client/u)
+    assert.match(workflow, /Verify generated Codex app-server protocol contract/u)
+    assert.match(workflow, /npm run verify:codex-app-server-protocol-contract/u)
+    assert.match(workflow, /Smoke-test real Codex app-server contract/u)
+    assert.match(workflow, /npm run verify:real-codex-app-server-contract/u)
+    assert.match(workflow, /Run release LLM E2E/u)
+    assert.match(workflow, /npm --prefix desktop-app run test:e2e:release-llm/u)
+    assert.match(
+      workflow,
+      /DASCOWORK_RELEASE_LLM_SMOKE: \$\{\{ secrets\.DASCOWORK_RELEASE_LLM_SMOKE \}\}/u
+    )
+    assert.match(
+      workflow,
+      /DASCOWORK_RELEASE_ADMIN_BACKEND_URL: \$\{\{ secrets\.DASCOWORK_RELEASE_ADMIN_BACKEND_URL \}\}/u
+    )
+    assert.doesNotMatch(workflow, /if:[^\n]*DASCOWORK_RELEASE_LLM_SMOKE/u)
+    assert.match(workflow, /Verify native Codex runtime boundaries/u)
+    assert.match(workflow, /node scripts\/verify-codex-native-runtime-boundaries\.mjs/u)
+    assert.match(workflow, /Upload native runtime boundary report/u)
+    assert.match(workflow, /native-runtime-boundaries\.json/u)
+    assert.doesNotMatch(workflow, /codex:generate-types/u)
+  }
 })
 
 test('release workflow verifies exact assets and smoke-tests built installers', async () => {

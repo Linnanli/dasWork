@@ -309,5 +309,13 @@ async function expectNoBundledAppServerResources(resourcesPath: string): Promise
   ).rejects.toThrow()
   const appAsarPath = join(resourcesPath, 'app.asar')
   const { stdout } = await execFile('npx', ['asar', 'list', appAsarPath])
-  expect(stdout).not.toContain('codex-app-server')
+  const archiveEntries = stdout.split(/\r?\n/u)
+  const bundledAppServerExecutables = archiveEntries.filter((entry) =>
+    /(?:^|\/)(?:codex|codex-app-server)(?:\.exe)?(?:\/|$)/u.test(entry)
+  )
+  expect(bundledAppServerExecutables).toEqual([])
+  expect(
+    archiveEntries.filter((entry) => /(?:^|\/)ai-sdk-provider-codex-asp(?:\/|$)/u.test(entry)),
+    'the AI SDK compatibility provider must not ship in the desktop production package'
+  ).toEqual([])
 }

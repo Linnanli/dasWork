@@ -510,6 +510,10 @@ describe('createCodexAppServer', () => {
     })
     const streamed = readAll(stream)
     await expect(savedObjective).resolves.toBe('finish the reference parity work')
+    transport.emitMessage({
+      method: 'thread/goal/cleared',
+      params: { threadId: 'thr_1' }
+    })
     transport.completeTurn()
     await streamed
 

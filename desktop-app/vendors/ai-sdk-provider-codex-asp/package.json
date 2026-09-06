@@ -25,7 +25,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "codex:generate-types": "codex app-server generate-ts --experimental -o src/protocol/app-server-protocol",
     "build": "tsup",
     "dev": "tsup --watch",
     "clean": "rimraf dist",
@@ -73,6 +72,7 @@
     "vitest": "^3.0.7"
   },
   "dependencies": {
+    "@dascowork/codex-app-server-client": "file:../codex-app-server-client",
     "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/provider-utils": "^4.0.15"
   }

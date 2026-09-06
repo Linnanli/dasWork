@@ -1,7 +1,7 @@
+import type { Thread } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread'
 import { describe, expect, it, vi } from 'vitest'
 
 import { type CodexHistoryJsonRpcClientLike, createCodexHistoryClient } from '../src'
-import type { Thread } from '../src/protocol/app-server-protocol/v2/Thread'
 import type { ThreadGoal } from '../src/protocol/types'
 
 type RequestRecord = { method: string; params?: unknown }

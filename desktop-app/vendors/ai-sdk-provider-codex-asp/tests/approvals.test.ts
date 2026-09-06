@@ -1,9 +1,9 @@
+import type { FileUpdateChange } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/FileUpdateChange";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApprovalsDispatcher } from "../src/approvals";
 import { AppServerClient } from "../src/client/app-server-client";
 import type { JsonRpcMessage } from "../src/client/transport";
-import type { FileUpdateChange } from "../src/protocol/app-server-protocol/v2/FileUpdateChange";
 import { codexCallOptions } from "../src/protocol/provider-metadata";
 import { createCodexAppServer } from "../src/provider";
 import { MockTransport } from "./helpers/mock-transport";

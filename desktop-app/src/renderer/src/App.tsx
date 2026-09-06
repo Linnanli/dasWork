@@ -21,6 +21,7 @@ import {
   type ThreadMessageLike
 } from '@assistant-ui/react'
 import { getToolName, isToolUIPart, type UIMessage, type UIMessagePart } from 'ai'
+import { readCodexMessageMetadata } from '../../shared/codexMessageMetadata'
 import { type DirectiveChipProps } from '@assistant-ui/react-lexical'
 import { Streamdown, type Components, type PluginConfig } from 'streamdown'
 import { cjk } from '@streamdown/cjk'
@@ -642,14 +643,18 @@ function App(): React.JSX.Element {
     if (conversation) {
       restoredActiveConversation.current = true
       restoringActiveConversation.current = true
-      void openConversation({ conversationId: conversation.id }).then(
-        () => {
+      // A live run must be restored from Main's journal before falling back
+      // to app-server history. Loading both concurrently can render the same
+      // assistant message once from replay and again from the history snapshot.
+      void restoreActiveConversation(conversation.id)
+        .then(
+          (restored) =>
+            restored ? undefined : openConversation({ conversationId: conversation.id }),
+          () => openConversation({ conversationId: conversation.id })
+        )
+        .finally(() => {
           restoringActiveConversation.current = false
-        },
-        () => {
-          restoringActiveConversation.current = false
-        }
-      )
+        })
       return
     }
 
@@ -2730,8 +2735,6 @@ type CodexTextPartMetadata = {
   turnDurationMs?: number
 }
 
-const CODEX_PROVIDER_ID = '@janole/ai-sdk-provider-codex-asp'
-
 function codexTextPartMetadataFor(message: ThreadMessage): readonly CodexTextPartMetadata[] {
   return getExternalStoreMessages<ExternalAISDKMessage>(message).flatMap((externalMessage) =>
     (externalMessage.parts ?? []).flatMap((part) => {
@@ -2756,10 +2759,8 @@ function codexTurnDurationFor(message: ThreadMessage): number | undefined {
 }
 
 function messageMetadataFromProviderMetadata(providerMetadata: unknown): CodexTextPartMetadata {
-  if (!providerMetadata || typeof providerMetadata !== 'object') return {}
-  const codexMetadata = (providerMetadata as Record<string, unknown>)[CODEX_PROVIDER_ID]
-  if (!codexMetadata || typeof codexMetadata !== 'object') return {}
-  const metadata = codexMetadata as Record<string, unknown>
+  const metadata = readCodexMessageMetadata(providerMetadata)
+  if (!metadata) return {}
   const phase = metadata.messagePhase
   const turnDurationMs = metadata.turnDurationMs
   return {

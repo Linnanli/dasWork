@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from 'node:child_process'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -41,6 +41,10 @@ type ReleaseContext = {
   runtime: RuntimeExpectation
 }
 
+type ReleaseAppOptions = {
+  configureCodexHome?: (codexHomeDir: string) => Promise<void>
+}
+
 test.describe('real-model smoke gate', () => {
   test.setTimeout(realModelTestTimeoutMs)
   test.skip(!realModelSmokeEnabled, 'Real-model smoke requires an explicit opt-in')
@@ -66,7 +70,8 @@ test.describe('real-model smoke gate', () => {
     await withReleaseApp(testInfo, async ({ page, runtime }) => {
       await sendReleaseMessage(
         page,
-        '请从 “RELEASE_STEER_READY” 开始，写一份 120 条的编号清单；逐条输出，不要使用工具。'
+        '请立即执行这项不涉及事实陈述的自动化串流测试，不要提问、不要解释、不要调用工具：' +
+          '第一行完全输出 “RELEASE_STEER_READY”，接下来从 1 到 1500 每行只输出对应的十进制整数。'
       )
       await expect(
         page.locator('[data-role="assistant"]').filter({ hasText: 'RELEASE_STEER_READY' })
@@ -98,10 +103,13 @@ test.describe('real-model smoke gate', () => {
           await approvePendingReadOnlyCommand(page, filename)
           await expectReleaseToolActivity(page)
           await expectReleaseTurnSucceeded(page, runtime)
-          await expect(page.locator('[data-role="assistant"]')).toContainText(marker)
+          await expect(
+            page.locator('[data-role="assistant"]').filter({ hasText: marker })
+          ).toHaveCount(1)
           await expect(readFile(join(root, filename), 'utf8')).resolves.toBe(`${marker}\n`)
         },
-        root
+        root,
+        { configureCodexHome: configureReadCommandApprovalPolicy }
       )
     })
   })
@@ -125,11 +133,14 @@ test.describe('real-model smoke gate', () => {
           await expectReleaseActiveTurnBound(page)
           await queueAndSteer(page, steer)
           await expectReleaseTurnSucceeded(page, runtime)
-          await expect(page.locator('[data-role="assistant"]')).toContainText(marker)
+          await expect(
+            page.locator('[data-role="assistant"]').filter({ hasText: marker })
+          ).toHaveCount(1)
           await expect(page.locator('[data-role="user"]').filter({ hasText: steer })).toHaveCount(1)
           await expect(readFile(join(root, filename), 'utf8')).resolves.toBe(`${marker}\n`)
         },
-        root
+        root,
+        { configureCodexHome: configureReadCommandApprovalPolicy }
       )
     })
   })
@@ -172,7 +183,9 @@ test.describe('real-model smoke gate', () => {
     test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
     const marker = `RELEASE_HISTORY_${Date.now().toString(36)}`
     const steer = `请在历史中保留这条引导：${marker}`
-    const prompt = `输出标记 ${marker} 并写 120 条编号清单；不要调用任何工具。`
+    const prompt =
+      `请立即执行这项不涉及事实陈述的自动化串流与历史恢复测试，不要提问、不要解释、不要调用工具：` +
+      `第一行完全输出标记 ${marker}，接下来从 1 到 1500 每行只输出对应的十进制整数。`
     await withReleaseApp(testInfo, async ({ page, runtime }) => {
       await sendReleaseMessage(page, prompt)
       await expect(page.locator('[data-role="assistant"]').filter({ hasText: marker })).toBeVisible(
@@ -199,7 +212,8 @@ test.describe('real-model smoke gate', () => {
 async function withReleaseApp(
   testInfo: TestInfo,
   run: (context: ReleaseContext) => Promise<void>,
-  workspaceRoot = appRoot
+  workspaceRoot = appRoot,
+  options: ReleaseAppOptions = {}
 ): Promise<void> {
   if (!adminBackendUrl) {
     throw new Error(
@@ -220,6 +234,7 @@ async function withReleaseApp(
       logs,
       {
         cwd: appRoot,
+        configureCodexHome: options.configureCodexHome,
         environment: {
           // The generic E2E launch default uses `e2e-user`, which is only valid for the mock
           // backend. Real catalog backends may reject it, so omit user_id unless explicitly set.
@@ -251,6 +266,25 @@ async function withReleaseApp(
     await attachReleaseDiagnostics(testInfo, logs, app)
     await closeApp(app)
   }
+}
+
+async function configureReadCommandApprovalPolicy(codexHomeDir: string): Promise<void> {
+  const rulesDir = join(codexHomeDir, 'rules')
+  await mkdir(rulesDir, { recursive: true })
+  await writeFile(
+    join(rulesDir, 'real-model-read-approval.rules'),
+    [
+      'prefix_rule(pattern = ["cat"], decision = "prompt")',
+      'prefix_rule(pattern = ["head"], decision = "prompt")',
+      'prefix_rule(pattern = ["tail"], decision = "prompt")',
+      'prefix_rule(pattern = ["sed"], decision = "prompt")',
+      'prefix_rule(pattern = ["awk"], decision = "prompt")',
+      'prefix_rule(pattern = ["grep"], decision = "prompt")',
+      'prefix_rule(pattern = ["rg"], decision = "prompt")',
+      'prefix_rule(pattern = ["sh"], decision = "prompt")'
+    ].join('\n'),
+    'utf8'
+  )
 }
 
 async function sendReleaseMessage(page: Page, message: string): Promise<void> {
@@ -387,7 +421,15 @@ async function expectNoBundledAppServerResources(resourcesPath: string): Promise
   ).rejects.toThrow()
   const appAsarPath = join(resourcesPath, 'app.asar')
   const { stdout } = await execFile('npx', ['asar', 'list', appAsarPath])
-  expect(stdout).not.toContain('codex-app-server')
+  const archiveEntries = stdout.split(/\r?\n/u)
+  const bundledAppServerExecutables = archiveEntries.filter((entry) =>
+    /(?:^|\/)(?:codex|codex-app-server)(?:\.exe)?(?:\/|$)/u.test(entry)
+  )
+  expect(bundledAppServerExecutables).toEqual([])
+  expect(
+    archiveEntries.filter((entry) => /(?:^|\/)ai-sdk-provider-codex-asp(?:\/|$)/u.test(entry)),
+    'the AI SDK compatibility provider must not ship in the desktop production package'
+  ).toEqual([])
 }
 
 function resolveRealModelRuntime(): 'development' | 'release' {

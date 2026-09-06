@@ -4,6 +4,11 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli 0.148.0-alpha.21\n')
+  process.exit(0)
+}
+
 const rpcLogPath = process.env.DASCOWORK_E2E_APPROVAL_RPC_LOG_PATH
 if (!rpcLogPath) throw new Error('Approval mode E2E app-server requires an RPC log path.')
 

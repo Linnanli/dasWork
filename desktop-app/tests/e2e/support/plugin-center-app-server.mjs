@@ -5,6 +5,11 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli 0.148.0-alpha.21\n')
+  process.exit(0)
+}
+
 const statePath = process.env.DASCOWORK_E2E_PLUGIN_CENTER_STATE_PATH
 const rpcLogPath = process.env.DASCOWORK_E2E_PLUGIN_CENTER_RPC_LOG_PATH
 const pluginListDelayMs = nonNegativeInteger(process.env.DASCOWORK_E2E_PLUGIN_CENTER_LIST_DELAY_MS)

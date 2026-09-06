@@ -1,17 +1,12 @@
 import {
-  createCodexHistoryClient,
   type CodexExperimentalFeature,
-  mapCodexThreadToUiMessages,
   type CodexThreadGoalSetParams,
   type CodexTurnListParams,
-  type CodexHistoryClient,
-  type CodexThreadForUi,
   type ThreadGoal
-} from '@janole/ai-sdk-provider-codex-asp'
+} from '@dascowork/codex-app-server-client'
 import type { UIMessage } from 'ai'
 
-import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
-import { createCodexClientInfo } from '../codexClientInfo'
+import { mapCodexThreadToUiMessages, type CodexThreadForUi } from './CodexHistoryUiMessageMapper'
 import type { TurnDiffStoreReader } from './TurnDiffStore'
 
 type AppServerHistoryThread = CodexThreadForUi & {
@@ -64,9 +59,11 @@ export type AppServerHistoryClientLike = {
 }
 
 export type AppServerThreadClientOptions = {
-  launch?: CodexAppServerLaunchOptions
-  historyClient?: AppServerHistoryClientLike
-  createHistoryClient?: () => AppServerHistoryClientLike
+  /**
+   * A host-owned logical client lease. Requiring it prevents sidebar/history
+   * operations from creating their own initialize lifecycle or stdio process.
+   */
+  historyClient: AppServerHistoryClientLike
   turnDiffStore?: TurnDiffStoreReader
 }
 
@@ -165,26 +162,7 @@ export class AppServerThreadClient {
   private async withHistoryClient<T>(
     callback: (client: AppServerHistoryClientLike) => Promise<T>
   ): Promise<T> {
-    return callback(this.createHistoryClient())
-  }
-
-  private createHistoryClient(): AppServerHistoryClientLike {
-    if (this.options.historyClient) return this.options.historyClient
-    if (this.options.createHistoryClient) return this.options.createHistoryClient()
-    if (!this.options.launch) throw new Error('Codex app-server launch options are required')
-    return createCodexHistoryClient({
-      clientInfo: createCodexClientInfo('dascowork_desktop_sidebar', 'dasCowork Desktop Sidebar'),
-      experimentalApi: true,
-      transport: {
-        type: 'stdio',
-        stdio: {
-          command: this.options.launch.command,
-          args: this.options.launch.args,
-          cwd: this.options.launch.cwd,
-          env: this.options.launch.env
-        }
-      }
-    }) satisfies CodexHistoryClient
+    return callback(this.options.historyClient)
   }
 }
 

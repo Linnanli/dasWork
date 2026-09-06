@@ -1,7 +1,8 @@
+import type { FileChangePatchUpdatedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/FileChangePatchUpdatedNotification";
+import type { FileUpdateChange } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/FileUpdateChange";
+
 import type { AppServerClient } from "./client/app-server-client";
 import type { JsonRpcRequest } from "./client/transport";
-import type { FileChangePatchUpdatedNotification } from "./protocol/app-server-protocol/v2/FileChangePatchUpdatedNotification";
-import type { FileUpdateChange } from "./protocol/app-server-protocol/v2/FileUpdateChange";
 import type {
     CommandExecutionApprovalDecision,
     CommandExecutionRequestApprovalParams,

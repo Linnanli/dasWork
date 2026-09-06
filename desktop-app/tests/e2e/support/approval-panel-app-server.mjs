@@ -4,6 +4,11 @@
 import { appendFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli 0.148.0-alpha.21\n')
+  process.exit(0)
+}
+
 const scenario = process.env.DASCOWORK_E2E_APPROVAL_SCENARIO
 const responsePath = process.env.DASCOWORK_E2E_APPROVAL_RESPONSE_PATH
 const threadId = 'e2e-approval-thread'

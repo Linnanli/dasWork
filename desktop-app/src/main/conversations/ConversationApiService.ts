@@ -1,7 +1,7 @@
 import {
   type CodexTurnInputItem,
   userInputText as codexUserInputText
-} from '@janole/ai-sdk-provider-codex-asp'
+} from '@dascowork/codex-app-server-client'
 import type {
   SidebarConversationActionPayload,
   SidebarConversationListState,
@@ -13,7 +13,7 @@ import type {
   ThreadGoalSummary
 } from '../../shared/codexIpcApi'
 import type { ProjectState, ThreadProjectAssignment } from '../../shared/projects/projectTypes'
-import type { CodexExperimentalFeature } from '@janole/ai-sdk-provider-codex-asp'
+import type { CodexExperimentalFeature } from '@dascowork/codex-app-server-client'
 import type { AppServerThreadGoal, AppServerThreadRow } from './AppServerThreadClient'
 import { normalizeLocalMediaUrls } from './localMediaUrls'
 
@@ -60,6 +60,8 @@ const defaultPreferences: SidebarPreferences = {
   collapsedSectionIds: [],
   collapsedGroupIds: []
 }
+const placeholderThreadTitles = new Set(['New Chat'])
+
 const emptyProjectState: ProjectState = {
   workspaceRootOptions: [],
   localProjects: {},
@@ -78,7 +80,19 @@ const emptyProjectState: ProjectState = {
 export class ConversationApiService {
   private preferences: SidebarPreferences = defaultPreferences
   private authoritativeThreadRows: AppServerThreadRow[] = []
+  /**
+   * Threads confirmed by `thread/read` while `thread/list` is still catching
+   * up. These are never optimistic rows: each later refresh reads them again
+   * before projecting them into the sidebar.
+   */
+  private readonly readConfirmedThreadRows = new Map<string, AppServerThreadRow>()
   private readonly observedStartedThreads = new Map<string, AppServerThreadRow>()
+  /**
+   * App-server can expose an immediately interrupted thread with the generic
+   * "New Chat" label before its first user item has reached history. Preserve
+   * the bound request title until app-server supplies a real presentation.
+   */
+  private readonly startedThreadTitleFallbacks = new Map<string, string>()
   private readonly observedStartedThreadAssignments = new Map<string, ThreadProjectAssignment>()
   private readonly observedStartedThreadOrigins = new Map<string, string>()
   private lastProjectState: ProjectState = emptyProjectState
@@ -179,7 +193,7 @@ export class ConversationApiService {
       ])
       this.lastProjectState = projectState
       this.authoritativeThreadRows = await this.includeRequiredThreads({
-        threads,
+        threads: await this.reconcileReadConfirmedThreads(threads),
         requiredThreadIds: input.ensureThreadIds
       })
       return this.updateLastState({
@@ -247,8 +261,10 @@ export class ConversationApiService {
     await this.options.threadClient.archiveThread(input.conversationId)
     await this.options.onConversationArchived?.(input.conversationId)
     this.observedStartedThreads.delete(input.conversationId)
+    this.startedThreadTitleFallbacks.delete(input.conversationId)
     this.observedStartedThreadAssignments.delete(input.conversationId)
     this.observedStartedThreadOrigins.delete(input.conversationId)
+    this.readConfirmedThreadRows.delete(input.conversationId)
     return this.refreshConversationList()
   }
 
@@ -263,6 +279,7 @@ export class ConversationApiService {
     input: SidebarConversationRenamePayload
   ): Promise<SidebarConversationListState> {
     await this.options.threadClient.renameThread(input.conversationId, input.title.trim())
+    this.startedThreadTitleFallbacks.set(input.conversationId, input.title.trim())
     return this.refreshConversationList()
   }
 
@@ -310,6 +327,8 @@ export class ConversationApiService {
     if (input.originConversationId) {
       this.observedStartedThreadOrigins.set(input.threadId, input.originConversationId)
     }
+    const title = cleanTitle(input.title)
+    if (title) this.startedThreadTitleFallbacks.set(input.threadId, title)
     this.observedStartedThreads.set(input.threadId, {
       id: input.threadId,
       title: input.title ?? existing?.title ?? null,
@@ -346,8 +365,40 @@ export class ConversationApiService {
       if (rowsById.has(thread.id)) continue
       if (thread.archived) continue
       this.observedStartedThreads.delete(thread.id)
+      this.readConfirmedThreadRows.set(thread.id, thread)
       rowsById.set(thread.id, thread)
       rows.unshift(thread)
+    }
+
+    return rows
+  }
+
+  private async reconcileReadConfirmedThreads(
+    threads: AppServerThreadRow[]
+  ): Promise<AppServerThreadRow[]> {
+    const rows = [...threads]
+    const rowsById = new Map(rows.map((thread) => [thread.id, thread]))
+
+    for (const threadId of this.readConfirmedThreadRows.keys()) {
+      if (rowsById.has(threadId)) {
+        this.readConfirmedThreadRows.delete(threadId)
+        continue
+      }
+
+      try {
+        const thread = await this.options.threadClient.readThreadWithFullTurns(threadId)
+        if (thread.archived) {
+          this.readConfirmedThreadRows.delete(threadId)
+          continue
+        }
+        this.readConfirmedThreadRows.set(thread.id, thread)
+        rowsById.set(thread.id, thread)
+        rows.unshift(thread)
+      } catch {
+        // A read-confirmed row is only retained while app-server can still
+        // read it. This prevents a stale local sidebar fallback.
+        this.readConfirmedThreadRows.delete(threadId)
+      }
     }
 
     return rows
@@ -385,6 +436,9 @@ export class ConversationApiService {
       if (this.observedStartedThreads.has(thread.id)) continue
       this.observedStartedThreadAssignments.delete(thread.id)
       this.observedStartedThreadOrigins.delete(thread.id)
+      if (hasAuthoritativeThreadPresentation(thread)) {
+        this.startedThreadTitleFallbacks.delete(thread.id)
+      }
     }
   }
 
@@ -397,12 +451,12 @@ export class ConversationApiService {
   }): SidebarConversationListState {
     return {
       conversations: threads.map((thread) => ({
+        ...conversationListRowTitle(thread, this.startedThreadTitleFallbacks.get(thread.id)),
         id: thread.id,
         threadId: thread.id,
         ...(this.observedStartedThreadOrigins.has(thread.id)
           ? { originConversationId: this.observedStartedThreadOrigins.get(thread.id) }
           : {}),
-        title: conversationTitle(thread),
         projectAssignment:
           this.observedStartedThreadAssignments.get(thread.id) ??
           resolveAssignment(projectState, thread),
@@ -432,7 +486,34 @@ function uniqueThreadIds(threadIds: (string | undefined)[]): string[] {
 }
 
 function conversationTitle(thread: AppServerThreadRow): string | null {
-  return cleanTitle(thread.title) ?? cleanTitle(firstTurnText(thread)) ?? null
+  const title = cleanTitle(thread.title)
+  const firstUserText = cleanTitle(firstTurnText(thread))
+  if (isPlaceholderThreadTitle(title)) return firstUserText ?? title
+  return title ?? firstUserText ?? null
+}
+
+function conversationListRowTitle(
+  thread: AppServerThreadRow,
+  startedThreadTitleFallback: string | undefined
+): { title: string | null } {
+  const title = conversationTitle(thread)
+  return {
+    title:
+      (isPlaceholderThreadTitle(title) ? startedThreadTitleFallback : title) ??
+      startedThreadTitleFallback ??
+      null
+  }
+}
+
+function hasAuthoritativeThreadPresentation(thread: AppServerThreadRow): boolean {
+  return [thread.title, thread.preview, firstTurnText(thread)].some((value) => {
+    const title = cleanTitle(value)
+    return title !== null && !isPlaceholderThreadTitle(title)
+  })
+}
+
+function isPlaceholderThreadTitle(title: string | null): boolean {
+  return title !== null && placeholderThreadTitles.has(title)
 }
 
 function firstTurnText(thread: AppServerThreadRow): string | null {

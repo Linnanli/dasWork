@@ -1,4 +1,7 @@
-import type { CodexProcessSession, CodexProcessSessionClient } from '@janole/ai-sdk-provider-codex-asp'
+import type {
+  CodexProcessSession,
+  CodexProcessSessionClient
+} from '@dascowork/codex-app-server-client'
 
 import type { TerminalBackend, TerminalExit } from './TerminalBackend'
 

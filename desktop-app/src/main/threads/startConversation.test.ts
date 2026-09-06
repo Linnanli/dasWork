@@ -1,19 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const providerState = vi.hoisted(() => ({
-  listModels: vi.fn(),
-  shutdown: vi.fn(),
-  startThread: vi.fn()
-}))
-
-vi.mock('../codexAspProvider', () => ({
-  createCodexAspProvider: vi.fn(() => ({
-    listModels: providerState.listModels,
-    shutdown: providerState.shutdown,
-    startThread: providerState.startThread,
-    chat: vi.fn()
-  }))
-}))
+import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: {
@@ -86,13 +71,6 @@ type RuntimeStreamTextInput = {
 }
 
 describe('startConversation', () => {
-  beforeEach(() => {
-    providerState.listModels.mockReset()
-    providerState.shutdown.mockReset()
-    providerState.startThread.mockReset()
-    providerState.startThread.mockResolvedValue({ threadId: 'thread-prestarted' })
-  })
-
   it('ignores renderer supplied cwd and uses resolved target', async () => {
     const port = new FakePort()
     const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
@@ -130,7 +108,7 @@ describe('startConversation', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       projectService
     })
 
@@ -273,7 +251,7 @@ describe('startConversation', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       projectService
     })
 

@@ -14,6 +14,7 @@ import type {
   ThreadGoalLoadResult
 } from '../../../shared/codexIpcApi'
 import { LOCAL_FILE_ATTACHMENT_MEDIA_TYPE } from '../../../shared/composerContext'
+import { codexMessageProviderMetadata } from '../../../shared/codexMessageMetadata'
 import { ConversationDraftStore } from './ConversationDraftStore'
 import { ConversationChatRegistry } from './ConversationChatRegistry'
 import { ConversationTranscriptRecoveryStore } from './ConversationTranscriptRecoveryStore'
@@ -338,6 +339,7 @@ describe('ConversationChatRegistry', () => {
             run: {
               runId: 'run-local-recovery',
               conversationId,
+              state: 'active' as const,
               runKind: 'single-turn' as const,
               lastSequence: 0
             },
@@ -383,6 +385,68 @@ describe('ConversationChatRegistry', () => {
     expect(vi.mocked(bridge.startChatStream)).not.toHaveBeenCalled()
   })
 
+  it('does not attach a duplicate recovery stream to a local stream that is already live', async () => {
+    const { bridge, registry } = registryFixture()
+    const entry = registry.getSnapshot().activeEntry
+    await entry.transport.sendMessages({
+      chatId: entry.controller.id,
+      trigger: 'submit-message',
+      messageId: undefined,
+      messages: [],
+      abortSignal: undefined
+    })
+    bridge.getActiveSnapshot = vi.fn(async (conversationId: string) => ({
+      run: {
+        runId: 'run-live-local-stream',
+        conversationId,
+        state: 'active' as const,
+        runKind: 'single-turn' as const,
+        threadId: 'thread-live-local-stream',
+        lastSequence: 3
+      },
+      baseMessages: []
+    }))
+    bridge.attachChatStream = vi.fn(async () => 'duplicate-attachment')
+
+    await expect(registry.restoreActiveConversation(entry.localId)).resolves.toBe(true)
+
+    expect(entry.context.threadId).toBe('thread-live-local-stream')
+    expect(bridge.attachChatStream).not.toHaveBeenCalled()
+  })
+
+  it('coalesces local and thread identity recovery into one replay stream', async () => {
+    const { bridge, registry } = registryFixture()
+    const callbacks = new Map<string, CodexChatStreamCallbacks>()
+    bridge.getActiveSnapshot = vi.fn(async () => ({
+      run: {
+        runId: 'run-identity-race',
+        conversationId: 'local-identity-race',
+        state: 'active' as const,
+        runKind: 'single-turn' as const,
+        threadId: 'thread-identity-race',
+        lastSequence: 4
+      },
+      baseMessages: []
+    }))
+    bridge.attachChatStream = vi.fn(async (conversationId, streamCallbacks) => {
+      callbacks.set(conversationId, streamCallbacks)
+      return 'attached-identity-race'
+    })
+
+    await expect(registry.restoreActiveConversation('thread-identity-race')).resolves.toBe(true)
+    expect(registry.resolve('local-identity-race')).toBe(registry.resolve('thread-identity-race'))
+    await expect(registry.restoreActiveConversation('local-identity-race')).resolves.toBe(true)
+    await vi.waitFor(() => expect(bridge.attachChatStream).toHaveBeenCalledOnce())
+
+    const entry = registry.getSnapshot().activeEntry
+    expect(
+      registry.getSnapshot().entries.filter((candidate) => candidate.localId !== 'local-0')
+    ).toEqual([entry])
+    expect(registry.resolve('local-identity-race')).toBe(entry)
+    expect(registry.resolve('thread-identity-race')).toBe(entry)
+    callbacks.get('thread-identity-race')?.onFinish('thread-identity-race')
+  })
+
   it('F16 treats app-server history as canonical after a failed turn', async () => {
     const { registry } = registryFixture()
     const user = {
@@ -403,6 +467,73 @@ describe('ConversationChatRegistry', () => {
       sourceMessageId: user.id,
       parts: user.parts
     })
+  })
+
+  it('loads canonical history instead of replaying a retained terminal run after reload', async () => {
+    const { bridge, registry } = registryFixture()
+    const terminalRun = {
+      runId: 'run-terminal-reload',
+      conversationId: 'thread-steered',
+      state: 'terminal' as const,
+      runKind: 'single-turn' as const,
+      threadId: 'thread-steered',
+      lastSequence: 8
+    }
+    bridge.getActiveSnapshot = vi.fn(async () => ({
+      run: terminalRun,
+      baseMessages: [
+        {
+          id: 'initial-user',
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: 'Initial request.' }]
+        }
+      ]
+    }))
+    bridge.getActiveRun = vi.fn(async () => terminalRun)
+    bridge.attachChatStream = vi.fn(async () => 'unexpected-terminal-replay')
+
+    await expect(registry.restoreActiveConversation('thread-steered')).resolves.toBe(false)
+
+    const entry = await registry.openConversation('thread-steered', async () => ({
+      conversationId: 'thread-steered',
+      threadId: 'thread-steered',
+      title: 'Steered conversation',
+      messages: [
+        {
+          id: 'initial-user',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Initial request.' }]
+        },
+        {
+          id: 'initial-assistant',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Initial response.' }]
+        },
+        {
+          id: 'steer-user',
+          role: 'user',
+          parts: [{ type: 'text', text: 'Steer follow-up.' }]
+        },
+        {
+          id: 'steer-assistant',
+          role: 'assistant',
+          parts: [{ type: 'text', text: 'Steered response.' }]
+        }
+      ]
+    }))
+    await flushRecoveryWork()
+
+    expect(entry.messages).toHaveLength(4)
+    expect(entry.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'user',
+          sourceMessageId: 'steer-user',
+          parts: [{ type: 'text', text: 'Steer follow-up.' }]
+        })
+      ])
+    )
+    expect(bridge.attachChatStream).not.toHaveBeenCalled()
   })
 
   it('does not retry an unknown active-conversation recovery after 750ms', async () => {
@@ -1451,11 +1582,6 @@ async function flushRecoveryWork(): Promise<void> {
 function codexMetadata(
   turnId: string,
   sourceItemId: string
-): Record<string, Record<string, string>> {
-  return {
-    '@janole/ai-sdk-provider-codex-asp': {
-      turnId,
-      sourceItemId
-    }
-  }
+): ReturnType<typeof codexMessageProviderMetadata> {
+  return codexMessageProviderMetadata({ turnId, sourceItemId })
 }

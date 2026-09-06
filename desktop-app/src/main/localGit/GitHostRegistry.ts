@@ -7,7 +7,7 @@ import {
   CodexCommandClient,
   type CodexCommandExecOptions,
   type CodexCommandExecResult
-} from '@janole/ai-sdk-provider-codex-asp'
+} from '@dascowork/codex-app-server-client'
 
 import type { GitBytesResult, GitHost, GitRunOptions, GitRunResult } from './GitManager'
 import { createCodexClientInfo } from '../codexClientInfo'

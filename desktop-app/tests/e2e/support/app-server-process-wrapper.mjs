@@ -12,6 +12,15 @@ const originalTurnCompletedPath = process.env.DASCOWORK_E2E_ORIGINAL_TURN_COMPLE
 const heldThreadStartPath = process.env.DASCOWORK_E2E_HELD_THREAD_START_PATH
 const releaseThreadStartPath = process.env.DASCOWORK_E2E_RELEASE_THREAD_START_PATH
 
+if (process.argv.includes('--version')) {
+  const versionExitCode = await new Promise((resolve) => {
+    const versionChild = spawn(codexCommand, ['--version'], { env: process.env, stdio: 'inherit' })
+    versionChild.once('error', () => resolve(1))
+    versionChild.once('close', (code) => resolve(code ?? 1))
+  })
+  process.exit(versionExitCode)
+}
+
 if (!pidPath) {
   throw new Error('The E2E app-server wrapper requires DASCOWORK_E2E_APP_SERVER_PID_PATH.')
 }

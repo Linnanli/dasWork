@@ -8,7 +8,7 @@ import eslintPluginUnicorn from 'eslint-plugin-unicorn';
 
 export default [
     {
-        ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'src/protocol/app-server-protocol/**'],
+        ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
     },
     js.configs.recommended,
     {

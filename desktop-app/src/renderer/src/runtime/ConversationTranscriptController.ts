@@ -7,6 +7,7 @@ import {
 } from 'ai'
 
 import type { CodexTurnLifecycleEvent } from '../../../shared/codexIpcApi'
+import { readCodexMessageMetadata } from '../../../shared/codexMessageMetadata'
 import { selectUniqueLegacyCandidate } from '../../../shared/uniqueLegacyCandidate'
 import type {
   CodexChatStreamError,
@@ -14,7 +15,6 @@ import type {
 } from '../lib/ElectronIpcChatTransport'
 import { markConversationStreamPublish } from './conversationStreamPerformance'
 
-const CODEX_PROVIDER_ID = '@janole/ai-sdk-provider-codex-asp'
 const DEFAULT_TURN_ERROR_MESSAGE = '模型响应未完成，请重试。'
 const UNKNOWN_RECOVERY_ERROR_MESSAGE = '无法确认后台任务状态，请重试。'
 const UNKNOWN_RECOVERY_ERROR_CODE = 'unknown-recovery'
@@ -893,7 +893,8 @@ export class ConversationTranscriptController {
         if (!sourceMessageId) {
           throw this.integrityError('Assistant segment has no stable render identity')
         }
-        messages.push(
+        appendOrReplaceAssistantSegment(
+          messages,
           toRegularTranscriptMessage(
             {
               ...assistant,
@@ -1080,6 +1081,30 @@ function toRegularTranscriptMessage(
   }
 }
 
+/**
+ * An active-run snapshot can already contain an assistant item when its
+ * replacement renderer attaches to Main's journal. The journal is
+ * authoritative for that same source item, so update it in place rather than
+ * creating a second render identity. This intentionally does not normalize
+ * unrelated duplicate history entries; those still fail the integrity check.
+ */
+function appendOrReplaceAssistantSegment(
+  messages: ConversationTranscriptMessage[],
+  segment: ConversationTranscriptRegularMessage
+): void {
+  const existingIndex = messages.findIndex(
+    (message) =>
+      message.kind === 'message' &&
+      message.role === 'assistant' &&
+      message.sourceMessageId === segment.sourceMessageId
+  )
+  if (existingIndex < 0) {
+    messages.push(segment)
+    return
+  }
+  messages[existingIndex] = segment
+}
+
 function emptyAssistantTranscriptMessage(
   sourceMessageId: string,
   turnId: string
@@ -1252,7 +1277,7 @@ function sourceItemIdFromChunk(chunk: UIMessageChunk): string | undefined {
   if ('providerMetadata' in chunk) {
     const providerMetadata = chunk.providerMetadata
     if (providerMetadata && typeof providerMetadata === 'object') {
-      const codexMetadata = providerMetadata[CODEX_PROVIDER_ID]
+      const codexMetadata = readCodexMessageMetadata(providerMetadata)
       if (codexMetadata && typeof codexMetadata === 'object') {
         const sourceItemId = (codexMetadata as Record<string, unknown>).sourceItemId
         if (typeof sourceItemId === 'string' && sourceItemId.length > 0) return sourceItemId
@@ -1314,7 +1339,7 @@ function turnIdFromChunk(chunk: UIMessageChunk): string | undefined {
   if (!('providerMetadata' in chunk)) return undefined
   const providerMetadata = chunk.providerMetadata
   if (!providerMetadata || typeof providerMetadata !== 'object') return undefined
-  const codexMetadata = providerMetadata[CODEX_PROVIDER_ID]
+  const codexMetadata = readCodexMessageMetadata(providerMetadata)
   if (!codexMetadata || typeof codexMetadata !== 'object') return undefined
   const turnId = (codexMetadata as Record<string, unknown>).turnId
   return typeof turnId === 'string' && turnId.length > 0 ? turnId : undefined

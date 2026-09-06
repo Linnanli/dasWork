@@ -1,0 +1,42 @@
+{
+  "schemaGenerator": {
+    "package": "@openai/codex",
+    "version": "0.148.0-alpha.21",
+    "command": ["app-server", "generate-ts", "--experimental"]
+  },
+  "generatedTree": {
+    "root": "src/protocol/app-server-protocol",
+    "sha256": "1e815936c544fdf85a8331da1fb31e8f693aa5dba1a1ff0cbcd321891efa4534"
+  },
+  "supportedAppServerVersions": ["0.148.0-alpha.21"],
+  "initialize": {
+    "clientInfo": {
+      "name": "dascowork_desktop",
+      "version": "1.0.0",
+      "title": "dasCowork Desktop"
+    },
+    "capabilities": { "experimentalApi": true },
+    "requiredMethods": [
+      "initialize",
+      "initialized",
+      "model/list",
+      "thread/start",
+      "thread/resume",
+      "turn/start",
+      "turn/interrupt"
+    ]
+  },
+  "runtimeVersionSource": {
+    "category": "launch-probe",
+    "command": ["--version"],
+    "sameExecutable": true
+  },
+  "runtimeVersionParser": {
+    "pattern": "^codex-cli\\s+(?<version>\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?)\\s*$",
+    "capture": "version"
+  },
+  "runtimeVersionEvidence": {
+    "commandOutputSha256": "633cc2c6930fb9ed682f801ac8874f00d77b0b34240f6c65af524bab02bd0df6",
+    "description": "desktop-app/node_modules/.bin/codex --version emitted codex-cli 0.148.0-alpha.21 on 2026-09-03"
+  }
+}

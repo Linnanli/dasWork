@@ -73,12 +73,12 @@ import type { InlineReferenceDescriptor } from '@/lib/referenceInlineTarget'
 import { cn } from '@/lib/utils'
 import { renderUnitAttributes } from './renderUnitAttributes'
 import { ResourceFileIcon } from './resourceFileIcon'
+import { readCodexMessageMetadata } from '../../../../shared/codexMessageMetadata'
 
 type AnyRecord = Record<string, unknown>
 type EntryUnit = Extract<AssistantRenderUnit, { type: 'entry' }>
 type ReviewCommentsUnit = Extract<AssistantRenderUnit, { type: 'review-comments' }>
 
-const CODEX_PROVIDER_ID = '@janole/ai-sdk-provider-codex-asp'
 const MAX_VISIBLE_ROWS = 3
 const MAX_VISIBLE_DIFF_FILES = 3
 const LARGE_DIFF_TEXT_LENGTH = 50_000
@@ -821,7 +821,7 @@ function GeneratedImageFileUnit({
   part: AnyRecord
   unit: Extract<AssistantRenderUnit, { type: 'unknown' }>
 }): React.JSX.Element {
-  const metadata = recordValue(recordValue(part.providerMetadata)?.[CODEX_PROVIDER_ID])
+  const metadata = readCodexMessageMetadata(part.providerMetadata)
   const image = {
     src: imageSourceFromPart(part),
     alt: stringValue(metadata?.revisedPrompt) ?? stringValue(part.name) ?? '生成图片',

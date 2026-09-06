@@ -1,10 +1,10 @@
 import { pathToFileURL } from "node:url";
 
+import type { Thread } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread";
+import type { ThreadItem } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadItem";
+import type { Turn } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Turn";
 import type { UIMessage } from "ai";
 
-import type { Thread } from "./protocol/app-server-protocol/v2/Thread";
-import type { ThreadItem } from "./protocol/app-server-protocol/v2/ThreadItem";
-import type { Turn } from "./protocol/app-server-protocol/v2/Turn";
 import { CODEX_PROVIDER_ID } from "./protocol/provider-metadata";
 import {
     type CodexRenderableThreadItem,

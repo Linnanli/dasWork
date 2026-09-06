@@ -1,7 +1,8 @@
-import type { ItemCompletedNotification } from "./protocol/app-server-protocol/v2/ItemCompletedNotification";
-import type { ItemStartedNotification } from "./protocol/app-server-protocol/v2/ItemStartedNotification";
-import type { TurnCompletedNotification } from "./protocol/app-server-protocol/v2/TurnCompletedNotification";
-import type { TurnStartedNotification } from "./protocol/app-server-protocol/v2/TurnStartedNotification";
+import type { ItemCompletedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ItemCompletedNotification";
+import type { ItemStartedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ItemStartedNotification";
+import type { TurnCompletedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnCompletedNotification";
+import type { TurnStartedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnStartedNotification";
+
 import {
     type CodexRenderableThreadItem,
     userMessageCompareKey,

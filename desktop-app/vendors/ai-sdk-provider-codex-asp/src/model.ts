@@ -8,6 +8,10 @@ import type {
   LanguageModelV3StreamResult,
   LanguageModelV3Usage
 } from '@ai-sdk/provider'
+import type { JsonValue } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/serde_json/JsonValue'
+import type { Thread } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread'
+import type { ThreadReadResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadReadResponse'
+import type { ThreadResumeResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadResumeResponse'
 
 import { agentLifecycleEvents } from './agent-lifecycle'
 import { ApprovalsDispatcher } from './approvals'
@@ -18,10 +22,6 @@ import { WebSocketTransport } from './client/transport-websocket'
 import { DynamicToolsDispatcher } from './dynamic-tools'
 import { CodexProviderError } from './errors'
 import { PACKAGE_NAME, PACKAGE_VERSION } from './package-info'
-import type { JsonValue } from './protocol/app-server-protocol/serde_json/JsonValue'
-import type { Thread } from './protocol/app-server-protocol/v2/Thread'
-import type { ThreadReadResponse } from './protocol/app-server-protocol/v2/ThreadReadResponse'
-import type { ThreadResumeResponse } from './protocol/app-server-protocol/v2/ThreadResumeResponse'
 import { CodexEventMapper } from './protocol/event-mapper'
 import { CODEX_PROVIDER_ID, withProviderMetadata } from './protocol/provider-metadata'
 import type {

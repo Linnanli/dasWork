@@ -1,4 +1,4 @@
-import { CodexProcessSessionClient } from '@janole/ai-sdk-provider-codex-asp'
+import { CodexProcessSessionClient } from '@dascowork/codex-app-server-client'
 
 import { createCodexClientInfo } from '../codexClientInfo'
 import {

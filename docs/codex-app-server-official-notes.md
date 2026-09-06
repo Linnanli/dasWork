@@ -16,6 +16,7 @@ Codex App Server 是 Codex 用来支撑富客户端集成的本地接口，例�
 
 - `codex/codex-rs/app-server/`
 - `codex/codex-rs/app-server-protocol/`
+- `desktop-app/vendors/codex-app-server-client/`
 - `desktop-app/vendors/ai-sdk-provider-codex-asp/`
 
 ## 协议
@@ -723,8 +724,8 @@ Rate limit 响应可能同时包含旧的单 bucket 视图 `rateLimits` 和多 b
 renderer assistant-ui
   -> preload IPC
   -> Electron main CodexChatRuntimeService
-  -> AI SDK streamText()
-  -> @janole/ai-sdk-provider-codex-asp
+  -> NativeCodexRunDriver
+  -> @dascowork/codex-app-server-client
   -> codex-app-server --listen stdio://
   -> Codex runtime / provider / tools / approvals
 ```
@@ -732,9 +733,12 @@ renderer assistant-ui
 因此：
 
 - renderer 不应直接实现 App Server JSON-RPC。
-- main process 不应复制 provider 内部协议适配。
-- AI SDK provider fork 是 AI SDK 与 Codex App Server Protocol 的映射边界。
-- 涉及 `thread/start`、`thread/resume`、`turn/start`、approval、sandbox、cwd、MCP、tools 或 elicitation 的改动，应先判断属于 app-server、provider fork、main process 还是 renderer。
+- Main-owned native driver 与 AI-free client 是桌面协议适配边界；不得把 JSON-RPC 堆回 `CodexChatRuntimeService`。
+- AI SDK provider fork 仅是独立兼容包，不在桌面生产依赖图中。
+- 涉及 `thread/start`、`thread/resume`、`turn/start`、approval、sandbox、cwd、MCP、tools 或 elicitation 的改动，应先判断属于 app-server、AI-free client、main process 还是 renderer。
+- 升级锁定的 Codex CLI 后，先重新生成 core 唯一的协议树，再运行 protocol
+  contract、native boundary 和 real app-server contract smoke；后者只做
+  `initialize`、`model/list` 与 ephemeral `thread/start`，不调用模型。
 
 ## 本地源码索引
 

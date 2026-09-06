@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { CodexTaskSearchResult } from '@janole/ai-sdk-provider-codex-asp'
+import type { CodexTaskSearchResult } from '@dascowork/codex-app-server-client'
 import type { SidebarConversationListState } from '../../shared/codexIpcApi'
 import type { ProjectState, ResolvedExecutionTarget } from '../../shared/projects/projectTypes'
 import { ComposerContextSearchService } from './ComposerContextSearchService'

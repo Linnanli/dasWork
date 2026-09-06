@@ -1,0 +1,31 @@
+{
+  "name": "@dascowork/codex-app-server-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-free Codex App Server Protocol client for dasCowork desktop hosts.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./protocol/*": {
+      "types": "./dist/src/protocol/*.d.ts"
+    }
+  },
+  "files": ["dist", "protocol-manifest.json"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "codex:generate-types": "codex app-server generate-ts --experimental -o src/protocol/app-server-protocol",
+    "build": "tsup && tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "qa": "npm run lint && npm run typecheck && npm run test"
+  }
+}

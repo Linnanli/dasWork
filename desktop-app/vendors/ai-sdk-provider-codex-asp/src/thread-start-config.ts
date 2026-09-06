@@ -1,4 +1,5 @@
-import type { JsonValue } from "./protocol/app-server-protocol/serde_json/JsonValue";
+import type { JsonValue } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/serde_json/JsonValue";
+
 import type {
     CodexCustomModelProviderSettings,
     CodexModelProviderInfo,

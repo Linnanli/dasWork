@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { CodexCommandClient, CodexCommandExecResult } from '@janole/ai-sdk-provider-codex-asp'
+import type { CodexCommandClient, CodexCommandExecResult } from '@dascowork/codex-app-server-client'
 
 import { GitHostRegistry, RemoteGitHost } from './GitHostRegistry'
 

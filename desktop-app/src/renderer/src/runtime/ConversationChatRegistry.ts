@@ -170,8 +170,15 @@ export class ConversationChatRegistry {
     const activeRun =
       recoverySnapshot?.run ?? (await this.chatBridge.getActiveRun?.(conversationId))
     if (!activeRun) return false
+    // The app-server history is already authoritative after a terminal turn.
+    // Terminal journal replay remains available for a detached MessagePort, but
+    // must not replace that complete history during application startup.
+    if (activeRun.state === 'terminal') return false
 
-    let entry = this.resolveInternal(conversationId)
+    let entry =
+      this.resolveInternal(conversationId) ??
+      this.resolveInternal(activeRun.conversationId) ??
+      this.resolveInternal(activeRun.threadId)
     const createdEntry = !entry
     if (!entry) {
       entry = this.createEntry({
@@ -181,11 +188,20 @@ export class ConversationChatRegistry {
         newConversation: false
       })
     }
-    if (createdEntry && recoverySnapshot?.baseMessages.length) {
+    if (activeRun.threadId) {
+      const boundEntry = this.bindThread(entry, activeRun.threadId) as InternalConversationChatEntry
+      if (boundEntry !== entry) {
+        // A thread-id restore can arrive before its renderer-local identity.
+        // Keep one controller and retain both lookup aliases for the run.
+        if (createdEntry) this.removeEntry(entry, boundEntry)
+        entry = boundEntry
+      }
+    }
+    this.bindAlias(entry, activeRun.conversationId)
+    this.bindAlias(entry, conversationId)
+    if (createdEntry && entry.localId === conversationId && recoverySnapshot?.baseMessages.length) {
       entry.controller.replaceMessages(recoverySnapshot.baseMessages)
     }
-    if (activeRun.threadId)
-      entry = this.bindThread(entry, activeRun.threadId) as InternalConversationChatEntry
     entry.context = {
       ...entry.context,
       conversationId,
@@ -193,7 +209,13 @@ export class ConversationChatRegistry {
     }
     entry.loaded = true
     this.activate(entry)
-    this.resumeEntry(entry)
+    // A startup recovery probe can overlap with a stream that this renderer
+    // has just started. That entry already owns its MessagePort; attaching a
+    // second replay stream would reset the shared transcript ledger and let an
+    // empty replay snapshot overwrite live text.
+    if (!isRunningStatus(entry.status) && entry.recoveryPhase !== 'resuming') {
+      this.resumeEntry(entry)
+    }
     return true
   }
 
@@ -750,43 +772,53 @@ export class ConversationChatRegistry {
 
   private resumeEntry(entry: InternalConversationChatEntry): void {
     if (this.destroyed) return
+    if (entry.recoveryPhase === 'resuming') return
     entry.recoveryPhase = 'resuming'
     entry.recoveryError = undefined
     this.emit()
     this.recoveryHydrations.add(entry)
-    void entry.controller
-      .resumeStream()
-      .then((resumed) => {
-        if (this.destroyed) return
-        entry.recoveryError = entry.controller.getRecoveryError()
-        if (
-          !resumed &&
-          entry.recoveryError &&
-          !hasVisibleAssistantContent(entry.controller.getSnapshot().messages)
-        ) {
-          this.restoreRenderedActiveText(entry)
-        }
-        entry.recoveryPhase = resumed
-          ? 'resumed'
-          : entry.recoveryError
-            ? 'needs_resume'
-            : 'attached'
+    void this.resumeEntryFromActiveRun(entry)
+  }
+
+  private async resumeEntryFromActiveRun(entry: InternalConversationChatEntry): Promise<void> {
+    try {
+      const conversationId = entry.context.threadId ?? entry.context.conversationId ?? entry.localId
+      const run = await this.chatBridge.getActiveRun?.(conversationId)
+      if (this.destroyed) return
+      if (run?.state === 'terminal') {
+        entry.recoveryPhase = 'attached'
         this.emit()
-        const diagnostic = classifyConversationRecoveryError(entry.recoveryError)
-        if (
-          !resumed &&
-          diagnostic?.kind === 'transient-runtime' &&
-          entry.recoveryAttempts === 0 &&
-          entry === this.activeEntry
-        ) {
-          entry.recoveryAttempts = 1
-          entry.recoveryRetryTimer = setTimeout(() => {
-            entry.recoveryRetryTimer = undefined
-            if (!this.destroyed && entry === this.activeEntry) this.resumeEntry(entry)
-          }, 750)
-        }
-      })
-      .finally(() => this.recoveryHydrations.delete(entry))
+        return
+      }
+
+      const resumed = await entry.controller.resumeStream()
+      if (this.destroyed) return
+      entry.recoveryError = entry.controller.getRecoveryError()
+      if (
+        !resumed &&
+        entry.recoveryError &&
+        !hasVisibleAssistantContent(entry.controller.getSnapshot().messages)
+      ) {
+        this.restoreRenderedActiveText(entry)
+      }
+      entry.recoveryPhase = resumed ? 'resumed' : entry.recoveryError ? 'needs_resume' : 'attached'
+      this.emit()
+      const diagnostic = classifyConversationRecoveryError(entry.recoveryError)
+      if (
+        !resumed &&
+        diagnostic?.kind === 'transient-runtime' &&
+        entry.recoveryAttempts === 0 &&
+        entry === this.activeEntry
+      ) {
+        entry.recoveryAttempts = 1
+        entry.recoveryRetryTimer = setTimeout(() => {
+          entry.recoveryRetryTimer = undefined
+          if (!this.destroyed && entry === this.activeEntry) this.resumeEntry(entry)
+        }, 750)
+      }
+    } finally {
+      this.recoveryHydrations.delete(entry)
+    }
   }
 
   private restoreRenderedActiveText(entry: InternalConversationChatEntry): void {

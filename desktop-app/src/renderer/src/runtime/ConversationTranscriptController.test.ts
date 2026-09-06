@@ -1422,6 +1422,52 @@ describe('ConversationTranscriptController', () => {
     ).toBe(true)
   })
 
+  it('replaces an active-run snapshot assistant with the replayed source item', async () => {
+    const transport = new ControlledTransport()
+    const controller = createController(transport)
+    controller.replaceMessages([
+      { id: 'user-one', role: 'user', parts: [{ type: 'text', text: 'request' }] },
+      {
+        id: 'assistant:turn-one:replayed-text',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'snapshot text' }]
+      }
+    ])
+
+    const resume = controller.resumeStream()
+    await vi.waitFor(() => expect(transport.sendCount).toBe(1))
+    controller.handleStreamAccepted()
+    beginCanonicalTurn(controller, 'turn-one')
+    transport.enqueue({ type: 'text-start', id: 'replayed-text' })
+    transport.enqueue({
+      type: 'text-delta',
+      id: 'replayed-text',
+      delta: 'journal text'
+    })
+    await vi.waitFor(() =>
+      expect(
+        controller
+          .getSnapshot()
+          .messages.filter(
+            (message) => message.renderId === 'message:assistant:turn-one:replayed-text'
+          )
+      ).toEqual([
+        expect.objectContaining({
+          parts: [expect.objectContaining({ type: 'text', text: 'journal text' })]
+        })
+      ])
+    )
+    completeCanonicalTurn(controller, 'turn-one', 'completed', 2)
+    transport.close()
+
+    await expect(resume).resolves.toBe(true)
+    expect(
+      controller
+        .getSnapshot()
+        .messages.filter((message) => message.renderId === 'message:assistant:turn-one:replayed-text')
+    ).toHaveLength(1)
+  })
+
   it('F04 limits long errors to 2,000 characters plus an ellipsis', async () => {
     const message = `upstream failure: ${'x'.repeat(2_100)}`
     const safeMessage = safeTurnErrorMessage(message)

@@ -360,6 +360,8 @@ export type CodexChatAttachResult =
 export type CodexChatRunDescriptor = {
   readonly runId: string
   readonly conversationId: string
+  /** Main retains terminal runs briefly for a disconnected port to replay. */
+  readonly state: 'active' | 'terminal'
   /** Distinguishes a long-running Goal from a regular one-turn chat stream. */
   readonly runKind: 'single-turn' | 'goal'
   readonly threadId?: string

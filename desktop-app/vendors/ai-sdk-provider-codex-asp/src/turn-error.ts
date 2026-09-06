@@ -1,5 +1,5 @@
-import type { TurnError } from "./protocol/app-server-protocol/v2/TurnError";
-import type { TurnStatus } from "./protocol/app-server-protocol/v2/TurnStatus";
+import type { TurnError } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnError";
+import type { TurnStatus } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnStatus";
 
 export const DEFAULT_TURN_FAILURE_MESSAGE = "The model request failed before completion.";
 

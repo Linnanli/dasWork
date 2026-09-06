@@ -5,6 +5,11 @@ import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, unlinkSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
+if (process.argv.includes('--version')) {
+  process.stdout.write('codex-cli 0.148.0-alpha.21\n')
+  process.exit(0)
+}
+
 const running = new Map()
 const terminalProcesses = new Map()
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity })

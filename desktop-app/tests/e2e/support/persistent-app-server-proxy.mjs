@@ -13,6 +13,15 @@ const relayPidPath = process.env.DASCOWORK_E2E_RELAY_PID_PATH
 const proxyPidPath = process.env.DASCOWORK_E2E_APP_SERVER_PID_PATH
 const codexCommand = process.env.DASCOWORK_E2E_REAL_CODEX_BIN || 'codex'
 
+if (process.argv.includes('--version')) {
+  const versionExitCode = await new Promise((resolve) => {
+    const versionChild = spawn(codexCommand, ['--version'], { env: process.env, stdio: 'inherit' })
+    versionChild.once('error', () => resolve(1))
+    versionChild.once('close', (code) => resolve(code ?? 1))
+  })
+  process.exit(versionExitCode)
+}
+
 if (!socketPath || !readyPath || !relayPidPath || !proxyPidPath) {
   throw new Error('Persistent app-server proxy is missing required E2E environment variables.')
 }

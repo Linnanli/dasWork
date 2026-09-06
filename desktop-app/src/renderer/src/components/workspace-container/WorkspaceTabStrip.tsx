@@ -457,12 +457,32 @@ function NewTabMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const firstMenuItemRef = useRef<HTMLButtonElement>(null)
+  const menuContentRef = useRef<HTMLDivElement>(null)
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
   const availableOptions = NEW_TAB_OPTIONS.filter(
     (option) => option.target.type !== 'review' || !hasReviewTab
   )
 
   useEffect(() => onVisibilityChange?.(open), [open, onVisibilityChange])
   useEffect(() => () => onVisibilityChange?.(false), [onVisibilityChange])
+  useEffect(() => {
+    if (!open) return
+
+    const closeOnExternalPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      if (
+        !(target instanceof Node) ||
+        menuContentRef.current?.contains(target) ||
+        menuTriggerRef.current?.contains(target)
+      ) {
+        return
+      }
+      setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnExternalPointerDown)
+    return () => document.removeEventListener('pointerdown', closeOnExternalPointerDown)
+  }, [open])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -471,6 +491,7 @@ function NewTabMenu({
           type="button"
           variant="ghost"
           size="icon-xs"
+          ref={menuTriggerRef}
           className="size-7 shrink-0 rounded-md"
           aria-label="Open workspace tab"
           aria-haspopup="menu"
@@ -479,6 +500,7 @@ function NewTabMenu({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        ref={menuContentRef}
         role="menu"
         aria-label="New workspace tab"
         align="start"

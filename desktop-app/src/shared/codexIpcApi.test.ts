@@ -135,6 +135,25 @@ describe('codex IPC schemas', () => {
         chatId: 'chat-1',
         trigger: 'submit-message',
         messages: [],
+        body: { method: 'thread/start', params: {} }
+      }).success
+    ).toBe(false)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        body: {
+          modelProvider: 'untrusted-provider',
+          customModelProviders: { 'untrusted-provider': { experimental_bearer_token: 'secret' } }
+        }
+      }).success
+    ).toBe(false)
+    expect(
+      codexChatRequestSchema.safeParse({
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
         body: {
           approvalModeKind: 'auto-approve'
         }

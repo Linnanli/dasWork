@@ -501,6 +501,72 @@ describe('ConversationApiService', () => {
     expect(threadClient.readThreadWithFullTurns).toHaveBeenCalledWith('thread-prestarted')
   })
 
+  it('keeps the bound request title while an interrupted thread only has the New Chat placeholder', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockResolvedValue([
+      {
+        id: 'thread-prestarted',
+        title: 'New Chat',
+        preview: '',
+        createdAt: '2026-06-30T04:00:00.000Z',
+        updatedAt: '2026-06-30T04:05:00.000Z',
+        archived: false,
+        running: false,
+        cwd: '/repo/desktop-app'
+      }
+    ])
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await service.observeStartedThread({
+      threadId: 'thread-prestarted',
+      title: 'Interrupted desktop test request',
+      cwd: '/repo/desktop-app'
+    })
+
+    await expect(service.refreshConversationList()).resolves.toMatchObject({
+      conversations: [
+        {
+          id: 'thread-prestarted',
+          title: 'Interrupted desktop test request',
+          running: false
+        }
+      ]
+    })
+  })
+
+  it('replaces the bound request title once app-server supplies a real title', async () => {
+    const threadClient = createClient()
+    vi.mocked(threadClient.listThreads).mockResolvedValue([
+      {
+        id: 'thread-prestarted',
+        title: 'Persisted app-server title',
+        preview: 'Persisted app-server title',
+        createdAt: '2026-06-30T04:00:00.000Z',
+        updatedAt: '2026-06-30T04:05:00.000Z',
+        archived: false,
+        running: false,
+        cwd: '/repo/desktop-app'
+      }
+    ])
+    const service = new ConversationApiService({
+      threadClient,
+      projectStore: { getState: async () => baseProjectState }
+    })
+
+    await service.observeStartedThread({
+      threadId: 'thread-prestarted',
+      title: 'Original desktop request',
+      cwd: '/repo/desktop-app'
+    })
+
+    await expect(service.refreshConversationList()).resolves.toMatchObject({
+      conversations: [{ id: 'thread-prestarted', title: 'Persisted app-server title' }]
+    })
+  })
+
   it('can discard an unconfirmed observed started thread', async () => {
     const threadClient = createClient()
     const service = new ConversationApiService({
@@ -580,7 +646,7 @@ describe('ConversationApiService', () => {
     })
   })
 
-  it('keeps getConversationList authoritative after an ensured sidebar broadcast', async () => {
+  it('keeps an app-server-read confirmed thread visible when thread/list continues to lag', async () => {
     const threadClient = createClient()
     vi.mocked(threadClient.listThreads).mockResolvedValue([])
     vi.mocked(threadClient.readThreadWithFullTurns).mockResolvedValue({
@@ -621,8 +687,14 @@ describe('ConversationApiService', () => {
     vi.mocked(threadClient.readThreadWithFullTurns).mockClear()
 
     const state = await service.getConversationList()
-    expect(state.conversations).toEqual([])
-    expect(threadClient.readThreadWithFullTurns).not.toHaveBeenCalled()
+    expect(state.conversations).toMatchObject([
+      {
+        id: 'thread-fresh',
+        title: 'Fresh sidebar prompt',
+        running: false
+      }
+    ])
+    expect(threadClient.readThreadWithFullTurns).toHaveBeenCalledWith('thread-fresh')
     expect(threadClient.readThread).not.toHaveBeenCalled()
   })
 

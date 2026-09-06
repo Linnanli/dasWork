@@ -1,4 +1,4 @@
-import type { Thread } from "../protocol/app-server-protocol/v2/Thread";
+import type { Thread } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread";
 
 export interface ReferencedTaskContext
 {

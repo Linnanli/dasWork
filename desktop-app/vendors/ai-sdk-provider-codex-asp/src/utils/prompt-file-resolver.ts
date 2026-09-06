@@ -5,9 +5,9 @@ import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { LanguageModelV3FilePart, LanguageModelV3Prompt } from "@ai-sdk/provider";
+import type { ThreadReadResponse } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadReadResponse";
 
 import { CodexProviderError } from "../errors";
-import type { ThreadReadResponse } from "../protocol/app-server-protocol/v2/ThreadReadResponse";
 import type {
     CodexTurnInputItem,
     CodexTurnInputText,

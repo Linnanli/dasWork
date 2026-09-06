@@ -1,12 +1,17 @@
 # ai-sdk-provider-codex-asp API 文档
 
-整理日期：2026-07-02
+整理日期：2026-09-04
 
 关联文档：`codex-app-server-official-notes.md`
 
 ## 1. 定位
 
-`@janole/ai-sdk-provider-codex-asp` 是 dasCowork 桌面聊天链路中的 AI SDK provider 适配层。它把 AI SDK v6 / `LanguageModelV3` 的 `streamText()`、`generateText()`、tool、provider options 和 stream parts 映射到 Codex App Server Protocol 的 JSON-RPC 生命周期。
+`@janole/ai-sdk-provider-codex-asp` 是保留给仓库外 AI SDK consumer 的兼容包。它把 AI SDK v6 / `LanguageModelV3` 的 `streamText()`、`generateText()`、tool、provider options 和 stream parts 映射到 Codex App Server Protocol 的 JSON-RPC 生命周期。
+
+桌面生产聊天链路自 2026-09-04 起不再使用该包。它由 Main-owned
+`NativeCodexRunDriver` 和 AI-free
+`@dascowork/codex-app-server-client` 直接驱动 app-server；本文件的 API
+说明仅用于维护兼容包及其独立测试，不能作为 desktop Main 的实现依据。
 
 本 provider 不直接调用 OpenAI-compatible API、Responses API 或第三方 LLM SDK。真正的模型请求由 `codex-app-server` 根据 thread / turn 配置发起。
 
@@ -28,11 +33,11 @@
 - `desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/*`
 - `desktop-app/vendors/ai-sdk-provider-codex-asp/src/protocol/*`
 
-dasCowork 当前集成入口：
+兼容包的历史集成入口：
 
-- `desktop-app/src/main/codexAspProvider.ts`
-- `desktop-app/src/main/codexChatRuntimeService.ts`
-- `desktop-app/src/main/codexAppServerLaunch.ts`
+- `desktop-app/vendors/ai-sdk-provider-codex-asp/src/provider.ts`
+- `desktop-app/vendors/ai-sdk-provider-codex-asp/src/model.ts`
+- `desktop-app/vendors/codex-app-server-client/src/`
 
 ## 2. 包与导出
 
@@ -977,46 +982,22 @@ type CodexThreadHistoryMappingInput = {
 - `webSearch` -> dynamic-tool `codex_web_search`。
 - `imageGeneration` -> file part，`mediaType: "image/png"`。
 
-## 14. dasCowork 当前配置
+## 14. dasCowork 当前桌面配置
 
-`desktop-app/src/main/codexAspProvider.ts` 当前设置：
+本节之前的 provider API 是兼容包的历史/仓库外 consumer 参考，不描述
+desktop 的生产执行路径。桌面现在由下列边界直接驱动 app-server：
 
-```ts
-{
-  clientInfo: {
-    name: "dascowork_desktop",
-    title: "dasCowork Desktop",
-    version: "1.0.0",
-  },
-  experimentalApi: true,
-  transport: {
-    type: "stdio",
-    stdio: {
-      command: launch.command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: sanitizedEnv,
-    },
-  },
-  defaultThreadSettings: {
-    cwd,
-    approvalPolicy: "on-request",
-    approvalsReviewer: "user",
-    sandbox: "workspace-write",
-  },
-  defaultTurnSettings: {
-    cwd,
-    summary: "auto",
-  },
-  persistent: {
-    scope: "provider",
-    poolSize: 1,
-    idleTimeoutMs: 300_000,
-  },
-  toolTimeoutMs: 120_000,
-  interruptTimeoutMs: 10_000,
-}
-```
+- `desktop-app/src/main/codexRun/HostCodexConnection.ts` 负责每个 host
+  generation 的版本探针和唯一 `initialize` / `initialized`。
+- `desktop-app/src/main/codexRun/NativeCodexRunDriver.ts` 编排
+  `thread/start` / `thread/resume`、`turn/start`、interrupt、恢复和审批。
+- `desktop-app/src/main/codexRun/CodexRunInputAdapter.ts` 与
+  `CodexUiMessageAdapter.ts` 是 Main 的 UI 适配边界。
+- `desktop-app/vendors/codex-app-server-client/` 拥有 AI-free transport、
+  中性事件和唯一 generated protocol tree。
+
+桌面不再从 `streamText()`、`codexCallOptions()` 或
+`CodexLanguageModel` 构造聊天调用。
 
 launch 解析顺序：
 
@@ -1031,32 +1012,12 @@ launch 解析顺序：
 - 自动把 `localhost`、`127.0.0.1`、`::1` 加入 `NO_PROXY` / `no_proxy`。
 - debug packet logger 会递归 redacts `authorization`、`api_key`、`experimental_bearer_token`、`token`、`secret` 等字段。
 
-聊天调用：
-
-```ts
-const providerOptions = codexCallOptions({
-  model: modelId,
-  summary: "auto",
-  resumeThreadId: request.body?.threadId,
-  cwd: executionTarget?.cwd,
-  runtimeWorkspaceRoots: executionTarget?.runtimeWorkspaceRoots,
-});
-
-return streamText({
-  model: provider.chat(modelId, customModelSettings),
-  messages: modelMessages,
-  system,
-  abortSignal,
-  providerOptions,
-});
-```
-
 ## 15. 对接 official app-server notes 的注意事项
 
 1. provider 是 official app-server API 的子集 adapter，不是完整 app-server SDK。
 2. provider 当前主路径只覆盖 chat language model、model/list、thread start/resume/compact、turn start/interrupt、动态工具、审批和通知映射。
-3. official notes 中的 `thread/read`、`thread/list`、`thread/fork`、`review/start`、`command/exec`、`fs/*`、`account/*`、`skills/*`、`plugin/*` 等 API 不由 `CodexLanguageModel` 暴露；如 UI 需要这些能力，应直接用 `AppServerClient` 或新增 provider-facing helper。
-4. provider 使用 hand-maintained protocol subset + 部分 generated types。升级 app-server 后应运行 provider 的 `npm run codex:generate-types`，再检查 runtime mapper 和测试。
+3. official notes 中的 `thread/read`、`thread/list`、`thread/fork`、`review/start`、`command/exec`、`fs/*`、`account/*`、`skills/*`、`plugin/*` 等 API 不由 `CodexLanguageModel` 暴露；desktop 新增能力应落在 Main-owned native driver 或明确的 Main service，不能向 renderer 暴露原始 RPC。
+4. provider 与 desktop 都依赖 `@dascowork/codex-app-server-client` 的唯一 generated protocol tree。升级 app-server 时只在 core 运行 `codex app-server generate-ts`，然后执行协议、边界和真实 app-server contract 验证。
 5. `dynamicTools`、`process/*`、部分 provider capability 属于 experimental API；provider 会在有工具或显式配置时发送 `capabilities.experimentalApi = true`。
 6. standard AI SDK tools 的跨 step 工作流依赖 persistent transport；桌面当前使用 host-scoped broker 的单一 physical connection，而不是 `poolSize: 1` 的串行 worker。
 7. `thread/start` 的 `runtimeWorkspaceRoots` 字段需要按目标 app-server schema 复核。
@@ -1074,6 +1035,15 @@ npm --prefix desktop-app/vendors/ai-sdk-provider-codex-asp run typecheck
 npm --prefix desktop-app/vendors/ai-sdk-provider-codex-asp run test
 ```
 
+core 与协议层：
+
+```bash
+npm --prefix desktop-app/vendors/codex-app-server-client run qa
+npm --prefix desktop-app run verify:codex-app-server-protocol-contract
+npm --prefix desktop-app run verify:codex-native-runtime-boundaries
+npm --prefix desktop-app run verify:real-codex-app-server-contract
+```
+
 desktop 层：
 
 ```bash
@@ -1089,23 +1059,11 @@ npm --prefix desktop-app run test:e2e -- --reporter=line
 
 ## 17. 证据索引
 
-- Provider 导出：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/index.ts`
-- Provider 工厂与 `listModels()`：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/provider.ts`
-- 主要 settings / call options：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/provider-settings.ts`
-- AI SDK model + RPC 生命周期：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/model.ts`
-- JSON-RPC client：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/app-server-client.ts`
-- transport contract：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/transport.ts`
-- stdio transport：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/transport-stdio.ts`
-- websocket transport：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/transport-websocket.ts`
-- persistent transport / host broker：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/client/transport-persistent.ts`、`connection-broker.ts`、`app-server-connection.ts`；legacy provider-local pool 位于 `worker.ts`、`worker-pool.ts`
-- prompt 映射：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/utils/prompt-file-resolver.ts`
-- event mapper：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/protocol/event-mapper.ts`
-- provider metadata：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/protocol/provider-metadata.ts`
-- approvals：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/approvals.ts`
-- dynamic tools：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/dynamic-tools.ts`
-- session API：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/session.ts`
-- history mapper：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/protocol/thread-history-mapper.ts`
-- dasCowork provider settings：`desktop-app/src/main/codexAspProvider.ts`
-- dasCowork chat runtime：`desktop-app/src/main/codexChatRuntimeService.ts`
+- Core JSON-RPC client / stdio transport：`desktop-app/vendors/codex-app-server-client/src/client/`
+- Core event normalizer：`desktop-app/vendors/codex-app-server-client/src/run-events/CodexRunEventNormalizer.ts`
+- Desktop host connection / version policy：`desktop-app/src/main/codexRun/HostCodexConnection.ts`、`codexAppServerVersionPolicy.ts`
+- Desktop native driver 与 UI adapters：`desktop-app/src/main/codexRun/NativeCodexRunDriver.ts`、`CodexRunInputAdapter.ts`、`CodexUiMessageAdapter.ts`
+- Compatibility provider export、AI SDK lifecycle 与 history mapper：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/index.ts`、`model.ts`、`history-mapper.ts`
+- Compatibility provider protocol adapters：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/protocol/`
 - app-server launch：`desktop-app/src/main/codexAppServerLaunch.ts`
 - official notes：`codex-app-server-official-notes.md`

@@ -58,6 +58,7 @@ describe('createChatStreamBridge', () => {
     const descriptor = {
       runId: 'run-local',
       conversationId: 'local-conversation',
+      state: 'active',
       runKind: 'single-turn',
       lastSequence: 2
     } as const
@@ -145,6 +146,7 @@ describe('createChatStreamBridge', () => {
       getActiveRun: async () => ({
         runId: 'run-current',
         conversationId: 'thread-live',
+        state: 'active',
         runKind: 'single-turn',
         threadId: 'thread-live',
         lastSequence: 4
@@ -171,6 +173,7 @@ describe('createChatStreamBridge', () => {
       getActiveRun: async () => ({
         runId: 'run-1',
         conversationId: 'chat-1',
+        state: 'active',
         runKind: 'single-turn',
         lastSequence: 3
       }),
@@ -251,6 +254,7 @@ describe('createChatStreamBridge', () => {
       getActiveRun: async () => ({
         runId: 'run-current',
         conversationId: 'chat-1',
+        state: 'active',
         runKind: 'single-turn',
         lastSequence: 2
       }),

@@ -1,10 +1,10 @@
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider";
+import type { Thread } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread";
 
 import { AppServerClient } from "./client/app-server-client";
 import { StdioTransport } from "./client/transport-stdio";
 import { WebSocketTransport } from "./client/transport-websocket";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-info";
-import type { Thread } from "./protocol/app-server-protocol/v2/Thread";
 import type {
     CodexDynamicToolDefinition,
     CodexInitializeParams,

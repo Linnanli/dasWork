@@ -1,7 +1,8 @@
+import type { ThreadItem } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadItem";
+
 import { restoreComposerContextInputs } from "../utils/context-codec";
 import { restoreFilesMentionedContext } from "../utils/local-context-directives";
 import { stripUndefined } from "../utils/object";
-import type { ThreadItem } from "./app-server-protocol/v2/ThreadItem";
 import type { CodexTurnInputItem } from "./types";
 
 type CollabAgentThreadItem = Extract<ThreadItem, { type: "collabAgentToolCall" }>;

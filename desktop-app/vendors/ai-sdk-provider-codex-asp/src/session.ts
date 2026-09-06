@@ -1,11 +1,11 @@
 import type { LanguageModelV3Prompt } from '@ai-sdk/provider'
+import type { ThreadReadResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadReadResponse'
+import type { TurnSteerParams } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnSteerParams'
+import type { TurnSteerResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnSteerResponse'
+import type { UserInput } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/UserInput'
 
 import { type AppServerClient, JsonRpcError } from './client/app-server-client'
 import { CodexProviderError } from './errors'
-import type { ThreadReadResponse } from './protocol/app-server-protocol/v2/ThreadReadResponse'
-import type { TurnSteerParams } from './protocol/app-server-protocol/v2/TurnSteerParams'
-import type { TurnSteerResponse } from './protocol/app-server-protocol/v2/TurnSteerResponse'
-import type { UserInput } from './protocol/app-server-protocol/v2/UserInput'
 import type {
   CodexTurnInterruptParams,
   CodexTurnInterruptResult,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ThreadItem } from '@janole/ai-sdk-provider-codex-asp'
+import type { ThreadItem } from '@dascowork/codex-app-server-client'
 
 import { AppServerThreadClient, type AppServerHistoryClientLike } from './AppServerThreadClient'
 
@@ -26,12 +26,12 @@ function createHistoryClient(threads: HistoryThread[] = []): AppServerHistoryCli
 }
 
 describe('AppServerThreadClient', () => {
-  it('lists threads through the provider history client', async () => {
+  it('lists threads through the injected host-owned history client', async () => {
     const historyClient = createHistoryClient([
       historyThread({
         id: 'thread-1',
-        name: 'Provider work',
-        preview: 'Investigate provider',
+        name: 'Connection-owned work',
+        preview: 'Inspect the shared connection',
         createdAt: 1782777600,
         updatedAt: 1782777900,
         status: { type: 'idle' },
@@ -43,8 +43,8 @@ describe('AppServerThreadClient', () => {
     await expect(client.listThreads({ includeArchived: false })).resolves.toEqual([
       {
         id: 'thread-1',
-        title: 'Provider work',
-        preview: 'Investigate provider',
+        title: 'Connection-owned work',
+        preview: 'Inspect the shared connection',
         createdAt: '2026-06-30T00:00:00.000Z',
         updatedAt: '2026-06-30T00:05:00.000Z',
         archived: false,
@@ -116,7 +116,7 @@ describe('AppServerThreadClient', () => {
     })
   })
 
-  it('hydrates read threads from full turn pages for provider-generated UI messages', async () => {
+  it('hydrates read threads from full turn pages for app-server-generated UI messages', async () => {
     const commandItem = {
       id: 'cmd_1',
       type: 'commandExecution',

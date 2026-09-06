@@ -1,7 +1,8 @@
 import { isAbsolute, relative, sep } from "node:path";
 
+import type { FileUpdateChange } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/FileUpdateChange";
+
 import { stripUndefined } from "../utils/object";
-import type { FileUpdateChange } from "./app-server-protocol/v2/FileUpdateChange";
 import type { CodexRenderableThreadItem } from "./shared-item-extractors";
 
 export const TURN_DIFF_PREVIEW_CHAR_LIMIT = 50_000;

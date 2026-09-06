@@ -35,6 +35,7 @@ import type {
   ComposerContextCatalogResult,
   DesktopProjectsApi
 } from '../../shared/codexIpcApi'
+import { codexMessageProviderMetadata } from '../../shared/codexMessageMetadata'
 import type { ProjectState } from '../../shared/projects/projectTypes'
 import type { ActiveConversationContext } from './lib/ElectronIpcChatTransport'
 import type { ProjectStateController } from './projects/useProjectState'
@@ -4834,12 +4835,10 @@ describe('App composer', () => {
         type: 'file',
         mediaType: 'image/png',
         data: 'iVBORw0KGgo=',
-        providerMetadata: {
-          '@janole/ai-sdk-provider-codex-asp': {
-            revisedPrompt: 'a generated reference image',
-            savedPath: '/tmp/image.png'
-          }
-        }
+        providerMetadata: codexMessageProviderMetadata({
+          revisedPrompt: 'a generated reference image',
+          savedPath: '/tmp/image.png'
+        })
       }
     ]
 
@@ -5798,12 +5797,10 @@ function messagePhaseMetadata(
   phase: 'commentary' | 'final_answer',
   turnDurationMs?: number
 ): Record<string, unknown> {
-  return {
-    '@janole/ai-sdk-provider-codex-asp': {
-      messagePhase: phase,
-      ...(turnDurationMs === undefined ? {} : { turnDurationMs })
-    }
-  }
+  return codexMessageProviderMetadata({
+    messagePhase: phase,
+    ...(turnDurationMs === undefined ? {} : { turnDurationMs })
+  })
 }
 
 function codeCommentDirective(

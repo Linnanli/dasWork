@@ -71,9 +71,10 @@ export type LocalImageAttachmentIdentity = {
 }
 
 export function localImageAttachmentIdentityFromId(
-  attachmentId: string
+  attachmentId: unknown
 ): LocalImageAttachmentIdentity | undefined {
   const prefix = 'local-image:'
+  if (typeof attachmentId !== 'string') return undefined
   if (!attachmentId.startsWith(prefix)) return undefined
   try {
     const value = JSON.parse(decodeURIComponent(attachmentId.slice(prefix.length))) as unknown
@@ -166,9 +167,10 @@ export function createArtifactSourceAttachment({
 }
 
 export function artifactSourceAttachmentIdentityFromId(
-  attachmentId: string
+  attachmentId: unknown
 ): ArtifactSourceAttachmentIdentity | undefined {
   const prefix = 'artifact-source:'
+  if (typeof attachmentId !== 'string') return undefined
   if (!attachmentId.startsWith(prefix)) return undefined
   try {
     const value = JSON.parse(decodeURIComponent(attachmentId.slice(prefix.length))) as unknown
@@ -201,9 +203,10 @@ export function artifactSourceIdFromUrl(value: unknown): string | undefined {
 }
 
 export function localPathAttachmentIdentityFromId(
-  attachmentId: string
+  attachmentId: unknown
 ): LocalPathAttachmentIdentity | undefined {
   const prefix = 'local-context:'
+  if (typeof attachmentId !== 'string') return undefined
   if (!attachmentId.startsWith(prefix)) return undefined
   try {
     const value = JSON.parse(decodeURIComponent(attachmentId.slice(prefix.length))) as unknown

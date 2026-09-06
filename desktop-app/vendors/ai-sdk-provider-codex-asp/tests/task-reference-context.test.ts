@@ -1,6 +1,6 @@
+import type { Thread } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Thread";
 import { describe, expect, it } from "vitest";
 
-import type { Thread } from "../src/protocol/app-server-protocol/v2/Thread";
 import { normalizeReferencedTask } from "../src/utils/task-reference-context";
 
 describe("normalizeReferencedTask", () =>

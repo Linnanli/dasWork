@@ -1,4 +1,7 @@
 import { NoSuchModelError, type ProviderV3 } from "@ai-sdk/provider";
+import type { Model } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Model";
+import type { ModelListParams } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ModelListParams";
+import type { ModelListResponse } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ModelListResponse";
 
 import { AppServerClient } from "./client/app-server-client";
 import { acquirePersistentPool, type PersistentPoolHandle } from "./client/persistent-pool-registry";
@@ -7,21 +10,18 @@ import { StdioTransport } from "./client/transport-stdio";
 import { WebSocketTransport } from "./client/transport-websocket";
 import { CodexLanguageModel, type CodexLanguageModelSettings } from "./model";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-info";
-import type { Model } from "./protocol/app-server-protocol/v2/Model";
-import type { ModelListParams } from "./protocol/app-server-protocol/v2/ModelListParams";
-import type { ModelListResponse } from "./protocol/app-server-protocol/v2/ModelListResponse";
 import { CODEX_PROVIDER_ID } from "./protocol/provider-metadata";
 import type { CodexInitializeParams, CodexInitializeResult } from "./protocol/types";
 import type { CodexProviderSettings, TransportContext } from "./provider-settings";
 import { type CodexStartedThread, CodexThreadClient, type CodexThreadStartOptions } from "./thread-client";
 import { stripUndefined } from "./utils/object";
-export type { Model as CodexModel } from "./protocol/app-server-protocol/v2/Model";
 export type {
     CodexCustomModelProviderSettings,
     CodexModelProviderInfo,
     CodexProviderSettings,
     McpServerConfig,
 } from "./provider-settings";
+export type { Model as CodexModel } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/Model";
 
 export interface CodexProvider extends ProviderV3
 {

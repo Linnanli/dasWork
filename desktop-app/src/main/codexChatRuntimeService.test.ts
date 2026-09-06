@@ -1,11 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  CodexProviderError,
-  CodexSteerError,
-  type CodexCallOptions,
-  type CodexCommandApprovalRequest,
-  type CodexSession
-} from '@janole/ai-sdk-provider-codex-asp'
 
 import { createVitestPlanAssertionRecorder } from '../../scripts/lib/test-plan-assertions.mjs'
 
@@ -28,18 +21,16 @@ async function assertRacePlanEvidence(
   }
 }
 
-const providerState = vi.hoisted(() => ({
+const nativeDriverState = vi.hoisted(() => ({
   listModels: vi.fn(),
-  shutdown: vi.fn(),
-  startThread: vi.fn()
+  shutdown: vi.fn()
 }))
 
-vi.mock('./codexAspProvider', () => ({
-  createCodexAspProvider: vi.fn(() => ({
-    listModels: providerState.listModels,
-    shutdown: providerState.shutdown,
-    startThread: providerState.startThread,
-    chat: vi.fn()
+vi.mock('./codexRun/CodexRunDriver', () => ({
+  createNativeCodexRunDriver: vi.fn(() => ({
+    listModels: nativeDriverState.listModels,
+    shutdown: nativeDriverState.shutdown,
+    start: vi.fn()
   }))
 }))
 
@@ -52,6 +43,7 @@ vi.mock('electron', () => ({
 
 import {
   CodexChatRuntimeService,
+  CodexSteerError,
   approvalSettingsForMode,
   commandApprovalDecisionFromResponse,
   mcpElicitationResponseFromApprovalResponse,
@@ -66,6 +58,7 @@ import type {
   CodexChatRequest,
   CodexTurnLifecycleEvent
 } from '../shared/codexIpcApi'
+import { codexMessageProviderMetadata } from '../shared/codexMessageMetadata'
 import type {
   ConversationFollowUpQueueService,
   FollowUpClaim
@@ -127,7 +120,7 @@ async function* emptyUiMessageStream(): AsyncGenerator<never, void, unknown> {
   }
 }
 
-type RuntimeStreamTextInput = {
+type RuntimeRunDriverInput = {
   request: CodexChatRequest
   collaborationMode?: {
     mode: 'default' | 'plan'
@@ -137,10 +130,12 @@ type RuntimeStreamTextInput = {
       developer_instructions: string | null
     }
   }
-  approvalSettings?: Pick<
-    CodexCallOptions,
-    'approvalPolicy' | 'approvalsReviewer' | 'sandbox' | 'sandboxPolicy'
-  >
+  approvalSettings?: {
+    approvalPolicy: 'never' | 'on-request'
+    approvalsReviewer: 'user' | 'auto_review'
+    sandbox: 'workspace-write' | 'danger-full-access'
+    sandboxPolicy: Record<string, unknown>
+  }
   goalControlObjective?: string
   goalContinuous?: boolean
   resumeThreadId?: string
@@ -159,31 +154,46 @@ type RuntimeStreamTextInput = {
     turnId: string
     diff: string
   }) => void | Promise<void>
-  onThreadSettingsUpdated?: CodexCallOptions['onThreadSettingsUpdated']
-  onThreadGoalUpdated?: CodexCallOptions['onThreadGoalUpdated']
-  onSessionCreated?: (session: CodexSession) => void
+  onThreadSettingsUpdated?: (event: {
+    threadId: string
+    modeKind: 'default' | 'plan'
+    [key: string]: unknown
+  }) => void
+  onThreadGoalUpdated?: (event: { threadId: string; goal: unknown }) => void
+  onSessionCreated?: (session: RuntimeSession) => void
   onExistingTurnRecoveryState?: (
-    state: NonNullable<RuntimeStreamTextInput['existingTurnRecoveryState']>
+    state: NonNullable<RuntimeRunDriverInput['existingTurnRecoveryState']>
   ) => void
   onProviderToolCall?: (toolName: string) => void
 }
 
-type RecordedStreamText = NonNullable<CodexChatRuntimeServiceOptions['streamText']> & {
-  mock: { calls: Array<[RuntimeStreamTextInput]> }
+type RuntimeSession = {
+  threadId: string
+  turnId?: string
+  isActive(): boolean
+  steerMessage(...args: unknown[]): Promise<{ turnId: string }>
+  setThreadGoal?(): Promise<unknown>
+  clearThreadGoal?(): Promise<boolean>
+  interrupt(): Promise<void>
+  injectMessage?: unknown
 }
 
-function streamTextWithStartedThread(threadId = 'thread-prestarted'): RecordedStreamText {
-  return vi.fn(async (input: RuntimeStreamTextInput) => {
+type RecordedRunDriver = NonNullable<CodexChatRuntimeServiceOptions['runDriver']> & {
+  mock: { calls: Array<[RuntimeRunDriverInput]> }
+}
+
+function runDriverWithStartedThread(threadId = 'thread-prestarted'): RecordedRunDriver {
+  return vi.fn(async (input: RuntimeRunDriverInput) => {
     await input.onThreadStarted?.({ threadId })
     await completeCanonicalTurn(input, threadId)
     return {
       toUIMessageStream: () => emptyUiMessageStream()
     }
-  }) as unknown as RecordedStreamText
+  }) as unknown as RecordedRunDriver
 }
 
-function recordedStreamInput(streamText: RecordedStreamText): RuntimeStreamTextInput | undefined {
-  return streamText.mock.calls[0]?.[0]
+function recordedRunInput(runDriver: RecordedRunDriver): RuntimeRunDriverInput | undefined {
+  return runDriver.mock.calls[0]?.[0]
 }
 
 function deferred<T = void>(): {
@@ -204,14 +214,12 @@ function activeSession(
   threadId: string,
   turnId: string,
   interrupt: () => Promise<void>
-): CodexSession {
+): RuntimeSession {
   return {
     threadId,
     turnId,
     isActive: () => true,
-    injectMessage: async () => undefined,
-    steerPrompt: async () => ({ turnId }),
-    getThreadGoal: async () => null,
+    steerMessage: async () => ({ turnId }),
     setThreadGoal: async () => ({
       threadId,
       objective: 'goal',
@@ -228,7 +236,7 @@ function activeSession(
 }
 
 async function completeCanonicalTurn(
-  input: RuntimeStreamTextInput,
+  input: RuntimeRunDriverInput,
   threadId = 'thread-prestarted',
   turnId = 'turn-prestarted'
 ): Promise<void> {
@@ -307,13 +315,11 @@ function createSteerClaim(overrides: Partial<FollowUpClaim> = {}): FollowUpClaim
 
 describe('CodexChatRuntimeService', () => {
   beforeEach(() => {
-    providerState.listModels.mockReset()
-    providerState.shutdown.mockReset()
-    providerState.startThread.mockReset()
-    providerState.startThread.mockResolvedValue({ threadId: 'thread-prestarted' })
+    nativeDriverState.listModels.mockReset()
+    nativeDriverState.shutdown.mockReset()
   })
 
-  it('generates a commit subject through the configured Codex provider in the trusted local cwd', async () => {
+  it('generates an isolated native commit subject in the trusted local cwd', async () => {
     const streamText = vi.fn(async () => ({
       toUIMessageStream: () =>
         (async function* () {
@@ -350,7 +356,7 @@ describe('CodexChatRuntimeService', () => {
         }))
       } satisfies ModelCatalogLike,
       projectService: { resolveExistingThreadTarget } as never,
-      streamText
+      runDriver: streamText
     })
 
     await expect(
@@ -375,6 +381,13 @@ describe('CodexChatRuntimeService', () => {
       expect.objectContaining({
         modelId: 'gpt-test',
         executionTarget: { cwd: '/repo', runtimeWorkspaceRoots: ['/repo'] },
+        ephemeral: true,
+        approvalSettings: {
+          approvalPolicy: 'never',
+          approvalsReviewer: 'user',
+          sandbox: 'workspace-write',
+          sandboxPolicy: {}
+        },
         request: expect.objectContaining({
           body: expect.not.objectContaining({ threadId: expect.anything() })
         })
@@ -384,7 +397,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('resolves renderer composer mode into an explicit app-server collaboration mode', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-plan-mode' })
       await completeCanonicalTurn(input, 'thread-plan-mode', 'turn-plan-mode')
       return { toUIMessageStream: () => emptyUiMessageStream() }
@@ -396,7 +409,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -426,7 +439,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('adds desktop instructions without changing normal user messages', async () => {
     const port = new FakePort()
-    const streamText = streamTextWithStartedThread()
+    const streamText = runDriverWithStartedThread()
     const messages = [
       {
         id: 'user-1',
@@ -451,7 +464,7 @@ describe('CodexChatRuntimeService', () => {
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       projectService,
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -468,7 +481,7 @@ describe('CodexChatRuntimeService', () => {
       port
     )
 
-    const modelInput = recordedStreamInput(streamText)
+    const modelInput = recordedRunInput(streamText)
     expect(modelInput?.request.body?.system).toContain('Preserve these existing instructions.')
     expect(modelInput?.request.body?.system).toContain('<app-context>')
     expect(modelInput?.request.body?.system).toContain('# DasCowork desktop context')
@@ -480,7 +493,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('adds verified projectless directories to developer instructions only for projectless threads', async () => {
     const port = new FakePort()
-    const streamText = streamTextWithStartedThread()
+    const streamText = runDriverWithStartedThread()
     const projectService = {
       resolveNewThreadTarget: vi.fn().mockResolvedValue({
         hostId: 'local',
@@ -499,7 +512,7 @@ describe('CodexChatRuntimeService', () => {
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       projectService,
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -513,7 +526,7 @@ describe('CodexChatRuntimeService', () => {
       port
     )
 
-    const instructions = recordedStreamInput(streamText)?.request.body?.system
+    const instructions = recordedRunInput(streamText)?.request.body?.system
     expect(instructions).toContain('### Projectless Chat')
     expect(instructions).toContain('Workspace root: /tmp/dascowork/projectless/task-1.')
     expect(instructions).toContain('Working directory: /tmp/dascowork/projectless/task-1.')
@@ -564,7 +577,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('passes the current approval mode snapshot to the provider stream', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-full-access' })
       await completeCanonicalTurn(input, 'thread-full-access', 'turn-full-access')
       return { toUIMessageStream: () => emptyUiMessageStream() }
@@ -576,7 +589,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -604,7 +617,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('uses the app-server Plan preset when the collaboration catalog is available', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-plan-preset' })
       await completeCanonicalTurn(input, 'thread-plan-preset', 'turn-plan-preset')
       return { toUIMessageStream: () => emptyUiMessageStream() }
@@ -620,7 +633,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       collaborationModeClient: { listCollaborationModes } as never
     })
 
@@ -659,7 +672,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       collaborationModeClient: {
         listCollaborationModes: vi
           .fn()
@@ -699,7 +712,7 @@ describe('CodexChatRuntimeService', () => {
       createdAt: 0,
       updatedAt: 0
     })
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-goal-mode' })
       await input.onSessionCreated?.({
         ...activeSession('thread-goal-mode', 'turn-goal-mode', async () => undefined),
@@ -727,7 +740,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -773,7 +786,7 @@ describe('CodexChatRuntimeService', () => {
       createdAt: 0,
       updatedAt: 0
     })
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onSessionCreated?.({
         ...activeSession('thread-existing-goal', 'turn-placeholder', async () => undefined),
         turnId: undefined,
@@ -814,7 +827,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -850,7 +863,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('forwards Goal updates from the provider as renderer-safe stream events', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-goal-events' })
       await input.onThreadGoalUpdated?.({
         threadId: 'thread-goal-events',
@@ -875,7 +888,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -906,7 +919,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('forwards the applied collaboration mode without exposing thread settings', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-mode-events' })
       await input.onThreadSettingsUpdated?.({
         threadId: 'thread-mode-events',
@@ -924,7 +937,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -1011,7 +1024,7 @@ describe('CodexChatRuntimeService', () => {
     const firstPort = new FakePort()
     const replacementPort = new FakePort()
     const releaseTurn = deferred()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-recoverable' })
       await releaseTurn.promise
       await completeCanonicalTurn(input, 'thread-recoverable', 'turn-recoverable')
@@ -1024,7 +1037,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     const running = service.startChatStream(
@@ -1050,7 +1063,8 @@ describe('CodexChatRuntimeService', () => {
     const descriptor = service.getActiveChatRun('thread-recoverable')
     expect(descriptor).toMatchObject({
       conversationId: 'conversation-recoverable',
-      threadId: 'thread-recoverable'
+      threadId: 'thread-recoverable',
+      state: 'active'
     })
     expect(descriptor?.runId).toEqual(expect.any(String))
     expect(descriptor?.lastSequence).toBeGreaterThan(0)
@@ -1131,7 +1145,7 @@ describe('CodexChatRuntimeService', () => {
   })
 
   it('returns catalog unavailability instead of provider fallback when catalog is configured', async () => {
-    providerState.listModels.mockResolvedValue([])
+    nativeDriverState.listModels.mockResolvedValue([])
     const modelCatalog: ModelCatalogLike = {
       listModels: vi.fn().mockResolvedValue({
         models: [],
@@ -1154,7 +1168,7 @@ describe('CodexChatRuntimeService', () => {
       models: [],
       unavailableReason: 'backend down'
     })
-    expect(providerState.listModels).not.toHaveBeenCalled()
+    expect(nativeDriverState.listModels).not.toHaveBeenCalled()
   })
 
   it('replays a recent failed terminal to a renderer that detached before it arrived', async () => {
@@ -1167,7 +1181,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => ({
+      runDriver: async () => ({
         toUIMessageStream: () =>
           (async function* () {
             yield { type: 'text-start', id: 'retained-text' } as never
@@ -1190,6 +1204,7 @@ describe('CodexChatRuntimeService', () => {
     )
     const descriptor = service.getActiveChatRun('conversation-retained-terminal')
     expect(descriptor?.runId).toEqual(expect.any(String))
+    expect(descriptor?.state).toBe('terminal')
     expect(
       service.attachChatStream(
         'conversation-retained-terminal',
@@ -1207,11 +1222,11 @@ describe('CodexChatRuntimeService', () => {
 
   it('keeps catalog validation required after an unavailable catalog list', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await completeCanonicalTurn(input)
       return { toUIMessageStream: () => emptyUiMessageStream() }
     })
-    providerState.listModels.mockResolvedValue([
+    nativeDriverState.listModels.mockResolvedValue([
       {
         id: 'provider-model',
         displayName: 'Provider Model',
@@ -1235,7 +1250,7 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       modelCatalog,
-      streamText
+      runDriver: streamText
     })
 
     await service.listModels()
@@ -1261,7 +1276,7 @@ describe('CodexChatRuntimeService', () => {
   it('restores app media URLs only in the model-input request copy', async () => {
     const port = new FakePort()
     let originalMessages: unknown
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await completeCanonicalTurn(input)
       return {
         toUIMessageStream: (options?: { originalMessages?: unknown }) => {
@@ -1277,7 +1292,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
     const messages = [
       {
@@ -1335,7 +1350,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -1368,7 +1383,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('revalidates local path attachments before invoking the provider boundary', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await completeCanonicalTurn(input)
       return { toUIMessageStream: () => emptyUiMessageStream() }
     })
@@ -1379,7 +1394,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -1448,7 +1463,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('uses the catalog selected model when chat requests omit modelId', async () => {
     const port = new FakePort()
-    const streamText = streamTextWithStartedThread()
+    const streamText = runDriverWithStartedThread()
     const modelCatalog: ModelCatalogLike = {
       listModels: vi.fn().mockResolvedValue({
         models: [
@@ -1482,7 +1497,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       modelCatalog
     })
 
@@ -1523,7 +1538,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       modelCatalog
     })
 
@@ -1543,7 +1558,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('streams with the canonical catalog model id after resolving padded request values', async () => {
     const port = new FakePort()
-    const streamText = streamTextWithStartedThread()
+    const streamText = runDriverWithStartedThread()
     const modelCatalog: ModelCatalogLike = {
       listModels: vi.fn(),
       setSelectedModel: vi.fn(),
@@ -1567,7 +1582,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText,
+      runDriver: streamText,
       modelCatalog
     })
 
@@ -1622,7 +1637,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         await input.onThreadStarted?.({ threadId: 'thread-prestarted' })
         await completeCanonicalTurn(input)
         return {
@@ -1666,7 +1681,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         await input.onThreadStarted?.({ threadId: 'thread-prestarted' })
         await completeCanonicalTurn(input)
         return {
@@ -1721,7 +1736,7 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       turnDiffStore,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         input.onSessionCreated?.(
           activeSession('thread-final-diff', 'turn-final-diff', async () => undefined)
         )
@@ -1766,7 +1781,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('resumes the same active turn after an app-server transport disconnect', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       if (!input.resumeActiveTurn) {
         input.onSessionCreated?.(
           activeSession('thread-recover', 'turn-recover', async () => undefined)
@@ -1784,18 +1799,13 @@ describe('CodexChatRuntimeService', () => {
           turnId: 'turn-recover'
         })
         return {
-          toUIMessageStream: (options?: { onError?: (error: unknown) => string }) =>
+          toUIMessageStream: () =>
             (async function* () {
               yield { type: 'text-start', id: 'text-recover' } as never
               yield { type: 'text-delta', id: 'text-recover', delta: 'Hel' } as never
               yield {
                 type: 'error',
-                errorText:
-                  options?.onError?.(
-                    new CodexProviderError('any transport message', {
-                      code: 'app_server_transport_closed'
-                    })
-                  ) ?? 'any transport message'
+                errorText: 'app_server_transport_closed'
               } as never
             })()
         }
@@ -1836,7 +1846,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -1871,20 +1881,15 @@ describe('CodexChatRuntimeService', () => {
 
   it('settles as interrupted when the restarted app-server no longer has the active turn', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       if (input.resumeActiveTurn) {
         expect(input.resumeThreadId).toBe('thread-restart')
         return {
-          toUIMessageStream: (options?: { onError?: (error: unknown) => string }) =>
+          toUIMessageStream: () =>
             (async function* () {
               yield {
                 type: 'error',
-                errorText:
-                  options?.onError?.(
-                    new CodexProviderError('any unavailable-turn message', {
-                      code: 'active_turn_unavailable'
-                    })
-                  ) ?? 'any unavailable-turn message'
+                errorText: 'active_turn_unavailable'
               } as never
             })()
         }
@@ -1905,18 +1910,13 @@ describe('CodexChatRuntimeService', () => {
         turnId: 'turn-restart'
       })
       return {
-        toUIMessageStream: (options?: { onError?: (error: unknown) => string }) =>
+        toUIMessageStream: () =>
           (async function* () {
             yield { type: 'text-start', id: 'text-restart' } as never
             yield { type: 'text-delta', id: 'text-restart', delta: 'partial history' } as never
             yield {
               type: 'error',
-              errorText:
-                options?.onError?.(
-                  new CodexProviderError('another arbitrary transport message', {
-                    code: 'app_server_transport_terminated'
-                  })
-                ) ?? 'another arbitrary transport message'
+              errorText: 'app_server_transport_terminated'
             } as never
           })()
       }
@@ -1928,7 +1928,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -1960,7 +1960,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('does not resume an existing turn from a transport-looking message without a provider code', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       input.onSessionCreated?.(
         activeSession('thread-uncoded-transport', 'turn-uncoded-transport', async () => undefined)
       )
@@ -1990,7 +1990,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -2019,14 +2019,12 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => ({
+      runDriver: async () => ({
         toUIMessageStream: (options) => {
           expect(
             options?.messageMetadata?.({
               part: {
-                providerMetadata: {
-                  '@janole/ai-sdk-provider-codex-asp': { turnDurationMs: 1250 }
-                }
+                providerMetadata: codexMessageProviderMetadata({ turnDurationMs: 1250 })
               }
             })
           ).toEqual({ codexTurnDurationMs: 1250 })
@@ -2055,7 +2053,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => ({
+      runDriver: async () => ({
         toUIMessageStream: (options: { onError?: (error: unknown) => string } = {}) =>
           (async function* () {
             yield {
@@ -2092,7 +2090,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         onSessionCreated?.(activeSession('thread-quota', 'turn-quota', async () => undefined))
         const failedLifecycle = {
           type: 'turn-completed',
@@ -2156,7 +2154,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         onSessionCreated?.(activeSession('thread-journal', 'turn-journal', async () => undefined))
         await onTurnLifecycle?.({
           type: 'turn-started',
@@ -2220,7 +2218,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => {
+      runDriver: async () => {
         const currentError = errors[invocation++]
         return {
           toUIMessageStream: (options: { onError?: (error: unknown) => string } = {}) =>
@@ -2288,7 +2286,7 @@ describe('CodexChatRuntimeService', () => {
       },
       projectService,
       projectStore,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         await input.onThreadStarted?.({ threadId: 'thread-prestarted' })
         await completeCanonicalTurn(input)
         return {
@@ -2297,11 +2295,9 @@ describe('CodexChatRuntimeService', () => {
               yield {
                 type: 'text-start',
                 id: 'text-1',
-                providerMetadata: {
-                  '@janole/ai-sdk-provider-codex-asp': {
-                    threadId: 'thread-prestarted'
-                  }
-                }
+                providerMetadata: codexMessageProviderMetadata({
+                  threadId: 'thread-prestarted'
+                })
               } as never
             })()
         }
@@ -2366,7 +2362,7 @@ describe('CodexChatRuntimeService', () => {
       },
       projectService,
       projectStore,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         await input.onThreadStarted?.({ threadId: 'thread-prestarted' })
         await completeCanonicalTurn(input)
         return {
@@ -2424,7 +2420,7 @@ describe('CodexChatRuntimeService', () => {
     const onThreadIdAvailable = vi.fn((threadId: string) => {
       events.push(`callback:${threadId}`)
     })
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       const { resumeThreadId, onThreadStarted } = input
       expect(resumeThreadId).toBeUndefined()
       events.push('streamText')
@@ -2445,7 +2441,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     const result = await service.startChatStream(
@@ -2482,7 +2478,6 @@ describe('CodexChatRuntimeService', () => {
       'port:thread-prestarted',
       'chunk'
     ])
-    expect(providerState.startThread).not.toHaveBeenCalled()
     expect(onThreadIdAvailable).toHaveBeenCalledWith(
       'thread-prestarted',
       expect.objectContaining({
@@ -2509,7 +2504,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('starts an explicit terminal retry in a fresh app-server thread', async () => {
     const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await input.onThreadStarted?.({ threadId: 'thread-replacement' })
       await completeCanonicalTurn(input, 'thread-replacement')
       return { toUIMessageStream: () => emptyUiMessageStream() }
@@ -2521,7 +2516,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     await service.startChatStream(
@@ -2549,7 +2544,7 @@ describe('CodexChatRuntimeService', () => {
     const port = new FakePort()
     const publication = deferred()
     const events: string[] = []
-    const streamText = vi.fn(async ({ onThreadStarted }: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async ({ onThreadStarted }: RuntimeRunDriverInput) => {
       await onThreadStarted?.({ threadId: 'thread-migrated' })
       return {
         toUIMessageStream: () =>
@@ -2566,7 +2561,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     const run = service.startChatStream(
@@ -2653,7 +2648,7 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       followUpQueue,
-      streamText: vi.fn(async () => ({
+      runDriver: vi.fn(async () => ({
         toUIMessageStream: () => waitThenEnd(firstTurn.promise)
       }))
     })
@@ -2763,13 +2758,13 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       followUpQueue,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         await input.onThreadStarted?.({ threadId: 'thread-real' })
         input.onSessionCreated?.({
           threadId: 'thread-real',
           turnId: 'turn-real',
           isActive: () => true,
-          steerPrompt: vi.fn(),
+          steerMessage: vi.fn(),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -2811,7 +2806,7 @@ describe('CodexChatRuntimeService', () => {
   it('publishes durable thread metadata before asking the renderer to bind', async () => {
     const port = new FakePort(false)
     const onThreadIdAvailable = vi.fn()
-    const streamText = vi.fn(async ({ onThreadStarted }: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async ({ onThreadStarted }: RuntimeRunDriverInput) => {
       await onThreadStarted?.({ threadId: 'thread-acknowledged' })
       return { toUIMessageStream: () => emptyUiMessageStream() }
     })
@@ -2822,7 +2817,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
 
     const running = service.startChatStream(
@@ -2861,18 +2856,16 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => ({
+      runDriver: async () => ({
         toUIMessageStream: () =>
           (async function* () {
             yield {
               type: 'text-start',
               id: 'text-1',
-              providerMetadata: {
-                '@janole/ai-sdk-provider-codex-asp': {
-                  threadId: 'thread-real',
-                  turnId: 'turn-real'
-                }
-              }
+              providerMetadata: codexMessageProviderMetadata({
+                threadId: 'thread-real',
+                turnId: 'turn-real'
+              })
             } as never
             yield { type: 'text-end', id: 'text-1' } as never
           })()
@@ -2891,7 +2884,6 @@ describe('CodexChatRuntimeService', () => {
       { onThreadIdAvailable }
     )
 
-    expect(providerState.startThread).not.toHaveBeenCalled()
     expect(onThreadIdAvailable).not.toHaveBeenCalled()
     expect(result.threadId).toBe('thread-old')
     expect(port.messages).not.toContainEqual({ type: 'thread-bound', threadId: 'thread-real' })
@@ -2915,7 +2907,7 @@ describe('CodexChatRuntimeService', () => {
       })
       completed.resolve()
     })
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -2923,7 +2915,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(activeSession('thread-real', 'turn-real', interrupt))
         return {
@@ -2932,12 +2924,10 @@ describe('CodexChatRuntimeService', () => {
               yield {
                 type: 'text-start',
                 id: 'text-1',
-                providerMetadata: {
-                  '@janole/ai-sdk-provider-codex-asp': {
-                    threadId: 'thread-real',
-                    turnId: 'turn-real'
-                  }
-                }
+                providerMetadata: codexMessageProviderMetadata({
+                  threadId: 'thread-real',
+                  turnId: 'turn-real'
+                })
               } as never
               metadataSeen.resolve()
               await completed.promise
@@ -2985,7 +2975,7 @@ describe('CodexChatRuntimeService', () => {
       })
       completed.resolve()
     })
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -2993,7 +2983,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(activeSession('thread-stop-identity', 'turn-stop-identity', interrupt))
         return {
@@ -3002,12 +2992,10 @@ describe('CodexChatRuntimeService', () => {
               yield {
                 type: 'text-start',
                 id: 'text-stop-identity',
-                providerMetadata: {
-                  '@janole/ai-sdk-provider-codex-asp': {
-                    threadId: 'thread-stop-identity',
-                    turnId: 'turn-stop-identity'
-                  }
-                }
+                providerMetadata: codexMessageProviderMetadata({
+                  threadId: 'thread-stop-identity',
+                  turnId: 'turn-stop-identity'
+                })
               } as never
               metadataSeen.resolve()
               await completed.promise
@@ -3052,7 +3040,7 @@ describe('CodexChatRuntimeService', () => {
   it('does not deliver a terminal until the matching canonical completion arrives', async () => {
     const port = new FakePort()
     const releaseStream = deferred()
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const interrupt = vi.fn(async () => undefined)
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
@@ -3061,7 +3049,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(activeSession('thread-gated', 'turn-gated', interrupt))
         return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
@@ -3104,7 +3092,7 @@ describe('CodexChatRuntimeService', () => {
     const port = new FakePort()
     const publishSession = deferred()
     const completed = deferred()
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const interrupt = vi.fn(async () => {
       await lifecycle?.({
         type: 'turn-completed',
@@ -3122,7 +3110,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         await publishSession.promise
         onSessionCreated?.(activeSession('thread-late', 'turn-late', interrupt))
@@ -3159,7 +3147,7 @@ describe('CodexChatRuntimeService', () => {
   ] as const)('lets canonical %s win a stop race', async (outcome, expectedTerminal) => {
     const port = new FakePort()
     const releaseStream = deferred()
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -3167,7 +3155,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(activeSession('thread-race', 'turn-race', async () => undefined))
         return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
@@ -3215,7 +3203,7 @@ describe('CodexChatRuntimeService', () => {
       },
       canonicalOutcomeTimeoutMs: 0,
       readCanonicalTurnOutcome,
-      streamText: async ({ abortSignal, onSessionCreated }) => {
+      runDriver: async ({ abortSignal, onSessionCreated }) => {
         onSessionCreated?.(activeSession('thread-history', 'turn-history', interrupt))
         abortSignal.addEventListener('abort', () => abortSeen.resolve(), { once: true })
         return { toUIMessageStream: () => waitThenEnd(abortSeen.promise) }
@@ -3252,7 +3240,7 @@ describe('CodexChatRuntimeService', () => {
       },
       canonicalOutcomeTimeoutMs: 0,
       readCanonicalTurnOutcome: async () => undefined,
-      streamText: async ({ abortSignal, onSessionCreated }) => {
+      runDriver: async ({ abortSignal, onSessionCreated }) => {
         onSessionCreated?.(activeSession('thread-unknown', 'turn-unknown', async () => undefined))
         abortSignal.addEventListener('abort', () => abortSeen.resolve(), { once: true })
         return { toUIMessageStream: () => waitThenEnd(abortSeen.promise) }
@@ -3285,7 +3273,7 @@ describe('CodexChatRuntimeService', () => {
     const firstEntered = deferred()
     const firstCompleted = deferred()
     const streamText = vi.fn(
-      async ({ onSessionCreated, onTurnLifecycle }: RuntimeStreamTextInput) => {
+      async ({ onSessionCreated, onTurnLifecycle }: RuntimeRunDriverInput) => {
         onSessionCreated?.(
           activeSession('thread-first', 'turn-first', async () => {
             await onTurnLifecycle?.({
@@ -3303,7 +3291,7 @@ describe('CodexChatRuntimeService', () => {
           toUIMessageStream: () => waitThenEnd(firstCompleted.promise)
         }
       }
-    ) as NonNullable<CodexChatRuntimeServiceOptions['streamText']>
+    ) as NonNullable<CodexChatRuntimeServiceOptions['runDriver']>
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -3311,7 +3299,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
     const firstRequest = service.startChatStream(
       {
@@ -3365,7 +3353,7 @@ describe('CodexChatRuntimeService', () => {
 
   it('clears the active run before delivering the authoritative terminal event', async () => {
     const secondPort = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeStreamTextInput) => {
+    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
       await completeCanonicalTurn(input)
       return { toUIMessageStream: () => emptyUiMessageStream() }
     })
@@ -3376,7 +3364,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
     let secondRun: Promise<unknown> | undefined
     const firstPort = new FakePort()
@@ -3415,9 +3403,9 @@ describe('CodexChatRuntimeService', () => {
     })
   })
 
-  it('steers through the exact provider session associated with the active run', async () => {
+  it('steers through the exact native run session associated with the active run', async () => {
     const finish = deferred()
-    const steerPrompt = vi.fn().mockResolvedValue({ turnId: 'turn-1' })
+    const steerMessage = vi.fn().mockResolvedValue({ turnId: 'turn-1' })
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -3425,12 +3413,12 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt,
+          steerMessage,
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -3462,9 +3450,7 @@ describe('CodexChatRuntimeService', () => {
         'follow-up-1'
       )
     ).resolves.toEqual({ turnId: 'turn-1' })
-    expect(steerPrompt).toHaveBeenCalledWith([expect.objectContaining({ role: 'user' })], {
-      clientUserMessageId: 'follow-up-1'
-    })
+    expect(steerMessage).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }), 'follow-up-1')
 
     finish.resolve()
     await run
@@ -3488,8 +3474,8 @@ describe('CodexChatRuntimeService', () => {
       archived: false,
       items: []
     }))
-    let onThreadStarted: RuntimeStreamTextInput['onThreadStarted']
-    let onTurnLifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let onThreadStarted: RuntimeRunDriverInput['onThreadStarted']
+    let onTurnLifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -3502,14 +3488,14 @@ describe('CodexChatRuntimeService', () => {
         commitClaim,
         failClaim: vi.fn()
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onThreadStarted = input.onThreadStarted
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-real',
           turnId: 'turn-real',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-real' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-real' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -3590,14 +3576,14 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         invocation += 1
         if (invocation === 1) {
           await input.onSessionCreated?.({
             threadId: 'thread-shared',
             turnId: 'turn-first',
             isActive: () => true,
-            steerPrompt: firstSteerPrompt,
+            steerMessage: firstSteerPrompt,
             injectMessage: vi.fn(),
             interrupt: vi.fn()
           })
@@ -3609,7 +3595,7 @@ describe('CodexChatRuntimeService', () => {
           threadId: 'thread-shared',
           turnId: 'turn-mismatched',
           isActive: () => true,
-          steerPrompt: mismatchedSteerPrompt,
+          steerMessage: mismatchedSteerPrompt,
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -3699,13 +3685,13 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       followUpQueue,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -3812,7 +3798,7 @@ describe('CodexChatRuntimeService', () => {
       archived: false,
       items: []
     }))
-    const steerPrompt = vi.fn(async () => ({ turnId: 'turn-1' }))
+    const steerMessage = vi.fn(async () => ({ turnId: 'turn-1' }))
     let expireConfirmation: (() => void) | undefined
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
@@ -3831,12 +3817,12 @@ describe('CodexChatRuntimeService', () => {
         return 1 as unknown as ReturnType<typeof setTimeout>
       },
       clearScheduledTimeout: vi.fn(),
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt,
+          steerMessage,
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -3872,13 +3858,13 @@ describe('CodexChatRuntimeService', () => {
         })
       )
     )
-    expect(steerPrompt).toHaveBeenCalledTimes(1)
+    expect(steerMessage).toHaveBeenCalledTimes(1)
 
     finish.resolve()
     await run
     expect(failClaim).toHaveBeenCalledTimes(1)
     await assertRacePlanEvidence(['B08'], () => {
-      expect(steerPrompt).toHaveBeenCalledTimes(1)
+      expect(steerMessage).toHaveBeenCalledTimes(1)
       expect(failClaim).toHaveBeenCalledTimes(1)
       expect(failClaim).toHaveBeenCalledWith(
         'conversation-1',
@@ -3906,7 +3892,7 @@ describe('CodexChatRuntimeService', () => {
         items: []
       }))
       const commitClaim = vi.fn()
-      let onTurnLifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+      let onTurnLifecycle: RuntimeRunDriverInput['onTurnLifecycle']
       const service = new CodexChatRuntimeService({
         cwd: '/repo',
         launch: {
@@ -3918,13 +3904,13 @@ describe('CodexChatRuntimeService', () => {
           commitClaim,
           failClaim
         } as unknown as ConversationFollowUpQueueService,
-        streamText: async (input: RuntimeStreamTextInput) => {
+        runDriver: async (input: RuntimeRunDriverInput) => {
           onTurnLifecycle = input.onTurnLifecycle
           input.onSessionCreated?.({
             threadId: 'thread-1',
             turnId: 'turn-1',
             isActive: () => true,
-            steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+            steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
             injectMessage: vi.fn(),
             interrupt: vi.fn()
           })
@@ -4007,12 +3993,12 @@ describe('CodexChatRuntimeService', () => {
         commitClaim: vi.fn(),
         failClaim
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => {
+          steerMessage: vi.fn(async () => {
             throw new CodexSteerError('app_server_rejected', 'steer rejected')
           }),
           injectMessage: vi.fn(),
@@ -4075,13 +4061,13 @@ describe('CodexChatRuntimeService', () => {
         commitClaim,
         failClaim
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4158,13 +4144,13 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       followUpQueue,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4217,7 +4203,7 @@ describe('CodexChatRuntimeService', () => {
       items: []
     }))
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    let onTurnLifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let onTurnLifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -4229,13 +4215,13 @@ describe('CodexChatRuntimeService', () => {
         commitClaim,
         failClaim
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4333,13 +4319,13 @@ describe('CodexChatRuntimeService', () => {
         commitClaim,
         failClaim: vi.fn()
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(() => steerResult.promise),
+          steerMessage: vi.fn(() => steerResult.promise),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4426,13 +4412,13 @@ describe('CodexChatRuntimeService', () => {
         commitClaim,
         failClaim: vi.fn()
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         onTurnLifecycle = input.onTurnLifecycle
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+          steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4540,14 +4526,14 @@ describe('CodexChatRuntimeService', () => {
         commitClaim: vi.fn(),
         failClaim
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         streamInvocation += 1
         if (streamInvocation === 1) {
           input.onSessionCreated?.({
             threadId: 'thread-1',
             turnId: 'turn-1',
             isActive: () => true,
-            steerPrompt: vi.fn(async () => ({ turnId: 'turn-1' })),
+            steerMessage: vi.fn(async () => ({ turnId: 'turn-1' })),
             injectMessage: vi.fn(),
             interrupt: vi.fn()
           })
@@ -4639,12 +4625,12 @@ describe('CodexChatRuntimeService', () => {
           commitClaim,
           failClaim
         } as unknown as ConversationFollowUpQueueService,
-        streamText: async (input: RuntimeStreamTextInput) => {
+        runDriver: async (input: RuntimeRunDriverInput) => {
           input.onSessionCreated?.({
             threadId: 'thread-1',
             turnId: 'turn-1',
             isActive: () => true,
-            steerPrompt: vi.fn(() => steerResult.promise),
+            steerMessage: vi.fn(() => steerResult.promise),
             injectMessage: vi.fn(),
             interrupt: vi.fn()
           })
@@ -4747,12 +4733,12 @@ describe('CodexChatRuntimeService', () => {
         commitClaim: vi.fn(),
         failClaim
       } as unknown as ConversationFollowUpQueueService,
-      streamText: async (input: RuntimeStreamTextInput) => {
+      runDriver: async (input: RuntimeRunDriverInput) => {
         input.onSessionCreated?.({
           threadId: 'thread-1',
           turnId: 'turn-1',
           isActive: () => true,
-          steerPrompt: vi.fn(() => steerResult.promise),
+          steerMessage: vi.fn(() => steerResult.promise),
           injectMessage: vi.fn(),
           interrupt: vi.fn()
         })
@@ -4859,7 +4845,7 @@ describe('CodexChatRuntimeService', () => {
     const completed = [deferred(), deferred()]
     let invocation = 0
     const streamText = vi.fn(
-      async ({ onSessionCreated, onTurnLifecycle }: RuntimeStreamTextInput) => {
+      async ({ onSessionCreated, onTurnLifecycle }: RuntimeRunDriverInput) => {
         const index = invocation++
         onSessionCreated?.(
           activeSession(`thread-${index}`, `turn-${index}`, async () => {
@@ -4878,7 +4864,7 @@ describe('CodexChatRuntimeService', () => {
           toUIMessageStream: () => waitThenEnd(completed[index].promise)
         }
       }
-    ) as NonNullable<CodexChatRuntimeServiceOptions['streamText']>
+    ) as NonNullable<CodexChatRuntimeServiceOptions['runDriver']>
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -4886,7 +4872,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText
+      runDriver: streamText
     })
     const requests = ['conversation-a', 'conversation-b'].map((conversationId, index) =>
       service.startChatStream(
@@ -4927,7 +4913,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ request, onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ request, onSessionCreated, onTurnLifecycle }) => {
         if (request.body?.conversationId === 'healthy') {
           onSessionCreated?.(
             activeSession('thread-healthy', 'turn-healthy', async () => {
@@ -4997,7 +4983,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => {
+      runDriver: async () => {
         throw new Error('boom')
       }
     })
@@ -5027,8 +5013,8 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async (input) => {
-        const requestApproval = input.approvals?.onCommandApproval
+      runDriver: async (input) => {
+        const requestApproval = input.approvals?.command
         if (!requestApproval) throw new Error('Expected the runtime to configure command approvals')
         pendingApproval = Promise.resolve(
           requestApproval({
@@ -5038,7 +5024,7 @@ describe('CodexChatRuntimeService', () => {
             startedAtMs: 0,
             environmentId: null,
             command: 'pwd'
-          } satisfies CodexCommandApprovalRequest)
+          } satisfies Record<string, unknown>)
         )
         void pendingApproval?.catch(() => undefined)
         return {
@@ -5093,7 +5079,7 @@ describe('CodexChatRuntimeService', () => {
     const completed = deferred<void>()
     const onTerminal = vi.fn()
     const interrupt = vi.fn(async () => undefined)
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -5101,7 +5087,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(activeSession('thread-port-close', 'turn-port-close', interrupt))
         await onTurnLifecycle?.({
@@ -5203,7 +5189,7 @@ describe('CodexChatRuntimeService', () => {
     const port = new FakePort()
     const entered = deferred<void>()
     const completed = deferred<void>()
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -5211,7 +5197,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         onSessionCreated?.(
           activeSession('thread-canonical', 'turn-canonical', async () => undefined)
@@ -5296,7 +5282,7 @@ describe('CodexChatRuntimeService', () => {
     const port = new FakePort()
     const entered = deferred<void>()
     const completed = deferred<void>()
-    let lifecycle: RuntimeStreamTextInput['onTurnLifecycle']
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
       launch: {
@@ -5304,7 +5290,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async ({ onTurnLifecycle }) => {
+      runDriver: async ({ onTurnLifecycle }) => {
         lifecycle = onTurnLifecycle
         entered.resolve()
         return { toUIMessageStream: () => waitThenEnd(completed.promise) }
@@ -5377,7 +5363,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => {
+      runDriver: async () => {
         streamStarted.resolve()
         return { toUIMessageStream: () => waitThenEnd(streamFinished.promise) }
       }
@@ -5414,18 +5400,18 @@ describe('CodexChatRuntimeService', () => {
     expect(rejectedStart).toEqual({ threadId: undefined })
     expect(rejectedPort.messages).toEqual([{ type: 'error', error: 'Codex runtime is stopping' }])
     expect(recoverBlockedConversationRun).toHaveBeenCalledOnce()
-    expect(providerState.shutdown).not.toHaveBeenCalled()
+    expect(nativeDriverState.shutdown).not.toHaveBeenCalled()
 
     preparation.resolve()
     await streamStarted.promise
     await flushAsyncWork()
-    expect(providerState.shutdown).not.toHaveBeenCalled()
+    expect(nativeDriverState.shutdown).not.toHaveBeenCalled()
 
     streamFinished.resolve()
     await Promise.all([admittedStart, stopping])
 
     expect(service.isConversationRunning('chat-admitted-before-stop')).toBe(false)
-    expect(providerState.shutdown).toHaveBeenCalledTimes(1)
+    expect(nativeDriverState.shutdown).toHaveBeenCalledTimes(1)
   })
 
   it('shares one shutdown promise across concurrent stop calls', async () => {
@@ -5440,7 +5426,7 @@ describe('CodexChatRuntimeService', () => {
 
     await Promise.all([service.stop(), service.stop()])
 
-    expect(providerState.shutdown).toHaveBeenCalledTimes(1)
+    expect(nativeDriverState.shutdown).toHaveBeenCalledTimes(1)
   })
 
   it('waits for active stream cleanup before shutting down the provider', async () => {
@@ -5453,7 +5439,7 @@ describe('CodexChatRuntimeService', () => {
         args: ['--listen', 'stdio://'],
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
-      streamText: async () => {
+      runDriver: async () => {
         entered.resolve()
         return { toUIMessageStream: () => waitThenEnd(finished.promise) }
       }
@@ -5476,12 +5462,12 @@ describe('CodexChatRuntimeService', () => {
     })
     await flushAsyncWork()
     expect(stopped).toBe(false)
-    expect(providerState.shutdown).not.toHaveBeenCalled()
+    expect(nativeDriverState.shutdown).not.toHaveBeenCalled()
 
     finished.resolve()
     await Promise.all([running, stopping])
 
-    expect(providerState.shutdown).toHaveBeenCalledTimes(1)
+    expect(nativeDriverState.shutdown).toHaveBeenCalledTimes(1)
   })
 
   it('forces local stream release when shutdown misses its canonical deadline', async () => {
@@ -5502,7 +5488,7 @@ describe('CodexChatRuntimeService', () => {
         return {} as ReturnType<typeof setTimeout>
       },
       clearScheduledTimeout: vi.fn(),
-      streamText: async ({ abortSignal, onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ abortSignal, onSessionCreated, onTurnLifecycle }) => {
         onSessionCreated?.(activeSession('thread-shutdown', 'turn-shutdown', interrupt))
         await onTurnLifecycle?.({
           type: 'turn-started',
@@ -5535,7 +5521,7 @@ describe('CodexChatRuntimeService', () => {
     await running
 
     expect(service.isConversationRunning('chat-shutdown-deadline')).toBe(false)
-    expect(providerState.shutdown).toHaveBeenCalledTimes(1)
+    expect(nativeDriverState.shutdown).toHaveBeenCalledTimes(1)
   })
 
   it('releases follow-up leases and steer confirmation timers when shutdown misses its deadline', async () => {
@@ -5567,7 +5553,7 @@ describe('CodexChatRuntimeService', () => {
         return timer as ReturnType<typeof setTimeout>
       },
       clearScheduledTimeout,
-      streamText: async ({ abortSignal, onSessionCreated, onTurnLifecycle }) => {
+      runDriver: async ({ abortSignal, onSessionCreated, onTurnLifecycle }) => {
         onSessionCreated?.(
           activeSession('thread-shutdown-follow-up', 'turn-shutdown-follow-up', interrupt)
         )
@@ -5646,7 +5632,7 @@ describe('CodexChatRuntimeService', () => {
         displayBinary: '/bin/codex-app-server --listen stdio://'
       },
       onAgentLifecycle,
-      streamText: async (input) => {
+      runDriver: async (input) => {
         observedCallback = input.onAgentLifecycle
         return { toUIMessageStream: () => emptyUiMessageStream() }
       }

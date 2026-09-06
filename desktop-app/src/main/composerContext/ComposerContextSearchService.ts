@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type {
   CodexFuzzyFileSearchSession,
   CodexTaskSearchResult
-} from '@janole/ai-sdk-provider-codex-asp'
+} from '@dascowork/codex-app-server-client'
 import {
   COMPOSER_CONTEXT_CATALOG_VERSION,
   COMPOSER_CONTEXT_SEARCH_VERSION,

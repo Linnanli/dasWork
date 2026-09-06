@@ -1,3 +1,5 @@
+import { readCodexMessageMetadata } from '../../../shared/codexMessageMetadata'
+
 type ToolGroupCounterKey =
   | 'readFiles'
   | 'listFiles'
@@ -113,8 +115,6 @@ const counterLabels: Record<ToolGroupCounterKey, CounterLabels> = {
   approvalInProgress: { active: '正在审核', completed: '已审核', unit: '次自动审批' },
   genericTools: { active: '正在调用', completed: '已调用', unit: '个工具' }
 }
-
-const CODEX_PROVIDER_ID = '@janole/ai-sdk-provider-codex-asp'
 
 export function summarizeToolGroup(parts: readonly unknown[]): ToolGroupSummary {
   const state = createSummaryState()
@@ -491,8 +491,7 @@ export function extractThreadItem(part: unknown): ToolPartRecord | undefined {
   const output = recordValue(part.output)
   if (output && typeof output.type === 'string') return output
 
-  const providerMetadata = recordValue(part.providerMetadata)
-  const codexMetadata = recordValue(providerMetadata?.[CODEX_PROVIDER_ID])
+  const codexMetadata = readCodexMessageMetadata(part.providerMetadata)
   const providerItem = recordValue(codexMetadata?.item)
   if (providerItem && typeof providerItem.type === 'string') return providerItem
 

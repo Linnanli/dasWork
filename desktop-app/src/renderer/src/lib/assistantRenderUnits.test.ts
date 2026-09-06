@@ -6,6 +6,7 @@ import {
 } from '@janole/ai-sdk-provider-codex-asp'
 import { readUIMessageStream, streamText, type LanguageModel, type UIMessage } from 'ai'
 
+import { LEGACY_CODEX_MESSAGE_METADATA_KEY } from '../../../shared/codexMessageMetadata'
 import { buildAssistantRenderUnits, displayNameForSubagentPath } from './assistantRenderUnits'
 import { assistantRenderUnitFixtures } from './__fixtures__/assistantRenderUnitFixtures'
 
@@ -1975,14 +1976,14 @@ describe('buildAssistantRenderUnits', () => {
         type: 'text',
         text: '先收集实际证据。',
         providerMetadata: {
-          '@janole/ai-sdk-provider-codex-asp': { messagePhase: 'commentary' }
+          [LEGACY_CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'commentary' }
         }
       },
       {
         type: 'text',
         text: '## 结论\n\n根因已确认。',
         providerMetadata: {
-          '@janole/ai-sdk-provider-codex-asp': { messagePhase: 'final_answer' }
+          [LEGACY_CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'final_answer' }
         }
       }
     ])

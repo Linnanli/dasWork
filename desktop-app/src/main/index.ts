@@ -17,11 +17,12 @@ import {
   createCodexContextCatalogClient,
   createCodexHistoryClient,
   type CodexContextCatalogClient
-} from '@janole/ai-sdk-provider-codex-asp'
+} from '@dascowork/codex-app-server-client'
 import icon from '../../resources/icon.png?asset'
 import { createBeforeQuitHandler } from './appShutdown'
 import { CodexChatRuntimeService } from './codexChatRuntimeService'
-import { createCodexAspSharedConnection, type CodexAspSharedConnection } from './codexAspProvider'
+import { HostCodexConnection } from './codexRun/HostCodexConnection'
+import { createCodexNativeSharedConnection } from './codexRun/codexNativeConnection'
 import { resolveCodexAppServerLaunchOptions } from './codexAppServerLaunch'
 import { createCodexClientInfo } from './codexClientInfo'
 import { AppServerThreadClient } from './conversations/AppServerThreadClient'
@@ -140,7 +141,7 @@ let composerContextChanges: ComposerContextChangeBroker | undefined
 let composerContextClient: CodexContextCatalogClient | undefined
 let mcpServerStatus: McpServerStatusService | undefined
 let pluginCenterService: PluginCenterService | undefined
-let codexAppServerConnection: CodexAspSharedConnection | undefined
+let codexAppServerConnection: ReturnType<typeof createCodexNativeSharedConnection> | undefined
 let followUpQueue: ConversationFollowUpQueueService | undefined
 let localGitWatchBroker: LocalGitWatchBroker | undefined
 let gitHostRegistry: GitHostRegistry | undefined
@@ -167,12 +168,13 @@ function createCodexRuntime(
   turnDiffStore: TurnDiffStore
 ): CodexChatRuntimeService {
   const launch = resolveCodexAppServerLaunchOptions({ env: process.env })
-  const connection = createCodexAspSharedConnection(launch)
+  const connection = createCodexNativeSharedConnection(launch)
   codexAppServerConnection = connection
+  const hostConnection = new HostCodexConnection(launch, connection.connection)
   const historyClient = createCodexHistoryClient({
     clientInfo: createCodexClientInfo('dascowork_desktop_sidebar', 'dasCowork Desktop Sidebar'),
     experimentalApi: true,
-    transportFactory: connection.transportFactory
+    acquireClient: () => hostConnection.acquireLease()
   })
   const projectRuntimeServices = createProjectRuntimeServices({
     userDataPath: app.getPath('userData'),
@@ -209,7 +211,7 @@ function createCodexRuntime(
     ),
     experimentalApi: true,
     connectionLifecycle: 'per-operation',
-    transportFactory: connection.transportFactory
+    acquireClient: () => hostConnection.acquireLease()
   })
   mcpServerStatus = new McpServerStatusService({
     provider: composerContextClient
@@ -274,7 +276,7 @@ function createCodexRuntime(
 
   return new CodexChatRuntimeService({
     launch,
-    connection,
+    hostConnection,
     modelCatalog: createModelCatalogService(loadDesktopRuntimeConfig(process.env)),
     projectService: projectRuntimeServices.projectService,
     projectStore: projectRuntimeServices.projectStore,

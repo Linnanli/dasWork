@@ -1,5 +1,11 @@
 import { StringDecoder } from "node:string_decoder";
 
+import type { ProcessExitedNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ProcessExitedNotification";
+import type { ProcessOutputDeltaNotification } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ProcessOutputDeltaNotification";
+import type { ProcessResizePtyParams } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ProcessResizePtyParams";
+import type { ProcessSpawnParams } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ProcessSpawnParams";
+import type { ProcessWriteStdinParams } from "@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ProcessWriteStdinParams";
+
 import { AppServerClient } from "./client/app-server-client";
 import type { CodexTransport } from "./client/transport";
 import { StdioTransport } from "./client/transport-stdio";
@@ -7,11 +13,6 @@ import { WebSocketTransport } from "./client/transport-websocket";
 import type { CodexCommandJsonRpcClientLike } from "./command-client";
 import { CodexProviderError } from "./errors";
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./package-info";
-import type { ProcessExitedNotification } from "./protocol/app-server-protocol/v2/ProcessExitedNotification";
-import type { ProcessOutputDeltaNotification } from "./protocol/app-server-protocol/v2/ProcessOutputDeltaNotification";
-import type { ProcessResizePtyParams } from "./protocol/app-server-protocol/v2/ProcessResizePtyParams";
-import type { ProcessSpawnParams } from "./protocol/app-server-protocol/v2/ProcessSpawnParams";
-import type { ProcessWriteStdinParams } from "./protocol/app-server-protocol/v2/ProcessWriteStdinParams";
 import type { CodexInitializeParams, CodexInitializeResult } from "./protocol/types";
 import type { CodexProviderSettings, TransportContext } from "./provider-settings";
 import { stripUndefined } from "./utils/object";

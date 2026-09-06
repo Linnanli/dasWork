@@ -42,9 +42,33 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
-      - name: Generate Codex app-server protocol types
-        run: npm run codex:generate-types
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
+      - name: Build AI-free Codex app-server client
+        run: npm run build:codex-app-server-client
+        working-directory: desktop-app
+
+      - name: Verify generated Codex app-server protocol contract
+        run: npm run verify:codex-app-server-protocol-contract
+        working-directory: desktop-app
+
+      - name: Smoke-test real Codex app-server contract
+        run: npm run verify:real-codex-app-server-contract
+        working-directory: desktop-app
+
+      - name: Verify native Codex runtime boundaries
+        shell: bash
+        working-directory: desktop-app
+        run: |
+          set -o pipefail
+          mkdir -p test-results/contracts
+          node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
+
+      - name: Upload native runtime boundary report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-runtime-boundaries
+          if-no-files-found: warn
+          path: desktop-app/test-results/contracts/native-runtime-boundaries.json
 
       - name: Provider lint, typecheck, and tests
         working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
@@ -78,6 +102,14 @@ jobs:
 
       - name: Run packaged smoke
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:packaged
+
+      - name: Run release LLM E2E
+        env:
+          DASCOWORK_RELEASE_LLM_SMOKE: ${{ secrets.DASCOWORK_RELEASE_LLM_SMOKE }}
+          DASCOWORK_RELEASE_ADMIN_BACKEND_URL: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_URL }}
+          DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID }}
+          DASCOWORK_RELEASE_EXTERNAL_RETRY: ${{ secrets.DASCOWORK_RELEASE_EXTERNAL_RETRY }}
+        run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:release-llm
 
       - name: Check change scope
         shell: bash
@@ -167,9 +199,9 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
-      - name: Generate Codex app-server protocol types
-        run: npm run codex:generate-types
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
+      - name: Build AI-free Codex app-server client
+        run: npm run build:codex-app-server-client
+        working-directory: desktop-app
 
       - name: Build installer
         run: npm run ${{ matrix.command }} -- --${{ matrix.arch }}

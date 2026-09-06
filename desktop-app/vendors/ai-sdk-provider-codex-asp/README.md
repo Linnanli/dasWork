@@ -164,7 +164,7 @@ const codex = createCodexAppServer({
 
 await streamText({
   model: codex("gpt-5.5"),
-  prompt: "Delete the old generated protocol files under src/protocol/app-server-protocol if they are no longer referenced, then regenerate the current ones.",
+  prompt: "Inspect the current protocol types and update the provider mapping if needed.",
   providerOptions: codexCallOptions({
     approvalsReviewer: "user",
     approvals: {
@@ -265,22 +265,12 @@ npm run qa           # lint + typecheck + test (all-in-one)
 
 ### Generated Protocol Types
 
-`src/protocol/app-server-protocol/` is gitignored, but selected generated files are intentionally tracked with `git add -f` so protocol shape changes stay visible in PRs.
-
-Important: for every tracked generated file, all imported generated type dependencies (direct + transitive) must also be tracked.
-Use the local skill `.codex/skills/codex-protocol-type-upgrade/SKILL.md` for the exact workflow.
-
-When protocol shapes change, clean and regenerate:
-
-```bash
-rm -rf src/protocol/app-server-protocol
-npm run codex:generate-types
-```
-
-Then follow the skill workflow to:
-- adapt runtime mappings if needed
-- add missing generated dependencies with `git add -f`
-- run `npm run typecheck` (and focused tests)
+The generated app-server protocol lives exclusively in
+`@dascowork/codex-app-server-client`. This compatibility package imports the
+types through that package's `protocol/*` export and never generates or stores
+a second protocol tree. When protocol shapes change, regenerate and validate
+the core client, then adapt this provider's mappings as needed and run
+`npm run typecheck` with focused tests.
 
 ## License
 
