@@ -48,6 +48,93 @@ describe('loadDesktopRuntimeConfig', () => {
     })
   })
 
+  it('loads a complete, immutable primary runtime release descriptor', () => {
+    expect(
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_VERSION: '2026.09.06',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: 'https://releases.example.test/runtime.zip',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: 'A'.repeat(64),
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: '123',
+        DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: 'https://releases.example.test'
+      })
+    ).toMatchObject({
+      primaryRuntimeRelease: {
+        version: '2026.09.06',
+        archiveUrl: 'https://releases.example.test/runtime.zip',
+        archiveSha256: 'a'.repeat(64),
+        archiveSizeBytes: 123,
+        allowedOrigins: ['https://releases.example.test']
+      }
+    })
+  })
+
+  it('loads a signed primary runtime manifest descriptor without exposing signing keys', () => {
+    expect(
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'https://releases.example.test/manifest.json',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: 'https://releases.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: 'stable'
+      })
+    ).toMatchObject({
+      primaryRuntimeManifest: {
+        manifestUrl: 'https://releases.example.test/manifest.json',
+        allowedOrigins: ['https://releases.example.test'],
+        channel: 'stable'
+      }
+    })
+  })
+
+  it('rejects incomplete and untrusted primary runtime release configuration', () => {
+    expect(() =>
+      loadDesktopRuntimeConfig({ DASCOWORK_PRIMARY_RUNTIME_VERSION: '2026.09.06' })
+    ).toThrow('must provide version')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_VERSION: '2026.09.06',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: 'http://releases.example.test/runtime.zip',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: 'a'.repeat(64),
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: '123',
+        DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: 'https://releases.example.test'
+      })
+    ).toThrow('must be an HTTPS URL')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_VERSION: '2026.09.06',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: 'https://mirror.example.test/runtime.zip',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: 'a'.repeat(64),
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: '123',
+        DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: 'https://releases.example.test'
+      })
+    ).toThrow('not in the configured allowlist')
+  })
+
+  it('rejects incomplete, untrusted, and conflicting signed manifest configuration', () => {
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'https://releases.example.test/manifest.json'
+      })
+    ).toThrow('must provide')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'http://releases.example.test/manifest.json',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: 'https://releases.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: 'stable'
+      })
+    ).toThrow('must be an HTTPS URL')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_VERSION: '2026.09.06',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: 'https://releases.example.test/runtime.zip',
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: 'a'.repeat(64),
+        DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: '123',
+        DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: 'https://releases.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'https://releases.example.test/manifest.json',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: 'https://releases.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: 'stable'
+      })
+    ).toThrow('cannot be used together')
+  })
+
   it('rejects multiline remote Codex commands', () => {
     expect(() =>
       loadDesktopRuntimeConfig({
@@ -65,8 +152,8 @@ describe('loadDesktopRuntimeConfig', () => {
   })
 
   it('rejects multiline terminal commands', () => {
-    expect(() => loadDesktopRuntimeConfig({ DASCOWORK_TERMINAL_COMMAND: 'zsh\necho unsafe' })).toThrow(
-      'DASCOWORK_TERMINAL_COMMAND must be an executable name or absolute POSIX path'
-    )
+    expect(() =>
+      loadDesktopRuntimeConfig({ DASCOWORK_TERMINAL_COMMAND: 'zsh\necho unsafe' })
+    ).toThrow('DASCOWORK_TERMINAL_COMMAND must be an executable name or absolute POSIX path')
   })
 })

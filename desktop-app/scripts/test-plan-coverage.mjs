@@ -58,18 +58,26 @@ async function executeEvidenceTests(manifest) {
   const evidence = coveredEntries.flatMap((entry) =>
     entry.evidence.map((item) => ({ ...item, scenarioId: entry.id }))
   )
+  const clientTestPrefix = 'vendors/codex-app-server-client/'
   const desktopTests = unique(
-    evidence
-      .filter((item) => !item.file.startsWith('vendors/') && !isPlaywrightEvidence(item.file))
+    evidence.filter((item) => !item.file.startsWith('vendors/') && !isPlaywrightEvidence(item.file))
   )
-  const providerTests = unique(
+  const clientTests = unique(
     evidence
-      .filter((item) => item.file.startsWith('vendors/'))
+      .filter((item) => item.file.startsWith(clientTestPrefix))
       .map((item) => ({
         ...item,
-        file: item.file.replace(/^vendors\/ai-sdk-provider-codex-asp\//u, '')
+        file: item.file.slice(clientTestPrefix.length)
       }))
   )
+  const unsupportedVendorEvidence = evidence.filter(
+    (item) => item.file.startsWith('vendors/') && !item.file.startsWith(clientTestPrefix)
+  )
+  if (unsupportedVendorEvidence.length > 0) {
+    throw new Error(
+      `Unsupported vendor test evidence: ${unsupportedVendorEvidence.map((item) => item.file).join(', ')}`
+    )
+  }
   const e2eEvidence = evidence.filter((item) => isPlaywrightEvidence(item.file))
   const desktopVitestRuns = [
     {
@@ -87,12 +95,12 @@ async function executeEvidenceTests(manifest) {
   ].filter((run) => run.evidence.length > 0)
   const tests = [
     ...(await runVitestBatches(desktopVitestRuns)),
-    ...(providerTests.length === 0
+    ...(clientTests.length === 0
       ? []
       : await runVitest({
-          cwd: resolve(desktopRoot, 'vendors/ai-sdk-provider-codex-asp'),
-          evidence: providerTests,
-          label: 'provider'
+          cwd: resolve(desktopRoot, 'vendors/codex-app-server-client'),
+          evidence: clientTests,
+          label: 'client-unit'
         })),
     ...(e2eEvidence.length === 0 ? [] : await runPlaywright(e2eEvidence))
   ]

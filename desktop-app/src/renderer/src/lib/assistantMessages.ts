@@ -1,4 +1,6 @@
 export const pendingAssistantMessageText = '正在思考'
+export const delayedAssistantMessageText = '处理时间比平常更长'
+export const delayedAssistantMessageThresholdMs = 24_000
 export const processingAssistantMessageText = '处理中'
 export const blockedAssistantMessageText = '等待确认'
 

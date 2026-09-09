@@ -1,4 +1,4 @@
-name: Desktop prerelease
+name: Desktop internal build
 
 on:
   push:
@@ -24,13 +24,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            desktop-app/package-lock.json
-            desktop-app/vendors/ai-sdk-provider-codex-asp/package-lock.json
-
-      - name: Install provider dependencies
-        run: npm ci
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Install desktop dependencies
         run: npm ci
@@ -62,6 +56,10 @@ jobs:
           mkdir -p test-results/contracts
           node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
 
+      - name: Verify App Tools release-gate contract
+        run: npm run verify:app-tools-release-gates
+        working-directory: desktop-app
+
       - name: Upload native runtime boundary report
         if: always()
         uses: actions/upload-artifact@v7
@@ -70,12 +68,9 @@ jobs:
           if-no-files-found: warn
           path: desktop-app/test-results/contracts/native-runtime-boundaries.json
 
-      - name: Provider lint, typecheck, and tests
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
-        run: |
-          npm run lint
-          npm run typecheck
-          npm test
+      - name: AI-free client lint, typecheck, and tests
+        run: npm --prefix vendors/codex-app-server-client run qa
+        working-directory: desktop-app
 
       - name: Desktop lint, typecheck, and tests
         working-directory: desktop-app
@@ -181,13 +176,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            desktop-app/package-lock.json
-            desktop-app/vendors/ai-sdk-provider-codex-asp/package-lock.json
-
-      - name: Install provider dependencies
-        run: npm ci
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Install desktop dependencies
         run: npm ci
@@ -243,57 +232,3 @@ jobs:
           name: ${{ matrix.artifact }}
           if-no-files-found: error
           path: ${{ matrix.pattern }}
-
-  release:
-    name: Publish prerelease
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-
-      - name: Download installer artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: release-assets
-          pattern: desktop-*
-          merge-multiple: true
-
-      - name: Verify release assets
-        run: node desktop-app/scripts/verify-release-assets.mjs release-assets
-
-      - name: Create or update GitHub prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: main-${{ github.sha }}
-        shell: bash
-        run: |
-          release_notes="$(printf '%s\n\n%s\n\n%s\n' \
-            "Automated test prerelease for commit ${GITHUB_SHA}." \
-            "These installers are prebuilt test artifacts from the main branch. macOS builds are not notarized and Windows builds are not signed, so first launch may show operating system security prompts." \
-            "This release includes SHA256SUMS for asset verification. It does not include API keys, Codex login state, or backend credentials. The installed app requires the user's local Codex CLI to be installed, logged in, and visible on PATH."
-          )"
-
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" \
-              --title "$RELEASE_TAG" \
-              --notes "$release_notes" \
-              --prerelease
-          else
-            gh release create "$RELEASE_TAG" \
-              --title "$RELEASE_TAG" \
-              --notes "$release_notes" \
-              --prerelease \
-              --target "$GITHUB_SHA"
-          fi
-
-          gh release upload "$RELEASE_TAG" release-assets/* --clobber

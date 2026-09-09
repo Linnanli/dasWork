@@ -16,6 +16,16 @@ import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
 import type { CodexTurnLifecycleEvent, ThreadGoalSummary } from '../../shared/codexIpcApi'
 import { CodexRunInputAdapter } from './CodexRunInputAdapter'
 import { HostCodexConnection } from './HostCodexConnection'
+import type { NativeDynamicToolSpec } from '../appTools/DynamicAppToolRegistry'
+import {
+  mergeDesktopThreadConfig,
+  type DesktopThreadConfig
+} from '../appTools/DesktopThreadConfigSource'
+import {
+  codexTurnActivityFromNotification,
+  codexTurnActivityFromServerRequest,
+  type CodexTurnActivityEvent
+} from './CodexTurnActivity'
 
 export type NativeApprovalKind =
   | 'command'
@@ -47,6 +57,7 @@ export type NativeCodexRunDriverInput = {
   signal: AbortSignal
   onThreadStarted?(thread: { threadId: string; threadPath?: string }): void | Promise<void>
   onLifecycle?(event: CodexTurnLifecycleEvent): void | Promise<void>
+  onTurnActivity?(event: CodexTurnActivityEvent): void | Promise<void>
   onAgentLifecycle?(event: unknown): void | Promise<void>
   onTurnDiffUpdated?(event: {
     threadId: string
@@ -65,6 +76,10 @@ export type NativeCodexRunDriverInput = {
   onExistingTurnRecoveryState?(state: CodexExistingTurnRecoveryState): void
   onApprovalRequest?(kind: NativeApprovalKind, params: unknown): Promise<unknown>
   onDynamicToolCall?(params: unknown): Promise<unknown>
+  /** Published only with thread/start; thread/resume has no matching protocol field. */
+  dynamicTools?: readonly NativeDynamicToolSpec[]
+  /** Main-process-only MCP/runtime configuration merged with the model config. */
+  threadConfig?: DesktopThreadConfig
 }
 
 export type NativeCodexRun = {
@@ -142,6 +157,7 @@ export class NativeCodexRunDriver {
     let client: AppServerClient | undefined
     let inputAdapter: CodexRunInputAdapter | undefined
     let nativeSession: NativeCodexRunSession | undefined
+    let abortHandler: (() => void) | undefined
     let completed = false
     try {
       client = await this.host.acquire(input.resumeThreadId)
@@ -172,6 +188,8 @@ export class NativeCodexRunDriver {
           }
           if (lifecycle.type === 'turn-completed' && !input.goalContinuous) completed = true
         }
+        const activity = codexTurnActivityFromNotification(method, params)
+        if (activity) await input.onTurnActivity?.(activity)
         for (const event of agentLifecycleEvents(method, params))
           await input.onAgentLifecycle?.(event)
         if (method === 'turn/diff/updated' && isRecord(params)) {
@@ -319,17 +337,19 @@ export class NativeCodexRunDriver {
       await input.onSessionCreated?.(nativeSession)
       resolveSession(nativeSession)
 
-      if (input.signal.aborted) await nativeSession.interrupt()
-      else
-        input.signal.addEventListener('abort', () => void nativeSession?.interrupt(), {
-          once: true
-        })
+      abortHandler = () => {
+        queue.end()
+        void nativeSession?.interrupt().catch(() => undefined)
+      }
+      if (input.signal.aborted) abortHandler()
+      else input.signal.addEventListener('abort', abortHandler, { once: true })
 
       await queue.waitForEnd()
     } catch (error) {
       rejectSession(error)
       queue.fail(error)
     } finally {
+      if (abortHandler) input.signal.removeEventListener('abort', abortHandler)
       if (completed) queue.end()
       nativeSession?.complete()
       try {
@@ -393,6 +413,8 @@ export class NativeCodexRunDriver {
     if (input.ephemeral) {
       throw new NativeServerRequestUnsupportedError(`ephemeral/${request.method}`)
     }
+    const activity = codexTurnActivityFromServerRequest(request.method, request.params)
+    if (activity) await input.onTurnActivity?.(activity)
     switch (request.method) {
       case 'item/commandExecution/requestApproval':
         return {
@@ -441,6 +463,7 @@ export class NativeCodexRunDriver {
 export class NativeCodexRunSession {
   private active = true
   private currentTurnId: string | undefined
+  private interruptPromise: Promise<void> | undefined
 
   constructor(
     private readonly options: {
@@ -509,13 +532,20 @@ export class NativeCodexRunSession {
     return result.cleared ?? true
   }
 
-  async interrupt(): Promise<void> {
-    if (!this.active) return
+  interrupt(): Promise<void> {
+    if (this.interruptPromise) return this.interruptPromise
+    if (!this.active) return Promise.resolve()
     const turnId = this.currentTurnId
-    if (!turnId) return
-    await this.options.client.request('turn/interrupt', { threadId: this.threadId, turnId })
+    if (!turnId) return Promise.resolve()
     this.active = false
-    await this.options.inputAdapter.cleanup()
+    this.interruptPromise = (async () => {
+      try {
+        await this.options.client.request('turn/interrupt', { threadId: this.threadId, turnId })
+      } finally {
+        await this.options.inputAdapter.cleanup()
+      }
+    })()
+    return this.interruptPromise
   }
 }
 
@@ -550,10 +580,10 @@ function threadStartParams(input: NativeCodexRunDriverInput): Record<string, unk
     approvalPolicy: input.approvalPolicy,
     approvalsReviewer: input.approvalsReviewer,
     sandbox: input.sandbox,
-    config: customModel.config,
+    config: mergeDesktopThreadConfig(customModel.config, input.threadConfig),
     developerInstructions: input.developerInstructions,
     ephemeral: input.ephemeral,
-    dynamicTools: input.ephemeral ? [] : undefined
+    dynamicTools: input.ephemeral ? [] : [...(input.dynamicTools ?? [])]
   })
 }
 
@@ -569,7 +599,6 @@ function threadResumeParams(input: NativeCodexRunDriverInput): Record<string, un
     approvalsReviewer: input.approvalsReviewer,
     sandbox: input.sandbox,
     config: customModel.config,
-    developerInstructions: input.developerInstructions,
     initialTurnsPage: { limit: 5, itemsView: 'full', sortDirection: 'desc' }
   })
 }

@@ -1,0 +1,12 @@
+{
+  "name": "openai-bundled",
+  "plugins": [
+    {
+      "name": "codex-app-tools",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-app-tools"
+      }
+    }
+  ]
+}

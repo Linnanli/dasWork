@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "codex_app": {
+      "command": "./scripts/launch_codex_app_tools_mcp",
+      "args": [
+        "./server.mjs"
+      ],
+      "cwd": ".",
+      "enabled": false,
+      "env_vars": [
+        "CODEX_APP_TOOLS_PIPE_PATH",
+        "CODEX_MCP_NODE_PATH",
+        "ELECTRON_RUN_AS_NODE"
+      ],
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 3600
+    }
+  }
+}

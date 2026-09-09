@@ -58,7 +58,8 @@ test('native runtime production roots satisfy the boundary rules', () => {
     assert.ok(report.scanned.production.roots[label], `missing production scan root ${label}`)
     assert.ok(report.scanned.tests.roots[label], `missing test scan root ${label}`)
   }
-  assert.ok(report.scanned.compatibilityFixtures.roots['legacy-provider-tests'])
+  assert.equal(report.scanned.compatibilityFixtures.files, 0)
+  assert.deepEqual(report.scanned.compatibilityFixtures.roots, {})
 })
 
 test('rejects a second generated protocol tree', () => {

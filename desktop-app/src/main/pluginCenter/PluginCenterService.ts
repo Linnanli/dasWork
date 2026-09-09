@@ -225,6 +225,7 @@ export class PluginCenterService {
       removeSkillDirectory?: (path: string) => Promise<void>
       recommendedSkills?: RecommendedSkillsService
       codexHome?: string
+      isInternalPlugin?: (plugin: { id: string; name?: string; marketplaceId?: string }) => boolean
     }
   ) {}
 
@@ -324,7 +325,7 @@ export class PluginCenterService {
     const plugins = mergePluginsWithInstalled(
       normalizePlugins(catalog, pluginDetails),
       installedResult.ok ? installedResult.value : []
-    )
+    ).filter((plugin) => !this.isInternalPlugin(plugin))
     let catalogUnavailableMessage: string | undefined
     if (includePlugins) {
       catalogUnavailableMessage =
@@ -388,6 +389,7 @@ export class PluginCenterService {
   async getPluginDetail(
     input: PluginCenterGetPluginDetailRequest
   ): Promise<PluginCenterGetPluginDetailResult> {
+    this.assertUserManagedPlugin(input.plugin)
     const cwd = this.cwdFor(input)
     const located = await this.resolvePluginLocator(input)
     if (located.status === 'missing') {
@@ -788,6 +790,7 @@ export class PluginCenterService {
           : await this.readPluginCatalog(cwd, forceRefresh, requestId)
         return normalizePlugins(objectValue(raw), [])
           .filter((plugin) => plugin.installed)
+          .filter((plugin) => !this.isInternalPlugin(plugin))
           .map((plugin) => ({
             ...plugin,
             installed: true,
@@ -1001,6 +1004,20 @@ export class PluginCenterService {
     return (this.dependencies.nowMs ?? Date.now)()
   }
 
+  private isInternalPlugin(plugin: { id: string; name?: string; marketplaceId?: string }): boolean {
+    return this.dependencies.isInternalPlugin?.(plugin) === true
+  }
+
+  private assertUserManagedPlugin(plugin: {
+    id: string
+    name?: string
+    marketplaceId?: string
+  }): void {
+    if (this.isInternalPlugin(plugin)) {
+      throw new Error('Internal bundled plugins are managed by the desktop runtime.')
+    }
+  }
+
   private logPerformance(
     event: string,
     details: Record<string, string | number | boolean | undefined>
@@ -1011,6 +1028,7 @@ export class PluginCenterService {
   async installPlugin(
     input: PluginCenterRequestContext & { plugin: { id: string; marketplaceId?: string } }
   ): Promise<PluginCenterMutationResult> {
+    this.assertUserManagedPlugin(input.plugin)
     return this.queue(`plugin:${input.plugin.id}`, async () => {
       const locator = await this.findPluginLocator(input)
       const write = await this.dependencies.provider.installPlugin({
@@ -1028,6 +1046,7 @@ export class PluginCenterService {
   async uninstallPlugin(
     input: PluginCenterRequestContext & { plugin: { id: string; marketplaceId?: string } }
   ): Promise<PluginCenterMutationResult> {
+    this.assertUserManagedPlugin(input.plugin)
     return this.queue(`plugin:${input.plugin.id}`, async () => {
       const locator = await this.findPluginLocator(input)
       const write = await this.dependencies.provider.uninstallPlugin({
@@ -1040,6 +1059,7 @@ export class PluginCenterService {
   async setPluginEnabled(
     input: PluginCenterRequestContext & { plugin: { id: string }; enabled: boolean }
   ): Promise<PluginCenterMutationResult> {
+    this.assertUserManagedPlugin(input.plugin)
     return this.queue(`plugin:${input.plugin.id}`, async () => {
       const write = await this.dependencies.provider.setPluginEnabled({
         cwd: this.cwdFor(input),

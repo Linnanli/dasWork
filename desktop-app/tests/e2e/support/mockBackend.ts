@@ -211,6 +211,21 @@ export function shellCommandResponse(
   callId: string,
   args: Record<string, unknown>
 ): ResponsesStreamStep {
+  return dynamicFunctionCallResponse(responseId, callId, 'shell_command', args)
+}
+
+/**
+ * Emits a standard Responses API function call.  Keep this helper at the
+ * model HTTP boundary: Electron, the app-server, and desktop tool registry
+ * remain the production implementations in E2E tests.
+ */
+export function dynamicFunctionCallResponse(
+  responseId: string,
+  callId: string,
+  name: string,
+  args: Record<string, unknown>,
+  options: { namespace?: string } = {}
+): ResponsesStreamStep {
   return {
     events: [
       responseCreated(responseId),
@@ -219,7 +234,8 @@ export function shellCommandResponse(
         item: {
           type: 'function_call',
           call_id: callId,
-          name: 'shell_command',
+          ...(options.namespace ? { namespace: options.namespace } : {}),
+          name,
           arguments: JSON.stringify(args)
         }
       },

@@ -22,6 +22,10 @@ export * from './dynamic-tools'
 export * from './errors'
 export * from './history-client'
 export * from './process-session-client'
+export type {
+  DynamicToolCallParams,
+  DynamicToolSpec
+} from './protocol/app-server-protocol/v2'
 export type { Model as CodexModel } from './protocol/app-server-protocol/v2/Model'
 export * from './protocol/shared-item-extractors'
 export * from './protocol/turn-diff'

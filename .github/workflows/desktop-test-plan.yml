@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "desktop-app/**"
+      - ".omx/plans/codex-app-tools-presentations-remaining-gaps-remediation-plan.md"
       - "codex/codex-rs/app-server/**"
       - "docs/test-plan.md"
       - ".github/workflows/desktop-release.yml"
@@ -28,13 +29,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            desktop-app/package-lock.json
-            desktop-app/vendors/ai-sdk-provider-codex-asp/package-lock.json
-
-      - name: Install provider dependencies
-        run: npm ci
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Install desktop dependencies
         run: npm ci
@@ -66,6 +61,10 @@ jobs:
           mkdir -p test-results/contracts
           node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
 
+      - name: Verify App Tools release-gate contract
+        run: npm run verify:app-tools-release-gates
+        working-directory: desktop-app
+
       - name: Upload native runtime boundary report
         if: always()
         uses: actions/upload-artifact@v7
@@ -74,12 +73,9 @@ jobs:
           if-no-files-found: warn
           path: desktop-app/test-results/contracts/native-runtime-boundaries.json
 
-      - name: Provider lint, typecheck, and tests
-        working-directory: desktop-app/vendors/ai-sdk-provider-codex-asp
-        run: |
-          npm run lint
-          npm run typecheck
-          npm test
+      - name: AI-free client lint, typecheck, and tests
+        run: npm --prefix vendors/codex-app-server-client run qa
+        working-directory: desktop-app
 
       - name: Desktop lint, typecheck, and tests
         working-directory: desktop-app

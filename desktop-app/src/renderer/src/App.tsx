@@ -194,7 +194,12 @@ import {
   resolveInlineReferenceAction,
   type InlineReferenceAction
 } from './lib/referenceInlineAction'
-import { blockedAssistantMessageText, pendingAssistantMessageText } from './lib/assistantMessages'
+import {
+  blockedAssistantMessageText,
+  delayedAssistantMessageText,
+  delayedAssistantMessageThresholdMs,
+  pendingAssistantMessageText
+} from './lib/assistantMessages'
 import {
   buildAssistantRenderUnits,
   type AssistantMessagePhase,
@@ -2395,6 +2400,10 @@ function AssistantMessage({
   })
   const wasCancelled =
     message.status?.type === 'incomplete' && message.status.reason === 'cancelled'
+  const pendingStatusText = useDelayedAssistantMessageText(
+    message.status?.type === 'running',
+    message.id
+  )
 
   return (
     <MessagePrimitive.Root
@@ -2410,7 +2419,7 @@ function AssistantMessage({
         )}
       >
         {isThinkingOnly ? (
-          pendingAssistantMessageText
+          pendingStatusText
         ) : (
           <>
             {visibleUnits.map((unit) => (
@@ -2421,6 +2430,7 @@ function AssistantMessage({
               >
                 <AssistantRenderUnitView
                   unit={unit}
+                  pendingStatusText={pendingStatusText}
                   onOpenConversation={onOpenConversation}
                   workspaceCwd={workspaceCwd}
                   canOpenLocalPaths={canOpenLocalPaths}
@@ -2471,6 +2481,43 @@ function AssistantMessage({
       )}
     </MessagePrimitive.Root>
   )
+}
+
+type DelayedAssistantMessageState = {
+  running: boolean
+  messageId: string
+  elapsed: boolean
+}
+
+function useDelayedAssistantMessageText(running: boolean, messageId: string): string {
+  const [delayState, setDelayState] = useState<DelayedAssistantMessageState>(() => ({
+    running,
+    messageId,
+    elapsed: false
+  }))
+
+  if (delayState.running !== running || delayState.messageId !== messageId) {
+    setDelayState({ running, messageId, elapsed: false })
+  }
+
+  useEffect(() => {
+    if (!running) return
+    const timer = window.setTimeout(() => {
+      setDelayState((current) =>
+        current.running === running && current.messageId === messageId
+          ? { ...current, elapsed: true }
+          : current
+      )
+    }, delayedAssistantMessageThresholdMs)
+    return () => window.clearTimeout(timer)
+  }, [messageId, running])
+
+  return running &&
+    delayState.running === running &&
+    delayState.elapsed &&
+    delayState.messageId === messageId
+    ? delayedAssistantMessageText
+    : pendingAssistantMessageText
 }
 
 type ExternalAISDKMessage = {
@@ -2855,11 +2902,13 @@ function displayDirectiveLabel(
 
 function AssistantRenderUnitView({
   unit,
+  pendingStatusText,
   onOpenConversation,
   workspaceCwd,
   canOpenLocalPaths
 }: {
   unit: AssistantRenderUnit
+  pendingStatusText: string
   onOpenConversation: OpenSubagentConversation
   workspaceCwd?: string
   canOpenLocalPaths: boolean
@@ -2874,7 +2923,7 @@ function AssistantRenderUnitView({
         >
           <span aria-hidden className="h-4 w-0 shrink-0" />
           <span className="shimmer min-w-0 flex-1 truncate select-none leading-none motion-reduce:animate-none">
-            {pendingAssistantMessageText}
+            {pendingStatusText}
           </span>
         </span>
       )
@@ -2894,6 +2943,7 @@ function AssistantRenderUnitView({
       return (
         <ReasoningGroupUnit
           unit={unit}
+          pendingStatusText={pendingStatusText}
           onOpenConversation={onOpenConversation}
           workspaceCwd={workspaceCwd}
           canOpenLocalPaths={canOpenLocalPaths}
@@ -2911,7 +2961,13 @@ function AssistantRenderUnitView({
         />
       )
     case 'tool-group':
-      return <ToolGroupUnit unit={unit} onOpenConversation={onOpenConversation} />
+      return (
+        <ToolGroupUnit
+          unit={unit}
+          pendingStatusText={pendingStatusText}
+          onOpenConversation={onOpenConversation}
+        />
+      )
     case 'unknown':
       return <UnknownUnit unit={unit} />
   }
@@ -2919,11 +2975,13 @@ function AssistantRenderUnitView({
 
 function ReasoningGroupUnit({
   unit,
+  pendingStatusText,
   onOpenConversation,
   workspaceCwd,
   canOpenLocalPaths
 }: {
   unit: Extract<AssistantRenderUnit, { type: 'reasoning-group' }>
+  pendingStatusText: string
   onOpenConversation: OpenSubagentConversation
   workspaceCwd?: string
   canOpenLocalPaths: boolean
@@ -2973,6 +3031,7 @@ function ReasoningGroupUnit({
             <div key={child.key} data-slot="reasoning-process-item" className="min-w-0">
               <AssistantRenderUnitView
                 unit={child}
+                pendingStatusText={pendingStatusText}
                 onOpenConversation={onOpenConversation}
                 workspaceCwd={workspaceCwd}
                 canOpenLocalPaths={canOpenLocalPaths}
@@ -3168,12 +3227,14 @@ function AssistantText({
 
 function ToolGroupUnit({
   unit,
+  pendingStatusText,
   onOpenConversation
 }: {
   unit: Extract<AssistantRenderUnit, { type: 'tool-group' }>
+  pendingStatusText: string
   onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
-  const displayModel = buildToolActivityDisplayModel(unit)
+  const displayModel = buildToolActivityDisplayModel(unit, { pendingLabel: pendingStatusText })
 
   return (
     <ToolActivityGroupShell

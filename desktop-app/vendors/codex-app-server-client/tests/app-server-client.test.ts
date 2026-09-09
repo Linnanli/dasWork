@@ -43,6 +43,36 @@ class MemoryTransport implements CodexTransport {
 }
 
 describe('AppServerClient', () => {
+  it('uses a 30 second submission-confirmation timeout by default', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = new MemoryTransport()
+      const client = new AppServerClient(transport)
+      await client.connect()
+
+      const request = client.request('turn/start', { threadId: 'thread-1', input: [] })
+      let settled = false
+      void request.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      const rejection = expect(request).rejects.toThrow('Request timed out: turn/start')
+
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(transport.sentMessages).toHaveLength(1)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await rejection
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('serializes asynchronous notifications received in one transport tick', async () => {
     const transport = new MemoryTransport()
     const client = new AppServerClient(transport)

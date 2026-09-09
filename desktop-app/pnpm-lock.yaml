@@ -20,9 +20,6 @@ importers:
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@39.8.10(supports-color@7.1.0))
-      '@janole/ai-sdk-provider-codex-asp':
-        specifier: file:vendors/ai-sdk-provider-codex-asp
-        version: file:vendors/ai-sdk-provider-codex-asp(ai@6.0.256(zod@4.4.3))(zod@4.4.3)
       '@pierre/diffs':
         specifier: 1.2.12
         version: 1.2.12(@shikijs/themes@4.4.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -150,6 +147,9 @@ importers:
       electron-vite:
         specifier: ^5.0.0
         version: 5.0.0(supports-color@7.1.0)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0))
+      esbuild:
+        specifier: ^0.25.11
+        version: 0.25.11
       eslint:
         specifier: ^9.39.1
         version: 9.39.5(jiti@2.7.0)(supports-color@7.1.0)
@@ -1144,12 +1144,6 @@ packages:
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
-
-  '@janole/ai-sdk-provider-codex-asp@file:vendors/ai-sdk-provider-codex-asp':
-    resolution: {directory: vendors/ai-sdk-provider-codex-asp, type: directory}
-    engines: {node: '>=20'}
-    peerDependencies:
-      ai: ^6.0.0
 
   '@jridgewell/gen-mapping@0.3.12':
     resolution: {integrity: sha512-OuLGC46TjB5BbN1dH8JULVVZY4WTdkF7tV9Ys6wLL1rubZnCMstOhNHueU5bLCrnRuDhKPDM4g6sw4Bel5Gzqg==}
@@ -7774,14 +7768,6 @@ snapshots:
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
       minipass: 7.1.3
-
-  '@janole/ai-sdk-provider-codex-asp@file:vendors/ai-sdk-provider-codex-asp(ai@6.0.256(zod@4.4.3))(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.46(zod@4.4.3)
-      ai: 6.0.256(zod@4.4.3)
-    transitivePeerDependencies:
-      - zod
 
   '@jridgewell/gen-mapping@0.3.12':
     dependencies:

@@ -86,21 +86,29 @@ export type ToolActivityDisplayModel = {
   items: readonly ToolItemDisplay[]
 }
 
+export type ToolActivityDisplayOptions = {
+  pendingLabel?: string
+}
+
 const MAX_TRIGGER_COMMAND_CHARS = 96
 const MAX_ACTIVE_COMMAND_CHARS = 72
 const MAX_SHELL_OUTPUT_CHARS = 20_000
 
-export function buildToolActivityDisplayModel(unit: ToolGroupUnit): ToolActivityDisplayModel {
+export function buildToolActivityDisplayModel(
+  unit: ToolGroupUnit,
+  options: ToolActivityDisplayOptions = {}
+): ToolActivityDisplayModel {
   const items = unit.children.map((item) => buildToolItemDisplay(item, unit))
   return {
-    group: buildToolGroupDisplay(unit, items),
+    group: buildToolGroupDisplay(unit, items, options),
     items
   }
 }
 
 export function buildToolGroupDisplay(
   unit: ToolGroupUnit,
-  items: readonly ToolItemDisplay[] = unit.children.map((item) => buildToolItemDisplay(item, unit))
+  items: readonly ToolItemDisplay[] = unit.children.map((item) => buildToolItemDisplay(item, unit)),
+  options: ToolActivityDisplayOptions = {}
 ): ToolGroupDisplay {
   const status = toolGroupActivityStatus(unit, items)
   const showThinkingFallback = unit.showThinkingFallback === true
@@ -112,7 +120,7 @@ export function buildToolGroupDisplay(
 
   return {
     label: showThinkingFallback
-      ? pendingAssistantMessageText
+      ? (options.pendingLabel ?? pendingAssistantMessageText)
       : toolGroupLabel(unit, items, showShimmer),
     icon: showThinkingFallback ? undefined : toolGroupIcon(unit),
     status,

@@ -15,6 +15,9 @@ import type {
 import { CodexUiMessageAdapter } from './CodexUiMessageAdapter'
 import { NativeCodexRunDriver } from './NativeCodexRunDriver'
 import { HostCodexConnection } from './HostCodexConnection'
+import type { NativeDynamicToolSpec } from '../appTools/DynamicAppToolRegistry'
+import type { DesktopThreadConfig } from '../appTools/DesktopThreadConfigSource'
+import type { CodexTurnActivityEvent } from './CodexTurnActivity'
 
 export type CodexRunApprovalHandlers = {
   command?(params: unknown): Promise<unknown>
@@ -44,6 +47,7 @@ export type CodexRunDriverInput = {
   onThreadStarted?(thread: { threadId: string; threadPath?: string }): void | Promise<void>
   onAgentLifecycle?(event: unknown): void | Promise<void>
   onTurnLifecycle?(event: CodexTurnLifecycleEvent | Record<string, unknown>): void | Promise<void>
+  onTurnActivity?(event: CodexTurnActivityEvent): void | Promise<void>
   onTurnDiffUpdated?(event: {
     threadId: string
     turnId: string
@@ -60,6 +64,10 @@ export type CodexRunDriverInput = {
   }): void | Promise<void>
   onSessionCreated?(session: CodexRunSession): void | Promise<void>
   onDynamicToolCall?(params: unknown): Promise<unknown>
+  /** Immutable host-tool directory selected before this new thread starts. */
+  dynamicTools?: readonly NativeDynamicToolSpec[]
+  /** Main-process-only MCP/runtime configuration merged with the model config. */
+  threadConfig?: DesktopThreadConfig
   onExistingTurnRecoveryState?(state: CodexExistingTurnRecoveryState): void
   collaborationMode?: CollaborationMode
   approvalSettings?: CodexRunApprovalSettings
@@ -135,6 +143,7 @@ export function createNativeCodexRunDriver(
         signal: input.abortSignal,
         onThreadStarted: input.onThreadStarted,
         onLifecycle: input.onTurnLifecycle,
+        onTurnActivity: input.onTurnActivity,
         onAgentLifecycle: input.onAgentLifecycle,
         onTurnDiffUpdated: input.onTurnDiffUpdated,
         onThreadSettingsUpdated: input.onThreadSettingsUpdated,
@@ -142,6 +151,8 @@ export function createNativeCodexRunDriver(
         onSessionCreated: input.onSessionCreated,
         onExistingTurnRecoveryState: input.onExistingTurnRecoveryState,
         onDynamicToolCall: input.onDynamicToolCall,
+        dynamicTools: input.dynamicTools,
+        threadConfig: input.threadConfig,
         onApprovalRequest: (kind, params) => {
           switch (kind) {
             case 'command':

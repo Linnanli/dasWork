@@ -21,6 +21,9 @@ import {
 import icon from '../../resources/icon.png?asset'
 import { createBeforeQuitHandler } from './appShutdown'
 import { CodexChatRuntimeService } from './codexChatRuntimeService'
+import { DesktopHostCapabilityRuntime } from './appTools/DesktopHostCapabilityRuntime'
+import { DesktopThreadConfigSource } from './appTools/DesktopThreadConfigSource'
+import { CodexAppToolsNativePipeServer } from './appTools/nativePipeServer'
 import { HostCodexConnection } from './codexRun/HostCodexConnection'
 import { createCodexNativeSharedConnection } from './codexRun/codexNativeConnection'
 import { resolveCodexAppServerLaunchOptions } from './codexAppServerLaunch'
@@ -87,7 +90,23 @@ import { TerminalBackendFactory } from './terminal/TerminalBackendFactory'
 import { createLocalGitIpcHandlers } from './localGit/localGitIpc'
 import { LocalGitWatchBroker, localGitWatchControlChannels } from './localGit/LocalGitWatchBroker'
 import { invalidateLocalGitWatchCaches } from './localGit/LocalGitWatchInvalidation'
-import { loadDesktopRuntimeConfig } from './runtimeConfig'
+import { loadDesktopRuntimeConfig, type DesktopRuntimeConfig } from './runtimeConfig'
+import {
+  FilePrimaryRuntimeManifestSequenceStore,
+  PRIMARY_RUNTIME_MANIFEST_PUBLIC_KEYS,
+  PrimaryRuntimeLocator,
+  PrimaryRuntimeService,
+  SignedPrimaryRuntimeReleaseProvider,
+  TrustedPrimaryRuntimeReleaseProvider
+} from './primaryRuntime'
+import {
+  BundledPluginReconcileCoordinator,
+  BundledPluginManager,
+  isInternalBundledPlugin,
+  readAppBundledPluginDescriptors,
+  readPrimaryRuntimeBundledPluginDescriptors,
+  type BundledPluginDescriptor
+} from './bundledPlugins'
 import {
   registerRightWorkspaceIpc,
   type RightWorkspaceIpcRegistration
@@ -147,6 +166,8 @@ let localGitWatchBroker: LocalGitWatchBroker | undefined
 let gitHostRegistry: GitHostRegistry | undefined
 let codexHostConnectionRegistry: CodexHostConnectionRegistry | undefined
 let rightWorkspaceIpc: RightWorkspaceIpcRegistration | undefined
+let codexAppToolsPipe: CodexAppToolsNativePipeServer | undefined
+let primaryRuntimeService: PrimaryRuntimeService | undefined
 const localImageCapabilities = new LocalImageCapabilityStore()
 const localPathCapabilities = new LocalPathCapabilityStore()
 const artifactPreviewCapabilities = new ArtifactPreviewCapabilityStore()
@@ -162,11 +183,67 @@ const artifactPreviewManifest = new ArtifactPreviewSourceManifest(
 )
 registerAppSchemePrivileges(protocol)
 
-function createCodexRuntime(
+async function createCodexRuntime(
   hosts: GitHostRegistry,
   manager: GitManager,
-  turnDiffStore: TurnDiffStore
-): CodexChatRuntimeService {
+  turnDiffStore: TurnDiffStore,
+  runtimeConfig: DesktopRuntimeConfig
+): Promise<CodexChatRuntimeService> {
+  const primaryRuntime = new PrimaryRuntimeService({
+    locator: new PrimaryRuntimeLocator({
+      env: process.env,
+      allowDevelopmentRoot: is.dev || process.env['NODE_ENV'] === 'test',
+      appCacheRoot: join(app.getPath('userData'), 'primary-runtime'),
+      resourcesPath: process.resourcesPath
+    }),
+    cacheRoot: join(app.getPath('userData'), 'primary-runtime'),
+    ...(runtimeConfig.primaryRuntimeRelease
+      ? {
+          releaseProvider: new TrustedPrimaryRuntimeReleaseProvider({
+            ...runtimeConfig.primaryRuntimeRelease,
+            archiveFormat: 'zip'
+          })
+        }
+      : runtimeConfig.primaryRuntimeManifest
+        ? {
+            releaseProvider: new SignedPrimaryRuntimeReleaseProvider({
+              ...runtimeConfig.primaryRuntimeManifest,
+              publicKeys: PRIMARY_RUNTIME_MANIFEST_PUBLIC_KEYS,
+              sequenceStore: new FilePrimaryRuntimeManifestSequenceStore(
+                join(app.getPath('userData'), 'primary-runtime', 'release-sequence.json')
+              )
+            })
+          }
+        : {})
+  })
+  primaryRuntimeService = primaryRuntime
+  const hostCapabilities = new DesktopHostCapabilityRuntime({
+    workspaceDependencies: primaryRuntime,
+    readThreadTerminal: (threadId) =>
+      rightWorkspaceIpc?.terminalManager.readThreadTerminal(threadId) ?? { terminalAttached: false }
+  })
+  const desktopToolBridge = await startDesktopToolBridge(hostCapabilities)
+  let bundledPluginDescriptors = uniqueBundledPluginDescriptors([
+    ...desktopToolBridge.descriptors,
+    ...(await readPrimaryRuntimeBundledPluginDescriptors(
+      await primaryRuntime.diagnoseDependencies()
+    ).catch((error) => {
+      console.warn('[bundled-plugins] failed to discover initial runtime descriptors', error)
+      return []
+    }))
+  ])
+  const reconcileBundledPluginCatalog = async (): Promise<void> => {
+    const activeDescriptors = await reconcileBundledPlugins({
+      catalogClient: requireComposerContextClient(),
+      appDescriptors: desktopToolBridge.descriptors,
+      primaryRuntime,
+      hostCapabilities
+    })
+    bundledPluginDescriptors = uniqueBundledPluginDescriptors([
+      ...bundledPluginDescriptors,
+      ...activeDescriptors
+    ])
+  }
   const launch = resolveCodexAppServerLaunchOptions({ env: process.env })
   const connection = createCodexNativeSharedConnection(launch)
   codexAppServerConnection = connection
@@ -220,7 +297,13 @@ function createCodexRuntime(
     provider: composerContextClient,
     defaultCwd: () => undefined,
     codexHome,
-    recommendedSkills: new RecommendedSkillsService({ codexHome })
+    recommendedSkills: new RecommendedSkillsService({ codexHome }),
+    isInternalPlugin: (plugin) =>
+      isInternalBundledPlugin(bundledPluginDescriptors, {
+        id: plugin.id,
+        name: plugin.name,
+        marketplaceName: plugin.marketplaceId
+      })
   })
   composerContextCatalog = new ComposerContextCatalogService({
     provider: composerContextClient,
@@ -274,16 +357,29 @@ function createCodexRuntime(
   })
   followUpQueue.subscribe(broadcastFollowUpChange)
 
+  const bundledPluginReconciler = new BundledPluginReconcileCoordinator({
+    reconcile: reconcileBundledPluginCatalog,
+    refreshCapabilities: () => hostCapabilities.refresh(),
+    onFailure: () => hostCapabilities.setBundledPluginsStatus('degraded'),
+    warn: (message, error) => console.warn(message, error)
+  })
+
+  void bundledPluginReconciler.run('startup')
+  if (runtimeConfig.primaryRuntimeRelease || runtimeConfig.primaryRuntimeManifest) {
+    void installPrimaryRuntimeIfNeeded(primaryRuntime, bundledPluginReconciler, hostCapabilities)
+  }
+
   return new CodexChatRuntimeService({
     launch,
     hostConnection,
-    modelCatalog: createModelCatalogService(loadDesktopRuntimeConfig(process.env)),
+    modelCatalog: createModelCatalogService(runtimeConfig),
     projectService: projectRuntimeServices.projectService,
     projectStore: projectRuntimeServices.projectStore,
     turnDiffStore,
     collaborationModeClient: historyClient,
     followUpQueue,
-    restoreArtifactAttachments: (messages) => artifactComposerAttachments.restoreInMessages(messages),
+    restoreArtifactAttachments: (messages) =>
+      artifactComposerAttachments.restoreInMessages(messages),
     onTurnCompleted: () => manager.handleAppEvent({ type: 'turnComplete' }),
     onAgentLifecycle: (event) => {
       liveAgents.observe(event)
@@ -294,9 +390,115 @@ function createCodexRuntime(
     },
     onThreadBound: (conversationId, threadId) =>
       rightWorkspaceIpc?.terminalManager.bindThread(conversationId, threadId),
-    readThreadTerminal: (threadId) =>
-      rightWorkspaceIpc?.terminalManager.readThreadTerminal(threadId) ?? { terminalAttached: false }
+    hostCapabilities
   })
+}
+
+type DesktopToolBridge = {
+  descriptors: readonly BundledPluginDescriptor[]
+}
+
+async function startDesktopToolBridge(
+  hostCapabilities: DesktopHostCapabilityRuntime
+): Promise<DesktopToolBridge> {
+  let descriptors: BundledPluginDescriptor[] = []
+  try {
+    descriptors = await readAppBundledPluginDescriptors(
+      app.isPackaged
+        ? { isPackaged: true, resourcesPath: process.resourcesPath }
+        : { isPackaged: false, appPath: app.getAppPath() }
+    )
+    const appTools = descriptors.find((descriptor) => descriptor.pluginName === 'codex-app-tools')
+    if (!appTools) {
+      console.warn('[codex-app-tools] bundled codex-app-tools descriptor is missing')
+      return { descriptors }
+    }
+
+    const pipe = new CodexAppToolsNativePipeServer({
+      registry: hostCapabilities.registry,
+      onUnavailable: (error) => {
+        console.warn('[codex-app-tools] native Pipe became unavailable', error)
+        hostCapabilities.setCodexAppMcp({ status: 'unavailable' })
+      }
+    })
+    const { pipePath } = await pipe.start()
+    codexAppToolsPipe = pipe
+    const threadConfig = new DesktopThreadConfigSource({
+      pipePath,
+      pluginRoot: appTools.pluginRoot
+    }).snapshot()
+    hostCapabilities.setCodexAppMcp({ status: 'ready', threadConfig })
+    return { descriptors }
+  } catch (error) {
+    console.warn('[codex-app-tools] desktop tool bridge is unavailable', error)
+    await codexAppToolsPipe?.shutdown().catch(() => undefined)
+    codexAppToolsPipe = undefined
+    hostCapabilities.setCodexAppMcp({ status: 'unavailable' })
+    return { descriptors }
+  }
+}
+
+async function installPrimaryRuntimeIfNeeded(
+  primaryRuntime: PrimaryRuntimeService,
+  bundledPluginReconciler: BundledPluginReconcileCoordinator,
+  hostCapabilities: DesktopHostCapabilityRuntime
+): Promise<void> {
+  const diagnostic = await primaryRuntime.diagnoseDependencies()
+  if (diagnostic.status === 'ready') return
+  try {
+    await primaryRuntime.install()
+  } catch (error) {
+    console.warn('[primary-runtime] trusted release installation failed', error)
+    hostCapabilities.refresh()
+    return
+  }
+  await bundledPluginReconciler.run('primary-runtime-install')
+}
+
+async function reconcileBundledPlugins(input: {
+  catalogClient: NonNullable<typeof composerContextClient>
+  appDescriptors: readonly BundledPluginDescriptor[]
+  primaryRuntime: PrimaryRuntimeService
+  hostCapabilities: DesktopHostCapabilityRuntime
+}): Promise<BundledPluginDescriptor[]> {
+  const primaryDescriptors = await readPrimaryRuntimeBundledPluginDescriptors(
+    await input.primaryRuntime.diagnoseDependencies()
+  ).catch((error) => {
+    console.warn('[bundled-plugins] failed to read primary runtime descriptors', error)
+    return []
+  })
+  const descriptors = uniqueBundledPluginDescriptors([
+    ...input.appDescriptors,
+    ...primaryDescriptors
+  ])
+  if (descriptors.length === 0) {
+    input.hostCapabilities.setBundledPluginsStatus('unavailable')
+    return []
+  }
+
+  const result = await new BundledPluginManager({
+    catalogClient: input.catalogClient,
+    descriptors,
+    invalidateCaches: () => input.hostCapabilities.refresh()
+  }).reconcile()
+  input.hostCapabilities.setBundledPluginsStatus(
+    result.status === 'ready' ? 'ready' : result.status === 'degraded' ? 'degraded' : 'unavailable'
+  )
+  if (result.status !== 'ready') {
+    console.warn('[bundled-plugins] reconcile degraded', result.failures)
+  }
+  return descriptors
+}
+
+function uniqueBundledPluginDescriptors(
+  descriptors: readonly BundledPluginDescriptor[]
+): BundledPluginDescriptor[] {
+  const unique = new Map<string, BundledPluginDescriptor>()
+  for (const descriptor of descriptors) {
+    const key = `${descriptor.marketplaceName}\u0000${descriptor.pluginName}`
+    if (!unique.has(key)) unique.set(key, descriptor)
+  }
+  return [...unique.values()]
 }
 
 async function pickWorkspaceRootPath(): Promise<string | null> {
@@ -561,7 +763,7 @@ function createWindow(runtime: CodexChatRuntimeService): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerAppProtocol({
     protocol,
     session: session.defaultSession,
@@ -581,7 +783,7 @@ app.whenReady().then(() => {
   })
   codexHostConnectionRegistry = terminalHosts
   const turnDiffStore = new TurnDiffStore(join(app.getPath('userData'), 'turn-diffs'))
-  const runtime = createCodexRuntime(hosts, manager, turnDiffStore)
+  const runtime = await createCodexRuntime(hosts, manager, turnDiffStore, runtimeConfig)
   codexRuntime = runtime
   const targetResolver = new GitRepositoryTargetResolver({
     projectService: requireProjectService(),
@@ -1065,6 +1267,8 @@ app.on(
           gitHostRegistry?.shutdown(),
           codexHostConnectionRegistry?.shutdown()
         ])
+        primaryRuntimeService?.dispose()
+        await codexAppToolsPipe?.shutdown()
         await codexAppServerConnection?.shutdown()
       }
     },

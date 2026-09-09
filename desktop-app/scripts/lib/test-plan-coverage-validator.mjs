@@ -12,7 +12,7 @@ export const coverageStatuses = new Set([
 ])
 
 const priorities = new Set(['P0', 'P1', 'P2'])
-const layers = new Set(['provider-unit', 'desktop-unit', 'integration', 'mock-e2e', 'release-e2e'])
+const layers = new Set(['client-unit', 'desktop-unit', 'integration', 'mock-e2e', 'release-e2e'])
 
 export const expectedScenarioIds = Object.entries({
   A: 14,

@@ -1024,8 +1024,17 @@ vi.mock('@assistant-ui/react', () => {
 
   const omitPrimitiveOnlyProps = (props: PrimitiveProps): Record<string, unknown> => {
     const elementProps = { ...props } as Record<string, unknown>
-    delete elementProps.children
-    delete elementProps.asChild
+    for (const propName of [
+      'children',
+      'asChild',
+      'autohide',
+      'hideWhenRunning',
+      'scrollToBottomOnInitialize',
+      'scrollToBottomOnThreadSwitch',
+      'turnAnchor'
+    ]) {
+      delete elementProps[propName]
+    }
     return elementProps
   }
 
@@ -1310,6 +1319,12 @@ describe('App composer', () => {
     vi.unstubAllGlobals()
   })
 
+  async function renderApp(): Promise<void> {
+    await act(async () => {
+      root.render(<App />)
+    })
+  }
+
   it('keeps the workspace child mounted when switching between pinned and preview tabs', () => {
     let mounts = 0
     const WorkspaceChild = (): React.JSX.Element => {
@@ -1346,10 +1361,8 @@ describe('App composer', () => {
     expect(container.querySelector('[data-testid="workspace-child"]')).toBe(child)
   })
 
-  it('uses the shared Lexical context input without the legacy slash popover', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('uses the shared Lexical context input without the legacy slash popover', async () => {
+    await renderApp()
 
     const lexicalInput = container.querySelector('[data-testid="lexical-composer-input"]')
     expect(lexicalInput).not.toBeNull()
@@ -1373,11 +1386,9 @@ describe('App composer', () => {
     expect(container.querySelector('[data-testid="composer-trigger-popover"]')).toBeNull()
   })
 
-  it('places the approval selector between the add-context control and mode indicator', () => {
+  it('places the approval selector between the add-context control and mode indicator', async () => {
     runtimeState.activeEntry.composerModeKind = 'plan'
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const addContext = container.querySelector<HTMLButtonElement>(
       'button[aria-label="添加文件和更多"]'
@@ -1448,9 +1459,7 @@ describe('App composer', () => {
       ]
     })
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1519,9 +1528,7 @@ describe('App composer', () => {
       }
     })
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1578,9 +1585,7 @@ describe('App composer', () => {
       new Error('turn already ended')
     )
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1652,9 +1657,7 @@ describe('App composer', () => {
       state: { ...state, revision: 3 }
     }))
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1713,9 +1716,7 @@ describe('App composer', () => {
       state: { ...state, revision: 3 }
     }))
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1738,9 +1739,7 @@ describe('App composer', () => {
   it('preserves a new draft when the preceding send fails before acceptance', async () => {
     runtimeState.activeEntry.draft = 'failed request'
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
     })
@@ -1774,9 +1773,7 @@ describe('App composer', () => {
   it('loads the unified context catalog for the selected project', async () => {
     const listContext = vi.mocked(window.desktopApp.composerContext.list)
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     await act(async () => {
       await Promise.resolve()
@@ -1894,9 +1891,7 @@ describe('App composer', () => {
     }
     vi.mocked(window.desktopApp.composerContext.list).mockResolvedValue(result)
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -1980,9 +1975,7 @@ describe('App composer', () => {
     }
     vi.mocked(window.desktopApp.composerContext.list).mockResolvedValue(result)
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -2006,7 +1999,7 @@ describe('App composer', () => {
     expect(document.body.textContent).not.toContain('Appshot')
   })
 
-  it('blocks remote sends while a local path attachment is still in the composer', () => {
+  it('blocks remote sends while a local path attachment is still in the composer', async () => {
     runtimeState.activeConversation = {
       conversationId: 'remote-with-local-attachment',
       threadId: 'remote-with-local-attachment',
@@ -2031,9 +2024,7 @@ describe('App composer', () => {
     ]
     composerState.isEmpty = false
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('移除本地文件附件后才能发送到远程项目')
     expect(
@@ -2044,9 +2035,7 @@ describe('App composer', () => {
   it('shows model selection failures instead of silently swallowing them', async () => {
     runtimeState.modelSelectionError = 'model catalog unavailable'
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     await act(async () => {
       buttonWithText('GPT-5 Codex')?.click()
@@ -2060,10 +2049,8 @@ describe('App composer', () => {
     expect(container.textContent).toContain('model catalog unavailable')
   })
 
-  it('renders split sidebar sections without delete actions', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('renders split sidebar sections without delete actions', async () => {
+    await renderApp()
 
     expect(container.textContent).toContain('Projects')
     expect(container.textContent).toContain('Remote App')
@@ -2074,10 +2061,8 @@ describe('App composer', () => {
     expect(container.textContent).not.toContain('Delete')
   })
 
-  it('starts a new runtime conversation from the sidebar new conversation action', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('starts a new runtime conversation from the sidebar new conversation action', async () => {
+    await renderApp()
 
     const newChat = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === '新对话'
@@ -2100,9 +2085,7 @@ describe('App composer', () => {
     )
     vi.stubGlobal('cancelIdleCallback', vi.fn())
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('新对话')
     expect(pluginCenterResourceState.subscribe).toHaveBeenCalledWith(
@@ -2137,9 +2120,7 @@ describe('App composer', () => {
     )
     vi.stubGlobal('cancelIdleCallback', vi.fn())
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       idleCallback?.({ didTimeout: false, timeRemaining: () => 16 })
       await Promise.resolve()
@@ -2150,9 +2131,7 @@ describe('App composer', () => {
   })
 
   it('opens the plugin center without clearing the active conversation runtime', async () => {
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const plugins = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === '插件'
@@ -2169,9 +2148,7 @@ describe('App composer', () => {
   })
 
   it('starts an unsent conversation draft when an app is tried from Plugin Center', async () => {
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     const plugins = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === '插件'
     )
@@ -2181,7 +2158,8 @@ describe('App composer', () => {
     })
 
     const onTryApp = pluginCenterPagePropsState.lastProps?.onTryApp as
-      ((input: { mention: { path: string; name: string } }) => void) | undefined
+      | ((input: { mention: { path: string; name: string } }) => void)
+      | undefined
     expect(onTryApp).toBeTypeOf('function')
     await act(async () => {
       onTryApp?.({ mention: { path: 'app://github-app', name: 'github' } })
@@ -2202,9 +2180,7 @@ describe('App composer', () => {
     }
     runtimeState.activeEntry.context = runtimeState.activeConversation
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const plugins = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.trim() === '插件'
@@ -2270,10 +2246,8 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="plugin-center-page"]')).toBeNull()
   })
 
-  it('moves the shared sidebar trigger into the conversation header rail when collapsed', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('moves the shared sidebar trigger into the conversation header rail when collapsed', async () => {
+    await renderApp()
 
     const sidebar = container.querySelector<HTMLElement>('[data-slot="codex-sidebar"]')
     const headerSlot = container.querySelector<HTMLElement>('[data-slot="sidebar-header-slot"]')
@@ -2301,7 +2275,7 @@ describe('App composer', () => {
     expect(conversationHeader?.style.paddingRight).toBe('80px')
   })
 
-  it('shows active conversation title in the header without workspace path', () => {
+  it('shows active conversation title in the header without workspace path', async () => {
     runtimeState.activeConversation = {
       conversationId: 'conversation-1',
       threadId: 'thread-1',
@@ -2309,9 +2283,7 @@ describe('App composer', () => {
       cwd: '/Users/test/repo'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const header = container.querySelector('header')
 
@@ -2319,10 +2291,8 @@ describe('App composer', () => {
     expect(header?.innerHTML).not.toContain('/Users/test/repo')
   })
 
-  it('keeps the summary trigger in the adjacent header action slot', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('keeps the summary trigger in the adjacent header action slot', async () => {
+    await renderApp()
 
     const header = container.querySelector<HTMLElement>('header')
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="切换置顶摘要"]')
@@ -2336,10 +2306,8 @@ describe('App composer', () => {
     expect(header?.style.paddingRight).toBe('80px')
   })
 
-  it('keeps one shared workspace trigger across the conversation and workspace headers', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('keeps one shared workspace trigger across the conversation and workspace headers', async () => {
+    await renderApp()
 
     expect(container.querySelector('[aria-label="Right workspace launcher"]')).toBeNull()
     expect(container.querySelector('[aria-label="Right workspace"]')).toBeNull()
@@ -2448,9 +2416,7 @@ describe('App composer', () => {
       cwd: '/srv/app'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
     })
@@ -2469,9 +2435,7 @@ describe('App composer', () => {
   })
 
   it('shows the selected project branch control beside the project card before a chat starts', async () => {
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -2492,9 +2456,7 @@ describe('App composer', () => {
       ...requireProjectHookState(),
       activeProjectSelection: { projectKind: 'projectless' }
     }
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     expect(container.querySelector('[data-slot="local-branch-switcher"]')).toBeNull()
 
     projectHookState.controller.state = {
@@ -2502,9 +2464,7 @@ describe('App composer', () => {
       activeProjectSelection: { projectKind: 'path', path: '/repo' }
     }
     threadMessagesState.messages = [threadMessageState.message]
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="composer-project-card-shell"]')).toBeNull()
     expect(container.querySelector('[data-slot="local-branch-switcher"]')).toBeNull()
@@ -2519,9 +2479,7 @@ describe('App composer', () => {
       cwd: '/srv/app'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -2541,9 +2499,7 @@ describe('App composer', () => {
       cwd: '/tmp/projectless'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const addContextButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="添加文件和更多"]'
@@ -2563,9 +2519,7 @@ describe('App composer', () => {
       conversationId: 'conversation-without-project'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const addContextButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="添加文件和更多"]'
@@ -2586,9 +2540,7 @@ describe('App composer', () => {
       conversationId: 'conversation-awaiting-project'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const addContextButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="添加文件和更多"]'
@@ -2612,9 +2564,7 @@ describe('App composer', () => {
       cwd: '/srv/unassigned'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       await Promise.resolve()
     })
@@ -2635,28 +2585,24 @@ describe('App composer', () => {
     )
   })
 
-  it('keeps sidebar navigation available while a response is streaming', () => {
+  it('keeps sidebar navigation available while a response is streaming', async () => {
     runtimeState.activeEntry.status = 'streaming'
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const sidebar = container.querySelector('[data-slot="codex-sidebar"]')
     expect(sidebar?.hasAttribute('inert')).toBe(false)
     expect(sidebar?.hasAttribute('aria-disabled')).toBe(false)
   })
 
-  it('keeps the composer disabled until an existing conversation loads successfully', () => {
+  it('keeps the composer disabled until an existing conversation loads successfully', async () => {
     runtimeState.activeEntry.loaded = false
     runtimeState.activeConversation = {
       conversationId: 'thread-loading',
       title: 'Loading thread'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const sendButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.getAttribute('aria-label') === '发送消息'
@@ -2666,9 +2612,7 @@ describe('App composer', () => {
   })
 
   it('F01/F03/F06/F07/F18/F20 maps failed history to an accessible error card without stealing focus', async () => {
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const focusAnchor = document.createElement('button')
     focusAnchor.focus = nativeHTMLElementFocus.bind(focusAnchor)
@@ -2681,9 +2625,7 @@ describe('App composer', () => {
     }
     threadMessageState.message.content = [{ type: 'text', text: 'partial answer' }]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const converted = aiSdkRuntimeState.options?.convertMessage?.(
       {
@@ -2726,10 +2668,8 @@ describe('App composer', () => {
     focusAnchor.remove()
   })
 
-  it('F17 maps interrupted history metadata to cancelled without an error payload', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('F17 maps interrupted history metadata to cancelled without an error payload', async () => {
+    await renderApp()
 
     const converted = aiSdkRuntimeState.options?.convertMessage?.(
       {
@@ -2755,9 +2695,7 @@ describe('App composer', () => {
       type: 'incomplete',
       reason: 'cancelled'
     }
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     expect(
       container.querySelector('[data-slot="aui_assistant-message-cancelled"]')?.textContent
     ).toBe('已取消')
@@ -2771,9 +2709,7 @@ describe('App composer', () => {
           resolveRegenerate = resolve
         })
     )
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const onReload = aiSdkRuntimeState.options?.onReload
     expect(onReload).toBeDefined()
@@ -2807,9 +2743,7 @@ describe('App composer', () => {
     threadMessageState.message.content = [{ type: 'text', text: 'partial answer' }]
     assistantThreadState.isRunning = true
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(
       container.querySelector<HTMLButtonElement>('[data-slot="aui_assistant-message-retry"]')
@@ -2823,7 +2757,7 @@ describe('App composer', () => {
     })
   })
 
-  it('does not render the new-conversation welcome message while existing history loads', () => {
+  it('does not render the new-conversation welcome message while existing history loads', async () => {
     runtimeState.activeEntry.loaded = false
     runtimeState.activeEntry.newConversation = false
     runtimeState.activeEntry.status = 'loading'
@@ -2832,17 +2766,13 @@ describe('App composer', () => {
       title: 'Loading thread'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).not.toContain('How can I help you today?')
   })
 
-  it('shows only the welcome message in a blank new conversation', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('shows only the welcome message in a blank new conversation', async () => {
+    await renderApp()
 
     const viewport = container.querySelector<HTMLElement>('[data-slot="aui_thread-viewport"]')
     const footer = container.querySelector<HTMLElement>('.aui-thread-viewport-footer')
@@ -2858,7 +2788,7 @@ describe('App composer', () => {
     expect(container.querySelector('.aui-thread-welcome-suggestions-shell')).toBeNull()
   })
 
-  it('treats empty and explicit projectless selections as the same sendable mode', () => {
+  it('treats empty and explicit projectless selections as the same sendable mode', async () => {
     projectHookState.controller.state = {
       ...requireProjectHookState(),
       activeProjectSelection: undefined,
@@ -2868,9 +2798,7 @@ describe('App composer', () => {
     projectHookState.controller.currentLabel = 'Choose project'
     projectHookState.controller.currentDetail = null
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const card = container.querySelector<HTMLButtonElement>('[data-slot="composer-project-card"]')
     const send = container.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')
@@ -2882,9 +2810,7 @@ describe('App composer', () => {
       ...requireProjectHookState(),
       activeProjectSelection: { projectKind: 'projectless' }
     }
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(
       container.querySelector<HTMLButtonElement>('[data-slot="composer-project-card"]')?.textContent
@@ -2903,9 +2829,7 @@ describe('App composer', () => {
         })
     )
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-slot="composer-project-card"]')?.click()
       await Promise.resolve()
@@ -2940,9 +2864,7 @@ describe('App composer', () => {
       title: 'Broken thread'
     }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const alert = container.querySelector('[data-slot="conversation-load-error"]')
     const retryButton = Array.from(container.querySelectorAll('button')).find(
@@ -2959,10 +2881,8 @@ describe('App composer', () => {
     expect(runtimeState.openConversation).toHaveBeenCalledWith({ conversationId: 'local-test' })
   })
 
-  it('renders the sidebar with translucent glass styling', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('renders the sidebar with translucent glass styling', async () => {
+    await renderApp()
 
     const sidebar = container.querySelector('[data-slot="codex-sidebar"]')
     const mainSection = container.querySelector('[data-slot="app-main-section"]')
@@ -2981,12 +2901,10 @@ describe('App composer', () => {
     expect(newChat?.className).toContain('hover:bg-background/40')
   })
 
-  it('keeps the original opaque sidebar colors on Windows', () => {
+  it('keeps the original opaque sidebar colors on Windows', async () => {
     setDesktopPlatform('win32')
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const appShell = container.querySelector('main')
     const sidebar = container.querySelector('[data-slot="codex-sidebar"]')
@@ -3004,10 +2922,8 @@ describe('App composer', () => {
     expect(newChat?.className).not.toContain('hover:bg-background/40')
   })
 
-  it('renders user messages with the assistant-ui base message structure', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('renders user messages with the assistant-ui base message structure', async () => {
+    await renderApp()
 
     expect(container.querySelector('[data-primitive="Message.Attachments"]')).not.toBeNull()
     expect(container.querySelector('.aui-user-message-content-wrapper')).not.toBeNull()
@@ -3018,10 +2934,8 @@ describe('App composer', () => {
     expect(container.querySelector('.aui-user-action-bar-root')).not.toBeNull()
   })
 
-  it('projects only the visible request from a complete user prompt', () => {
-    act(() => {
-      root.render(<App />)
-    })
+  it('projects only the visible request from a complete user prompt', async () => {
+    await renderApp()
 
     const converted = aiSdkRuntimeState.options?.convertMessage?.(
       {
@@ -3048,7 +2962,7 @@ describe('App composer', () => {
     expect(converted?.content).toEqual([{ type: 'text', text: '请检查我未提交的更改' }])
   })
 
-  it('renders user image attachments with the assistant-ui attachment component', () => {
+  it('renders user image attachments with the assistant-ui attachment component', async () => {
     threadMessageState.message.content = [
       { type: 'text', text: '按这个图像风格调整组件样式' },
       {
@@ -3059,9 +2973,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const preview = container.querySelector<HTMLImageElement>('.aui-attachment-tile-image')
     const tile = container.querySelector<HTMLDivElement>('.aui-attachment-tile')
@@ -3080,25 +2992,21 @@ describe('App composer', () => {
     expect(container.querySelector('.aui-attachment-tile-fallback-icon')).not.toBeNull()
   })
 
-  it('renders the edit composer when a user message enters editing state', () => {
+  it('renders the edit composer when a user message enters editing state', async () => {
     threadMessageState.message.composer.isEditing = true
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="aui_edit-composer-wrapper"]')).not.toBeNull()
     expect(container.querySelector('.aui-edit-composer-root')).not.toBeNull()
     expect(container.querySelector('.aui-user-message-content-wrapper')).toBeNull()
   })
 
-  it('adds shimmer styling to the pending assistant thinking message', () => {
+  it('adds shimmer styling to the pending assistant thinking message', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const assistantContent = container.querySelector('[data-slot="aui_assistant-message-content"]')
 
@@ -3108,14 +3016,12 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="aui_assistant-message-footer"]')).toBeNull()
   })
 
-  it('keeps the assistant message footer height stable when actions appear', () => {
+  it('keeps the assistant message footer height stable when actions appear', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [{ type: 'text', text: '完成了' }]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const assistantFooter = container.querySelector('[data-slot="aui_assistant-message-footer"]')
 
@@ -3126,13 +3032,11 @@ describe('App composer', () => {
     expect(assistantFooter?.className).not.toContain('pt-1.5')
   })
 
-  it('renders assistant text with the streamdown markdown renderer', () => {
+  it('renders assistant text with the streamdown markdown renderer', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.content = [{ type: 'text', text: '# 标题\n\n- 条目' }]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-testid="streamdown-text"]')).not.toBeNull()
     expect(streamdownPropsState.lastProps).toMatchObject({
@@ -3161,21 +3065,19 @@ describe('App composer', () => {
     expect(streamdownPropsState.lastProps?.children).toBe('# 标题\n\n- 条目')
   })
 
-  it('animates streamed assistant text while the turn is running', () => {
+  it('animates streamed assistant text while the turn is running', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [{ type: 'text', text: 'Partial response' }]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(streamdownPropsState.lastProps).toMatchObject({
       isAnimating: true
     })
   })
 
-  it('renders semantic exploration labels for single assistant read tool parts', () => {
+  it('renders semantic exploration labels for single assistant read tool parts', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -3221,9 +3123,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('已探索')
     expect(container.textContent).toContain('1 个文件')
@@ -3231,7 +3131,7 @@ describe('App composer', () => {
     expect(container.textContent).not.toContain('codex_command_execution')
   })
 
-  it('renders semantic exploration cards for assistant search summaries', () => {
+  it('renders semantic exploration cards for assistant search summaries', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -3269,16 +3169,14 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('已探索')
     expect(container.textContent).toContain('2 次搜索')
     expect(explorationToolGroup()).not.toBeNull()
   })
 
-  it('summarizes grouped assistant exploration tool parts with Codex actions', () => {
+  it('summarizes grouped assistant exploration tool parts with Codex actions', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = Array.from({ length: 3 }, (_, index) => ({
@@ -3310,9 +3208,7 @@ describe('App composer', () => {
       }
     }))
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('已探索')
     expect(container.textContent).toContain('3 个文件')
@@ -3349,9 +3245,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('command')
     expect(group?.dataset.state).toBe('closed')
@@ -3406,9 +3300,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('command')
     expect(group?.textContent).toContain('正在运行：npm test -- --watch=false')
@@ -3434,7 +3326,7 @@ describe('App composer', () => {
     expect(shell?.textContent).toContain('250ms')
   })
 
-  it('shows fallback item attention statuses in the visible group label', () => {
+  it('shows fallback item attention statuses in the visible group label', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -3447,9 +3339,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(toolGroup('command')?.textContent).toContain('等待审批：npm test -- --inspect')
 
@@ -3471,9 +3361,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(toolGroup('file-change')?.textContent).toContain('已停止创建：src/new.ts')
   })
@@ -3493,9 +3381,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('command')
     expect(container.textContent).toContain('命令出错：npm test')
@@ -3533,9 +3419,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('dynamic')
     expect(group?.dataset.state).toBe('closed')
@@ -3576,9 +3460,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('file-change')
     expect(group).not.toBeNull()
@@ -3626,9 +3508,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('file-change')
     await act(async () => {
@@ -3670,9 +3550,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('file-change')
     await act(async () => {
@@ -3722,9 +3600,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('file-change')
     await act(async () => {
@@ -3789,9 +3665,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const reasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
     expect(reasoning?.dataset.state).toBe('closed')
@@ -3845,9 +3719,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = container.querySelector<HTMLElement>('[data-slot="subagent-activity-group"]')
     const chips = group?.querySelectorAll<HTMLButtonElement>(
@@ -3887,9 +3759,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('multi-agent')
     expect(group?.textContent).toContain('已启动 1 个子 agent')
@@ -3929,9 +3799,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('dynamic')
     expect(group).not.toBeNull()
@@ -3945,7 +3813,7 @@ describe('App composer', () => {
     expect(group?.textContent).toContain('动态工具缺少完整显示元数据')
   })
 
-  it('renders summary-only dynamic groups without expandable details', () => {
+  it('renders summary-only dynamic groups without expandable details', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -3963,9 +3831,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('dynamic')
     const trigger = group?.querySelector<HTMLButtonElement>('[data-slot="tool-group-trigger"]')
@@ -3975,7 +3841,7 @@ describe('App composer', () => {
     expect(group?.querySelector('[data-slot="collapsed-activity-details"]')).toBeNull()
   })
 
-  it('renders rich MCP content blocks and compact web search details', () => {
+  it('renders rich MCP content blocks and compact web search details', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -4009,9 +3875,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('composite')
     expect(group).not.toBeNull()
@@ -4045,7 +3909,7 @@ describe('App composer', () => {
     expect(container.querySelector('img[src="https://example.test/favicon.ico"]')).toBeNull()
   })
 
-  it('renders live web search details from tool input before result item exists', () => {
+  it('renders live web search details from tool input before result item exists', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -4059,9 +3923,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     act(() => {
       toolGroup('web-search')
@@ -4074,7 +3936,7 @@ describe('App composer', () => {
     expect(container.textContent).toContain('正在搜索网页')
   })
 
-  it('renders compact web search details without favicons', () => {
+  it('renders compact web search details without favicons', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -4095,9 +3957,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     act(() => {
       toolGroup('web-search')
@@ -4453,9 +4313,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const card = container.querySelector<HTMLElement>('[data-slot="review-comments-unit"]')
     expect(card).not.toBeNull()
@@ -4526,9 +4384,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const row = container.querySelector<HTMLButtonElement>(
       'button[aria-label="src/remote.ts:9 无法作为本地文件打开"]'
@@ -4550,9 +4406,7 @@ describe('App composer', () => {
       commandToolPart('list-exploration', 'listFiles', { status: { type: 'complete' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = explorationToolGroup()
     expect(group?.dataset.state).toBe('closed')
@@ -4572,7 +4426,7 @@ describe('App composer', () => {
     expect(container.textContent).toContain('list-exploration')
   })
 
-  it('renders active plan and diff in the composer while running, then preserves the diff card', () => {
+  it('renders active plan and diff in the composer while running, then preserves the diff card', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -4590,9 +4444,7 @@ describe('App composer', () => {
     ]
     threadMessagesState.messages = [threadMessageState.message]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const statusCard = container.querySelector('[data-slot="composer-turn-status-card"]')
     const viewportFooter = container.querySelector('[data-primitive="Thread.ViewportFooter"]')
@@ -4616,9 +4468,7 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="message-thinking-unit"]')).toBeNull()
 
     threadMessageState.message.status = { type: 'complete' }
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="composer-turn-status-card"]')).toBeNull()
     expect(container.querySelector('[data-slot="todo-list-entry-unit"]')).toBeNull()
@@ -4646,9 +4496,7 @@ describe('App composer', () => {
     ]
     threadMessagesState.messages = [threadMessageState.message]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const statusCard = container.querySelector<HTMLElement>(
       '[data-slot="composer-turn-status-card"]'
@@ -4713,7 +4561,7 @@ describe('App composer', () => {
     })
   })
 
-  it('renders a compact diff-only card without a plan separator', () => {
+  it('renders a compact diff-only card without a plan separator', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -4724,9 +4572,7 @@ describe('App composer', () => {
     ]
     threadMessagesState.messages = [threadMessageState.message]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const statusCard = container.querySelector('[data-slot="composer-turn-status-card"]')
     expect(statusCard?.getAttribute('role')).toBe('status')
@@ -4774,9 +4620,7 @@ describe('App composer', () => {
     ]
     threadMessagesState.messages = [threadMessageState.message]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const statusCard = container.querySelector<HTMLElement>(
       '[data-slot="composer-turn-status-card"]'
@@ -4794,7 +4638,7 @@ describe('App composer', () => {
     expect(document.body.textContent).toContain('New active')
   })
 
-  it('replaces the composer with the approval card while a server request is blocking', () => {
+  it('replaces the composer with the approval card while a server request is blocking', async () => {
     runtimeState.serverRequests = [fileChangeApprovalRequest('blocking-request')]
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
@@ -4813,9 +4657,7 @@ describe('App composer', () => {
     ]
     threadMessagesState.messages = [threadMessageState.message]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const panel = container.querySelector('[data-slot="server-request-panel"]')
     expect(panel).not.toBeNull()
@@ -4827,7 +4669,7 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="turn-diff-entry-unit"]')).toBeNull()
   })
 
-  it('renders generated image file parts as an image gallery card', () => {
+  it('renders generated image file parts as an image gallery card', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -4842,16 +4684,14 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="generated-image-file-unit"]')).not.toBeNull()
     expect(container.textContent).toContain('已生成图片')
     expect(container.textContent).toContain('a generated reference image')
   })
 
-  it('keeps hidden render target metadata for unknown non-image file parts', () => {
+  it('keeps hidden render target metadata for unknown non-image file parts', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -4863,9 +4703,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const target = container.querySelector('[data-slot="unknown-render-unit"]')
     expect(target).not.toBeNull()
@@ -4879,9 +4717,7 @@ describe('App composer', () => {
       commandToolPart('scroll-target-command', 'search', { status: { type: 'complete' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const target = container.querySelector<HTMLElement>(
       '[data-render-target-ids~="scroll-target-command"]'
@@ -4911,9 +4747,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = toolGroup('web-search')
     expect(group).not.toBeNull()
@@ -4932,7 +4766,7 @@ describe('App composer', () => {
     expect(group?.scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' })
   })
 
-  it('summarizes grouped running tool parts from derived assistant-ui part state', () => {
+  it('summarizes grouped running tool parts from derived assistant-ui part state', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -4956,16 +4790,14 @@ describe('App composer', () => {
       }))
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('正在探索')
     expect(container.textContent).toContain('2 次搜索')
     expect(container.textContent).not.toContain('已探索')
   })
 
-  it('renders preliminary dynamic-tool outputs as running activity', () => {
+  it('renders preliminary dynamic-tool outputs as running activity', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = []
@@ -4982,15 +4814,13 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('正在等待 1 次')
     expect(container.textContent).not.toContain('已等待 1 次')
   })
 
-  it('groups commentary and process activity while hiding internal reasoning summaries', () => {
+  it('groups commentary and process activity while hiding internal reasoning summaries', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5019,9 +4849,7 @@ describe('App composer', () => {
         ]
       }
     ]
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const reasoning = container.querySelector('[data-slot="reasoning-group"]')
     const reasoningContent = reasoning?.querySelector<HTMLElement>(
@@ -5084,9 +4912,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const streamingAnswerReasoning = container.querySelector('[data-slot="reasoning-group"]')
     const streamingAnswerTrigger = streamingAnswerReasoning?.querySelector<HTMLButtonElement>(
@@ -5101,9 +4927,7 @@ describe('App composer', () => {
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.metadata = undefined
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const completedReasoning = container.querySelector('[data-slot="reasoning-group"]')
     const trigger = container.querySelector<HTMLButtonElement>(
@@ -5125,7 +4949,7 @@ describe('App composer', () => {
     expect(completedReasoning?.textContent).toContain('现已核对实时流与历史记录')
   })
 
-  it('collapses an inferred process when the candidate answer starts', () => {
+  it('collapses an inferred process when the candidate answer starts', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5139,9 +4963,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const runningReasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
     const runningReasoningTrigger = runningReasoning?.querySelector<HTMLButtonElement>(
@@ -5164,9 +4986,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const completedReasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
     const completedTrigger = completedReasoning?.querySelector<HTMLButtonElement>(
@@ -5179,7 +4999,7 @@ describe('App composer', () => {
     expect(container.textContent).toContain('根因已经确认')
   })
 
-  it('keeps the inferred process chevron mounted when a candidate becomes process', () => {
+  it('keeps the inferred process chevron mounted when a candidate becomes process', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5193,9 +5013,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const inactiveTrigger = container.querySelector<HTMLButtonElement>(
       '[data-slot="reasoning-group-trigger"]'
@@ -5210,9 +5028,7 @@ describe('App composer', () => {
       commandToolPart('qwen-check-2', 'search', { status: { type: 'complete' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const activeTrigger = container.querySelector<HTMLButtonElement>(
       '[data-slot="reasoning-group-trigger"]'
@@ -5222,7 +5038,7 @@ describe('App composer', () => {
     expect(activeTrigger?.querySelector('svg')).toBe(chevron)
   })
 
-  it('shows blocked commentary as waiting for confirmation', () => {
+  it('shows blocked commentary as waiting for confirmation', async () => {
     runtimeState.serverRequests = [fileChangeApprovalRequest('commentary-blocking-request')]
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
@@ -5233,9 +5049,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const trigger = container.querySelector<HTMLElement>('[data-slot="reasoning-group-trigger"]')
 
@@ -5289,9 +5103,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const reasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
     const reasoningTrigger = reasoning?.querySelector<HTMLButtonElement>(
@@ -5359,9 +5171,7 @@ describe('App composer', () => {
       })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const group = container.querySelector<HTMLElement>(
       '[data-slot="tool-group-unit"][data-tool-group-kind="generic"]'
@@ -5399,9 +5209,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const toolGroupTrigger = container.querySelector(
       '[data-slot="tool-group-unit"] [data-slot="tool-group-trigger"]'
@@ -5425,9 +5233,7 @@ describe('App composer', () => {
     expect(container.textContent).toContain('已编辑：edit.ts')
 
     threadMessageState.message.status = { type: 'complete' }
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const completedTrigger = container.querySelector(
       '[data-slot="tool-group-unit"] [data-slot="tool-group-trigger"]'
@@ -5438,7 +5244,7 @@ describe('App composer', () => {
     expect(completedTrigger?.querySelector('[data-slot="tool-group-trigger-icon"]')).not.toBeNull()
   })
 
-  it('shows thinking after the latest completed exploration despite earlier unphased text', () => {
+  it('shows thinking after the latest completed exploration despite earlier unphased text', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5447,9 +5253,7 @@ describe('App composer', () => {
       commandToolPart('search-1', 'search', { status: { type: 'complete' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const thinkingExplorationCards = Array.from(
       container.querySelectorAll(
@@ -5469,7 +5273,7 @@ describe('App composer', () => {
     expect(container.textContent).toContain('先查到一部分')
   })
 
-  it('hides thinking when unphased visible text follows the latest completed tool', () => {
+  it('hides thinking when unphased visible text follows the latest completed tool', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5477,16 +5281,14 @@ describe('App composer', () => {
       { type: 'text', text: '这是最终分析' }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="message-thinking-unit"]')).toBeNull()
     expect(container.textContent).not.toContain('正在思考')
     expect(container.textContent).toContain('这是最终分析')
   })
 
-  it('shows active latest tool summary instead of generic thinking', () => {
+  it('shows active latest tool summary instead of generic thinking', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [
@@ -5494,23 +5296,19 @@ describe('App composer', () => {
       commandToolPart('search-2', 'search', { status: { type: 'running' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).toContain('正在探索')
     expect(container.textContent).toContain('2 次搜索')
     expect(container.textContent).not.toContain('正在思考')
   })
 
-  it('hides the thinking placeholder once assistant text is visible', () => {
+  it('hides the thinking placeholder once assistant text is visible', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'running' }
     threadMessageState.message.content = [{ type: 'text', text: '你好，有什么可以帮你？' }]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const assistantContent = container.querySelector('[data-slot="aui_assistant-message-content"]')
 
@@ -5524,7 +5322,7 @@ describe('App composer', () => {
     ['finished', { type: 'complete' } satisfies MockMessageStatus],
     ['cancelled', { type: 'incomplete', reason: 'cancelled' } satisfies MockMessageStatus],
     ['errored', { type: 'error', error: 'boom' } satisfies MockMessageStatus]
-  ])('does not show thinking for %s assistant messages', (_label, status) => {
+  ])('does not show thinking for %s assistant messages', async (_label, status) => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = status
     threadMessageState.message.content = [
@@ -5532,9 +5330,7 @@ describe('App composer', () => {
       commandToolPart('search-finished', 'search', { status: { type: 'complete' } })
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).not.toContain('正在思考')
     expect(
@@ -5542,7 +5338,7 @@ describe('App composer', () => {
     ).not.toContain('shimmer')
   })
 
-  it('loads historical commentary as a collapsed group and keeps the final answer outside', () => {
+  it('loads historical commentary as a collapsed group and keeps the final answer outside', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -5570,9 +5366,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const reasoning = container.querySelector('[data-slot="reasoning-group"]')
 
@@ -5584,7 +5378,7 @@ describe('App composer', () => {
     expect(container.textContent).not.toContain('Inspecting project selection conditions')
   })
 
-  it('formats completed reasoning duration as seconds, minutes, or hours', () => {
+  it('formats completed reasoning duration as seconds, minutes, or hours', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = [
@@ -5592,7 +5386,7 @@ describe('App composer', () => {
       { type: 'text', text: '## 结论\n\n根因已经确认。' }
     ]
 
-    const renderWithDuration = (durationMs: number): string | null | undefined => {
+    const renderWithDuration = async (durationMs: number): Promise<string | null | undefined> => {
       threadMessageState.externalMessages = [
         {
           metadata: { codexTurnDurationMs: durationMs },
@@ -5603,19 +5397,17 @@ describe('App composer', () => {
         }
       ]
 
-      act(() => {
-        root.render(<App />)
-      })
+      await renderApp()
 
       return container.querySelector('[data-slot="reasoning-group-trigger"]')?.textContent
     }
 
-    expect(renderWithDuration(1250)).toBe('已处理 · 耗时 1 秒')
-    expect(renderWithDuration(65_000)).toBe('已处理 · 耗时 1 分 5 秒')
-    expect(renderWithDuration(3_661_000)).toBe('已处理 · 耗时 1 小时 1 分 1 秒')
+    expect(await renderWithDuration(1250)).toBe('已处理 · 耗时 1 秒')
+    expect(await renderWithDuration(65_000)).toBe('已处理 · 耗时 1 分 5 秒')
+    expect(await renderWithDuration(3_661_000)).toBe('已处理 · 耗时 1 小时 1 分 1 秒')
   })
 
-  it('shows a live stopwatch while reasoning and freezes the locally measured duration', () => {
+  it('shows a live stopwatch while reasoning and freezes the locally measured duration', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-13T08:00:00.000Z'))
     threadMessageState.message.role = 'assistant'
@@ -5630,9 +5422,7 @@ describe('App composer', () => {
       }
     ]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const runningLabel = (): string | null | undefined =>
       container.querySelector('[data-slot="reasoning-group-trigger"]')?.textContent
@@ -5648,30 +5438,60 @@ describe('App composer', () => {
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.externalMessages = []
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(runningLabel()).toBe('已处理 · 耗时 2 秒')
   })
 
-  it('does not show thinking for a finished empty assistant message', () => {
+  it('does not show thinking for a finished empty assistant message', async () => {
     threadMessageState.message.role = 'assistant'
     threadMessageState.message.status = { type: 'complete' }
     threadMessageState.message.content = []
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.textContent).not.toContain('正在思考')
     expect(container.querySelector('[data-slot="aui_assistant-message-footer"]')).not.toBeNull()
   })
 
-  it('does not render the server request panel when there is no queued request', () => {
+  it('changes only the waiting copy after a short running delay', async () => {
+    vi.useFakeTimers()
+    const content = [{ type: 'text' as const, text: '正在思考' }]
+    threadMessageState.message.role = 'assistant'
+    threadMessageState.message.status = { type: 'running' }
+    threadMessageState.message.content = content
+    assistantThreadState.isRunning = true
+
+    await renderApp()
+
+    expect(container.textContent).toContain('正在思考')
+    expect(container.textContent).not.toContain('处理时间比平常更长')
+
     act(() => {
-      root.render(<App />)
+      vi.advanceTimersByTime(12_000)
     })
+    threadMessageState.message.content = [...content]
+    await renderApp()
+    act(() => {
+      vi.advanceTimersByTime(12_000)
+    })
+
+    expect(container.textContent).toContain('处理时间比平常更长')
+    expect(container.textContent).not.toContain('已取消')
+    expect(threadMessageState.message.status).toEqual({ type: 'running' })
+
+    threadMessageState.message.status = { type: 'complete' }
+    await renderApp()
+    threadMessageState.message.status = { type: 'running' }
+    threadMessageState.message.content = content
+    await renderApp()
+
+    expect(container.textContent).toContain('正在思考')
+    expect(container.textContent).not.toContain('处理时间比平常更长')
+  })
+
+  it('does not render the server request panel when there is no queued request', async () => {
+    await renderApp()
 
     expect(container.querySelector('[data-slot="server-request-panel"]')).toBeNull()
     expect(container.querySelector('[data-slot="aui_composer-shell"]')).not.toBeNull()
@@ -5681,9 +5501,7 @@ describe('App composer', () => {
     const request = fileChangeApprovalRequest('file-request-1')
     runtimeState.serverRequests = [request]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const approve = buttonWithText('允许一次')
     expect(approve).not.toBeUndefined()
@@ -5697,13 +5515,11 @@ describe('App composer', () => {
     })
   })
 
-  it('does not leak approval project context into the panel', () => {
+  it('does not leak approval project context into the panel', async () => {
     const request = fileChangeApprovalRequest('file-request-context')
     runtimeState.serverRequests = [request]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     expect(container.querySelector('[data-slot="server-request-panel"]')).not.toBeNull()
     expect(container.textContent).toContain('是否允许 ChatGPT 编辑以下文件？')
@@ -5715,9 +5531,7 @@ describe('App composer', () => {
     const request = permissionApprovalRequest('permission-request-1')
     runtimeState.serverRequests = [request]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const approveTurn = elementWithText('允许本轮')
     expect(approveTurn).not.toBeUndefined()
@@ -5735,9 +5549,7 @@ describe('App composer', () => {
     const request = toolUserInputRequest('input-request-1')
     runtimeState.serverRequests = [request]
 
-    act(() => {
-      root.render(<App />)
-    })
+    await renderApp()
 
     const input = container.querySelector<HTMLInputElement>('input[type="text"]')
     expect(input).not.toBeNull()

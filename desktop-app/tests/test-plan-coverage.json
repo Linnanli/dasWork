@@ -643,7 +643,7 @@
       "id": "B02",
       "title": "expectedTurnId 与当前 turn 不一致",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": [
         "claim、接受与队列结算至多一次",
         "正确的恢复、暂停或拒绝状态",
@@ -652,9 +652,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/provider.test.ts",
-          "testName": "B02 retries once with the latest turn id after an expected-turn mismatch",
-          "layer": "provider-unit",
+          "file": "src/main/codexChatRuntimeService.test.ts",
+          "testName": "B02 queues an expected-turn mismatch without retrying the steer request",
+          "layer": "desktop-unit",
           "assertions": [
             "claim、接受与队列结算至多一次",
             "正确的恢复、暂停或拒绝状态",
@@ -1024,7 +1024,7 @@
       "id": "C01",
       "title": "请求发送前连接失败",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1033,9 +1033,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C01 emits one error and sends no JSON-RPC request when transport connection fails",
-          "layer": "provider-unit",
+          "file": "src/main/codexChatRuntimeService.test.ts",
+          "testName": "C01 preserves native stream state when transport fails before the first chunk",
+          "layer": "desktop-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1204,7 +1204,7 @@
       "id": "C06",
       "title": "reasoning 过程中断流",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1213,9 +1213,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C06 preserves reasoning output and emits one error when transport fails during reasoning",
-          "layer": "provider-unit",
+          "file": "src/main/codexChatRuntimeService.test.ts",
+          "testName": "C06 preserves reasoning when the native transport fails",
+          "layer": "desktop-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1276,7 +1276,7 @@
       "id": "C09",
       "title": "工具调用后、执行前断流",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1285,9 +1285,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C09/C11 preserves completed tool state and emits one error when transport fails mid-tool sequence",
-          "layer": "provider-unit",
+          "file": "src/main/codexChatRuntimeService.test.ts",
+          "testName": "C09 preserves a started native tool when the transport fails",
+          "layer": "desktop-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1324,7 +1324,7 @@
       "id": "C11",
       "title": "多个工具部分完成后断流",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1333,9 +1333,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C09/C11 preserves completed tool state and emits one error when transport fails mid-tool sequence",
-          "layer": "provider-unit",
+          "file": "src/main/codexChatRuntimeService.test.ts",
+          "testName": "C11 preserves completed native tools when a later tool is interrupted",
+          "layer": "desktop-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1420,7 +1420,7 @@
       "id": "C15",
       "title": "非法事件顺序（done 先于 created）",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1429,9 +1429,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "C15/D10 emits a result completing before the tool request within the same step",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "C15/D10 safely closes a completion-before-call sequence once",
+          "layer": "client-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1492,7 +1492,7 @@
       "id": "C18",
       "title": "turn.status=failed 且有错误文本",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1501,9 +1501,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/event-mapper.test.ts",
-          "testName": "C18 emits an error stream part when a completed turn carries an error",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "C18 emits one error and one finish for a failed turn with an error message",
+          "layer": "client-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1516,7 +1516,7 @@
       "id": "C19",
       "title": "turn.status=failed 但无错误文本",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1525,9 +1525,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/event-mapper.test.ts",
-          "testName": "C19 emits a fallback error when a failed turn has no error message",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "C19 emits one fallback error and one finish when failed turn text is absent",
+          "layer": "client-unit",
           "assertions": [
             "保留可见内容并显示单一终态",
             "terminal 只结算一次且 Composer 恢复",
@@ -1640,9 +1640,9 @@
     },
     {
       "id": "C23",
-      "title": "app-server/provider transport 意外断开",
+      "title": "app-server transport 意外断开",
       "priority": "P0",
-      "requiredLayer": ["provider-unit", "mock-e2e"],
+      "requiredLayer": ["mock-e2e"],
       "requiredAssertions": [
         "保留可见内容并显示单一终态",
         "terminal 只结算一次且 Composer 恢复",
@@ -1650,47 +1650,6 @@
       ],
       "status": "covered",
       "evidence": [
-        {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C23 fails once and deactivates the session when transport closes before the first token",
-          "layer": "provider-unit",
-          "assertions": [
-            "保留可见内容并显示单一终态",
-            "terminal 只结算一次且 Composer 恢复",
-            "无自动重试、额外请求或迟到事件应用"
-          ]
-        },
-        {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C23 preserves partial output, emits one error, and rebuilds a crashed persistent worker",
-          "layer": "provider-unit",
-          "assertions": [
-            "保留可见内容并显示单一终态",
-            "terminal 只结算一次且 Composer 恢复",
-            "无自动重试、额外请求或迟到事件应用"
-          ]
-        },
-        {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/app-server-client.test.ts",
-          "testName": "C23 converts an active transport error and close into one fatal termination",
-          "layer": "provider-unit",
-          "assertions": [
-            "保留可见内容并显示单一终态",
-            "terminal 只结算一次且 Composer 恢复",
-            "无自动重试、额外请求或迟到事件应用"
-          ]
-        },
-        {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/model.stream.test.ts",
-          "testName": "C23 terminates once $phase and rebuilds the Desktop shared connection",
-          "fullTestName": "CodexLanguageModel.doStream > C23 terminates once 'before the first token' and rebuilds the Desktop shared connection",
-          "layer": "provider-unit",
-          "assertions": [
-            "保留可见内容并显示单一终态",
-            "terminal 只结算一次且 Composer 恢复",
-            "无自动重试、额外请求或迟到事件应用"
-          ]
-        },
         {
           "file": "tests/e2e/fault-injection.e2e.ts",
           "testName": "C23 @terminal-failure crashes the active Desktop shared app-server transport and rebuilds it for retry",
@@ -1749,33 +1708,33 @@
     },
     {
       "id": "D01",
-      "title": "单个只读工具成功后正常回答",
+      "title": "单个原生动态工具成功",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
-      "requiredAssertions": ["恢复工具结果后正常输出答案"],
+      "requiredLayer": ["client-unit"],
+      "requiredAssertions": ["单个原生工具成功结果完整回传"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "D01 resumes a successful single read-only tool result and emits the normal final answer",
-          "layer": "provider-unit",
-          "assertions": ["恢复工具结果后正常输出答案"]
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D01 returns one successful native dynamic-tool result",
+          "layer": "client-unit",
+          "assertions": ["单个原生工具成功结果完整回传"]
         }
       ]
     },
     {
       "id": "D02",
-      "title": "多个工具串行后回答",
+      "title": "多个原生动态工具串行执行",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
-      "requiredAssertions": ["多个工具串行后输出汇总答案"],
+      "requiredLayer": ["client-unit"],
+      "requiredAssertions": ["多个原生工具串行结果顺序稳定"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "D02 serializes multiple tool calls before emitting the final answer",
-          "layer": "provider-unit",
-          "assertions": ["多个工具串行后输出汇总答案"]
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D02 keeps sequential native dynamic-tool calls ordered and isolated",
+          "layer": "client-unit",
+          "assertions": ["多个原生工具串行结果顺序稳定"]
         }
       ]
     },
@@ -1783,14 +1742,14 @@
       "id": "D03",
       "title": "工具退出码非零",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["非零退出映射失败工具结果且保留回答"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/event-mapper.test.ts",
-          "testName": "D03 marks a non-zero command exit code as a failed tool result without masking the final answer",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "D03 marks a non-zero command exit as failed without masking the final answer",
+          "layer": "client-unit",
           "assertions": ["非零退出映射失败工具结果且保留回答"]
         }
       ]
@@ -1799,14 +1758,14 @@
       "id": "D04",
       "title": "工具返回 output-error",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["desktop-unit"],
       "requiredAssertions": ["失败动态工具映射为单个 output-error"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/dynamic-tools.test.ts",
-          "testName": "D04 forwards a failed dynamic tool response as an output-error record",
-          "layer": "provider-unit",
+          "file": "src/main/codexRun/CodexUiMessageAdapter.test.ts",
+          "testName": "D04 maps a failed native dynamic tool to one output-error chunk",
+          "layer": "desktop-unit",
           "assertions": ["失败动态工具映射为单个 output-error"]
         }
       ]
@@ -1815,14 +1774,14 @@
       "id": "D05",
       "title": "工具执行超时",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["工具超时返回单个失败结果"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/dynamic-tools.test.ts",
-          "testName": "D05 returns a failed tool result when execution times out",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D05 returns one failed native tool result when execution times out",
+          "layer": "client-unit",
           "assertions": ["工具超时返回单个失败结果"]
         }
       ]
@@ -1831,14 +1790,14 @@
       "id": "D06",
       "title": "工具返回空输出",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["空输出作为成功结果保留"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/dynamic-tools.test.ts",
-          "testName": "D06 preserves an empty successful tool output as an available result",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D06 preserves an empty successful native tool output",
+          "layer": "client-unit",
           "assertions": ["空输出作为成功结果保留"]
         }
       ]
@@ -1847,14 +1806,14 @@
       "id": "D07",
       "title": "工具返回超大输出",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["超大输出完整保留并回传"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/dynamic-tools.test.ts",
-          "testName": "D07 preserves a large successful tool output without truncating the tool record",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D07 preserves a large successful native tool output without truncation",
+          "layer": "client-unit",
           "assertions": ["超大输出完整保留并回传"]
         }
       ]
@@ -1863,14 +1822,14 @@
       "id": "D08",
       "title": "工具返回中文、emoji、替代字符或复杂 JSON",
       "priority": "P2",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["复杂 JSON 工具输出完整且只回传一次"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "D08 preserves Chinese, emoji, replacement characters, and complex JSON tool output",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/dynamic-tools.test.ts",
+          "testName": "D08 preserves Unicode and complex JSON native tool output exactly once",
+          "layer": "client-unit",
           "assertions": ["复杂 JSON 工具输出完整且只回传一次"]
         }
       ]
@@ -1879,14 +1838,14 @@
       "id": "D09",
       "title": "工具开始后没有完成事件",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["未完成工具由 turn/completed 以错误结果关闭"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "D09 closes an adopted call that never completes via the turn-completed safety net",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "D09 closes a native tool call that never completes when the turn ends",
+          "layer": "client-unit",
           "assertions": ["未完成工具由 turn/completed 以错误结果关闭"]
         }
       ]
@@ -1895,15 +1854,15 @@
       "id": "D10",
       "title": "completed 早于 started",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
-      "requiredAssertions": ["提前完成结果保持正确事件顺序与单终态"],
+      "requiredLayer": ["client-unit"],
+      "requiredAssertions": ["非法顺序安全关闭为单个错误结果与单终态"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "C15/D10 emits a result completing before the tool request within the same step",
-          "layer": "provider-unit",
-          "assertions": ["提前完成结果保持正确事件顺序与单终态"]
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "C15/D10 safely closes a completion-before-call sequence once",
+          "layer": "client-unit",
+          "assertions": ["非法顺序安全关闭为单个错误结果与单终态"]
         }
       ]
     },
@@ -1911,14 +1870,14 @@
       "id": "D11",
       "title": "相同工具结果重复到达",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": ["恢复步骤不重复工具生命周期结果"],
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/cross-call-tools.test.ts",
-          "testName": "D11 does not duplicate dynamic tool lifecycle parts on resumed steps",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/run-events.test.ts",
+          "testName": "D11 ignores a duplicated native tool completion",
+          "layer": "client-unit",
           "assertions": ["恢复步骤不重复工具生命周期结果"]
         }
       ]
@@ -3469,9 +3428,9 @@
     },
     {
       "id": "G08",
-      "title": "四并发占满 pool，第五等待取消恢复",
+      "title": "共享 app-server 连接上的多逻辑通道并发与取消隔离",
       "priority": "P1",
-      "requiredLayer": ["provider-unit"],
+      "requiredLayer": ["client-unit"],
       "requiredAssertions": [
         "跨对话与信任边界隔离",
         "资源、并发和终态无残留",
@@ -3480,9 +3439,9 @@
       "status": "covered",
       "evidence": [
         {
-          "file": "vendors/ai-sdk-provider-codex-asp/tests/persistent-transport.test.ts",
-          "testName": "G08 runs four transports concurrently and never assigns an aborted fifth waiter",
-          "layer": "provider-unit",
+          "file": "vendors/codex-app-server-client/tests/connection-broker.test.ts",
+          "testName": "G08 isolates five concurrent logical channels and one cancelled request",
+          "layer": "client-unit",
           "assertions": ["跨对话与信任边界隔离", "资源、并发和终态无残留", "诊断可关联而不泄露密钥"]
         }
       ]

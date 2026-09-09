@@ -12,6 +12,7 @@ type ServerRequestRouter = {
       ephemeral?: boolean
       onApprovalRequest?: (kind: string, params: unknown) => Promise<unknown>
       onDynamicToolCall?: (params: unknown) => Promise<unknown>
+      onTurnActivity?: (event: { threadId: string; turnId: string }) => void | Promise<void>
     }
   ): Promise<unknown>
 }
@@ -96,6 +97,17 @@ async function drain(events: AsyncIterable<unknown>): Promise<void> {
   }
 }
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve(value: T): void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
+}
+
 describe('NativeCodexRunDriver server-request routing', () => {
   it.each([
     ['item/commandExecution/requestApproval', 'command'],
@@ -122,10 +134,23 @@ describe('NativeCodexRunDriver server-request routing', () => {
 
   it('routes dynamic tools only through the main-owned handler', async () => {
     const onDynamicToolCall = vi.fn(async () => ({ success: true, contentItems: [] }))
+    const onTurnActivity = vi.fn()
 
     await expect(
-      router().routeServerRequest(request('item/tool/call'), { onDynamicToolCall })
+      router().routeServerRequest(
+        {
+          method: 'item/tool/call',
+          id: 1,
+          params: {
+            threadId: 'thread-tool',
+            turnId: 'turn-tool',
+            callId: 'dynamic-tool-call'
+          }
+        },
+        { onDynamicToolCall, onTurnActivity }
+      )
     ).resolves.toEqual({ success: true, contentItems: [] })
+    expect(onTurnActivity).toHaveBeenCalledWith({ threadId: 'thread-tool', turnId: 'turn-tool' })
   })
 
   it.each([
@@ -154,6 +179,239 @@ describe('NativeCodexRunDriver server-request routing', () => {
     ).rejects.toThrow(/ephemeral\/item\/commandExecution/u)
     expect(onApprovalRequest).not.toHaveBeenCalled()
     expect(onDynamicToolCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('NativeCodexRunDriver dynamic tool publication', () => {
+  it('publishes the immutable native snapshot only during thread/start', async () => {
+    let threadStartParams: Record<string, unknown> | undefined
+    const client = new FakeAppServerClient(async (method, params) => {
+      if (method === 'thread/start') {
+        threadStartParams = params as Record<string, unknown>
+        return { thread: { id: 'thread-1' } }
+      }
+      if (method === 'turn/start') return { turnId: 'turn-1' }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'use a desktop tool' }])],
+      modelId: 'test-model',
+      dynamicTools: [
+        {
+          type: 'namespace',
+          name: 'codex_app',
+          description: 'Desktop tools',
+          tools: []
+        }
+      ],
+      signal: new AbortController().signal
+    })
+    const drained = drain(run.events).catch(() => undefined)
+    await run.session
+
+    expect(threadStartParams?.dynamicTools).toEqual([
+      { type: 'namespace', name: 'codex_app', description: 'Desktop tools', tools: [] }
+    ])
+    client.terminate(new Error('test complete'))
+    await drained
+  })
+
+  it('uses an empty dynamic-tool list for ephemeral work', async () => {
+    let threadStartParams: Record<string, unknown> | undefined
+    const client = new FakeAppServerClient(async (method, params) => {
+      if (method === 'thread/start') {
+        threadStartParams = params as Record<string, unknown>
+        return { thread: { id: 'thread-1' } }
+      }
+      if (method === 'turn/start') return { turnId: 'turn-1' }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'utility work' }])],
+      modelId: 'test-model',
+      ephemeral: true,
+      dynamicTools: [
+        {
+          type: 'namespace',
+          name: 'codex_app',
+          description: 'Desktop tools',
+          tools: []
+        }
+      ],
+      signal: new AbortController().signal
+    })
+    const drained = drain(run.events).catch(() => undefined)
+    await run.session
+
+    expect(threadStartParams?.dynamicTools).toEqual([])
+    client.terminate(new Error('test complete'))
+    await drained
+  })
+
+  it('keeps the main-owned MCP configuration on a fresh thread', async () => {
+    let threadStartParams: Record<string, unknown> | undefined
+    const client = new FakeAppServerClient(async (method, params) => {
+      if (method === 'thread/start') {
+        threadStartParams = params as Record<string, unknown>
+        return { thread: { id: 'thread-1' } }
+      }
+      if (method === 'turn/start') return { turnId: 'turn-1' }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'use the installed desktop tools' }])],
+      modelId: 'test-model',
+      threadConfig: {
+        mcp_servers: {
+          codex_app: {
+            command: '/bundle/scripts/launch_codex_app_tools_mcp',
+            env: { CODEX_APP_TOOLS_PIPE_PATH: '/private/tmp/codex-app-tools.sock' }
+          }
+        }
+      },
+      signal: new AbortController().signal
+    })
+    const drained = drain(run.events).catch(() => undefined)
+    await run.session
+
+    expect(threadStartParams?.config).toEqual({
+      mcp_servers: {
+        codex_app: {
+          command: '/bundle/scripts/launch_codex_app_tools_mcp',
+          env: { CODEX_APP_TOOLS_PIPE_PATH: '/private/tmp/codex-app-tools.sock' }
+        }
+      }
+    })
+    client.terminate(new Error('test complete'))
+    await drained
+  })
+
+  it('does not reapply current desktop MCP configuration when resuming an existing thread', async () => {
+    let threadResumeParams: Record<string, unknown> | undefined
+    const client = new FakeAppServerClient(async (method, params) => {
+      if (method === 'thread/resume') {
+        threadResumeParams = params as Record<string, unknown>
+        return { thread: { id: 'thread-1' } }
+      }
+      if (method === 'turn/start') return { turnId: 'turn-1' }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'continue with the existing thread' }])],
+      modelId: 'test-model',
+      resumeThreadId: 'thread-1',
+      developerInstructions: 'Current desktop tools are available.',
+      threadConfig: {
+        mcp_servers: {
+          codex_app: {
+            command: '/bundle/scripts/launch_codex_app_tools_mcp',
+            env: { CODEX_APP_TOOLS_PIPE_PATH: '/private/tmp/codex-app-tools.sock' }
+          }
+        }
+      },
+      signal: new AbortController().signal
+    })
+    const drained = drain(run.events).catch(() => undefined)
+    await run.session
+
+    expect(threadResumeParams?.config).toBeUndefined()
+    expect(threadResumeParams?.developerInstructions).toBeUndefined()
+    client.terminate(new Error('test complete'))
+    await drained
+  })
+})
+
+describe('NativeCodexRunDriver turn activity', () => {
+  it('publishes model activity without treating turn metadata as progress', async () => {
+    const client = new FakeAppServerClient(async (method) => {
+      if (method === 'thread/start') return { thread: { id: 'thread-activity' } }
+      if (method === 'turn/start') return { turnId: 'turn-activity' }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const onTurnActivity = vi.fn()
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'identify yourself' }])],
+      modelId: 'test-model',
+      signal: new AbortController().signal,
+      onTurnActivity
+    })
+    const drained = drain(run.events)
+    await run.session
+
+    await client.emitNotification('turn/started', {
+      threadId: 'thread-activity',
+      turn: { id: 'turn-activity', status: 'inProgress', items: [] }
+    })
+    await client.emitNotification('thread/tokenUsage/updated', {
+      threadId: 'thread-activity',
+      turnId: 'turn-activity'
+    })
+    expect(onTurnActivity).not.toHaveBeenCalled()
+
+    await client.emitNotification('item/agentMessage/delta', {
+      threadId: 'thread-activity',
+      turnId: 'turn-activity',
+      itemId: 'assistant-message',
+      delta: 'I am Codex.'
+    })
+    expect(onTurnActivity).toHaveBeenCalledOnce()
+    expect(onTurnActivity).toHaveBeenCalledWith({
+      threadId: 'thread-activity',
+      turnId: 'turn-activity'
+    })
+
+    await client.emitNotification('turn/completed', {
+      threadId: 'thread-activity',
+      turn: { id: 'turn-activity', status: 'completed', items: [] }
+    })
+    await drained
+  })
+
+  it('coalesces explicit and abort-triggered interruption while releasing the local stream', async () => {
+    const interruptResponse = deferred<unknown>()
+    const abortController = new AbortController()
+    const client = new FakeAppServerClient(async (method) => {
+      if (method === 'thread/start') return { thread: { id: 'thread-interrupt' } }
+      if (method === 'turn/start') return { turnId: 'turn-interrupt' }
+      if (method === 'turn/interrupt') return interruptResponse.promise
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const run = driverWithClient(client).start({
+      messages: [userMessage([{ type: 'text', text: 'wait' }])],
+      modelId: 'test-model',
+      signal: abortController.signal
+    })
+    const session = await run.session
+    const draining = drain(run.events)
+    let streamReleased = false
+    void draining.then(() => {
+      streamReleased = true
+    })
+    const interrupting = session.interrupt()
+
+    try {
+      await vi.waitFor(() =>
+        expect(
+          client.request.mock.calls.filter(([method]) => method === 'turn/interrupt')
+        ).toHaveLength(1)
+      )
+      abortController.abort()
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+      expect(
+        client.request.mock.calls.filter(([method]) => method === 'turn/interrupt')
+      ).toHaveLength(1)
+      expect(streamReleased).toBe(true)
+      expect(session.isActive()).toBe(false)
+    } finally {
+      interruptResponse.resolve({})
+      await interrupting.catch(() => undefined)
+      await client.emitNotification('turn/completed', {
+        threadId: 'thread-interrupt',
+        turn: { id: 'turn-interrupt', status: 'interrupted', items: [] }
+      })
+      await draining
+    }
   })
 })
 

@@ -8,7 +8,6 @@ files:
   - '!.code-review-graph/**'
   - '!dist/**'
   - '!src/*'
-  - '!vendors/ai-sdk-provider-codex-asp/**'
   - '!vendors/codex-app-server-client/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
@@ -20,6 +19,11 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/node-pty/**
+extraResources:
+  - from: resources/bundled-plugins
+    to: plugins
+    filter:
+      - '**/*'
 win:
   executableName: desktop-app
 nsis:
@@ -34,7 +38,6 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
 linux:
@@ -51,6 +54,3 @@ deb:
 snap:
   artifactName: ${name}-${version}-${arch}.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates

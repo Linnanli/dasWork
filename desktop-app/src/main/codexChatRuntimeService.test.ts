@@ -64,6 +64,7 @@ import type {
   FollowUpClaim
 } from './followUps/ConversationFollowUpQueueService'
 import { ProjectStore, createDefaultProjectState } from './projects/ProjectStore'
+import { DesktopHostCapabilityRuntime } from './appTools/DesktopHostCapabilityRuntime'
 
 class FakePort implements CodexPortLike {
   readonly messages: unknown[] = []
@@ -122,6 +123,8 @@ async function* emptyUiMessageStream(): AsyncGenerator<never, void, unknown> {
 
 type RuntimeRunDriverInput = {
   request: CodexChatRequest
+  dynamicTools?: readonly unknown[]
+  threadConfig?: Record<string, unknown>
   collaborationMode?: {
     mode: 'default' | 'plan'
     settings: {
@@ -149,6 +152,7 @@ type RuntimeRunDriverInput = {
   startFreshTerminalRetry?: boolean
   onThreadStarted?: (thread: { threadId: string; threadPath?: string }) => void | Promise<void>
   onTurnLifecycle?: (event: CodexTurnLifecycleEvent) => void | Promise<void>
+  onTurnActivity?: (event: { threadId: string; turnId: string }) => void | Promise<void>
   onTurnDiffUpdated?: (event: {
     threadId: string
     turnId: string
@@ -165,6 +169,10 @@ type RuntimeRunDriverInput = {
     state: NonNullable<RuntimeRunDriverInput['existingTurnRecoveryState']>
   ) => void
   onProviderToolCall?: (toolName: string) => void
+  onDynamicToolCall?: (params: Record<string, unknown>) => Promise<unknown>
+  approvals?: {
+    command?: (params: unknown) => Promise<unknown>
+  }
 }
 
 type RuntimeSession = {
@@ -489,6 +497,75 @@ describe('CodexChatRuntimeService', () => {
     expect(modelInput?.request.body?.system).not.toContain('### Projectless Chat')
     expect(modelInput?.request.body?.system).not.toContain('automation_update')
     expect(modelInput?.request.messages).toEqual(messages)
+  })
+
+  it('passes MCP configuration from the same capability snapshot as native tools', async () => {
+    const port = new FakePort()
+    const runDriver = runDriverWithStartedThread('thread-capability-snapshot')
+    const hostCapabilities = new DesktopHostCapabilityRuntime({})
+    const threadConfig = {
+      mcp_servers: { codex_app: { command: '/runtime/launch_codex_app_tools_mcp' } }
+    }
+    hostCapabilities.setCodexAppMcp({ status: 'ready', threadConfig })
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      hostCapabilities,
+      runDriver
+    })
+
+    await service.startChatStream(
+      {
+        chatId: 'chat-capability-snapshot',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test'
+      },
+      port
+    )
+
+    expect(recordedRunInput(runDriver)?.threadConfig).toEqual(threadConfig)
+  })
+
+  it('binds dynamic tool calls to the active thread instead of trusting a supplied thread id', async () => {
+    const port = new FakePort()
+    const hostCapabilities = new DesktopHostCapabilityRuntime({})
+    const dispatch = vi.spyOn(hostCapabilities, 'dispatch').mockResolvedValue({
+      success: true,
+      contentItems: []
+    })
+    const runDriver = vi.fn(async (input: RuntimeRunDriverInput) => {
+      await input.onDynamicToolCall?.({
+        tool: 'read_thread_terminal',
+        threadId: 'thread-from-tool-call',
+        arguments: {}
+      })
+      await completeCanonicalTurn(input, 'thread-active')
+      return { toUIMessageStream: () => emptyUiMessageStream() }
+    }) as unknown as RecordedRunDriver
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      hostCapabilities,
+      runDriver
+    })
+
+    await service.startChatStream(
+      {
+        chatId: 'chat-dynamic-tool-thread-binding',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { threadId: 'thread-active' }
+      },
+      port
+    )
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool: 'read_thread_terminal',
+        threadId: 'thread-active'
+      }),
+      expect.any(AbortSignal)
+    )
   })
 
   it('adds verified projectless directories to developer instructions only for projectless threads', async () => {
@@ -2044,6 +2121,185 @@ describe('CodexChatRuntimeService', () => {
     )
   })
 
+  it('B02 queues an expected-turn mismatch without retrying the steer request', async () => {
+    const finish = deferred()
+    const steerMessage = vi.fn(async () => {
+      throw new CodexSteerError('expected_turn_mismatch', 'active turn changed')
+    })
+    const commitClaim = vi.fn()
+    const failClaim = vi.fn(async () => ({
+      version: 2 as const,
+      revision: 3,
+      conversationKey: 'conversation-1',
+      defaultMode: 'queue' as const,
+      archived: false,
+      items: []
+    }))
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      followUpQueue: {
+        commitClaim,
+        failClaim
+      } as unknown as ConversationFollowUpQueueService,
+      runDriver: async (input: RuntimeRunDriverInput) => {
+        input.onSessionCreated?.({
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          isActive: () => true,
+          steerMessage,
+          injectMessage: vi.fn(),
+          interrupt: vi.fn()
+        })
+        return { toUIMessageStream: () => waitThenEnd(finish.promise) }
+      }
+    })
+    const run = service.startChatStream(
+      {
+        chatId: 'chat-1',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-1', threadId: 'thread-1' }
+      },
+      new FakePort()
+    )
+    await flushAsyncWork()
+
+    const steer = service.steerClaimedFollowUp(createSteerClaim(), {
+      id: 'follow-up-1',
+      role: 'user',
+      parts: [{ type: 'text', text: 'change direction' }]
+    })
+    const rejected = expect(steer).rejects.toThrow('active turn changed')
+    finish.resolve()
+    await run
+    await rejected
+
+    await assertRacePlanEvidence(['B02'], () => {
+      expect(steerMessage).toHaveBeenCalledOnce()
+      expect(failClaim).toHaveBeenCalledTimes(1)
+      expect(failClaim).toHaveBeenCalledWith(
+        'conversation-1',
+        'follow-up-1',
+        'lease-1',
+        expect.objectContaining({ status: 'queued', kind: 'turn-race' })
+      )
+      expect(commitClaim).not.toHaveBeenCalled()
+      expect(service.isConversationRunning('conversation-1')).toBe(false)
+    })
+  })
+
+  async function assertNativeTransportFailure(
+    scenarioId: string,
+    chunks: readonly Record<string, unknown>[]
+  ): Promise<void> {
+    const port = new FakePort()
+    const runDriver = vi.fn(async () => ({
+      toUIMessageStream: () =>
+        (async function* () {
+          for (const chunk of chunks) yield chunk as never
+          yield { type: 'error', errorText: 'app-server transport disconnected' } as never
+        })()
+    }))
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      runDriver
+    })
+    const conversationId = `conversation-${scenarioId.toLowerCase()}`
+
+    await service.startChatStream(
+      { chatId: conversationId, trigger: 'submit-message', messages: [], modelId: 'gpt-test' },
+      port
+    )
+
+    const expectedVisible = chunks.map((chunk) => ({ type: 'chunk', chunk }))
+    await planAssert({
+      scenarioId,
+      assertionId: '保留可见内容并显示单一终态',
+      assertion: () => {
+        expect(port.messages).toEqual([
+          ...expectedVisible,
+          { type: 'error', error: 'app-server transport disconnected' }
+        ])
+      }
+    })
+    await planAssert({
+      scenarioId,
+      assertionId: 'terminal 只结算一次且 Composer 恢复',
+      assertion: () => {
+        expect(port.messages.filter((message) => isTerminalMessage(message))).toHaveLength(1)
+        expect(service.isConversationRunning(conversationId)).toBe(false)
+      }
+    })
+    await planAssert({
+      scenarioId,
+      assertionId: '无自动重试、额外请求或迟到事件应用',
+      assertion: () => {
+        expect(runDriver).toHaveBeenCalledOnce()
+        expect(port.messages).not.toContainEqual(expect.objectContaining({ type: 'finish' }))
+        expect(port.messages).not.toContainEqual(expect.objectContaining({ type: 'aborted' }))
+      }
+    })
+  }
+
+  it('C01 preserves native stream state when transport fails before the first chunk', () =>
+    assertNativeTransportFailure('C01', []))
+
+  it('C06 preserves reasoning when the native transport fails', () =>
+    assertNativeTransportFailure('C06', [
+      { type: 'reasoning-start', id: 'reasoning-1' },
+      { type: 'reasoning-delta', id: 'reasoning-1', delta: 'Inspecting the runtime' }
+    ]))
+
+  it('C09 preserves a started native tool when the transport fails', () =>
+    assertNativeTransportFailure('C09', [
+      {
+        type: 'tool-input-available',
+        toolCallId: 'tool-1',
+        toolName: 'lookup',
+        input: { id: 'TICK-42' },
+        providerExecuted: true,
+        dynamic: true
+      }
+    ]))
+
+  it('C11 preserves completed native tools when a later tool is interrupted', () =>
+    assertNativeTransportFailure('C11', [
+      {
+        type: 'tool-input-available',
+        toolCallId: 'tool-1',
+        toolName: 'lookup',
+        input: { id: 'TICK-42' },
+        providerExecuted: true,
+        dynamic: true
+      },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'tool-1',
+        output: { status: 'open' },
+        providerExecuted: true,
+        dynamic: true
+      },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'tool-2',
+        toolName: 'weather',
+        input: { city: 'Berlin' },
+        providerExecuted: true,
+        dynamic: true
+      }
+    ]))
+
   it('forwards model stream error messages as terminal IPC errors', async () => {
     const port = new FakePort()
     const service = new CodexChatRuntimeService({
@@ -3088,6 +3344,434 @@ describe('CodexChatRuntimeService', () => {
     ])
   })
 
+  it('interrupts a turn with no model or tool activity before the inactivity deadline', async () => {
+    const port = new FakePort()
+    const releaseStream = deferred()
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
+    let expireInactivity: (() => void) | undefined
+    const interrupt = vi.fn(async () => {
+      await lifecycle?.({
+        type: 'turn-completed',
+        sequence: 2,
+        threadId: 'thread-inactivity-timeout',
+        turnId: 'turn-inactivity-timeout',
+        outcome: 'interrupted'
+      })
+      releaseStream.resolve()
+    })
+    const options: CodexChatRuntimeServiceOptions = {
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) expireInactivity = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout: vi.fn(),
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
+        lifecycle = onTurnLifecycle
+        onSessionCreated?.(
+          activeSession('thread-inactivity-timeout', 'turn-inactivity-timeout', interrupt)
+        )
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-inactivity-timeout',
+          turnId: 'turn-inactivity-timeout'
+        })
+        return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
+      }
+    }
+    const service = new CodexChatRuntimeService(options)
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-inactivity-timeout',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-inactivity-timeout' }
+      },
+      port
+    )
+
+    try {
+      await vi.waitFor(() => expect(expireInactivity).toBeTypeOf('function'))
+      expireInactivity?.()
+      await vi.waitFor(() => expect(interrupt).toHaveBeenCalledOnce())
+      await running
+    } finally {
+      releaseStream.resolve()
+    }
+
+    expect(port.messages.filter((message) => isTerminalMessage(message))).toEqual([
+      {
+        type: 'error',
+        error: '模型长时间没有活动，已停止本次请求。请重试或切换模型。'
+      }
+    ])
+  })
+
+  it('releases a timed-out stream even when turn interruption does not settle', async () => {
+    const port = new FakePort()
+    const releaseStream = deferred()
+    const pendingInterrupt = deferred()
+    let expireInactivity: (() => void) | undefined
+    let reconcileCanonicalOutcome: (() => void) | undefined
+    let nextTimer = 0
+    const interrupt = vi.fn(() => pendingInterrupt.promise)
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      canonicalOutcomeTimeoutMs: 0,
+      readCanonicalTurnOutcome: async () => undefined,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) expireInactivity = callback
+        if (timeoutMs === 0) reconcileCanonicalOutcome = callback
+        nextTimer += 1
+        return nextTimer as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout: vi.fn(),
+      runDriver: async ({ abortSignal, onSessionCreated, onTurnLifecycle }) => {
+        onSessionCreated?.(
+          activeSession('thread-stalled-interrupt', 'turn-stalled-interrupt', interrupt)
+        )
+        abortSignal.addEventListener('abort', () => releaseStream.resolve(), { once: true })
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-stalled-interrupt',
+          turnId: 'turn-stalled-interrupt'
+        })
+        return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
+      }
+    })
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-stalled-interrupt',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-stalled-interrupt' }
+      },
+      port
+    )
+
+    await vi.waitFor(() => expect(expireInactivity).toBeTypeOf('function'))
+    expireInactivity?.()
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledOnce()
+      expect(reconcileCanonicalOutcome).toBeTypeOf('function')
+    })
+    reconcileCanonicalOutcome?.()
+    await running
+
+    expect(port.messages.filter((message) => isTerminalMessage(message))).toEqual([
+      {
+        type: 'error',
+        error: '模型长时间没有活动，已停止本次请求。请重试或切换模型。'
+      }
+    ])
+  })
+
+  it('uses canonical completion when it wins a race with the inactivity interrupt', async () => {
+    const port = new FakePort()
+    const releaseStream = deferred()
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
+    let expireInactivity: (() => void) | undefined
+    const interrupt = vi.fn(async () => undefined)
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) expireInactivity = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout: vi.fn(),
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
+        lifecycle = onTurnLifecycle
+        onSessionCreated?.(activeSession('thread-timeout-race', 'turn-timeout-race', interrupt))
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-timeout-race',
+          turnId: 'turn-timeout-race'
+        })
+        return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
+      }
+    })
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-timeout-race',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-timeout-race' }
+      },
+      port
+    )
+
+    await vi.waitFor(() => expect(expireInactivity).toBeTypeOf('function'))
+    expireInactivity?.()
+    await vi.waitFor(() => expect(interrupt).toHaveBeenCalledOnce())
+    await lifecycle?.({
+      type: 'turn-completed',
+      sequence: 2,
+      threadId: 'thread-timeout-race',
+      turnId: 'turn-timeout-race',
+      outcome: 'completed'
+    })
+    releaseStream.resolve()
+    await running
+
+    expect(port.messages.filter((message) => isTerminalMessage(message))).toEqual([
+      { type: 'finish', threadId: 'thread-timeout-race' }
+    ])
+  })
+
+  it('does not treat the ordinary stream-start metadata chunk as model activity', async () => {
+    const port = new FakePort()
+    const streamStarted = deferred()
+    const releaseStream = deferred()
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
+    let expireInactivity: (() => void) | undefined
+    const interrupt = vi.fn(async () => {
+      await lifecycle?.({
+        type: 'turn-completed',
+        sequence: 2,
+        threadId: 'thread-stream-start',
+        turnId: 'turn-stream-start',
+        outcome: 'interrupted'
+      })
+      releaseStream.resolve()
+    })
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) expireInactivity = callback
+        return 1 as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout: vi.fn(),
+      runDriver: async ({ onSessionCreated, onTurnLifecycle }) => {
+        lifecycle = onTurnLifecycle
+        onSessionCreated?.(activeSession('thread-stream-start', 'turn-stream-start', interrupt))
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-stream-start',
+          turnId: 'turn-stream-start'
+        })
+        return {
+          toUIMessageStream: () =>
+            (async function* () {
+              yield {
+                type: 'start',
+                messageMetadata: {
+                  threadId: 'thread-stream-start',
+                  turnId: 'turn-stream-start'
+                }
+              } as never
+              streamStarted.resolve()
+              await releaseStream.promise
+            })()
+        }
+      }
+    })
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-stream-start',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-stream-start' }
+      },
+      port
+    )
+
+    await streamStarted.promise
+    expireInactivity?.()
+    await vi.waitFor(() => expect(interrupt).toHaveBeenCalledOnce())
+    await running
+
+    expect(port.messages.filter((message) => isTerminalMessage(message))).toEqual([
+      {
+        type: 'error',
+        error: '模型长时间没有活动，已停止本次请求。请重试或切换模型。'
+      }
+    ])
+  })
+
+  it('refreshes the inactivity deadline only for activity from the active turn', async () => {
+    const port = new FakePort()
+    const releaseStream = deferred()
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
+    let activity: RuntimeRunDriverInput['onTurnActivity']
+    const inactivityCallbacks: Array<() => void> = []
+    let nextTimer = 0
+    const interrupt = vi.fn(async () => {
+      await lifecycle?.({
+        type: 'turn-completed',
+        sequence: 2,
+        threadId: 'thread-active-turn',
+        turnId: 'turn-active-turn',
+        outcome: 'interrupted'
+      })
+      releaseStream.resolve()
+    })
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) inactivityCallbacks.push(callback)
+        nextTimer += 1
+        return nextTimer as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout: vi.fn(),
+      runDriver: async ({ onSessionCreated, onTurnLifecycle, onTurnActivity }) => {
+        lifecycle = onTurnLifecycle
+        activity = onTurnActivity
+        onSessionCreated?.(activeSession('thread-active-turn', 'turn-active-turn', interrupt))
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-active-turn',
+          turnId: 'turn-active-turn'
+        })
+        return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
+      }
+    })
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-active-turn',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-active-turn' }
+      },
+      port
+    )
+
+    await vi.waitFor(() => expect(inactivityCallbacks).toHaveLength(1))
+    await activity?.({ threadId: 'thread-active-turn', turnId: 'turn-other' })
+    expect(inactivityCallbacks).toHaveLength(1)
+
+    await activity?.({ threadId: 'thread-active-turn', turnId: 'turn-active-turn' })
+    expect(inactivityCallbacks).toHaveLength(2)
+
+    inactivityCallbacks[0]?.()
+    await flushAsyncWork()
+    expect(interrupt).not.toHaveBeenCalled()
+
+    inactivityCallbacks[1]?.()
+    await vi.waitFor(() => expect(interrupt).toHaveBeenCalledOnce())
+    await running
+  })
+
+  it('suspends the inactivity watchdog while waiting for user approval', async () => {
+    const port = new FakePort()
+    const releaseStream = deferred()
+    let lifecycle: RuntimeRunDriverInput['onTurnLifecycle']
+    let approvals: RuntimeRunDriverInput['approvals']
+    const inactivityCallbacks: Array<() => void> = []
+    let nextTimer = 0
+    const clearScheduledTimeout = vi.fn()
+    const interrupt = vi.fn(async () => {
+      await lifecycle?.({
+        type: 'turn-completed',
+        sequence: 2,
+        threadId: 'thread-approval-wait',
+        turnId: 'turn-approval-wait',
+        outcome: 'interrupted'
+      })
+      releaseStream.resolve()
+    })
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      launch: {
+        command: '/bin/codex-app-server',
+        args: ['--listen', 'stdio://'],
+        displayBinary: '/bin/codex-app-server --listen stdio://'
+      },
+      turnInactivityTimeoutMs: 1_234,
+      scheduleTimeout: (callback, timeoutMs) => {
+        if (timeoutMs === 1_234) inactivityCallbacks.push(callback)
+        nextTimer += 1
+        return nextTimer as unknown as ReturnType<typeof setTimeout>
+      },
+      clearScheduledTimeout,
+      runDriver: async ({ onSessionCreated, onTurnLifecycle, approvals: runApprovals }) => {
+        lifecycle = onTurnLifecycle
+        approvals = runApprovals
+        onSessionCreated?.(activeSession('thread-approval-wait', 'turn-approval-wait', interrupt))
+        await onTurnLifecycle?.({
+          type: 'turn-started',
+          sequence: 1,
+          threadId: 'thread-approval-wait',
+          turnId: 'turn-approval-wait'
+        })
+        return { toUIMessageStream: () => waitThenEnd(releaseStream.promise) }
+      }
+    })
+
+    const running = service.startChatStream(
+      {
+        chatId: 'chat-approval-wait',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { conversationId: 'conversation-approval-wait' }
+      },
+      port
+    )
+
+    await vi.waitFor(() => expect(inactivityCallbacks).toHaveLength(1))
+    const approval = approvals?.command?.({})
+    await vi.waitFor(() => expect(service.listPendingApprovals()).toHaveLength(1))
+    expect(clearScheduledTimeout).toHaveBeenCalledWith(1)
+
+    inactivityCallbacks[0]?.()
+    await flushAsyncWork()
+    expect(interrupt).not.toHaveBeenCalled()
+
+    const requestId = service.listPendingApprovals()[0]!.id
+    await service.respondApproval(requestId, { action: 'approve' })
+    await expect(approval).resolves.toBe('accept')
+    expect(inactivityCallbacks).toHaveLength(2)
+
+    inactivityCallbacks[1]?.()
+    await vi.waitFor(() => expect(interrupt).toHaveBeenCalledOnce())
+    await running
+  })
+
   it('interrupts a stop requested before session and turn binding once the session becomes available', async () => {
     const port = new FakePort()
     const publishSession = deferred()
@@ -3450,7 +4134,10 @@ describe('CodexChatRuntimeService', () => {
         'follow-up-1'
       )
     ).resolves.toEqual({ turnId: 'turn-1' })
-    expect(steerMessage).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }), 'follow-up-1')
+    expect(steerMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'user' }),
+      'follow-up-1'
+    )
 
     finish.resolve()
     await run

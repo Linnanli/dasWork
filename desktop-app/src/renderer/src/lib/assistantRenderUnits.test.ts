@@ -1,23 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CodexEventMapper,
-  mapCodexThreadItemToUiPart,
+  CodexRunEventNormalizer as CodexEventMapper,
+  type CodexRunEvent,
   type ThreadItem
-} from '@janole/ai-sdk-provider-codex-asp'
-import { readUIMessageStream, streamText, type LanguageModel, type UIMessage } from 'ai'
+} from '@dascowork/codex-app-server-client'
+import { readUIMessageStream, type UIMessage, type UIMessageChunk } from 'ai'
 
-import { LEGACY_CODEX_MESSAGE_METADATA_KEY } from '../../../shared/codexMessageMetadata'
+import { mapCodexThreadItemToUiPart } from '../../../main/conversations/CodexHistoryUiMessageMapper'
+import { CodexUiMessageAdapter } from '../../../main/codexRun/CodexUiMessageAdapter'
+import { CODEX_MESSAGE_METADATA_KEY } from '../../../shared/codexMessageMetadata'
 import { buildAssistantRenderUnits, displayNameForSubagentPath } from './assistantRenderUnits'
 import { assistantRenderUnitFixtures } from './__fixtures__/assistantRenderUnitFixtures'
-
-// The desktop package deliberately depends on `ai`, not its transitive
-// `@ai-sdk/provider` package. Derive the v3 test-double contract from the
-// public `LanguageModel` union so pnpm's strict resolver keeps that boundary.
-type LanguageModelV3 = Extract<LanguageModel, { specificationVersion: 'v3' }>
-type LanguageModelV3GenerateResult = Awaited<ReturnType<LanguageModelV3['doGenerate']>>
-type LanguageModelV3StreamResult = Awaited<ReturnType<LanguageModelV3['doStream']>>
-type LanguageModelV3StreamPart =
-  LanguageModelV3StreamResult['stream'] extends ReadableStream<infer Part> ? Part : never
 
 describe('buildAssistantRenderUnits', () => {
   it('marks text as streaming only while the assistant message is running', () => {
@@ -1348,6 +1341,36 @@ describe('buildAssistantRenderUnits', () => {
     ])
   })
 
+  it('keeps a standalone dynamic tool visible beside the completed answer', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      content: [
+        {
+          type: 'dynamic-tool',
+          toolCallId: 'workspace-dependencies-1',
+          toolName: 'load_workspace_dependencies',
+          state: 'output-available',
+          input: {},
+          output: { node: { path: '/runtime/node' } },
+          providerExecuted: true
+        },
+        { type: 'text', text: '依赖已准备好。' }
+      ]
+    })
+
+    expect(model.units).toMatchObject([
+      {
+        type: 'tool-group',
+        kind: 'dynamic',
+        dynamicMetadata: {
+          standaloneInConversation: true,
+          displayLabels: [{ completedLabel: '已加载工作区依赖' }]
+        }
+      },
+      { type: 'text', text: '依赖已准备好。' }
+    ])
+  })
+
   it('keeps dynamic tool fallback metadata explicit when registry metadata is absent', () => {
     const model = buildAssistantRenderUnits({
       status: { type: 'complete' },
@@ -1881,7 +1904,7 @@ describe('buildAssistantRenderUnits', () => {
     ])
   })
 
-  it('preserves agent message phases through the provider and AI SDK UI stream', async () => {
+  it('preserves agent message phases through the native normalizer and UI adapter', async () => {
     const mapper = new CodexEventMapper()
     const streamParts = [
       { method: 'turn/started', params: { threadId: 'thr', turn: { id: 'turn-phase' } } },
@@ -1968,28 +1991,27 @@ describe('buildAssistantRenderUnits', () => {
       }
     ].flatMap((event) => mapper.map(event))
 
-    const aiSdkParts = await messagePartsFromProviderStreamParts(streamParts)
+    const aiSdkParts = await messagePartsFromNativeRunEvents(streamParts)
 
     expect(aiSdkParts).toMatchObject([
-      { type: 'step-start' },
       {
         type: 'text',
         text: '先收集实际证据。',
         providerMetadata: {
-          [LEGACY_CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'commentary' }
+          [CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'commentary' }
         }
       },
       {
         type: 'text',
         text: '## 结论\n\n根因已确认。',
         providerMetadata: {
-          [LEGACY_CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'final_answer' }
+          [CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'final_answer' }
         }
       }
     ])
   })
 
-  it('keeps provider mapper MCP lifecycle as one Render-Unit with completed source metadata', async () => {
+  it('keeps native MCP lifecycle as one Render-Unit with completed source metadata', async () => {
     const mapper = new CodexEventMapper()
     const startedItem = {
       type: 'mcpToolCall',
@@ -2033,11 +2055,10 @@ describe('buildAssistantRenderUnits', () => {
       })
     )
 
-    const aiSdkParts = await messagePartsFromProviderStreamParts(streamParts)
+    const aiSdkParts = await messagePartsFromNativeRunEvents(streamParts)
     const model = buildAssistantRenderUnits({ status: { type: 'complete' }, content: aiSdkParts })
 
     expect(aiSdkParts).toMatchObject([
-      { type: 'step-start' },
       {
         type: 'dynamic-tool',
         toolCallId: 'mcp-chain',
@@ -2049,7 +2070,7 @@ describe('buildAssistantRenderUnits', () => {
       {
         type: 'tool-group',
         kind: 'mcp',
-        partIndices: [1],
+        partIndices: [0],
         mcpSource: {
           sourceType: 'app',
           groupKey: 'app:github-app',
@@ -2063,7 +2084,7 @@ describe('buildAssistantRenderUnits', () => {
     ])
   })
 
-  it('maps provider sleep events through real AI SDK UI parts into custom entries', async () => {
+  it('maps native sleep events through real AI SDK UI parts into custom entries', async () => {
     const mapper = new CodexEventMapper()
     const item = { type: 'sleep', id: 'sleep-chain', durationMs: 1000 }
     const streamParts = [
@@ -2079,11 +2100,10 @@ describe('buildAssistantRenderUnits', () => {
       }
     ].flatMap((event) => mapper.map(event))
 
-    const aiSdkParts = await messagePartsFromProviderStreamParts(streamParts)
+    const aiSdkParts = await messagePartsFromNativeRunEvents(streamParts)
     const model = buildAssistantRenderUnits({ status: { type: 'complete' }, content: aiSdkParts })
 
     expect(aiSdkParts).toMatchObject([
-      { type: 'step-start' },
       {
         type: 'dynamic-tool',
         toolCallId: 'sleep-chain',
@@ -2101,7 +2121,7 @@ describe('buildAssistantRenderUnits', () => {
     ])
   })
 
-  it('maps provider plan updates into live todoList custom entries', async () => {
+  it('maps native plan updates into live todoList custom entries', async () => {
     const mapper = new CodexEventMapper()
     const streamParts = [
       { method: 'turn/started', params: { threadId: 'thr', turn: { id: 'turn-plan' } } },
@@ -2126,11 +2146,10 @@ describe('buildAssistantRenderUnits', () => {
       }
     ].flatMap((event) => mapper.map(event))
 
-    const aiSdkParts = await messagePartsFromProviderStreamParts(streamParts)
+    const aiSdkParts = await messagePartsFromNativeRunEvents(streamParts)
     const model = buildAssistantRenderUnits({ status: { type: 'running' }, content: aiSdkParts })
 
     expect(aiSdkParts).toMatchObject([
-      { type: 'step-start' },
       {
         type: 'dynamic-tool',
         toolCallId: 'plan:turn-plan:1',
@@ -2157,7 +2176,7 @@ describe('buildAssistantRenderUnits', () => {
     ])
   })
 
-  it('maps provider turn diff updates into capped turnDiff custom entries', async () => {
+  it('maps native turn diff updates into capped turnDiff custom entries', async () => {
     const mapper = new CodexEventMapper()
     const diff = 'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n-old\n+new\n'
     const streamParts = [
@@ -2175,11 +2194,10 @@ describe('buildAssistantRenderUnits', () => {
       }
     ].flatMap((event) => mapper.map(event))
 
-    const aiSdkParts = await messagePartsFromProviderStreamParts(streamParts)
+    const aiSdkParts = await messagePartsFromNativeRunEvents(streamParts)
     const model = buildAssistantRenderUnits({ status: { type: 'complete' }, content: aiSdkParts })
 
     expect(aiSdkParts).toMatchObject([
-      { type: 'step-start' },
       {
         type: 'dynamic-tool',
         toolCallId: 'turn-diff:turn-diff',
@@ -2318,19 +2336,14 @@ function historicalDynamicToolPart(
   }
 }
 
-async function messagePartsFromProviderStreamParts(
-  parts: readonly LanguageModelV3StreamPart[]
+async function messagePartsFromNativeRunEvents(
+  events: readonly CodexRunEvent[]
 ): Promise<Record<string, unknown>[]> {
-  const result = streamText({
-    model: new MockUiStreamModel(parts),
-    prompt: 'render unit test'
-  })
-
+  const adapter = new CodexUiMessageAdapter()
+  const chunks = events.flatMap((event) => adapter.map(event))
   let lastMessage: UIMessage | undefined
   for await (const message of readUIMessageStream({
-    stream: result.toUIMessageStream({
-      sendReasoning: true
-    }),
+    stream: streamFromParts(chunks),
     onError(error) {
       throw error
     }
@@ -2341,27 +2354,8 @@ async function messagePartsFromProviderStreamParts(
   return (lastMessage?.parts ?? []) as Record<string, unknown>[]
 }
 
-class MockUiStreamModel implements LanguageModelV3 {
-  readonly specificationVersion = 'v3'
-  readonly provider = 'test'
-  readonly modelId = 'render-unit-test'
-  readonly supportedUrls = {}
-
-  constructor(private readonly parts: readonly LanguageModelV3StreamPart[]) {}
-
-  async doGenerate(): Promise<LanguageModelV3GenerateResult> {
-    throw new Error('MockUiStreamModel only supports streaming')
-  }
-
-  async doStream(): Promise<LanguageModelV3StreamResult> {
-    return { stream: streamFromParts(this.parts) }
-  }
-}
-
-function streamFromParts(
-  parts: readonly LanguageModelV3StreamPart[]
-): ReadableStream<LanguageModelV3StreamPart> {
-  return new ReadableStream<LanguageModelV3StreamPart>({
+function streamFromParts(parts: readonly UIMessageChunk[]): ReadableStream<UIMessageChunk> {
+  return new ReadableStream<UIMessageChunk>({
     start(controller) {
       for (const part of parts) {
         controller.enqueue(part)

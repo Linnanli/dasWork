@@ -24,10 +24,7 @@ import {
   type CodexRunSession
 } from './codexRun/CodexRunDriver'
 import { HostCodexConnection } from './codexRun/HostCodexConnection'
-import {
-  readThreadTerminalToolResult,
-  type ThreadTerminalReader
-} from './terminal/readThreadTerminalTool'
+import type { ThreadTerminalReader } from './terminal/readThreadTerminalTool'
 import type { ModelCatalogService } from './modelCatalogService'
 import type { ProjectStoreLike, ProjectServiceLike } from './threads/startConversation'
 import {
@@ -61,6 +58,7 @@ import { extractVisibleUserRequest } from '../shared/userRequestEnvelope'
 import { readCodexMessageMetadata } from '../shared/codexMessageMetadata'
 import { restoreLocalMediaFileUrlsForModel } from './conversations/localMediaUrls'
 import { composeCodexDesktopInstructions } from './developerInstructions/composeCodexDesktopInstructions'
+import { DesktopHostCapabilityRuntime } from './appTools/DesktopHostCapabilityRuntime'
 import type { TurnDiffStoreWriter } from './conversations/TurnDiffStore'
 import { validateLocalAttachmentsInLatestUserMessage } from './composerContext/localAttachmentValidation'
 import {
@@ -146,8 +144,11 @@ type ActiveConversationRun = {
   terminalDelivered: boolean
   stopRequested: boolean
   stopRequestedAt?: number
+  interruptReason?: ConversationInterruptReason
   approvalSettlementPromise?: Promise<void>
   interruptPromise?: Promise<void>
+  turnInactivityTimer?: ReturnType<typeof setTimeout>
+  turnInactivityTurnId?: string
   canonicalOutcomeTimer?: ReturnType<typeof setTimeout>
   canonicalResolutionError?: string
   canonicalFailureMessage?: string
@@ -166,6 +167,8 @@ type ActiveConversationRun = {
   handlePortControl?: (message: unknown) => void
   terminalRetentionTimer?: ReturnType<typeof setTimeout>
 }
+
+type ConversationInterruptReason = 'user-stop' | 'turn-inactivity-timeout'
 
 type PendingSteerClaim = {
   claim: FollowUpClaim
@@ -189,10 +192,12 @@ const maxReplayJournalEvents = 20_000
 const maxReplayJournalBytes = 8 * 1024 * 1024
 const terminalReplayRetentionMs = 5 * 60 * 1_000
 const defaultSteerConfirmationTimeoutMs = 30_000
+const defaultTurnInactivityTimeoutMs = 2 * 60 * 1_000
 const defaultCanonicalOutcomeTimeoutMs = 10_000
 const defaultShutdownTimeoutMs = 10_000
 const unknownStopOutcomeError = '停止结果无法确认，请重新打开任务检查状态'
 const canonicalFailureError = '模型响应未完成，请重试。'
+const turnInactivityTimeoutError = '模型长时间没有活动，已停止本次请求。请重试或切换模型。'
 
 type ApprovalSettings = CodexRunApprovalSettings
 
@@ -213,9 +218,11 @@ export type CodexChatRuntimeServiceOptions = {
   onAgentLifecycle?: (event: CodexAgentLifecycleEvent) => void | Promise<void>
   onThreadBound?: (conversationId: string, threadId: string) => void | Promise<void>
   readThreadTerminal?: ThreadTerminalReader
+  hostCapabilities?: DesktopHostCapabilityRuntime
   onTurnCompleted?: () => void
   followUpQueue?: ConversationFollowUpQueueService
   steerConfirmationTimeoutMs?: number
+  turnInactivityTimeoutMs?: number
   scheduleTimeout?: (callback: () => void, timeoutMs: number) => ReturnType<typeof setTimeout>
   clearScheduledTimeout?: (timer: ReturnType<typeof setTimeout>) => void
   canonicalOutcomeTimeoutMs?: number
@@ -269,6 +276,7 @@ export class CodexChatRuntimeService {
   private readonly onTurnCompleted: (() => void) | undefined
   private readonly followUpQueue: ConversationFollowUpQueueService | undefined
   private readonly steerConfirmationTimeoutMs: number
+  private readonly turnInactivityTimeoutMs: number
   private readonly scheduleTimeout: (
     callback: () => void,
     timeoutMs: number
@@ -284,7 +292,7 @@ export class CodexChatRuntimeService {
   private readonly restoreArtifactAttachments: (
     messages: readonly UIMessage[]
   ) => Promise<UIMessage[]>
-  private readonly readThreadTerminal: ThreadTerminalReader | undefined
+  private readonly hostCapabilities: DesktopHostCapabilityRuntime
   private readonly collaborationModeClient:
     | Pick<CodexHistoryClient, 'listCollaborationModes'>
     | undefined
@@ -315,6 +323,10 @@ export class CodexChatRuntimeService {
       0,
       options.steerConfirmationTimeoutMs ?? defaultSteerConfirmationTimeoutMs
     )
+    this.turnInactivityTimeoutMs = Math.max(
+      0,
+      options.turnInactivityTimeoutMs ?? defaultTurnInactivityTimeoutMs
+    )
     this.scheduleTimeout = options.scheduleTimeout ?? setTimeout
     this.clearScheduledTimeout = options.clearScheduledTimeout ?? clearTimeout
     this.canonicalOutcomeTimeoutMs = Math.max(
@@ -328,7 +340,9 @@ export class CodexChatRuntimeService {
     this.turnDiffStore = options.turnDiffStore
     this.restoreArtifactAttachments =
       options.restoreArtifactAttachments ?? (async (messages) => [...messages])
-    this.readThreadTerminal = options.readThreadTerminal
+    this.hostCapabilities =
+      options.hostCapabilities ??
+      new DesktopHostCapabilityRuntime({ readThreadTerminal: options.readThreadTerminal })
     this.collaborationModeClient = options.collaborationModeClient
     this.readCanonicalTurnOutcome =
       options.readCanonicalTurnOutcome ??
@@ -726,9 +740,16 @@ export class CodexChatRuntimeService {
                 }
               }
             }
+      const capabilitySnapshot = await this.hostCapabilities.snapshot({ hostId: 'local' })
       const desktopInstructions = composeCodexDesktopInstructions({
         system: effectiveRequest.body?.system,
-        projectAssignment: conversation.projectAssignment
+        projectAssignment: conversation.projectAssignment,
+        capabilities: {
+          workspaceDependencies: capabilitySnapshot.availableToolNames.includes(
+            'load_workspace_dependencies'
+          )
+        },
+        availableToolNames: capabilitySnapshot.availableToolNames
       })
       const modelInputRequest = {
         ...effectiveRequest,
@@ -819,6 +840,7 @@ export class CodexChatRuntimeService {
           onThreadStarted,
           onAgentLifecycle: this.onAgentLifecycle,
           onTurnLifecycle,
+          onTurnActivity: (event) => this.observeTurnActivity(activeRun, event),
           onTurnDiffUpdated,
           onThreadSettingsUpdated,
           onThreadGoalUpdated,
@@ -830,7 +852,13 @@ export class CodexChatRuntimeService {
           onExistingTurnRecoveryState: (state) => {
             activeRun.existingTurnRecoveryState = state
           },
-          onDynamicToolCall: (params) => this.handleDynamicToolCall(activeRun, params),
+          dynamicTools: capabilitySnapshot.dynamicTools,
+          threadConfig: capabilitySnapshot.threadConfig,
+          onDynamicToolCall: (params) =>
+            this.hostCapabilities.dispatch(
+              withDynamicToolCallThread(params, activeRun.threadId),
+              activeRun.abortController.signal
+            ),
           approvals: this.createRunApprovalHandlers(activeRun),
           onSessionCreated: async (session) => {
             if (activeRun.terminalDelivered) return
@@ -846,7 +874,9 @@ export class CodexChatRuntimeService {
               activeRun.initialThreadGoalApplied = true
               onThreadGoalUpdated({ threadId: session.threadId, goal })
             }
-            if (activeRun.stopRequested) void this.requestConversationInterrupt(activeRun)
+            if (activeRun.interruptReason) {
+              void this.requestRunInterrupt(activeRun, activeRun.interruptReason)
+            }
           }
         })
       let result = await startRun()
@@ -871,6 +901,8 @@ export class CodexChatRuntimeService {
             return errorMessage(error)
           }
         })) {
+          const threadId = extractCodexThreadId(chunk)
+          const turnId = extractCodexTurnId(chunk)
           if (chunk.type === 'error') {
             runErrorCode ??= codexRunRecoveryErrorCode(chunk.errorText)
             if (
@@ -885,12 +917,12 @@ export class CodexChatRuntimeService {
               shouldResumeActiveTurn = true
               break
             }
+            this.clearTurnInactivityWatchdog(activeRun)
             streamFailed = true
             terminalEvent = { type: 'error', error: chunk.errorText }
             break
           }
-          const threadId = extractCodexThreadId(chunk)
-          const turnId = extractCodexTurnId(chunk)
+          if (activeRun.interruptReason === 'turn-inactivity-timeout') continue
           let threadIdChanged = false
           if (threadId || turnId) {
             if (activeRun.threadId && threadId && activeRun.threadId !== threadId) {
@@ -952,6 +984,8 @@ export class CodexChatRuntimeService {
         error: errorMessage(error)
       })
     } finally {
+      this.clearTurnInactivityWatchdog(activeRun)
+      this.clearCanonicalOutcomeTimer(activeRun)
       if (terminalEvent?.type !== 'finish') {
         this.rejectRunApprovals(activeRun, 'The task ended before approval was completed.')
       }
@@ -1145,12 +1179,28 @@ export class CodexChatRuntimeService {
   }
 
   private requestConversationInterrupt(run: ActiveConversationRun): Promise<void> {
-    if (!run.stopRequested) {
-      run.stopRequested = true
-      run.stopRequestedAt = Date.now()
+    return this.requestRunInterrupt(run, 'user-stop')
+  }
+
+  private requestRunInterrupt(
+    run: ActiveConversationRun,
+    reason: ConversationInterruptReason
+  ): Promise<void> {
+    if (run.interruptReason && run.interruptReason !== reason) {
+      return run.interruptPromise ?? Promise.resolve()
+    }
+    if (!run.interruptReason) {
+      run.interruptReason = reason
+      this.clearTurnInactivityWatchdog(run)
+      if (reason === 'user-stop') {
+        run.stopRequested = true
+        run.stopRequestedAt = Date.now()
+      }
       run.approvalSettlementPromise = this.settleRunApprovalsForInterrupt(
         run,
-        'The task was stopped before approval was completed.'
+        reason === 'user-stop'
+          ? 'The task was stopped before approval was completed.'
+          : 'The model response timed out before approval was completed.'
       )
     }
     if (run.interruptPromise) return run.interruptPromise
@@ -1158,6 +1208,7 @@ export class CodexChatRuntimeService {
 
     run.interruptPromise = (async () => {
       await run.approvalSettlementPromise
+      this.scheduleCanonicalReconciliation(run)
       try {
         await run.session?.interrupt()
       } catch (error) {
@@ -1167,6 +1218,56 @@ export class CodexChatRuntimeService {
       }
     })()
     return run.interruptPromise
+  }
+
+  private startTurnInactivityWatchdog(run: ActiveConversationRun, turnId: string): void {
+    if (run.turnInactivityTimer !== undefined && run.turnInactivityTurnId === turnId) return
+    this.armTurnInactivityWatchdog(run, turnId)
+  }
+
+  private refreshTurnInactivityWatchdog(run: ActiveConversationRun, turnId: string): void {
+    if (run.threadId === undefined || run.turnId !== turnId) return
+    this.armTurnInactivityWatchdog(run, turnId)
+  }
+
+  private armTurnInactivityWatchdog(run: ActiveConversationRun, turnId: string): void {
+    this.clearTurnInactivityWatchdog(run)
+    if (
+      this.turnInactivityTimeoutMs === 0 ||
+      run.terminalDelivered ||
+      run.interruptReason ||
+      run.turnOutcome ||
+      run.approvalRequestIds.size > 0
+    ) {
+      return
+    }
+
+    run.turnInactivityTurnId = turnId
+    const timer = this.scheduleTimeout(() => {
+      if (run.turnInactivityTimer !== timer) return
+      run.turnInactivityTimer = undefined
+      run.turnInactivityTurnId = undefined
+      if (run.terminalDelivered || run.turnOutcome || run.turnId !== turnId) return
+      console.warn('turn produced no model or tool activity before the inactivity deadline', {
+        conversationId: run.conversationId,
+        threadId: run.threadId,
+        turnId,
+        timeoutMs: this.turnInactivityTimeoutMs
+      })
+      void this.requestRunInterrupt(run, 'turn-inactivity-timeout')
+    }, this.turnInactivityTimeoutMs)
+    run.turnInactivityTimer = timer
+  }
+
+  private clearTurnInactivityWatchdog(run: ActiveConversationRun, turnId?: string): void {
+    if (turnId && run.turnInactivityTurnId && run.turnInactivityTurnId !== turnId) {
+      return
+    }
+    if (run.turnInactivityTimer !== undefined) {
+      this.clearScheduledTimeout(run.turnInactivityTimer)
+      run.turnInactivityTimer = undefined
+    }
+    run.turnInactivityTurnId = undefined
   }
 
   private scheduleCanonicalReconciliation(run: ActiveConversationRun): void {
@@ -1185,6 +1286,12 @@ export class CodexChatRuntimeService {
     }, this.canonicalOutcomeTimeoutMs)
   }
 
+  private clearCanonicalOutcomeTimer(run: ActiveConversationRun): void {
+    if (run.canonicalOutcomeTimer === undefined) return
+    this.clearScheduledTimeout(run.canonicalOutcomeTimer)
+    run.canonicalOutcomeTimer = undefined
+  }
+
   private async reconcileCanonicalOutcome(run: ActiveConversationRun): Promise<void> {
     if (run.turnOutcome || run.terminalDelivered || !run.threadId || !run.turnId) return
 
@@ -1198,7 +1305,10 @@ export class CodexChatRuntimeService {
     if (outcome) {
       this.setCanonicalOutcome(run, outcome, 'history-reconciliation')
     } else if (!run.canonicalResolutionError) {
-      run.canonicalResolutionError = unknownStopOutcomeError
+      run.canonicalResolutionError =
+        run.interruptReason === 'turn-inactivity-timeout'
+          ? turnInactivityTimeoutError
+          : unknownStopOutcomeError
     }
 
     // The UI/control-plane decision has been made from authoritative history
@@ -1213,26 +1323,23 @@ export class CodexChatRuntimeService {
     source: NonNullable<ActiveConversationRun['canonicalOutcomeSource']>
   ): void {
     if (run.turnOutcome) return
+    this.clearTurnInactivityWatchdog(run)
     run.turnOutcome = outcome
     run.canonicalOutcomeSource = source
-    if (run.canonicalOutcomeTimer !== undefined) {
-      this.clearScheduledTimeout(run.canonicalOutcomeTimer)
-      run.canonicalOutcomeTimer = undefined
-    }
+    this.clearCanonicalOutcomeTimer(run)
   }
 
   private canonicalTerminalForRun(
     run: ActiveConversationRun,
     fallback: CodexChatTerminalEvent | undefined
   ): CodexChatTerminalEvent {
-    if (run.canonicalResolutionError) {
-      return { type: 'error', error: run.canonicalResolutionError }
-    }
     switch (run.turnOutcome) {
       case 'completed':
         return { type: 'finish', threadId: run.threadId }
       case 'interrupted':
-        return { type: 'aborted' }
+        return run.interruptReason === 'turn-inactivity-timeout'
+          ? { type: 'error', error: turnInactivityTimeoutError }
+          : { type: 'aborted' }
       case 'failed':
         // The app-server's canonical outcome decides that this is a failure,
         // while the provider stream may carry the safe, user-facing upstream
@@ -1246,8 +1353,14 @@ export class CodexChatRuntimeService {
       default:
         break
     }
+    if (run.canonicalResolutionError) {
+      return { type: 'error', error: run.canonicalResolutionError }
+    }
     if (run.stopRequested) {
       return { type: 'error', error: unknownStopOutcomeError }
+    }
+    if (run.interruptReason === 'turn-inactivity-timeout') {
+      return { type: 'error', error: turnInactivityTimeoutError }
     }
     if (fallback?.type === 'error') return fallback
     return { type: 'error', error: canonicalFailureError }
@@ -1424,10 +1537,7 @@ export class CodexChatRuntimeService {
 
     if (await this.waitForRunSettlement(run)) return
 
-    if (run.canonicalOutcomeTimer !== undefined) {
-      this.clearScheduledTimeout(run.canonicalOutcomeTimer)
-      run.canonicalOutcomeTimer = undefined
-    }
+    this.clearCanonicalOutcomeTimer(run)
     run.abortController.abort()
     this.rejectRunApprovals(run, 'Codex runtime shutdown timed out before approval was completed.')
     await this.forceReleaseFollowUpStateAfterShutdownTimeout(run)
@@ -1823,7 +1933,8 @@ export class CodexChatRuntimeService {
     event: CodexTurnLifecycleEvent
   ): Promise<void> {
     if (event.type === 'turn-started') {
-      if (run.stopRequested) void this.requestConversationInterrupt(run)
+      this.startTurnInactivityWatchdog(run, event.turnId)
+      if (run.interruptReason) void this.requestRunInterrupt(run, run.interruptReason)
       return
     }
 
@@ -1843,6 +1954,7 @@ export class CodexChatRuntimeService {
     }
 
     if (event.type === 'turn-completed') {
+      this.clearTurnInactivityWatchdog(run, event.turnId)
       await this.persistFinalTurnDiff(run, event)
       this.onTurnCompleted?.()
       const providerFailureDetail = turnFailureDetail(event)
@@ -1851,7 +1963,7 @@ export class CodexChatRuntimeService {
       }
       if (run.runKind === 'goal') {
         run.lastCompletedGoalOutcome = event.outcome
-        if (run.goalReachedTerminalStatus || run.stopRequested) {
+        if (run.goalReachedTerminalStatus || run.interruptReason) {
           this.setCanonicalOutcome(run, event.outcome, 'notification')
         }
       } else {
@@ -1859,6 +1971,22 @@ export class CodexChatRuntimeService {
       }
       await this.rejectUnacceptedSteerClaims(run, event.turnId, event.outcome)
     }
+  }
+
+  private observeTurnActivity(
+    run: ActiveConversationRun,
+    event: { threadId: string; turnId: string }
+  ): void {
+    if (
+      run.terminalDelivered ||
+      run.interruptReason ||
+      run.turnOutcome ||
+      run.threadId !== event.threadId ||
+      run.turnId !== event.turnId
+    ) {
+      return
+    }
+    this.refreshTurnInactivityWatchdog(run, event.turnId)
   }
 
   private async persistFinalTurnDiff(
@@ -2219,19 +2347,29 @@ export class CodexChatRuntimeService {
   }
 
   private createRunApprovalHandlers(run: ActiveConversationRun): CodexRunApprovalHandlers {
-    const request = (input: CodexApprovalRequestInput): Promise<CodexApprovalResponse> => {
-      return this.approvalBroker.request(
-        {
-          ...input,
-          context: {
-            threadId: run.threadId,
-            turnId: run.turnId
+    const request = async (input: CodexApprovalRequestInput): Promise<CodexApprovalResponse> => {
+      let requestId: string | undefined
+      try {
+        return await this.approvalBroker.request(
+          {
+            ...input,
+            context: {
+              threadId: run.threadId,
+              turnId: run.turnId
+            }
+          },
+          (registeredRequestId) => {
+            requestId = registeredRequestId
+            run.approvalRequestIds.add(registeredRequestId)
+            this.clearTurnInactivityWatchdog(run)
           }
-        },
-        (requestId) => {
-          run.approvalRequestIds.add(requestId)
+        )
+      } finally {
+        if (requestId) run.approvalRequestIds.delete(requestId)
+        if (run.approvalRequestIds.size === 0 && run.turnId) {
+          this.refreshTurnInactivityWatchdog(run, run.turnId)
         }
-      )
+      }
     }
 
     return {
@@ -2260,24 +2398,6 @@ export class CodexChatRuntimeService {
         const response = await request({ kind: 'mcp-elicitation', params })
         return mcpElicitationResponseFromApprovalResponse(response)
       }
-    }
-  }
-
-  private async handleDynamicToolCall(
-    run: ActiveConversationRun,
-    params: unknown
-  ): Promise<unknown> {
-    const toolName = asRecord(params)?.toolName ?? asRecord(params)?.name
-    if (toolName !== 'read_thread_terminal' || !this.readThreadTerminal) {
-      return {
-        success: false,
-        contentItems: [{ type: 'inputText', text: 'This desktop tool is unavailable.' }]
-      }
-    }
-    const snapshot = await readThreadTerminalToolResult(this.readThreadTerminal, run.threadId)
-    return {
-      success: true,
-      contentItems: [{ type: 'inputText', text: JSON.stringify(snapshot) }]
     }
   }
 
@@ -2595,6 +2715,18 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>
 }
 
+function withDynamicToolCallThread(
+  params: unknown,
+  threadId: string | undefined
+): Record<string, unknown> {
+  const call = { ...(asRecord(params) ?? {}) }
+  delete call.threadId
+  return {
+    ...call,
+    ...(threadId ? { threadId } : {})
+  }
+}
+
 function isAbortMessage(value: unknown): value is { type: 'abort'; runId?: string } {
   return Boolean(
     value &&
@@ -2678,7 +2810,7 @@ function canResumeActiveTurnAfterTransportError(
   code: CodexRunRecoveryErrorCode | undefined
 ): boolean {
   if (
-    run.stopRequested ||
+    run.interruptReason ||
     run.transportRecoveryAttempted ||
     !run.threadId ||
     !run.turnId ||

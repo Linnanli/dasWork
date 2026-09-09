@@ -7,10 +7,10 @@
   "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/src/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
@@ -22,7 +22,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "codex:generate-types": "codex app-server generate-ts --experimental -o src/protocol/app-server-protocol",
-    "build": "tsup && tsc -p tsconfig.build.json",
+    "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

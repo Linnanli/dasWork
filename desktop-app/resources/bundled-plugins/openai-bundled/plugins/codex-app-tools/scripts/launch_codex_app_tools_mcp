@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+if [ "${ELECTRON_RUN_AS_NODE:-}" != "1" ]; then
+  echo "ELECTRON_RUN_AS_NODE=1 is required." >&2
+  exit 127
+fi
+
+if [ -z "${CODEX_MCP_NODE_PATH:-}" ]; then
+  echo "CODEX_MCP_NODE_PATH is required." >&2
+  exit 127
+fi
+
+if [ ! -x "${CODEX_MCP_NODE_PATH}" ]; then
+  echo "CODEX_MCP_NODE_PATH is not executable." >&2
+  exit 127
+fi
+
+if [ "$#" -ne 1 ]; then
+  echo "Expected exactly one bridge script argument." >&2
+  exit 64
+fi
+
+exec "${CODEX_MCP_NODE_PATH}" "$1"

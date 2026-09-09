@@ -1,0 +1,48 @@
+{
+  "bundleFormatVersion": 2,
+  "marketplace": {
+    "name": "openai-bundled",
+    "pluginRoot": "plugins"
+  },
+  "plugins": [
+    {
+      "name": "codex-app-tools",
+      "version": "0.2.0",
+      "installWhenMissing": true,
+      "internal": true,
+      "provenance": {
+        "kind": "repo-owned",
+        "sourcePath": "desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools",
+        "licensePath": "LICENSE",
+        "reviewStatus": "pending-independent-review"
+      },
+      "files": [
+        {
+          "path": ".codex-plugin/plugin.json",
+          "sha256": "9728422f590a0be0847fd8fbf45d99e8c007f67e9cfd71138ca8875c542143d9"
+        },
+        {
+          "path": ".mcp.json",
+          "sha256": "0994570d06176dc4a96470b4d05e22988d1aec3ec2fc6d39de9bb986ba11c007"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "47c534844f332bbfc3b4be2b819b0c175cb2b1bbf1be5cfed0fafedd81c2eb5d"
+        },
+        {
+          "path": "server.mjs",
+          "sha256": "bdafd1e12e179b656794b97065d90ef8d4aa706c906193758102bb41dc9880ce"
+        },
+        {
+          "path": "scripts/launch_codex_app_tools_mcp",
+          "sha256": "d971cd305f3526ab24329c266982c76fb936c4daf4935148ce07149d3082c8f9",
+          "mode": "executable"
+        },
+        {
+          "path": "scripts/launch_codex_app_tools_mcp.cmd",
+          "sha256": "eb234e8712b73a77f5782c044b6b1e599bfbb5fbd1ebfb2765c364f306004192"
+        }
+      ]
+    }
+  ]
+}

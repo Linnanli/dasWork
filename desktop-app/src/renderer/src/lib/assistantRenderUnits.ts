@@ -386,7 +386,8 @@ const KNOWN_DYNAMIC_TOOL_METADATA: Record<
 > = {
   load_workspace_dependencies: {
     activeLabel: '正在加载工作区依赖',
-    completedLabel: '已加载工作区依赖'
+    completedLabel: '已加载工作区依赖',
+    standaloneInConversation: true
   },
   pia_slackbot_dm: { activeLabel: 'Pia Slackbot DM', completedLabel: 'Pia Slackbot DM' },
   read_thread_terminal: {
@@ -1467,22 +1468,12 @@ function groupCommentaryProcess(
   const children = units.slice(0, processEnd)
   if (children.length === 0) return [...units]
 
-  const partIndices = [...new Set(children.flatMap((unit) => [...unit.partIndices]))]
-  const itemIds = [...new Set(children.flatMap((unit) => [...unit.target.itemIds]))]
-  const group: AssistantRenderUnit = {
-    type: 'reasoning-group',
-    key: 'reasoning-group',
-    partIndices,
-    target: { id: 'reasoning-group', itemIds },
-    children,
+  return groupProcessSegments(children, units.slice(processEnd), {
     active: isRunning && answerIndex < 0,
     state: isRunning && answerIndex < 0 ? 'thinking' : 'completed',
     durationMs: isRunning ? undefined : processDurationMs,
-    turnRunning: isRunning,
-    showThinkingFallback: false
-  }
-
-  return [group, ...units.slice(processEnd)]
+    turnRunning: isRunning
+  })
 }
 
 function groupUnphasedAssistantProcess(
@@ -1502,23 +1493,83 @@ function groupUnphasedAssistantProcess(
   const children = units.slice(0, processEnd)
   if (children.length === 0) return [...units]
 
-  const partIndices = [...new Set(children.flatMap((unit) => [...unit.partIndices]))]
-  const itemIds = [...new Set(children.flatMap((unit) => [...unit.target.itemIds]))]
   const active = isRunning && candidateAnswerIndex < 0
-  const group: AssistantRenderUnit = {
-    type: 'reasoning-group',
-    key: 'reasoning-group',
-    partIndices,
-    target: { id: 'reasoning-group', itemIds },
-    children,
+  return groupProcessSegments(children, units.slice(processEnd), {
     active,
     state: active ? 'thinking' : 'completed',
     durationMs: isRunning ? undefined : processDurationMs,
-    turnRunning: isRunning,
-    showThinkingFallback: false
+    turnRunning: isRunning
+  })
+}
+
+type ReasoningGroupOptions = {
+  active: boolean
+  state: ReasoningGroupState
+  durationMs: number | undefined
+  turnRunning: boolean
+}
+
+function groupProcessSegments(
+  processUnits: readonly AssistantRenderUnit[],
+  trailingUnits: readonly AssistantRenderUnit[],
+  options: ReasoningGroupOptions
+): AssistantRenderUnit[] {
+  const hasStandaloneActivity = processUnits.some(shouldRenderOutsideProcessGroup)
+  if (!hasStandaloneActivity) {
+    return [
+      reasoningGroupForProcessSegment(processUnits, options, 'reasoning-group'),
+      ...trailingUnits
+    ]
   }
 
-  return [group, ...units.slice(processEnd)]
+  const result: AssistantRenderUnit[] = []
+  let segment: AssistantRenderUnit[] = []
+
+  const flushSegment = (): void => {
+    if (segment.length === 0) return
+    const firstPartIndex = segment[0]?.partIndices[0] ?? result.length
+    result.push(
+      reasoningGroupForProcessSegment(segment, options, `reasoning-group:${firstPartIndex}`)
+    )
+    segment = []
+  }
+
+  for (const unit of processUnits) {
+    if (shouldRenderOutsideProcessGroup(unit)) {
+      flushSegment()
+      result.push(unit)
+      continue
+    }
+    segment.push(unit)
+  }
+
+  flushSegment()
+  return [...result, ...trailingUnits]
+}
+
+function reasoningGroupForProcessSegment(
+  children: readonly AssistantRenderUnit[],
+  options: ReasoningGroupOptions,
+  key: string
+): Extract<AssistantRenderUnit, { type: 'reasoning-group' }> {
+  const partIndices = [...new Set(children.flatMap((unit) => [...unit.partIndices]))]
+  const itemIds = [...new Set(children.flatMap((unit) => [...unit.target.itemIds]))]
+  return {
+    type: 'reasoning-group',
+    key,
+    partIndices,
+    target: { id: key, itemIds },
+    children,
+    active: options.active,
+    state: options.state,
+    durationMs: options.durationMs,
+    turnRunning: options.turnRunning,
+    showThinkingFallback: false
+  }
+}
+
+function shouldRenderOutsideProcessGroup(unit: AssistantRenderUnit): boolean {
+  return unit.type === 'tool-group' && unit.dynamicMetadata?.standaloneInConversation === true
 }
 
 function messageThinkingUnit(): AssistantRenderUnit {

@@ -1,554 +1,633 @@
-# Codex App Tools、Primary Runtime 与 Presentations 通用能力复刻计划
+# Codex App Tools、Primary Runtime 与 Presentations 完整复刻计划（重构后修订版）
 
-日期：2026-09-03  
-模式：`$plan` direct（本轮只输出计划，不修改产品源码）
+日期：2026-09-06
+模式：`$plan` direct
+状态：实施中；截至 2026-09-07 尚未满足里程碑 D 和公开发布完成条件
+替代版本：2026-09-03 初版
 
-## 1. 结果与关键决定
+## 1. 目标和“完整复刻”的定义
 
-本计划把目标拆成三个连续、可单独验收的里程碑：
+本计划以参考项目 `codex-electron-26.818.21641` 的**可观察行为、生命周期和安全边界完整复刻**为目标，不要求复原缺失源码、内部类名或不可观察的私有实现。
 
-1. **里程碑 A：先打通最短真实链路。** 把参考项目里的 `codex-app-tools` 原样固定到客户端资源目录，用它启动真实 MCP 子进程；宿主实现 Native Pipe、`tools/list`、`tools/call` 和取消转发；先让 `load_workspace_dependencies` 从一个受控测试 Runtime/开发机 Runtime 返回真实路径。这个阶段证明“app-server → MCP → codex-app-tools → Native Pipe → Electron main → 工具结果”的链路成立。
-2. **里程碑 B：把临时链路升级为通用平台。** 增加 Primary Runtime 的诊断、安装、校验、修复、更新、取消和回滚；增加 Bundled Plugin 自动安装与内部管理；能力快照只在真实可用时注入提示词；形成可扩展的宿主工具注册表和插件描述符。
-3. **里程碑 C：用 Presentations 做端到端验收。** 由 Primary Runtime 安装并启用 `openai-primary-runtime/presentations`，让新会话真实调用 `load_workspace_dependencies`，再用 Runtime 中的 `@oai/artifact-tool` 把固定 HTML 内容生成 `.pptx`，完成结构、渲染和溢出校验。
+完整复刻必须同时覆盖五条闭环：
 
-核心决定如下：
+1. **原生动态工具闭环**：Electron main 在新 thread 创建时把宿主工具通过 `thread/start.dynamicTools` 交给 app-server；app-server 用 `item/tool/call` 把调用交回 main；宿主返回协议结果。
+2. **Codex App Tools 兼容闭环**：固定版本的 `codex-app-tools` 作为 `codex_app` stdio MCP server 启动，经 Native Pipe 调用同一套宿主工具注册表，并支持 list/call/cancel。
+3. **Primary Runtime 闭环**：能发现、诊断、安装、校验、更新、修复、取消和回滚 Runtime；`load_workspace_dependencies` 只返回健康 Runtime 的路径。
+4. **Bundled Plugin 闭环**：自动协调 `openai-bundled/codex-app-tools` 与 Runtime 中的 `openai-primary-runtime` marketplace，内部插件可安装、升级、恢复、隐藏和诊断。
+5. **Presentations 产物闭环**：新 thread 能发现 Presentations skill，调用 `load_workspace_dependencies`，使用 Runtime 自带 Node 和 `@oai/artifact-tool` 生成、渲染并验证 `.pptx`。
 
-- **不复制整个 `reference-projects/.../external`。** 只复制 `codex-app-tools` 所需的 5 个文件，并在客户端建立一个只含该插件的最小 `openai-bundled` marketplace。整个 `external` 还包含 Browser、Chrome、Sites 等无关私有资产，复制它们不会帮助本目标，反而扩大打包体积、许可证和供应链风险。
-- **第一阶段直接使用已打包的 `server.mjs`，不把源码复原作为前置条件。** 该文件的自有桥接逻辑集中在末尾，协议边界清楚；先用固定 SHA 的 bundle 验证整条链路，之后可在同一契约测试下替换为自有可读实现。
-- **保持 Codex app-server 不变。** 所有新增能力落在 `desktop-app/`、provider fork 和客户端资源层；通过 provider 已有的 `mcpServers -> thread/start.config.mcp_servers` 接缝注入 `codex_app`。
-- **行为复刻优先于复制参考项目的私有宿主 API。** 参考项目通过内部 `setDynamicAppToolsPipePath` 把 Pipe 路径送入执行环境；当前项目没有这一私有接口。本项目用每个 `thread/start` 的 stdio MCP 配置显式传入 `CODEX_APP_TOOLS_PIPE_PATH`，得到相同的数据链和安全边界，同时不修改 app-server。
-- **Primary Runtime 不复制进 Git。** 当前完整 Runtime 约 1.6GB，开发验证可用显式本地路径；正式环境由 Runtime 管理服务按平台下载、校验和原子安装。代码和测试不得硬编码 `/Users/nallylin`、`/Applications/ChatGPT.app` 或系统全局 Node/Python。
-- **工程完成与发布完成分开。** 参考 `codex-app-tools` manifest 标注 `Proprietary`。内部链路验证可以使用用户指定的固定 bundle；对外分发前必须取得明确授权，或在同一协议测试下换成自有 clean-room MCP bridge。
+“完整”不等于把所有能力强制串成一条链。参考项目存在两条工具入口；本项目必须都实现，但它们必须投影自同一个注册表、共享同一个 handler，不能互相依赖或产生两个同名工具实例。
 
-## 2. 需求摘要
+### 1.1 里程碑
 
-### 2.1 必须交付
+- **里程碑 A——原生工具主链**：`dynamicTools → item/tool/call → main registry → load_workspace_dependencies` 使用 fixture Runtime 通过。
+- **里程碑 B——MCP/Pipe 兼容链**：真实 `server.mjs → Native Pipe → 同一 registry` 的 list/call/cancel 通过，结果与原生主链等价。
+- **里程碑 C——通用平台**：Primary Runtime 和两个 marketplace 的生命周期、能力快照、降级及打包完成。
+- **里程碑 D——完整复刻验收**：真实 Presentations skill 和 `@oai/artifact-tool` 生成有效 PPTX；开发、packaged、发布门禁全部有证据。
 
-1. 客户端仓库内有 SHA 固定、来源可追踪的 `codex-app-tools` 资源，开发和 packaged app 都能定位。
-2. Electron main 启动并管理本地 Native Pipe，支持 4-byte little-endian 长度前缀、8MiB 上限、JSON-RPC 2.0、请求路由、响应定向、并发调用和取消。
-3. `codex-app-tools/server.mjs` 作为真实 stdio MCP server 启动，并通过 `CODEX_APP_TOOLS_PIPE_PATH` 转发到宿主。
-4. 宿主有通用工具注册表，不把 `load_workspace_dependencies` 写死在网络层；新增工具只需要增加描述符和 handler。
-5. `load_workspace_dependencies` 是只读、无参数、仅本地主机可用的真实工具；返回已经校验的 Node、Node modules、Python、override/fallback binaries 和 bundle version。
-6. Primary Runtime 有完整状态机：发现、诊断、缺失、下载、校验、安装、就绪、过期、修复、取消、失败、回滚。
-7. Primary Runtime release manifest、下载 URL、摘要和平台信息只能由 main 的可信配置提供，renderer 和模型不能任意指定下载地址或安装路径。
-8. Bundled Plugin manager 支持 `installWhenMissing`、功能开关、内部隐藏、版本比较、幂等安装、升级、失败回滚和缓存刷新。
-9. Runtime 内的 `openai-primary-runtime` marketplace 能被同步，Presentations、Documents、PDF、Spreadsheets 等插件可按描述符接入；不能为每个插件再写一套安装逻辑。
-10. 能力提示词来源于 main 的真实能力快照；`load_workspace_dependencies` 不存在或不可用时，不向模型声称它可用。
-11. 开发、单元、集成、Electron E2E 和 packaged smoke 都有明确覆盖；应用退出会关闭 Pipe、取消调用并清理 socket。
-12. 用真实 Presentations 技能和 `@oai/artifact-tool` 生成一个有效 `.pptx`，而不是退化为手写 OOXML、`python-pptx` 或系统全局依赖。
+### 1.2 需求摘要
 
-### 2.2 明确不包含
+必须交付：
 
-- 不修改 `codex/codex-rs/app-server/`。
-- 不把整个参考项目 `external/` 目录搬进客户端。
-- 不在 renderer 中直接启动进程、读任意文件、管理 Pipe 或接触 Runtime 下载凭据。
-- 不把 1.6GB Primary Runtime 直接提交到 Git。
-- 本计划不要求先反编译/重写 `server.mjs`；可读源码替换是后续硬化项，不阻塞里程碑 A-C。
-- 本计划不重做 PPTX 预览 UI。当前工作树已有独立的 Artifact/PPTX 预览工作；本计划只要求生成产物能被现有文件/Artifact 入口发现，预览像素或批注闭环由 `.omx/plans/reference-pptx-preview-parity-plan.md` 管理。
+- 一个 main-owned、可扩展的宿主工具注册表，以及原生 dynamic tool 和 MCP/Native Pipe 两种投影。
+- 一个只读、无参数、local-only 的 `load_workspace_dependencies`，返回经过校验的 Primary Runtime 路径。
+- Primary Runtime 的完整生命周期、可信安装源、安全解压、原子更新和失败回滚。
+- `openai-bundled` 与 `openai-primary-runtime` 两个 marketplace 的数据驱动协调。
+- 能力快照、提示词、工具目录和实际 handler 的一致降级。
+- 真实 Presentations skill 使用 Runtime 的 `@oai/artifact-tool` 生成并验证 PPTX。
+- 开发、单元、集成、Electron E2E、packaged smoke 和发布安全门禁。
 
-## 3. 参考项目事实与当前缺口
+明确不包含：
 
-### 3.1 参考链路证据
+- 不修改或 fork Codex app-server。
+- 不恢复 provider 作为桌面生产运行时。
+- 不复制参考项目整个 `external/`，也不把约 1.6GB Runtime 提交到 Git。
+- 不向 renderer 暴露任意 Node、文件系统、app-server JSON-RPC、MCP 或 Runtime 管理权限。
+- 不在本计划中重做 PPTX 预览 UI；仅在最终阶段接入现有 Artifact/PPTX 入口的 smoke。
+- 不把反编译/重写 proprietary `server.mjs` 作为工程复刻前置；公开发布仍受授权或 clean-room 替代门禁约束。
 
-参考索引已执行完整校验：7188/7188 个文件通过，`sourceMode=beautified-fallback`。因此下列结论引用可读文件精确行号和 SHA256，不声称有 `_analysis/raw/` 排版前行列。
+## 2. 架构决定
 
-| 能力               | 参考证据                                                                                          | 结论                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Bundled descriptor | `.vite/build/src-PzwkD6WC.js:15436-15453`                                                         | `openai-bundled/codex-app-tools` 被标为 `installWhenMissing: true`。                                                       |
-| 自动安装与资源同步 | `.vite/build/main-Cwjv9Ibf.js:9864-9932`                                                          | 启动流程计算强制安装/缺失安装列表，并用 `resourcesPath`、runtime marketplace root 和 app-server connection 做同步。        |
-| Plugin manifest    | `external/plugins/openai-bundled/plugins/codex-app-tools/.codex-plugin/plugin.json:2-9`           | 插件用于“通过一个本地 MCP server 暴露桌面工具”；版本 `0.1.0`，许可证 `Proprietary`。                                       |
-| MCP manifest       | `external/plugins/openai-bundled/plugins/codex-app-tools/.mcp.json:2-20`                          | MCP 名为 `codex_app`，启动 `server.mjs`，启动超时 10 秒、工具超时 3600 秒。                                                |
-| Node launcher      | `external/plugins/openai-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp:9-35` | 按显式 Runtime、应用资源、缓存 Runtime、系统 Node 的顺序寻找 Node；正式实现应优先给出显式可信 Runtime 路径。               |
-| MCP → Pipe         | `external/plugins/openai-bundled/plugins/codex-app-tools/server.mjs:28024-28118`                  | MCP 的 `tools/list`/`tools/call` 通过 Native Pipe 转发，调用时携带 thread/turn/call 元数据。                               |
-| Pipe 协议与取消    | 同文件 `:28173-28390`                                                                             | 从 `CODEX_APP_TOOLS_PIPE_PATH` 建连，采用 4-byte LE frame、8MiB 上限，并把 abort 变成 `tools/cancel`。                     |
-| Host Pipe          | `.vite/build/main-Cwjv9Ibf.js:11715-11928,12017-12164`                                            | 宿主创建随机 Pipe、解析 frame、区分客户端、过滤命名空间、转发 list/call/cancel；Unix socket chmod `0600`。                 |
-| Peer authorization | 同文件 `:11959-12005`                                                                             | macOS hardened 构建可加载 native addon 校验 socket peer；这不是普通 `node:net` 自动提供的能力。                            |
-| 启动/销毁接线      | 同文件 `:133626-133641`                                                                           | 启动 Pipe 后设置动态工具 Pipe path；销毁时清空并关闭 Pipe；失败只降级工具能力，不应拖垮整个应用。                          |
-| load tool 定义     | `webview/assets/app-initial-DOX-K1rC.js:171349-171357`                                            | `load_workspace_dependencies` 为只读、无参数的本地桌面工具。                                                               |
-| load tool 执行     | 同文件 `:457478-457537,462430-462432`                                                             | 工具先确认本地主机和 feature，再调用 Primary Runtime `loadDependencies`，并把安装/禁用/缺失分别返回。                      |
-| Runtime 诊断与管理 | `.vite/build/main-Cwjv9Ibf.js:96269-96473`                                                        | Runtime manager 暴露 diagnose、load、install、repair/reset、cancel、update poll 和安装进度广播。                           |
-| Runtime 路径说明   | `.vite/build/src-PzwkD6WC.js:31476-31555`                                                         | 返回 bundle version、Node、node_modules、Python、Python packages、override/fallback bins；只有完整校验后才标记 installed。 |
-| 安全解压           | 同文件 `:31610-31616`                                                                             | 解压前验证所有归档项仍在目标目录内，阻止路径穿越。                                                                         |
-| 提示词             | 同文件 `:52400-52413`                                                                             | 宿主只在能力存在时提示模型先调用 `load_workspace_dependencies`。                                                           |
+### 2.1 必须遵守
 
-参考文件完整性：
+- **不修改 Codex app-server**：禁止修改 `codex/codex-rs/app-server/**` 和 `codex/codex-rs/core/**`。
+- **不把生产聊天接回 provider**：桌面生产链继续由 Electron main 持有 `HostCodexConnection`、`CodexRunDriver`、`NativeCodexRunDriver` 和 AI-free `@dascowork/codex-app-server-client`。`ai-sdk-provider-codex-asp` 只保留仓库外兼容测试。
+- **一个 app-server 协议所有者**：app-server 生成协议只属于 `desktop-app/vendors/codex-app-server-client`；main 不维护第二份手写 app-server 模型。Native Pipe 是独立、窄范围的宿主协议，可在 `appTools/` 下定义 frame 和 Zod schema。
+- **一个工具真相源**：原生 `dynamicTools` 与 Native Pipe 的 `tools/list/tools/call` 都从 `DynamicAppToolRegistry` 派生。
+- **只在新 thread 发布目录**：当前协议只有 `ThreadStartParams` 支持 `dynamicTools`；Runtime 或插件变化默认提示“新任务生效”，不伪装成 resume/下一 turn 热更新。
+- **main-only 信任边界**：renderer 不能指定 MCP command/env、Pipe path、Runtime 下载 URL、安装 root 或工具输入 schema。
+- **失败关闭工具，不拖垮聊天**：工具、Pipe、MCP 或 Runtime 失败时普通聊天继续；提示词和工具目录必须同步降级。
 
-| 文件                                                     | SHA256                                                             |
-| -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `.vite/build/main-Cwjv9Ibf.js`                           | `f2cc48c767fb95d4f1ed5c9f847deefc65bbbb3e3e0bef4556264a515f70ef3a` |
-| `.vite/build/src-PzwkD6WC.js`                            | `63a92f6c811355a447bb65029b4963f7552ed31607de88858e494da1c995a4f5` |
-| `webview/assets/app-initial-DOX-K1rC.js`                 | `3e25e0c6cb4474d93afaff933c9f7473783d45002d0d8c641d0b5015019b13e4` |
-| `external/.../codex-app-tools/server.mjs`                | `2a5a64f192b672261e9bb22ebf2a84d550714ba002f58e5a89eeeaca951da222` |
-| `external/.../codex-app-tools/.mcp.json`                 | `559df556a073ac3f1a014e4cadf62c4e8a49bb3164186061e478275926c815c1` |
-| `external/.../codex-app-tools/.codex-plugin/plugin.json` | `932709a16f0547f47253110f7c75cc36275f832c221f5524416c3b536cc8b733` |
+### 2.2 完整复刻而不回退旧架构
 
-### 3.2 当前项目已有接缝
-
-- provider 已支持 `mcpServers`，并把它写入 `thread/start.config.mcp_servers`：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/provider-settings.ts:315-324`、`thread-client.ts:97-118`。
-- 当前 main wrapper 没有接收或传入 `mcpServers`，只注册了 `read_thread_terminal`：`desktop-app/src/main/codexAspProvider.ts:31-42,76-118`。
-- `CodexChatRuntimeService` 构造 provider 时没有宿主 MCP，组装提示词时也没传 capability/tool names：`desktop-app/src/main/codexChatRuntimeService.ts:359-370,760-763`。
-- “工作区依赖”提示词骨架已经存在，但默认关闭：`desktop-app/src/main/developerInstructions/codexDesktopInstructionCatalog.ts:50-55`；composer 已支持按 capability/tool names 决定是否注入：`composeCodexDesktopInstructions.ts:17-22,43-99`。
-- 当前 renderer 只有 `load_workspace_dependencies` 展示文案，没有工具实现：`desktop-app/src/renderer/src/lib/assistantRenderUnits.ts:378-397`。
-- 插件中心已经封装 `plugin/list`、`plugin/installed`、`plugin/install` 等 RPC，可复用于内部安装协调：`desktop-app/vendors/ai-sdk-provider-codex-asp/src/context-catalog-client.ts:283-365,544-557`、`desktop-app/src/main/pluginCenter/PluginCenterService.ts:1011-1037`。
-- UI 已经隐藏内部 `codex-app-tools`，MCP 管理页也排除 `codex_app`：`desktop-app/src/renderer/src/components/plugin-center/pluginCenterDataResource.ts:621-637`、`desktop-app/src/main/pluginCenter/PluginCenterService.ts:2591-2606`。
-- packaged 配置目前只 unpack `resources/**`，没有把 bundled marketplace 放到 `process.resourcesPath/plugins`：`desktop-app/electron-builder.yml:5-20`。
-- 应用启动和退出已有集中接线点：`desktop-app/src/main/index.ts:164-297,562-583,1050-1067`。
-
-### 3.3 差距判断
-
-这不是“少装一个 Presentations 插件”，而是以下连续能力都未接入：
+初版通过 provider 的 `mcpServers` 接缝注入 `codex_app`，与当前已接受的原生运行时 ADR 冲突。修订版改为：
 
 ```text
-客户端资源中的 codex-app-tools
-  → 内部 bundled plugin 发现/安装
-  → codex_app stdio MCP 配置
-  → app-server thread/start
-  → server.mjs
-  → Native Pipe
-  → 宿主 tools/list / tools/call / tools/cancel
-  → load_workspace_dependencies
-  → Primary Runtime 真实路径
-  → 能力提示词
-  → Presentations skill + @oai/artifact-tool
-  → .pptx
+Renderer / assistant-ui
+  → Preload MessagePort
+  → CodexChatRuntimeService
+  → CodexRunDriver
+  → NativeCodexRunDriver
+  → AI-free app-server client
+  → codex app-server
 ```
 
-当前仓库只具备这条链中的 provider 配置透传、插件中心 RPC 和提示词开关骨架。
+所有宿主能力从 main-owned `DesktopHostCapabilityRuntime` 注入这条链。禁止在 `desktop-app/src/main/**` 引入 `@janole/ai-sdk-provider-codex-asp`；现有边界验证器在 [verify-codex-native-runtime-boundaries.mjs](/Users/nallylin/Documents/code/dasCowork/desktop-app/scripts/verify-codex-native-runtime-boundaries.mjs:10) 已把它列为违规。
 
-## 4. 目标架构
+## 3. 参考项目证据和证据边界
 
-### 4.1 宿主能力运行时
+### 3.1 索引状态
 
-新增 `DesktopHostCapabilityRuntime`，由 Electron main 唯一持有：
+已执行完整校验：`7188/7188` 个文件通过，`sourceMode=beautified-fallback`。旧包没有 `_analysis/raw/` 排版前镜像，因此以下证据只引用当前可读文件的精确行号和 SHA256，不声称原包行列号。
+
+### 3.2 原生动态工具链
+
+以下连接证据证明 `load_workspace_dependencies` 是普通新会话的原生动态工具，而不是必须经过 MCP/Pipe 才能调用：
+
+1. 新会话参数从宿主请求 `dynamicTools`：[app-initial-DOX-K1rC.js:134718](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:134718)。
+2. 请求由 `dynamic-tools-for-thread-start-requested` 事件获取：[app-initial-DOX-K1rC.js:135323](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:135323)。
+3. `load_workspace_dependencies` 被定义为只读、无参数工具：[app-initial-DOX-K1rC.js:171349](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:171349)。
+4. 工具被加入动态工具列表，并可包装进 `codex_app` namespace：[app-initial-DOX-K1rC.js:457250](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:457250)、[app-initial-DOX-K1rC.js:457291](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:457291)。
+5. app-server 的 `item/tool/call` 被转给对应 conversation：[app-initial-DOX-K1rC.js:77724](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:77724)。
+6. 宿主执行该工具时校验本地主机和 feature，再调用 Primary Runtime `loadDependencies`：[app-initial-DOX-K1rC.js:457478](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:457478)、[app-initial-DOX-K1rC.js:462430](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/webview/assets/app-initial-DOX-K1rC.js:462430)。
+
+### 3.3 Codex App Tools MCP/Native Pipe 链
+
+参考项目也包含一条把宿主动态工具投影为本地 MCP 的兼容链：
+
+- Pipe 接收 `tools/list`、`tools/call`、`tools/cancel`，带 thread/turn/call/namespace/tool 元数据：[main-Cwjv9Ibf.js:12017](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/main-Cwjv9Ibf.js:12017)。
+- Pipe 只把允许 namespace 中的工具展开成 MCP tools：[main-Cwjv9Ibf.js:12103](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/main-Cwjv9Ibf.js:12103)。
+- 启动 Pipe 时复用 `callDynamicAppTool` 和 `requestDynamicToolsForThreadStart`：[main-Cwjv9Ibf.js:133626](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/main-Cwjv9Ibf.js:133626)。
+- `codex-app-tools/server.mjs` 把 stdio MCP list/call/cancel 转发到 Native Pipe：[server.mjs:28024](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/external/plugins/openai-bundled/plugins/codex-app-tools/server.mjs:28024)。
+- bundled descriptor 把插件标记为 `installWhenMissing`：[src-PzwkD6WC.js:15436](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/src-PzwkD6WC.js:15436)。
+
+静态证据的限制也必须进入计划：随包 `.mcp.json` 的 `enabled` 初始为 `false`，见 [.mcp.json:7](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/external/plugins/openai-bundled/plugins/codex-app-tools/.mcp.json:7)；当前提取物中 `setDynamicAppToolsPipePath` 的函数体为空，见 [main-Cwjv9Ibf.js:113108](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/main-Cwjv9Ibf.js:113108)。因此“参考项目如何最终激活 MCP 配置”不能仅凭静态包认定。实施必须先做定向运行证据，再选择唯一激活源，禁止同时由插件和 main 注入两个 `codex_app`。
+
+### 3.4 Primary Runtime、提示词和插件
+
+- Runtime 管理器提供 diagnose/load/install/repair/cancel/update：[main-Cwjv9Ibf.js:96269](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/main-Cwjv9Ibf.js:96269)。
+- Runtime 只在路径、bundle version 和依赖完整校验后报告已安装：[src-PzwkD6WC.js:31476](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/src-PzwkD6WC.js:31476)。
+- 解压验证归档条目没有逃逸目标目录：[src-PzwkD6WC.js:31610](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/src-PzwkD6WC.js:31610)。
+- 工作区依赖提示只在能力存在时指导模型调用工具：[src-PzwkD6WC.js:52399](/Users/nallylin/Documents/code/dasCowork/reference-projects/codex-electron-26.818.21641-beautified/.vite/build/src-PzwkD6WC.js:52399)。
+
+### 3.5 参考文件完整性
+
+| 文件 | SHA256 |
+| --- | --- |
+| `.vite/build/main-Cwjv9Ibf.js` | `f2cc48c767fb95d4f1ed5c9f847deefc65bbbb3e3e0bef4556264a515f70ef3a` |
+| `.vite/build/src-PzwkD6WC.js` | `63a92f6c811355a447bb65029b4963f7552ed31607de88858e494da1c995a4f5` |
+| `webview/assets/app-initial-DOX-K1rC.js` | `3e25e0c6cb4474d93afaff933c9f7473783d45002d0d8c641d0b5015019b13e4` |
+| `external/.../codex-app-tools/server.mjs` | `2a5a64f192b672261e9bb22ebf2a84d550714ba002f58e5a89eeeaca951da222` |
+| `external/.../codex-app-tools/.mcp.json` | `559df556a073ac3f1a014e4cadf62c4e8a49bb3164186061e478275926c815c1` |
+| `external/.../codex-app-tools/.codex-plugin/plugin.json` | `932709a16f0547f47253110f7c75cc36275f832c221f5524416c3b536cc8b733` |
+
+## 4. 当前代码基线和明确缺口
+
+当前重构提供了正确的落点：
+
+- main 持有共享 app-server connection 和 `HostCodexConnection`：[index.ts:165](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/index.ts:165)。
+- `CodexRunDriverInput` 已有 `onDynamicToolCall`，但没有动态工具描述快照：[CodexRunDriver.ts:34](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/codexRun/CodexRunDriver.ts:34)。
+- `NativeCodexRunDriver` 已路由 `item/tool/call`：[NativeCodexRunDriver.ts:388](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/codexRun/NativeCodexRunDriver.ts:388)。
+- AI-free client 已有中性的 `DynamicToolsDispatcher`，支持定义/handler 注册、`params.tool` 兼容解析、超时和协议结果归一化，不能在 main 再造一套同职责 dispatcher：[dynamic-tools.ts:23](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/dynamic-tools.ts:23)、[dynamic-tools.ts:73](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/dynamic-tools.ts:73)、[dynamic-tools.ts:119](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/dynamic-tools.ts:119)。
+- `threadStartParams()` 当前只给 ephemeral thread 写入空数组，普通 thread 没有发布动态工具：[NativeCodexRunDriver.ts:543](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/codexRun/NativeCodexRunDriver.ts:543)。
+- 生成协议已包含 `ThreadStartParams.dynamicTools`：[ThreadStartParams.ts:62](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/protocol/app-server-protocol/v2/ThreadStartParams.ts:62)。
+- `ThreadResumeParams` 没有该字段：[ThreadResumeParams.ts:29](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/protocol/app-server-protocol/v2/ThreadResumeParams.ts:29)。
+- 当前动态工具 handler 只处理 `read_thread_terminal`，并读取 `toolName/name`；真实协议字段是 `tool`：[codexChatRuntimeService.ts:2266](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/codexChatRuntimeService.ts:2266)、[DynamicToolCallParams.ts:6](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/protocol/app-server-protocol/v2/DynamicToolCallParams.ts:6)。
+- 提示词 composer 已支持 capability 和 available tool names，只缺真实快照接入：[composeCodexDesktopInstructions.ts:17](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/developerInstructions/composeCodexDesktopInstructions.ts:17)。
+- AI-free catalog client 已支持 `plugin/install`、`plugin/installed` 和 `mcpServerStatus/list`：[context-catalog-client.ts:555](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/context-catalog-client.ts:555)、[context-catalog-client.ts:948](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/context-catalog-client.ts:948)、[context-catalog-client.ts:966](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/context-catalog-client.ts:966)。
+
+因此缺口不是 provider 透传，而是以下四项：
+
+1. main-owned 工具注册表和每个新 thread 的描述快照；
+2. `CodexRunDriver → NativeCodexRunDriver → thread/start.dynamicTools` 的传递；
+3. Primary Runtime、Native Pipe、bundled plugin 与能力状态的统一生命周期；
+4. 同一工具注册表的原生投影和 MCP/Pipe 投影。
+
+## 5. 目标架构
+
+### 5.1 宿主能力运行时
+
+新增一个由 Electron main 唯一持有的 `DesktopHostCapabilityRuntime`：
 
 ```text
 DesktopHostCapabilityRuntime
-  ├─ BundledPluginManager
   ├─ PrimaryRuntimeService
-  ├─ DynamicAppToolRegistry
-  │    └─ load_workspace_dependencies
+  ├─ DynamicAppToolRegistry                 ← 唯一工具真相源
+  │    ├─ NativeDynamicToolProjection       → thread/start.dynamicTools
+  │    └─ NativePipeToolProjection          → tools/list/tools/call/tools/cancel
+  ├─ AI-free DynamicToolsDispatcher adapter  ← 复用现有中性协议执行器
   ├─ CodexAppToolsNativePipeServer
-  ├─ CodexAppToolsMcpService
+  ├─ CodexAppToolsMcpBridge
+  ├─ BundledPluginManager
   └─ DesktopCapabilityService
 ```
 
-职责边界：
-
-- `DynamicAppToolRegistry` 只管理工具描述、namespace、handler、主机限制和 feature 条件。
-- `CodexAppToolsNativePipeServer` 只负责本地传输、schema、并发、取消、安全和生命周期，不含业务工具逻辑。
-- `CodexAppToolsMcpService` 只负责定位已固定/已安装 bundle、选择 Node、生成 `mcpServers.codex_app` 配置和健康检查。
-- `PrimaryRuntimeService` 只负责依赖 Runtime，不知道聊天 UI 或 MCP 协议。
-- `DesktopCapabilityService` 汇总“工具已注册、Pipe 已监听、MCP 可启动、Runtime feature 是否启用”等事实，给提示词和诊断使用。
-- `CodexChatRuntimeService` 只消费能力快照和 MCP 配置，不复制上述实现。
-
-### 4.2 启动顺序
-
-把 `desktop-app/src/main/index.ts:562-583` 的启动段改为可等待的 bootstrap：
-
-1. 解析开发/packaged 资源路径和 Runtime 配置。
-2. 校验 `codex-app-tools` bundle lock；失败时记录降级原因。
-3. 创建 Primary Runtime service，并执行快速本地诊断；不得在启动主线程上等待远程下载。
-4. 注册 `load_workspace_dependencies` 等宿主工具。
-5. 启动 Native Pipe，取得随机路径。
-6. 生成 `codex_app` MCP 配置，其中显式设置 `CODEX_APP_TOOLS_PIPE_PATH`、`CODEX_MCP_NODE_PATH`、`CODEX_ELECTRON_RESOURCES_PATH` 和长工具超时。
-7. 创建 app-server shared connection、catalog client 和聊天 runtime。
-8. 在后台执行 bundled plugin reconcile；状态变化后刷新 capability snapshot。新 thread 使用新快照，运行中的 thread 不热换 MCP。
-9. 应用退出时先停止新工具调用，再取消 pending calls、关闭 MCP 连接/聊天、关闭 Pipe、删除 socket。
-
-如果步骤 2-6 失败，普通聊天仍可启动，但 `codex_app` 和工作区依赖提示词必须同时消失，诊断中给出单一明确原因。
-
-### 4.3 MCP 注入方式
-
-扩展 `CodexAspProviderSettingsInput`：
+`DynamicAppToolRegistry` 的条目至少包含：
 
 ```ts
-type CodexAspProviderSettingsInput = {
-  // existing fields...
-  mcpServers?: Record<string, McpServerConfig>;
-};
+type DynamicAppToolDefinition = {
+  namespace: 'codex_app'
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+  deferLoading?: boolean
+  exposure: { native: boolean; pipe: boolean }
+  availability(context: DesktopToolContext): Promise<ToolAvailability>
+  execute(context: DesktopToolContext, args: unknown, signal: AbortSignal): Promise<unknown>
+}
 ```
 
-并让 `createCodexAspProviderSettings()` 把它交给 provider。provider 的 `McpServerConfig` 需要补齐 app-server 已支持而当前类型缺少的内部字段：`enabled`、`required`、`startup_timeout_sec`、`tool_timeout_sec`、`enabled_tools`、`disabled_tools`、`supports_parallel_tool_calls`。字段名保持 app-server config 的 snake_case；协议依据是 `codex/codex-rs/config/src/mcp_types.rs:155-205,236-302`，但不修改该 Rust 代码。
+规则：
 
-`codex_app` 的配置由 main 构建，renderer 不能覆盖：
+- 注册时检查 namespace/name 唯一性；schema 和描述只有一个来源。
+- 原生投影生成 app-server `DynamicToolSpec[]`；Pipe 投影生成参考协议的 tools/list 结构。
+- main registry 持有业务定义和 availability；现有 AI-free `DynamicToolsDispatcher` 继续持有中性的协议解析、超时、执行和结果归一化。两条入口都把调用正规化为同一协议参数后进入这个 dispatcher，不在 main 新建第二套同名执行器。
+- 为支持完整复刻，只在 AI-free dispatcher 内补齐 namespace key、外部 AbortSignal 和显式 unregister/snapshot 接口；该包不能反向依赖 Electron、renderer、Primary Runtime 或其他 desktop 模块。
+- `load_workspace_dependencies` 无参数、只读、只支持 local host；远程 host 返回明确不支持。
+- `read_thread_terminal` 迁入同一注册表，避免保留第二个写死的 switch。
+- handler 不接触 renderer payload；工具定义和可用性由 main 生成。
 
-- `command`：macOS/Linux 使用插件 launcher；Windows 使用 `.cmd` 或受控 Node 直接启动 `server.mjs`。
-- `args`：绝对 `server.mjs` 路径。
-- `cwd`：已校验的插件根。
-- `env`：仅注入运行所需路径和 Pipe 路径；不复制整个 `process.env`。
-- `startup_timeout_sec: 10`、`tool_timeout_sec: 3600`、`required: false`。
-- `enabled_tools` 初期只允许 `load_workspace_dependencies`；通用能力扩展后由 registry/descriptor 生成，而不是接受用户输入。
+### 5.2 原生工具主链
 
-### 4.4 Native Pipe 协议
+```text
+DesktopCapabilitySnapshot
+  → CodexRunDriverInput.dynamicTools
+  → NativeCodexRunDriverInput.dynamicTools
+  → thread/start.dynamicTools
+  → app-server item/tool/call { threadId, turnId, callId, namespace, tool, arguments }
+  → AI-free DynamicToolsDispatcher + main registry handler
+  → tool handler
+  → DynamicToolCallResponse
+```
 
-新建 `desktop-app/src/main/appTools/`：
+实现要求：
 
-- `appToolsProtocol.ts`：Zod schema 和类型。
-- `nativePipeFrames.ts`：4-byte LE frame 编解码和 8MiB 限制。
-- `CodexAppToolsNativePipeServer.ts`：socket/Named Pipe 服务、client-id request id 重写、定向响应和清理。
-- `DynamicAppToolRegistry.ts`：namespace allowlist、名称唯一性、工具列举与调用。
-- `loadWorkspaceDependenciesTool.ts`：实际工具描述和 handler。
-- `DesktopHostCapabilityRuntime.ts`：启动/停止编排。
+- `CodexRunDriverInput` 和 `NativeCodexRunDriverInput` 使用生成协议的 `DynamicToolSpec`/`DynamicToolCallParams` 类型，不复制手写结构。
+- 普通新 thread 传入本次能力快照；ephemeral thread 默认 `[]`，除非调用方显式选择允许的只读工具。
+- resume 不尝试写入协议不存在的 `dynamicTools`。新能力、新插件或新 Runtime 版本只对新 thread 发布。
+- 现有 thread 调用已登记工具但 Runtime 后来失效时，返回稳定降级结果；不能执行过期路径。
+- 修正 handler 对 `params.tool`、`params.namespace` 和 `params.arguments` 的解析，并用协议级测试锁住。
 
-协议规则：
+### 5.3 MCP/Native Pipe 兼容链
 
+```text
+codex app-server / MCP client
+  → codex_app stdio MCP server.mjs
+  → CODEX_APP_TOOLS_PIPE_PATH
+  → CodexAppToolsNativePipeServer
+  → NativePipeToolProjection / AI-free DynamicToolsDispatcher
+  → 同一 tool handler
+```
+
+Native Pipe 要求：
+
+- 4-byte little-endian 长度前缀；单 frame 最大 8MiB。
 - 只接受 `tools/list`、`tools/call`、`tools/cancel`。
-- `tools/call` 必须有非空 `threadId`、`turnId`、`callId`、tool、namespace 和对象 arguments。
-- host 只接受 `local`；远程 host 返回明确不支持。
-- registry 只暴露允许的 namespace，启动时拒绝同名工具，避免 `server.mjs` 去掉 namespace 后发生覆盖。
-- pending call 以“socket client + JSON-RPC id”隔离；一个客户端不能取消另一个客户端的请求。
-- turn 已结束、thread 不属于当前本地 runtime、call 重复或过期时拒绝执行。
-- abort 必须传到业务 handler；业务完成后删除 pending state。
-- 非 Windows socket 放在 mode `0700` 的应用私有临时目录，socket mode `0600`，路径随机且退出删除。
-- hardened macOS 构建增加一个窄 N-API peer-authorizer，只接收 socket fd 并返回同 uid/签名判断；开发环境可按显式开关启用。Windows 在 Named Pipe 上使用当前用户 ACL。若 native peer authorization 尚未完成，内部验证可继续，但不得进入公开发布门禁。
+- request/response 以 socket client 与 JSON-RPC id 双重隔离；不同 client 使用相同 id 不能串线。
+- cancel 只能终止同 client、同 call；连接断开、turn 结束、应用退出都触发 AbortSignal。
+- Unix socket 位于 mode `0700` 的应用私有临时目录，socket mode `0600`；Windows Named Pipe 仅当前用户 ACL。
+- hardened macOS 发布版加入窄 N-API peer authorizer；未完成时只能内部验证，不能通过公开发布门禁。
 
-### 4.5 Primary Runtime
+MCP 激活采用证据驱动的唯一来源：
 
-新建 `desktop-app/src/main/primaryRuntime/`：
+1. 先在定向运行测试中安装参考 bundled plugin，读取 `plugin/installed`、`config/read`、`mcpServerStatus/list`，确认 app-server 是否会把初始 `enabled:false` 转成活动 server。
+2. 如果插件生命周期已产生唯一活动 `codex_app`，沿用该路径，main 只提供受控 Pipe/Runtime 环境。
+3. 如果参考私有 setter 的激活机制在本项目不可用，则由 main 在 `NativeCodexRunDriver` 的 thread config 中合并唯一 `mcp_servers.codex_app`；这是明确记录的等价适配，不经过 provider。
+4. 两种来源不能同时启用；启动时和测试中断言 `codex_app` 实例数恰好为 1。
 
-- `primaryRuntimeTypes.ts`：release manifest、runtime manifest、diagnostic、progress 和状态机。
-- `PrimaryRuntimeLocator.ts`：开发 override、app-owned cache、packaged bootstrap runtime 的有序定位。
-- `PrimaryRuntimeDiagnostics.ts`：解析 `runtime.json`，校验平台/架构、文件存在性、可执行权限和关键包。
-- `PrimaryRuntimeInstaller.ts`：下载、摘要、解压、原子切换、取消、回滚和清理。
-- `PrimaryRuntimeReleaseProvider.ts`：从 main 可信配置取得平台 release descriptor。
-- `PrimaryRuntimeService.ts`：对外提供 `diagnoseDependencies`、`loadDependencies`、`install`、`repair`、`cancelInstall`、`getUpdateStatus`、`runUpdateNow`、`dispose`。
-- `workspaceDependencyInstructions.ts`：生成稳定、可测试的路径说明。
+若采用 main-owned config fallback，新增独立的 `DesktopThreadConfigSource`；它只允许合并受控 `mcp_servers.codex_app`，与 `customModelConfig()` 的 `model_providers` 做深层无覆盖合并。renderer 和请求 body 无权传入该配置。
 
-可信路径顺序：
+### 5.4 Primary Runtime
 
-1. 仅开发/测试允许的 `DASCOWORK_PRIMARY_RUNTIME_ROOT` 绝对路径。
-2. 应用管理的 cache root。
-3. 若未来决定随应用携带最小 Runtime，则使用 `process.resourcesPath` 下的只读 root。
+新增 `desktop-app/src/main/primaryRuntime/`：
 
-禁止把 `/Applications/ChatGPT.app`、另一产品的 cache 或系统全局 Node 当成正式 fallback。当前机器已经存在可用 Runtime，可用于里程碑 A 的开发验证，但路径必须通过显式环境变量传入。
+- `primaryRuntimeTypes.ts`：release/runtime manifest、diagnostic、progress 和状态机。
+- `PrimaryRuntimeLocator.ts`：开发 override、app-owned cache、packaged bootstrap root 的有序定位。
+- `PrimaryRuntimeDiagnostics.ts`：平台/架构、文件、执行权限、关键包和路径逃逸校验。
+- `PrimaryRuntimeInstaller.ts`：下载、摘要、安全解压、staging、原子切换、取消、回滚和清理。
+- `PrimaryRuntimeReleaseProvider.ts`：只从 main 的可信配置提供 release descriptor。
+- `PrimaryRuntimeService.ts`：`diagnoseDependencies`、`loadDependencies`、`install`、`repair`、`cancelInstall`、`getUpdateStatus`、`runUpdateNow`、`dispose`。
+- `workspaceDependencyInstructions.ts`：生成稳定、可测试的工具文本结果。
 
-诊断至少验证：
+路径优先级：
 
-- `runtime.json.bundleFormatVersion`、`bundleVersion`、target platform/arch。
-- Node executable、node_modules、Python executable/libraries、override/fallback bin directories。
-- `@oai/artifact-tool` 可解析且版本与 manifest 一致。
-- Native dependencies 声明存在；Presentations 验收所需的 LibreOffice/Poppler 可执行。
-- 所有返回路径都在已选择 Runtime root 内，经过 `realpath` 后仍未逃逸。
+1. 只在开发/测试允许的 `DASCOWORK_PRIMARY_RUNTIME_ROOT` 绝对路径；
+2. 应用管理的 cache active root；
+3. 将来若携带 bootstrap Runtime，则使用 `process.resourcesPath` 下只读 root。
 
-安装规则：
+禁止把 `/Applications/ChatGPT.app`、参考产品 cache 或系统全局 Node/Python 作为正式 fallback。
 
-- release descriptor 包含 platform、arch、bundle version、archive format、size、SHA256 和允许的 HTTPS provider 列表。
-- 下载写入 app cache 的临时文件，支持 AbortSignal；完成前不触碰当前 Runtime。
-- 校验 size 和 SHA256 后再解压；每个 archive entry 做目标目录约束，拒绝绝对路径、`..`、symlink/hardlink 逃逸。
-- 解压到版本化 staging root，完成全量 diagnostics 后原子切换 `active-runtime.json`；旧版本保留到新版本健康检查通过。
-- 崩溃恢复会清理过期 staging，但不删除最后一个健康版本。
-- 同一时间只允许一个 install/repair/update；重复请求共享同一 promise，取消可重复调用。
-- 更新轮询有抖动、退避和显式关闭；不阻塞应用启动。
+诊断必须验证：
 
-`load_workspace_dependencies` 成功时返回参考项目同等信息：bundle version、Node.js executable、Node.js packages、Python executable、Python packages、override binaries、fallback binaries，以及可选 Git/pnpm。失败时返回稳定的“禁用 / 未安装 / 损坏 / 当前平台不支持”之一，不泄露下载 URL、token 或内部堆栈。
+- `runtime.json.bundleFormatVersion`、bundle version、target platform/arch；
+- Node、node_modules、Python、Python packages、override/fallback bin；
+- `@oai/artifact-tool` 可解析且版本符合 manifest；
+- Presentations 所需的 LibreOffice/Poppler 等声明和可执行文件；
+- 所有返回路径 `realpath` 后仍在选定 Runtime root 内。
 
-### 4.6 Bundled Plugin 自动安装与内部管理
+安装必须满足：可信 HTTPS release source allowlist、size+SHA256、逐条目路径穿越检查、版本化 staging、全量诊断后原子激活、保留最后健康版、可取消、崩溃恢复、单飞安装、更新抖动与退避。下载不得阻塞应用主启动。
 
-新建 `desktop-app/src/main/bundledPlugins/`：
+### 5.5 Bundled Plugin 管理
 
-- `bundledPluginTypes.ts`
-- `bundledPluginCatalog.ts`
-- `BundledPluginManager.ts`
-- `bundledPluginPaths.ts`
-- `bundleIntegrity.ts`
+新增 `desktop-app/src/main/bundledPlugins/`，以数据驱动 descriptor 管理：
 
-描述符至少包含：
+- `openai-bundled/codex-app-tools`：`installWhenMissing=true`、内部隐藏、参与 Pipe/MCP 兼容能力。
+- `openai-primary-runtime/*`：从健康 Runtime 的 `runtime.json.bundledPlugins` 发现；Presentations、Documents、PDF、Spreadsheets 使用同一 reconcile 流程。
 
-```ts
-type BundledPluginDescriptor = {
-  marketplaceName: string;
-  name: string;
-  version: string;
-  sourceRoot: string;
-  installWhenMissing: boolean;
-  requiredForCapabilities?: string[];
-  hiddenFromUserManagement?: boolean;
-  featureEnabled: () => boolean | Promise<boolean>;
-};
-```
+必须复用 AI-free [context-catalog-client.ts](/Users/nallylin/Documents/code/dasCowork/desktop-app/vendors/codex-app-server-client/src/context-catalog-client.ts:555) 和共享 `HostCodexConnection` lease，不在 main 手写 plugin cache，不调用 provider fork。
 
-初始 descriptor：
+reconcile 包含：资源/manifest/SHA 校验、缺失安装、版本比较、禁用恢复、安装后回读确认、失败回滚、有界重试、skills/plugin/MCP/capability cache 失效。内部插件继续从普通 UI 隐藏。
 
-- `openai-bundled/codex-app-tools`：`installWhenMissing=true`、内部隐藏、始终参与本地能力检测。
-- Primary Runtime 安装完成后，从 `runtime.json.bundledPlugins` 发现 `openai-primary-runtime` marketplace；Presentations 等具体插件仍通过同一 descriptor/reconcile 流程安装，不写专用复制代码。
+### 5.6 能力快照和提示词
 
-reconcile 行为：
-
-1. 校验 marketplace manifest、plugin manifest 和 bundle lock。
-2. 调用现有 catalog client 的 `plugin/installed` 判断版本/启用状态。
-3. 缺失时用本地 `marketplacePath + pluginName` 调 `plugin/install`；已安装但禁用时按内部策略恢复启用。
-4. 安装成功后重新读取确认，不以 RPC 无异常代替最终状态。
-5. 安装失败时保留旧版本、清除“正在安装”，记录可诊断原因，不无限重试。
-6. 内部插件继续从普通插件列表和 MCP 设置页隐藏，用户不能卸载 `codex-app-tools`；开发诊断页/日志可查看版本、来源 SHA、Pipe 和 MCP 健康状态。
-7. reconcile 完成后失效插件中心、skills 和 capability cache；已有 thread 不热换技能，新 thread 获得新目录。
-
-### 4.7 能力确认与提示词注入
-
-新增 `DesktopCapabilityService`，返回结构化快照，而不是散落的布尔量：
+`DesktopCapabilityService` 返回不可变快照：
 
 ```ts
 type DesktopCapabilitySnapshot = {
-  hostId: "local";
-  tools: string[];
-  mcpServers: { codex_app?: "ready" | "degraded" | "unavailable" };
-  workspaceDependencies: {
-    featureEnabled: boolean;
-    toolAvailable: boolean;
-    runtimeState: "ready" | "missing" | "broken" | "unsupported";
-  };
-};
+  revision: string
+  hostId: 'local'
+  dynamicTools: readonly DynamicToolSpec[]
+  availableToolNames: readonly string[]
+  nativeTools: 'ready' | 'degraded' | 'unavailable'
+  codexAppMcp: 'ready' | 'degraded' | 'unavailable'
+  primaryRuntime: 'ready' | 'missing' | 'broken' | 'unsupported'
+  bundledPlugins: 'ready' | 'degraded' | 'unavailable'
+}
 ```
 
-在 `desktop-app/src/main/codexChatRuntimeService.ts:760-763` 调用提示词 composer 时传入：
+- developer instructions、`dynamicTools` 和可选 MCP config 必须来自同一 revision。
+- `workspaceDependencies` 提示出现的最低条件是：feature enabled、原生工具已进入本次快照、handler 可执行。MCP/Pipe 健康是完整复刻状态的一部分，但不是原生工具提示的前置条件。
+- 提示词只指导模型先调用工具，不嵌入 Runtime 绝对路径。
+- Runtime/插件/Pipe 状态变化时产生新 revision；已有 thread 保持原工具目录，新 thread 使用新 revision。
 
-- `availableToolNames = snapshot.tools`
-- `capabilities.workspaceDependencies = featureEnabled && toolAvailable`
+## 6. 启动与关闭顺序
 
-提示词只能说明“先调用工具获取路径”，不能直接嵌入 Runtime 路径。真正路径每次由工具调用返回，避免升级后旧 thread 继续使用过期路径。当前 `composeCodexDesktopInstructions.ts:43-99` 已具备按能力选择 section 的机制，只需接入真实 snapshot 并扩充测试。
+把 [index.ts:564](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/index.ts:564) 的启动改成可等待但不等待网络下载的 bootstrap：
 
-## 5. 分阶段实施步骤
+1. 读取 main-only feature/release/资源配置。
+2. 创建 shared app-server connection 和 `HostCodexConnection`，完成版本探测及唯一 initialize。
+3. 创建 `PrimaryRuntimeService`，执行快速本地诊断。
+4. 创建 registry，注册 `read_thread_terminal` 和 `load_workspace_dependencies`。
+5. 生成第一版 capability snapshot。
+6. main 启动 Pipe 并准备受控 env/path；生产环境只能由 app-server 通过 Phase 0 确定的唯一 MCP 配置或插件生命周期启动 `server.mjs`。main 只允许在隔离集成测试中直接拉起该进程。
+7. 创建 AI-free catalog client、plugin manager 和聊天 runtime；聊天 runtime 接收 capability runtime，而不是 provider 配置。
+8. 后台 reconcile bundled/runtime plugins；完成后刷新 capability revision，新 thread 使用新版本。
+9. 后台检查 Runtime 更新；安装或更新不阻塞普通聊天。
 
-### Phase 0：固定 bundle 和资源打包基线
+关闭按相反依赖顺序：停止新工具调用 → abort pending calls → 停 plugin/runtime 更新 → 关闭聊天和 catalog leases → 关闭 MCP/Pipe → 删除 socket → 关闭 shared app-server connection。接入现有 [index.ts:1052](/Users/nallylin/Documents/code/dasCowork/desktop-app/src/main/index.ts:1052) 的 `before-quit`。
 
-目标：完成用户要求的“先把现有 `codex-app-tools` 放到客户端”，但不把整棵 `external` 搬进来。
+## 7. 分阶段实施
 
-1. 新增资源树：
+### Phase 0：锁定重构后边界和参考激活证据
 
-   - `desktop-app/resources/bundled-plugins/openai-bundled/.agents/plugins/marketplace.json`
-   - `desktop-app/resources/bundled-plugins/openai-bundled/.bundle-id`
-   - `desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/**`
-   - `desktop-app/resources/bundled-plugins/openai-bundled/bundle-lock.json`
+1. 把本计划对应 ADR 写入 `docs/adr/`，记录双投影、唯一 registry、Native driver 主路径和 provider 禁入决定。
+2. 为 `DynamicToolCallParams.tool`、`ThreadStartParams.dynamicTools`、`ThreadResumeParams` 无 dynamicTools 写协议契约测试。
+3. 扩展 native boundary verifier，禁止 main 重新引入 provider 或创建第二套 app-server client。
+4. 建立定向参考运行/本地等价实验：安装 `codex-app-tools` 后读取 config、plugin installed、MCP status，确定唯一 MCP 激活源；保存脱敏证据。
+5. 记录静态证据不能证明的部分，不把 `setDynamicAppToolsPipePath` 空实现推断成真实执行机制。
 
-2. `marketplace.json` 只列 `codex-app-tools`；不要复制 Browser、Chrome、Sites、Visualize 等条目。
-3. `bundle-lock.json` 记录参考版本 `26.818.21641`、原始相对路径、5 个文件的 SHA256、插件版本和复制日期；不要修改 `server.mjs`、`.mcp.json` 或 launcher 内容。
-4. 新增 `desktop-app/scripts/sync-codex-app-tools-bundle.mjs`，只允许从显式 `--source` 读取，复制前后都校验 allowlist 和 SHA；出现多余文件、缺文件或摘要变化即失败。
-5. 新增 `desktop-app/scripts/verify-bundled-plugins.mjs` 和 npm script，CI/build 前验证 lock。
-6. 修改 `desktop-app/electron-builder.yml`：从普通 asar files 排除 `resources/bundled-plugins/**`，再用 `extraResources` 放到 packaged 的 `process.resourcesPath/plugins/**`；确保 `.sh` 可执行位和 `.cmd` 均保留。
-7. 添加 `ORIGIN.md`/许可证说明到 marketplace 根，而不是改动插件本体；公开发布工作流在法律授权未确认时失败关闭。
+**Phase 0 完成条件**：协议字段、生产所有者和 MCP 唯一激活源均有自动化证据；不存在“实施时再决定由 provider 还是 Native driver 接线”的开放分支。
 
-Phase 0 验收：开发目录和 unpacked app 中的 5 个文件 SHA 与参考一致；packaged 路径没有 `reference-projects` 依赖；整个 `external` 没有进入产物。
+### Phase 1：建立统一工具注册表和原生主链
 
-### Phase 1：Native Pipe 与通用工具注册表
+1. 新建 `desktop-app/src/main/appTools/` 下的 registry、两个 projection、desktop context adapter 和 tool definitions；不新增与 AI-free `DynamicToolsDispatcher` 重复的执行器。
+2. 扩展现有 `vendors/codex-app-server-client/src/dynamic-tools.ts` 的中性契约，补齐 namespace、AbortSignal、快照注册/释放，并保持无 Electron/desktop 依赖。
+3. 把 `read_thread_terminal` 从 `CodexChatRuntimeService` 的写死分支迁入 registry，通过 AI-free dispatcher 执行，并修正 `params.tool` 解析。
+4. `CodexRunDriverInput`、`NativeCodexRunDriverInput` 增加不可变 `dynamicTools` 快照。
+5. `threadStartParams()` 把普通新 thread 的快照写入 `dynamicTools`；resume 不写；ephemeral 默认空。
+6. 用 echo/abort fixture 锁住工具发布、调用、错误、取消和结果格式。
 
-1. 在 `desktop-app/src/main/appTools/` 完成协议、frame、server、registry 和 runtime 编排。
-2. 先注册一个测试 echo/abort 工具，验证 list、call、错误和 cancel，再注册真实 `load_workspace_dependencies`。
-3. 增加 stale socket 清理、重复启动保护、单例生命周期和退出清理。
-4. 增加 namespace/tool allowlist、thread/turn/call 校验和并发隔离。
-5. 为 macOS peer authorization 建立独立 native build lane；在未完成时通过 release feature gate 阻止公开发版。
+**Phase 1 完成条件**：真实 app-server fixture 收到动态工具描述，并通过 `item/tool/call` 调到 main registry；`read_thread_terminal` 行为不回归。
 
-Phase 1 验收：一个真实 `server.mjs` 进程可经 stdio 收到 MCP `tools/list`，再经 Pipe 获得宿主工具；并发请求结果不串线，取消请求会让对应 handler 的 AbortSignal 变为 aborted。
+### Phase 2：实现 `load_workspace_dependencies` 和 fixture Runtime，完成里程碑 A
 
-### Phase 2：provider/app-server/MCP 接线
+1. 建立最小 Runtime fixture，包含 runtime manifest、假 Node/Python/package/bin 路径和 `@oai/artifact-tool` 标记。
+2. 实现只读、无参数、local-only 的 `load_workspace_dependencies` definition/handler。
+3. handler 每次调用重新向 Runtime service 取健康路径，不缓存绝对路径到 thread/prompt。
+4. 输出参考项目同等字段：bundle version、Node、Node packages、Python、Python packages、override/fallback binaries，以及存在时的 Git/pnpm。
+5. 覆盖 disabled、missing、broken、unsupported、非空参数、remote host 和 aborted 调用。
 
-1. 扩展 `desktop-app/src/main/codexAspProvider.ts` 输入和设置，注入 main-owned `mcpServers`。
-2. 扩展 provider `McpServerConfig` 类型并补充 `thread-client`/model 两条 thread-start 路径测试，确保 stdio env、cwd、超时和工具 allowlist 原样进入 `config.mcp_servers.codex_app`。
-3. `CodexChatRuntimeServiceOptions` 增加只读 MCP config 和 capability snapshot provider；构造 provider 时使用同一快照。
-4. 在 `index.ts` 中先启动 host capability runtime，再构造聊天 runtime；Pipe 未 ready 时不注入 MCP。
-5. 使用 `mcpServerStatus/list` 做健康确认：`codex_app` ready 且含预期工具时才标记 MCP ready。
+**里程碑 A 完成条件**：`thread/start.dynamicTools → item/tool/call → registry → fixture Runtime` 返回真实受控路径；失败状态稳定且不泄露内部堆栈。
 
-Phase 2 验收：app-server 记录的 `thread/start` 包含完整 `codex_app` 配置；MCP 子进程拿到 Pipe 路径；关闭 Pipe 或改坏 SHA 时新会话不会收到虚假的工具提示。
+### Phase 3：完成 Primary Runtime 生命周期
 
-### Phase 3：`load_workspace_dependencies` 真实实现，完成里程碑 A
+1. 实现 locator、manifest parser、diagnostics、状态机和 main-only release source contract。
+2. 实现下载、size/SHA 校验、安全解压、staging、全量诊断、原子激活、取消和回滚。
+3. 实现 repair/reset、更新检查、退避轮询、磁盘预检和崩溃恢复。
+4. 支持显式开发 Runtime root；只读且不复制/修改用户指定目录。
+5. 用小型 fixture archive 覆盖成功、截断、SHA 错误、路径穿越、symlink/hardlink 逃逸、平台不匹配、空间不足、安装中崩溃和回滚。
 
-1. 用一个小型测试 Runtime fixture 实现 diagnostics 和 instruction formatting。
-2. 支持开发环境显式指向当前机器已有 Runtime；只做读取和诊断，不复制、不修改该目录。
-3. handler 只接受 `{}`，只支持 `hostId=local`，并返回 `DynamicToolCallResponse` 的 text content。
-4. 通过真实 `server.mjs` 执行一次 MCP call，验证返回中包含 fixture/开发 Runtime 的绝对 Node、node_modules 和 bin 路径。
-5. 把 Pipe/MCP/tool 调用写入结构化安全日志：只记录版本、状态、耗时、tool 名和匿名 call id，不记录用户 prompt、完整 arguments 或敏感 env。
+**Phase 3 完成条件**：从可信 fixture release 可安装并激活；旧健康版在新版本诊断通过前始终可用；无网络时仍选择最后健康版本。
 
-里程碑 A 完成判定：无需 Runtime 下载、无需 Presentations，就能从 MCP 客户端穿过完整桥接链得到真实依赖路径；删除 Pipe env、传远程 host、传非空参数、传超大 frame 都得到预期错误。
+### Phase 4：固定 Codex App Tools 资源并建立 bundled plugin manager
 
-### Phase 4：Primary Runtime 管理服务
+1. 只复制参考 `codex-app-tools` 所需文件到 `desktop-app/resources/bundled-plugins/openai-bundled/`，不复制整个 `external/`。
+2. `bundle-lock.json` 记录参考版本、来源相对路径、文件 SHA、插件版本和复制日期；同步脚本只接受显式 `--source`。
+3. build/CI 验证 allowlist、SHA、多余/缺失文件、launcher 权限和 packaged layout。
+4. `electron-builder.yml` 用 `extraResources` 放到 `process.resourcesPath/plugins/**`，不依赖 `reference-projects`。
+5. 实现 `BundledPluginManager`，通过 AI-free catalog client 完成 installWhenMissing、版本比较、恢复启用、回读和缓存失效。
+6. 保持 `codex-app-tools` 内部隐藏；公开发布工作流验证 proprietary 分发授权。
 
-1. 在 `desktop-app/src/main/runtimeConfig.ts` 增加 main-only Runtime 配置：feature flag、开发 root、release manifest endpoint/内嵌 descriptor、轮询间隔和发布 channel。
-2. 完成 locator、manifest parser、diagnostics 和状态机。
-3. 完成下载、摘要验证、安全解压、staging、原子激活、回滚和取消。
-4. 完成 repair/reset、更新检查、退避轮询和应用关闭 cleanup。
-5. 用小 fixture archive 覆盖成功、SHA 错误、截断下载、路径穿越、平台不匹配、安装中崩溃和回滚。
-6. 若仓库现有依赖不能安全、跨平台解压目标格式，先做独立依赖评审；不得用 shell 拼接调用任意归档工具，也不得为了省依赖写未经充分测试的通用解压器。
+**Phase 4 完成条件**：空测试 `CODEX_HOME` 启动后插件被幂等安装/恢复且不出现在普通 UI；打包产物中只有 allowlist 文件且 SHA 正确。
 
-Phase 4 验收：从可信 fixture release 开始可完整安装并激活；旧 Runtime 在新版本诊断通过前始终可用；重启后能恢复 active version；无网络时使用最后健康版本。
+### Phase 5：Native Pipe 和真实 `server.mjs`，完成里程碑 B
 
-### Phase 5：Bundled Plugin 自动安装和内部管理
+1. 实现 frame codec、socket/Named Pipe server、client 隔离、定向响应、取消和生命周期。
+2. Pipe 的 list 使用 Phase 1 registry，call/cancel 进入同一个 AI-free dispatcher 和 main handler，不复制工具描述、Map 或执行状态。
+3. 真实 `server.mjs` 完成 MCP initialize/list/call/cancel/shutdown。
+4. 按 Phase 0 证据选择唯一 MCP 激活源；需要 main config fallback 时在 Native driver 合并，不经过 provider。
+5. 用同一参数分别走原生链和 Pipe/MCP 链，归一化后结果完全一致。
+6. 增加 macOS peer authorizer/Windows ACL 发布门禁和私有 socket 清理。
 
-1. 实现 descriptor catalog 和 `BundledPluginManager.reconcile()`。
-2. 复用现有 `CodexContextCatalogClient` 和 app-server `plugin/install`，不要在 main 手写 Codex plugin cache 格式。
-3. 自动安装/恢复 `codex-app-tools`；安装后验证 `plugin/installed` 和 `mcpServerStatus/list`。
-4. Primary Runtime ready 后读取其 `runtime.json.bundledPlugins`，同步 `openai-primary-runtime` marketplace 并安装声明为自动安装的插件。
-5. 为 Presentations、Documents、PDF、Spreadsheets 建数据驱动 descriptor；后续插件只需资源/descriptor，不改 installer。
-6. 保留当前内部隐藏行为，并增加 main-only diagnostics；不要让用户从 UI 卸载宿主桥。
+**里程碑 B 完成条件**：真实 `server.mjs` 经 Pipe 调用同一 handler；并发、取消、8MiB 限制和退出清理通过；app-server 观察到恰好一个 `codex_app`。
 
-Phase 5 验收：清空测试 `CODEX_HOME` 后启动应用，`codex-app-tools` 自动出现为已安装/启用但不在普通 UI 展示；Runtime 安装后 Presentations skill 能通过 `skills/list` 被发现；第二次启动不重复安装。
+### Phase 6：能力快照、提示词和降级一致性
 
-### Phase 6：能力快照、提示词和降级行为
+1. 实现 `DesktopCapabilityService` revision 快照，把同一快照同时交给提示词 composer、Native driver 和诊断。
+2. `CodexChatRuntimeService` 组装提示词时传入 `capabilities` 和 `availableToolNames`。
+3. 为新 thread、resume、retry、Runtime 更新、插件安装、Pipe 故障建立状态矩阵。
+4. 新能力只对新 thread 发布；UI/诊断明确提示“新任务生效”。
+5. 错误码区分 bundle 损坏、Pipe/MCP 失败、Runtime missing/broken/unsupported、feature disabled；renderer 不看到凭据、Pipe 路径或下载 URL。
 
-1. 接入 `DesktopCapabilityService`，让提示词 composer 获取真实 tool names/capabilities。
-2. 修改 `composeCodexDesktopInstructions.test.ts` 和 `desktop-context.e2e.ts`：默认失败关闭；只有真实 capability snapshot 才出现 `load_workspace_dependencies`。
-3. MCP 健康、Runtime 状态、bundled plugin 状态变化时失效快照；新会话读取新快照。
-4. 错误信息区分 bundle 损坏、Pipe 启动失败、MCP 启动失败、Runtime 缺失/损坏、feature disabled 和 unsupported platform。
-5. 增加开发诊断输出/页面，展示版本和状态，不展示 Pipe 路径、下载凭据或用户目录全路径。
+**Phase 6 完成条件**：提示词、动态工具目录和实际 handler 可用性没有互相矛盾；任何降级都不会出现“提示存在但工具不存在”。
 
-Phase 6 验收：能力 ready 时新 thread 的 developer instructions 有且仅有一个 Workspace Dependencies section；任一前置条件失效时 section 消失或工具返回精确降级原因，不出现“提示存在但工具不可调用”的状态。
+### Phase 7：同步 Primary Runtime marketplace，完成里程碑 C
 
-里程碑 B 完成判定：Runtime 安装/更新、两个 marketplace 的内部管理、通用工具注册、MCP 健康和能力提示词已经形成闭环；后续新增宿主工具或 Runtime 插件只需增加描述符与 handler。
+1. 从健康 Runtime 的 manifest 发现 `openai-primary-runtime` marketplace。
+2. 用同一 BundledPluginManager 安装/升级 Presentations、Documents、PDF、Spreadsheets 等 descriptor；不为 Presentations 写专用 installer。
+3. 安装后通过 `plugin/installed`、skills list 和来源路径回读确认。
+4. Runtime 切换版本时刷新 catalog/skills/capability cache；现有 thread 不热换，新 thread 获取新版本。
+5. 增加第二个内部插件 fixture，证明平台不是 Presentations 专用。
 
-### Phase 7：Presentations 真实闭环，完成里程碑 C
+**里程碑 C 完成条件**：新 thread 能发现当前 active Runtime 中的 Presentations skill；二次启动幂等；旧 Runtime 插件不会被误报成 active。
 
-1. 准备固定 HTML 输入和确定性输出目录；HTML 内容只使用本地文本/素材，避免把图片搜索、外部 connector 作为本验收的额外变量。
-2. 确认新 thread 的 skills 中包含 Presentations，且其 skill 文件来自当前 active Primary Runtime 对应版本。
-3. 通过真实聊天链发送“根据 HTML 内容生成一份 AI Agent 安全市场简单分析 PPT”。
-4. 记录并断言 `load_workspace_dependencies` 经 `codex_app` 被调用一次以上；返回路径必须属于 active Runtime。
-5. 从 app-server command item 证据断言 authoring 使用返回的 `RUNTIME_NODE` 和 `@oai/artifact-tool`，未使用 `python-pptx`、手写 OOXML 或系统全局 Node modules。
-6. 断言 Presentations skill 的 `mark_artifact_operation_started.mjs` 在首次写操作前成功执行一次。
-7. 验证 `.pptx` 为有效 OOXML zip，含 `[Content_Types].xml`、`ppt/presentation.xml` 和至少一页 slide。
-8. 用 Runtime 自带的 render/slide test 工具生成 PNG 并检查无结构错误、无文本溢出；至少人工查看一次 montage，保存测试证据，不把临时文件当用户交付物。
-9. 如当前 Artifact/PPTX preview 工作已合入，增加生成后自动打开 Artifact tab 的联动 smoke；否则只验证文件卡/链接可打开，预览闭环由现有独立计划继续。
-10. 增加一个第二工具或第二内部插件 fixture，证明平台不是为 Presentations 特写的单用途代码。
+### Phase 8：Presentations 真实闭环，完成里程碑 D
 
-里程碑 C 完成判定：最终 `.pptx` 真实生成、可打开、可渲染、无溢出；会话事件能证明它走了 `load_workspace_dependencies + @oai/artifact-tool` 标准链，而不是 fallback。
+1. 准备固定 HTML 和本地素材，使用确定性输出目录，不引入外部图片/connector 变量。
+2. 从真实聊天发送固定任务，记录 thread/start、tool call、command item、artifact 和最终文件证据。
+3. 断言 `load_workspace_dependencies` 至少调用一次，返回路径属于 active Runtime。
+4. 断言 authoring 使用返回的 Runtime Node 和 `@oai/artifact-tool`；禁止 `python-pptx`、手写 OOXML/zip 和系统全局 Node modules fallback。
+5. 断言 Presentations skill 的 artifact-operation marker 在首次写操作前执行。
+6. 验证 PPTX zip、`[Content_Types].xml`、`ppt/presentation.xml`、slide 数量和关系文件。
+7. 使用 Runtime 自带渲染/slide test 工具生成 PNG，检查结构错误和文本溢出；保存 montage 供人工复核。
+8. 如果 Artifact/PPTX preview 已合入，增加生成后打开 Artifact tab smoke；否则验证文件卡/链接可打开，不越界重做预览计划。
 
-## 6. 可测试验收标准
+**里程碑 D 完成条件**：真实会话可重复生成可打开、可渲染、无溢出的 PPTX，且事件证据证明使用标准 Runtime/skill/tool 链；packaged app 得到同样结果。
 
-### 6.1 Bundle 与打包
+### Phase 9：打包、发布门禁和最终复刻审计
 
-- **AC-01**：`verify-bundled-plugins` 对当前 5 个文件通过；修改 `server.mjs` 任意 1 byte 后失败。
-- **AC-02**：`build:unpack` 后 `process.resourcesPath/plugins/openai-bundled/plugins/codex-app-tools/server.mjs` 存在，SHA 为 `2a5a64...a222`，launcher 可执行。
-- **AC-03**：packaged 产物不包含 `reference-projects/` 或除 `codex-app-tools` 以外的参考 bundled plugins。
+1. macOS、Windows、Linux 至少完成各自可运行平台的资源定位、Pipe/ACL 和 Runtime 路径 smoke；无法获得的平台明确列为发布阻塞，不虚报通过。
+2. 公开发布门禁验证：bundle 授权、bundle SHA、peer authorization、可信 Runtime feed、代码签名和退出清理。
+3. 用参考行为矩阵逐项对照 native tools、Pipe/MCP、Runtime、plugin、prompt 和 Presentations；每项关联测试证据。
+4. 运行 native boundary/protocol/real app-server checks，确认没有修改 app-server、没有 provider 回流、没有第二个 initialize 所有者。
+5. 输出复刻差异清单；只允许明确记录且有等价测试的实现差异，不允许能力或安全差异。
 
-### 6.2 Pipe 与 MCP
+**完整复刻完成条件**：第 8 节所有验收项通过，差异清单中没有未解释的行为差异；若授权、peer authorization 或平台 smoke 未通过，只能标记为“内部工程复刻完成”，不能标记为“可发布完整复刻”。
 
-- **AC-04**：fragmented frame、coalesced frames、零长度、>8MiB、非法 JSON、非法 method 都有单元测试。
-- **AC-05**：两个 MCP clients 使用相同 request id 时结果仍定向到原客户端；一个 client 的 cancel 不影响另一个。
-- **AC-06**：真实 `server.mjs` 能完成 MCP initialize/list/call/shutdown；缺少 `CODEX_APP_TOOLS_PIPE_PATH` 时返回明确连接错误。
-- **AC-07**：thread/turn/call metadata 从 app-server/MCP 传到宿主 handler；缺 thread metadata 时 server 拒绝调用。
+## 8. 可测试验收标准
 
-### 6.3 Runtime 与插件
+### 8.1 原生动态工具
 
-- **AC-08**：完整 fixture Runtime 返回 installed=true 和全部绝对路径；缺 `@oai/artifact-tool`、错误 arch、逃逸 symlink 或不可执行 Node 时 installed=false 且 problems 非空。
-- **AC-09**：错误 SHA、路径穿越 archive、下载取消不会替换 active Runtime，也不会残留可被选中的 staging。
-- **AC-10**：Runtime 升级后新 thread 获得新 bundle version；旧版本直到新版本 health check 通过才清理。
-- **AC-11**：空 `CODEX_HOME` 自动安装 `codex-app-tools`，二次启动幂等；内部插件不能从普通 UI 卸载。
-- **AC-12**：Runtime marketplace 同步后 `skills/list` 能发现 Presentations；新增第二 descriptor 无需改 Pipe、provider 或 installer。
+- **AC-01**：新 thread 的 `thread/start.dynamicTools` 包含且只包含该 capability revision 允许的工具；ephemeral 默认空。
+- **AC-02**：resume payload 不伪造 `dynamicTools`；安装/更新后的新工具只有新 thread 可见。
+- **AC-03**：`item/tool/call` 按生成协议的 `tool/namespace/arguments` 字段路由；错误字段和未知工具稳定失败。
+- **AC-04**：`read_thread_terminal` 迁移后现有成功、不可用、无终端行为不回归。
+- **AC-05**：`load_workspace_dependencies` 原生调用成功返回 fixture/active Runtime 路径；参数非 `{}`、remote host、取消分别失败。
 
-### 6.4 提示词与 Presentations
+### 8.2 Registry 与双投影
 
-- **AC-13**：`workspaceDependencies` feature 或 `codex_app` tool 任一个不可用时，developer instructions 不包含“call `load_workspace_dependencies`”。
-- **AC-14**：能力可用时该 section 只出现一次，retry/resume 不重复注入。
-- **AC-15**：真实聊天调用记录中出现 `codex_app/load_workspace_dependencies`，结果的三个 Presentations 关键路径都位于 active Runtime。
-- **AC-16**：生成命令使用 Runtime Node 和 `@oai/artifact-tool`；测试主动拒绝 `python-pptx`、手写 zip/OOXML 和全局 package fallback。
-- **AC-17**：最终 PPTX 结构校验、渲染和 overflow test 全部通过，最终文件位于宿主允许的输出目录。
+- **AC-06**：同名 namespace/tool 重复注册在启动时失败；原生和 Pipe 描述来自同一 definition。
+- **AC-07**：同一调用经原生链和 MCP/Pipe 链的归一化结果、错误码和取消语义一致。
+- **AC-08**：第二个 fixture 工具无需修改 Native driver、Pipe server 或 AI-free dispatcher 核心逻辑即可被两条链发现和调用；代码检查不存在第二个动态工具 handler Map。
+- **AC-09**：任意时刻活动 `codex_app` MCP server 数量为 0 或 1，永不为 2；ready 状态下必须恰好为 1。
 
-### 6.5 生命周期与安全
+### 8.3 Bundle、MCP 与 Pipe
 
-- **AC-18**：应用退出后 Pipe/Named Pipe 不再接受连接，socket 文件清理，pending handler 全部 aborted。
-- **AC-19**：renderer 无 API 可以提交任意 MCP command/env、Runtime URL、安装 root 或 Native Pipe path。
-- **AC-20**：公开 release job 在 peer authorization 未启用、bundle lock 不匹配或 proprietary 分发授权标记缺失时失败关闭。
+- **AC-10**：任改 `server.mjs` 1 byte、缺文件或出现 allowlist 外文件，bundle verifier 失败。
+- **AC-11**：unpacked/packaged app 中插件位于 `process.resourcesPath/plugins/**`，SHA 正确且不依赖 `reference-projects`。
+- **AC-12**：fragmented/coalesced/zero/invalid/>8MiB frame，非法 JSON-RPC method 都有测试。
+- **AC-13**：两个 client 使用相同 request id 不串线；一个 client 不能取消另一个 client 的 call。
+- **AC-14**：真实 `server.mjs` 完成 initialize/list/call/cancel/shutdown；缺 Pipe env 时给出明确连接错误。
+- **AC-15**：退出后 Pipe 不接受连接、socket 已删除、pending handler 全部 aborted。
 
-## 7. 测试与验证矩阵
+### 8.4 Primary Runtime 与插件
 
-| 层级              | 新增/修改测试                                                                                               | 证明内容                                                                                                  |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Bundle script     | `desktop-app/scripts/tests/verify-bundled-plugins.node-test.mjs`                                            | allowlist、SHA、marketplace manifest、路径和 packaged layout。                                            |
-| Pipe unit         | `desktop-app/src/main/appTools/*.test.ts`                                                                   | frame、schema、client 隔离、cancel、allowlist、shutdown。                                                 |
-| Pipe integration  | `desktop-app/tests/integration/codex-app-tools-mcp.test.ts`                                                 | 真实 `server.mjs` stdio MCP ↔ Native Pipe ↔ fake/real tool。                                              |
-| Runtime unit      | `desktop-app/src/main/primaryRuntime/*.test.ts`                                                             | manifest、诊断、路径安全、状态机、指令格式。                                                              |
-| Runtime installer | `desktop-app/tests/integration/primary-runtime-installer.test.ts`                                           | fixture archive 下载、SHA、安全解压、原子激活、回滚、取消。                                               |
-| Bundled plugins   | `desktop-app/src/main/bundledPlugins/BundledPluginManager.test.ts`                                          | installWhenMissing、幂等、升级、失败恢复、内部隐藏。                                                      |
-| Provider          | `desktop-app/src/main/codexAspProvider.test.ts`、`vendors/.../tests/provider.test.ts`、`thread-client` 覆盖 | `mcpServers` 和超时/env 完整进入 thread/start。                                                           |
-| Runtime service   | `desktop-app/src/main/codexChatRuntimeService.test.ts`                                                      | capability snapshot、提示词、retry/resume、新旧 thread 行为。                                             |
-| Electron E2E      | `desktop-app/tests/e2e/app-tools-host.e2e.ts`                                                               | renderer → main → provider → app-server fixture 的 MCP 配置与 UI render unit。                            |
-| Packaged smoke    | `desktop-app/scripts/run-packaged-app-tools-smoke.mjs`                                                      | extraResources、launcher、Node、Pipe 和退出清理。                                                         |
-| Live LLM smoke    | `desktop-app/scripts/run-presentations-smoke.mjs`                                                           | 真实模型选择技能、调用 load tool、使用 artifact-tool、生成 PPTX。默认 opt-in，不把模型随机性放入普通 CI。 |
+- **AC-16**：健康 fixture 返回 installed/ready 和全部绝对路径；缺 artifact-tool、错误 arch、逃逸 symlink 或不可执行 Node 时 broken。
+- **AC-17**：SHA 错误、截断、路径穿越、取消和崩溃不会替换 active Runtime，也不残留可选 staging。
+- **AC-18**：Runtime 升级在新版本全量诊断通过后才原子切换；失败继续使用最后健康版。
+- **AC-19**：空测试 `CODEX_HOME` 自动安装 `codex-app-tools`；二次启动幂等；内部插件不能从普通 UI 卸载。
+- **AC-20**：Runtime marketplace 同步后 skills list 发现 Presentations；来源路径属于 active Runtime。
+- **AC-21**：新增第二个 runtime plugin descriptor 无需修改 installer 或 UI service。
 
-每个阶段完成时运行最小验证；全部阶段合并前运行：
+### 8.5 提示词与 Presentations
+
+- **AC-22**：feature、工具发布、handler 可用性任一不满足时，不注入 Workspace Dependencies 提示。
+- **AC-23**：能力可用时提示 section 只出现一次；retry/resume 不重复，Runtime 路径不写入提示词。
+- **AC-24**：真实聊天记录出现原生 `load_workspace_dependencies` 调用；兼容链测试另行证明同一工具可经 `codex_app` MCP 调用。
+- **AC-25**：生成命令使用 active Runtime Node 和 `@oai/artifact-tool`，测试拒绝所有禁止 fallback。
+- **AC-26**：最终 PPTX 结构、渲染和 overflow test 全部通过，文件位于宿主允许目录。
+
+### 8.6 架构与安全
+
+- **AC-27**：native boundary verifier 证明 main/renderer/preload 无 provider 生产依赖、无任意 app-server IPC bridge。
+- **AC-28**：renderer 无法提交 MCP command/env、Runtime URL/root、Pipe path 或动态工具 schema。
+- **AC-29**：共享 Host connection 每代只 initialize 一次；插件协调和状态读取只通过 lease。
+- **AC-30**：公开 release 在 proprietary 授权、peer authorization、trusted feed 或 bundle lock 任一缺失时失败关闭。
+- **AC-31**：app-server 源码无改动；协议 manifest、真实 binary contract 和桌面 E2E 同时通过。
+
+## 9. 测试与验证矩阵
+
+| 层级 | 新增/修改测试 | 证明内容 |
+| --- | --- | --- |
+| Protocol contract | AI-free client protocol/verifier tests | `dynamicTools`、`DynamicToolCallParams.tool`、resume 边界 |
+| Registry unit | `desktop-app/src/main/appTools/*.test.ts`、AI-free `dynamic-tools.test.ts` | 唯一性、schema、availability、中性 dispatcher、两种投影一致性 |
+| Native driver | `NativeCodexRunDriver.test.ts`、`CodexRunDriver.test.ts` | 新 thread 发布、resume/ephemeral、server request routing |
+| Chat runtime | `codexChatRuntimeService.test.ts` | capability revision、提示词、工具执行、retry/resume |
+| Pipe unit | `appTools/nativePipe*.test.ts` | frame、隔离、cancel、ACL/mode、shutdown |
+| MCP integration | `desktop-app/src/main/appTools/bundledAppToolsCompatibility.test.ts` | 真实 server.mjs ↔ Pipe ↔ registry |
+| Runtime unit | `desktop-app/src/main/primaryRuntime/*.test.ts` | manifest、路径、诊断、状态机、指令格式 |
+| Runtime installer | `desktop-app/src/main/primaryRuntime/PrimaryRuntimeReleaseProvider.test.ts`、`PrimaryRuntimeService.test.ts` | SHA、安全解压、激活、回滚、取消、恢复 |
+| Bundled plugins | `BundledPluginManager.test.ts`、`BundledPluginReconcileCoordinator.test.ts` | installWhenMissing、幂等、升级、失败恢复、内部隐藏 |
+| Electron E2E | 尚未交付的 `desktop-app/tests/e2e/app-tools-host.e2e.ts` | renderer → main → Native driver → app-server → registry |
+| Packaged smoke | `desktop-app/scripts/run-packaged-app-tools-smoke.mjs` | extraResources、Runtime、MCP/Pipe、退出清理 |
+| Deterministic Runtime smoke | `desktop-app/scripts/run-presentations-runtime-smoke.mjs` | 真实 Runtime/skill/artifact-tool、PPTX、渲染和 overflow 证据；不冒充真实聊天 |
+| Live LLM smoke | 尚未交付的独立 opt-in gate | 真实聊天中的 skill、load tool、command item、artifact 和最终文件事件证据 |
+
+阶段验证命令：
 
 ```text
-npm --prefix desktop-app/vendors/ai-sdk-provider-codex-asp run lint
-npm --prefix desktop-app/vendors/ai-sdk-provider-codex-asp run typecheck
-npm --prefix desktop-app/vendors/ai-sdk-provider-codex-asp run test
+npm --prefix desktop-app/vendors/codex-app-server-client run qa
+npm --prefix desktop-app run verify:codex-native-runtime-boundaries
+npm --prefix desktop-app run verify:codex-app-server-protocol-contract
+npm --prefix desktop-app run verify:real-codex-app-server-contract
 npm --prefix desktop-app run lint
 npm --prefix desktop-app run typecheck
 npm --prefix desktop-app run test:unit
-npm --prefix desktop-app run test:e2e -- tests/e2e/app-tools-host.e2e.ts --reporter=line
+# 待 E2E 文件交付后启用：npm --prefix desktop-app run test:e2e -- tests/e2e/app-tools-host.e2e.ts --reporter=line
 npm --prefix desktop-app run build:unpack
-npm --prefix desktop-app run test:e2e:packaged
+DASCOWORK_PACKAGED_APP_TOOLS_SMOKE=1 DASCOWORK_PACKAGED_RESOURCES_PATH=/absolute/resources/path DASCOWORK_PACKAGED_EXECUTABLE=/absolute/electron/path npm --prefix desktop-app run smoke:packaged-app-tools
+DASCOWORK_REAL_PRIMARY_RUNTIME_ROOT=/absolute/runtime/path npm --prefix desktop-app run test:primary-runtime-real
+DASCOWORK_PRESENTATIONS_RUNTIME_SMOKE=1 DASCOWORK_PRIMARY_RUNTIME_ROOT=/absolute/runtime/path DASCOWORK_PRESENTATIONS_RUNTIME_SMOKE_OUTPUT_DIR=/absolute/evidence/path npm --prefix desktop-app run smoke:presentations-runtime
 ```
 
-Live Presentations smoke 单独执行，并保存 tool-call、command item、PPTX 结构和渲染证据；不能用普通单元测试的通过替代该项。
+Deterministic Runtime smoke 与 Live Presentations smoke 必须分开命名、分开验收。前者保存 Runtime、skill、artifact-tool、PPTX 结构、渲染和 overflow 证据；后者必须另外保存脱敏的真实聊天 tool-call、command item 和最终 artifact 事件证据。前者和普通单元测试都不能代替后者。
 
-## 8. 文件改造清单
+## 10. 文件改造清单
 
-### 8.1 新增
+### 10.1 新增
 
+- `docs/adr/2026-09-06-codex-app-tools-primary-runtime-parity.md`
 - `desktop-app/resources/bundled-plugins/openai-bundled/**`
 - `desktop-app/scripts/sync-codex-app-tools-bundle.mjs`
 - `desktop-app/scripts/verify-bundled-plugins.mjs`
+- `desktop-app/scripts/run-packaged-app-tools-smoke.mjs`
+- `desktop-app/scripts/run-presentations-runtime-smoke.mjs`
+- `desktop-app/scripts/run-primary-runtime-real-smoke.mjs`
+- 独立 Live Presentations gate（尚未交付，不得用 deterministic smoke 替代）
 - `desktop-app/src/main/appTools/**`
 - `desktop-app/src/main/primaryRuntime/**`
 - `desktop-app/src/main/bundledPlugins/**`
-- `desktop-app/src/main/capabilities/DesktopCapabilityService.ts`
-- 对应 unit/integration/E2E/packaged smoke 文件
+- `desktop-app/src/main/appTools/DesktopHostCapabilityRuntime.ts`
+- 对应 unit/integration/E2E fixtures 和 tests
 
-### 8.2 修改
+### 10.2 修改
 
 - `desktop-app/electron-builder.yml`
 - `desktop-app/package.json`
 - `desktop-app/src/main/index.ts`
 - `desktop-app/src/main/runtimeConfig.ts`
-- `desktop-app/src/main/codexAspProvider.ts`
+- `desktop-app/src/main/codexRun/CodexRunDriver.ts`
+- `desktop-app/src/main/codexRun/NativeCodexRunDriver.ts`
 - `desktop-app/src/main/codexChatRuntimeService.ts`
 - `desktop-app/src/main/developerInstructions/composeCodexDesktopInstructions.ts` 及测试
-- `desktop-app/vendors/ai-sdk-provider-codex-asp/src/provider-settings.ts`
-- `desktop-app/vendors/ai-sdk-provider-codex-asp/src/thread-client.ts` 仅在类型/序列化需要时修改；现有透传逻辑优先复用
-- `desktop-app/src/main/pluginCenter/PluginCenterService.ts` 仅接入 cache invalidation/内部诊断；不把自动安装逻辑塞进 UI service
+- `desktop-app/src/main/pluginCenter/PluginCenterService.ts`，仅接 cache invalidation、内部隐藏和诊断；自动安装不塞进 UI service
+- `desktop-app/vendors/codex-app-server-client/src/**`，仅在需要导出已生成类型或补充 AI-free client 能力时修改
+- `desktop-app/scripts/verify-codex-native-runtime-boundaries.mjs` 及测试
 
-### 8.3 禁止修改
+### 10.3 明确不修改
 
-- `codex/codex-rs/app-server/**`
-- `codex/codex-rs/core/**`
-- renderer 的 Node/Electron 安全边界
-- 用户当前工作树中与 Artifact/PPTX 预览有关、但不属于本计划的实现，除非联动测试明确需要并先协调所有权
+- `desktop-app/src/main/codexAspProvider.ts`：文件已经不存在，不重建。
+- `desktop-app/vendors/ai-sdk-provider-codex-asp/**`：不用于桌面生产能力；除非单独发现兼容包回归，本计划不改。
+- `codex/codex-rs/app-server/**`、`codex/codex-rs/core/**`。
+- renderer 的 Node/Electron 安全边界。
+- 独立 Artifact/PPTX 预览实现；只在最终阶段接联动 smoke。
 
-## 9. 风险与缓解
+## 11. 风险与缓解
 
-| 风险                                         | 影响                                     | 缓解                                                                                                                                      |
-| -------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `server.mjs` 为 Proprietary                  | 对外发布可能无权分发                     | 内部验证先 SHA 固定；release job 加授权门禁；保留 clean-room bridge 替换路线。                                                            |
-| Pipe 只有随机路径/0600，不等于 peer 身份校验 | 同用户恶意进程可能抢连                   | macOS N-API peer authorizer、Windows Pipe ACL、私有目录、client 隔离；未完成不公开发布。                                                  |
-| Primary Runtime 体积大、下载易失败           | 首次使用慢、磁盘占用大                   | 后台下载、进度、断点/取消、SHA、原子激活、保留旧健康版、磁盘预检。                                                                        |
-| Runtime release feed 尚未由本项目定义        | 正式自动安装没有可信来源                 | 把 release provider 设计成 main-only 注入契约；先用 fixture/显式开发 root；正式发布前接入获授权的签名 manifest。                          |
-| 插件自动安装与 MCP 显式配置重复              | 可能出现两个 `codex_app`                 | main-owned `mcpServers.codex_app` 为唯一运行配置；plugin install 负责目录/skill 状态，静态 plugin MCP 保持关闭；测试断言只有一个 server。 |
-| 当前 provider MCP 类型字段不完整             | 3600 秒工具可能被 120 秒默认超时提前终止 | 扩展内部 config 字段并断言 thread/start wire payload；区分 provider 动态工具 timeout 与 MCP server tool timeout。                         |
-| 安装后已有 thread 看不到新技能               | 用户认为安装无效                         | 状态变化明确提示“新任务生效”；新 thread 重新获取 skills/MCP；不冒险热改运行中的 thread。                                                  |
-| Live LLM E2E 有随机性                        | CI 偶发失败                              | 核心 Pipe/MCP/Runtime 用确定性测试；live smoke 独立、可重试且必须保存可审计事件。                                                         |
-| Presentations 仍可能自行 fallback            | 生成了文件但没验证标准链                 | E2E 同时断言 load tool、Runtime Node、artifact-tool 命令和禁止项，不能只看 `.pptx` 存在。                                                 |
-| 与当前 Artifact/PPTX 预览工作树冲突          | 容易误改用户已有工作                     | 本计划以生成链为主；只在最后一项加联动 smoke，实施前基于当前 diff 协调文件所有权。                                                        |
+| 风险 | 影响 | 缓解 |
+| --- | --- | --- |
+| 把 dynamicTools 与 MCP/Pipe 再次串成单链 | 任一兼容组件失败会误伤主能力 | 一个 registry、两个投影、分别验收；提示词只依赖原生主链 |
+| MCP 激活来源在静态参考中不完整 | 可能重复启动或偏离参考 | Phase 0 定向运行证据；唯一激活源；ready 时实例数=1 |
+| `server.mjs` 为 Proprietary | 无权公开分发 | 内部 SHA 固定；release 授权门禁；准备同契约 clean-room 替代路线 |
+| Pipe 只有随机路径/0600 | 同用户恶意进程可能抢连 | peer authorizer、Windows ACL、私有目录、client 隔离；未完成不公开发布 |
+| capability snapshot 与 Runtime 状态竞态 | 提示存在但调用失败 | 不可变 revision；新 thread 单次取快照；handler 每次重新检查 Runtime |
+| resume 看不到新工具 | 用户误以为安装失败 | 产品明确提示“新任务生效”；测试锁住 thread-start-only 语义 |
+| model config 与 MCP config 覆盖 | custom model provider 配置丢失 | main-only 深层无覆盖合并；碰撞直接失败并记录诊断 |
+| Runtime 大且下载易失败 | 首次使用慢、磁盘压力 | 后台下载、进度、取消、SHA、磁盘预检、原子激活、保留健康版 |
+| release feed 未定义 | 正式安装缺可信来源 | main-only release source contract；fixture 先行；公开发布前必须接签名/授权 feed |
+| Live LLM 随机性 | CI 偶发失败 | 核心链确定性测试；live smoke 独立、可重试、保存事件证据 |
+| Presentations 自行 fallback | 文件存在但未走标准链 | 同时断言 tool、Runtime Node、artifact-tool 和禁止项 |
 
-## 10. 建议实施顺序与提交边界
+## 12. 提交边界
 
-建议保持小而可回滚的提交：
+建议保持以下可回滚提交，不把大 bundle 与业务代码混在同一提交：
 
-1. `chore: pin codex-app-tools bundled artifact`
-2. `feat: add dynamic app tools native pipe and registry`
-3. `feat: inject codex_app mcp through codex asp provider`
-4. `feat: implement load_workspace_dependencies diagnostics`
+1. `docs: rebase app tools parity plan on native runtime`
+2. `test: lock dynamic tool protocol contracts`
+3. `feat: add host tool registry and native projection`
+4. `feat: implement workspace dependency tool and runtime diagnostics`
 5. `feat: manage primary runtime lifecycle`
-6. `feat: reconcile bundled and primary runtime plugins`
-7. `feat: derive desktop instructions from host capabilities`
-8. `test: prove presentations artifact-tool generation end to end`
+6. `chore: pin codex-app-tools bundled artifact`
+7. `feat: reconcile bundled plugins with ai-free client`
+8. `feat: add native pipe and codex_app mcp projection`
+9. `feat: derive desktop instructions from capability revisions`
+10. `feat: sync primary runtime skills and plugins`
+11. `test: prove presentations generation and packaged parity`
+12. `security: enforce app tools release gates`
 
-每个提交都应有对应测试，且不得把 976KB bundle 与大量业务源码混在同一个不可审查提交中。
+## 13. 停止条件与完成定义
 
-## 11. 完成定义
+实施只有在以下全部成立时才能停止：
 
-只有同时满足以下条件，才算“通用能力建设完成”：
+- 原生 `dynamicTools/item/tool/call` 主链和真实 `server.mjs/Native Pipe` 兼容链都使用同一 registry，并分别通过。
+- `load_workspace_dependencies` 返回健康 Primary Runtime 的真实路径，失败时关闭能力且不泄露敏感信息。
+- Primary Runtime 安装、诊断、更新、修复、取消、回滚和崩溃恢复有自动化证据。
+- bundled plugin reconcile 使用 AI-free client，两个 marketplace 数据驱动且幂等。
+- 提示词、工具目录和 handler 可用性来自同一 capability revision；新 thread/resume 语义准确。
+- 真实 Presentations skill 使用 `load_workspace_dependencies + @oai/artifact-tool` 生成、渲染并验证 PPTX。
+- packaged app 能定位资源、Runtime 和 Pipe，退出无残留。
+- native boundary、协议、真实 app-server、unit、E2E、packaged smoke 全部通过。
+- 没有修改 Codex app-server，没有把生产聊天接回 provider，没有重复 `codex_app`。
+- 差异审计没有未解释的行为或安全差异。
+- bundle 授权、peer authorization、可信 Runtime feed 和目标平台 smoke 全部通过后，才标记“可发布完整复刻”；否则仅标记“内部工程复刻完成”。
 
-- 真实 `codex-app-tools` bundle 在开发和 packaged 环境都能由 app-server 作为 MCP 启动。
-- Native Pipe 的 list/call/cancel、隔离、安全、退出清理全部通过。
-- `load_workspace_dependencies` 返回当前健康 Primary Runtime 的真实路径，并在缺失/损坏时正确失败关闭。
-- Primary Runtime 可由可信 release 完成安装、诊断、修复、更新、取消和回滚。
-- bundled plugin reconcile 是数据驱动且幂等，`codex-app-tools` 与 Runtime marketplace 都由它管理。
-- 提示词只声明真实能力，新 thread 能发现 Presentations skill。
-- 真实会话使用 `load_workspace_dependencies + @oai/artifact-tool` 生成并验证 PPTX。
-- 再增加一个宿主工具或 bundled plugin fixture 时，不需要改 Pipe、provider 或 installer 核心代码。
-- 发布所需的 bundle 授权、peer authorization 和 Runtime release feed 三项门禁均有明确结论；否则只能标记为“内部工程验证完成”，不能标记为“可公开分发”。
+## 14. 本次修订摘要
+
+- 把生产接线从已删除的 `codexAspProvider.ts` 和 provider fork 移到 `CodexRunDriver/NativeCodexRunDriver`。
+- 补回参考项目真实存在的原生 `thread/start.dynamicTools → item/tool/call` 主链。
+- 将 MCP/Native Pipe 改为同一 registry 的第二投影，并仍保留为完整复刻的必达里程碑。
+- 新增 `params.tool` 协议修正、thread-start-only 能力快照和新任务生效规则。
+- Bundled Plugin manager 改用 AI-free context client 和共享 Host lease。
+- 更新文件清单、测试矩阵、提交顺序、发布门禁和停止条件。
+
+## 15. 2026-09-07 实施审计状态
+
+当前只能认定为“内部工程实施进行中”，不能认定里程碑 D、完整复刻或可发布完成。
+
+已获得的真实证据：
+
+- 原生动态工具、Native Pipe、真实 `server.mjs` 兼容调用、Runtime v2 诊断、双 marketplace 发现和内部插件隐藏均有针对性测试。
+- unpacked macOS 产物可以从 `process.resourcesPath/plugins/**` 启动固定 bundle；launcher 在没有显式 Electron-as-Node 时失败关闭。
+- 真实 Primary Runtime `26.904.11930` 已通过 `load_workspace_dependencies` 桌面工具调用，并发现 Presentations 和 Documents。
+- deterministic Runtime smoke 使用 Runtime Node、`@oai/artifact-tool`、Presentations finalizer、Runtime renderer 和 overflow checker 生成并验证 PPTX，证据目录不会被测试自动删除。
+- 动态工具调用由 main 强制绑定当前活动 thread，不能用请求里的 `threadId` 读取其他任务；超时或取消后会及时清理监听器，均有回归测试。
+
+仍未完成、不得由 fixture 或 deterministic smoke 代替的门槛：
+
+- 尚无真实聊天会话的 Presentations tool-call、command item 和 artifact 事件证据，因此 AC-24 与里程碑 D 未完成。
+- 尚无 renderer → main → Native driver → 真实 app-server → registry 的专用 Electron E2E，因此 AC-31 的桌面 E2E 部分未完成。
+- macOS peer authorizer、Windows 当前用户 ACL、Windows/Linux packaged smoke、proprietary bundle 分发授权、代码签名和正式可信 release feed 仍是公开发布阻塞。
+- Runtime archive 下载和 ZIP 索引仍会占用与大归档规模相关的进程内存；在真实大包安装压力测试通过前，不得把小 fixture 安装测试解释为大 Runtime 安装能力已验收。
+- 当前目录切换保留回滚和崩溃恢复，但不是单个文件系统原语完成的无窗口交换；在并发安装/读取压力测试或指针式激活完成前，不得宣称“旧健康版始终无瞬时空窗”。
+- 完整 `test:unit` 最近一次共通过 2255 项，但 `App.test.tsx` 的历史 commentary replay 在全套负载下有 1 项超过默认 5 秒；同项和整个文件隔离运行均通过。没有通过提高超时或弱化断言掩盖它，因此默认全量 unit 门禁目前仍不能记为绿色。

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "dascowork-app-tools-release-gates.v1",
+  "gates": [
+    { "id": "AT-UNIT-01", "layer": "engineering", "producers": ["unit-stability"], "assetBound": false },
+    { "id": "AT-E2E-01", "layer": "engineering", "producers": ["real-app-server-e2e"], "assetBound": false },
+    { "id": "AT-RT-MEM-01", "layer": "engineering", "producers": ["runtime-stress"], "assetBound": false },
+    { "id": "AT-RT-SWAP-01", "layer": "engineering", "producers": ["runtime-pointer-stress"], "assetBound": false },
+    { "id": "AT-PIPE-MAC-01", "layer": "release", "producers": ["pipe-macos"], "assetBound": true },
+    { "id": "AT-PIPE-WIN-01", "layer": "release", "producers": ["pipe-windows"], "assetBound": true },
+    { "id": "AT-BUNDLE-01", "layer": "release", "producers": ["bundle-provenance"], "assetBound": true },
+    { "id": "AT-FEED-01", "layer": "release", "producers": ["runtime-feed"], "assetBound": true },
+    { "id": "AT-PKG-MAC-01", "layer": "release", "producers": ["packaged-macos"], "assetBound": true },
+    { "id": "AT-PKG-WIN-01", "layer": "release", "producers": ["packaged-windows"], "assetBound": true },
+    { "id": "AT-PKG-LINUX-01", "layer": "release", "producers": ["packaged-linux"], "assetBound": true },
+    { "id": "AT-LIVE-01", "layer": "engineering", "producers": ["live-presentations-dev"], "assetBound": false },
+    { "id": "AT-LIVE-PKG-01", "layer": "release", "producers": ["live-presentations-packaged"], "assetBound": true },
+    { "id": "AT-SIGN-MAC-01", "layer": "release", "producers": ["signing-macos"], "assetBound": true },
+    { "id": "AT-SIGN-WIN-01", "layer": "release", "producers": ["signing-windows"], "assetBound": true }
+  ]
+}

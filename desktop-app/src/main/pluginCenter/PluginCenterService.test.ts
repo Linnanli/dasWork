@@ -214,6 +214,62 @@ function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCe
 }
 
 describe('PluginCenterService', () => {
+  it('hides internal bundled plugins and refuses direct user mutations', async () => {
+    const internalPlugin = {
+      id: 'codex-app-tools@openai-bundled',
+      name: 'codex-app-tools',
+      source: { type: 'local', path: '/plugins/codex-app-tools' },
+      installed: true,
+      enabled: true,
+      installPolicy: 'AVAILABLE',
+      availability: 'AVAILABLE',
+      version: '0.1.0',
+      interface: { displayName: 'Codex App Tools' }
+    }
+    const provider = createProvider({
+      listPluginCatalog: vi.fn(async () => ({
+        marketplaces: [{ name: 'openai-bundled', path: '/plugins', plugins: [internalPlugin] }],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      })),
+      listInstalledPluginsForManagement: vi.fn(async () => ({
+        marketplaces: [{ name: 'openai-bundled', path: '/plugins', plugins: [internalPlugin] }],
+        featuredPluginIds: [],
+        marketplaceLoadErrors: []
+      }))
+    })
+    const service = new PluginCenterService({
+      provider,
+      defaultCwd: () => '/repo',
+      isInternalPlugin: (plugin) => plugin.id === internalPlugin.id
+    })
+    const pluginInput = {
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: internalPlugin.id, marketplaceId: 'openai-bundled' }
+    }
+
+    const snapshot = await service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['plugins'],
+      includePluginDetails: false
+    })
+    const installed = await service.getInstalledPlugins({
+      version: PLUGIN_CENTER_API_VERSION
+    })
+
+    expect(snapshot.snapshot.plugins).toEqual([])
+    expect(installed.plugins).toEqual([])
+    await expect(service.getPluginDetail(pluginInput)).rejects.toThrow('managed by the desktop')
+    await expect(service.installPlugin(pluginInput)).rejects.toThrow('managed by the desktop')
+    await expect(service.uninstallPlugin(pluginInput)).rejects.toThrow('managed by the desktop')
+    await expect(service.setPluginEnabled({ ...pluginInput, enabled: false })).rejects.toThrow(
+      'managed by the desktop'
+    )
+    expect(provider.installPlugin).not.toHaveBeenCalled()
+    expect(provider.uninstallPlugin).not.toHaveBeenCalled()
+    expect(provider.setPluginEnabled).not.toHaveBeenCalled()
+  })
+
   it('maps raw catalog/config data without returning MCP secret values', async () => {
     const service = new PluginCenterService({
       provider: createProvider(),

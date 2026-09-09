@@ -208,6 +208,7 @@ export interface CodexToolCallRequestParams {
   threadId?: string
   turnId?: string
   callId?: string
+  namespace?: string | null
   tool?: string
   toolName?: string
   arguments?: unknown

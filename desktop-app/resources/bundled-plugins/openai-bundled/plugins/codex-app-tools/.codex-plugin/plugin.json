@@ -1,0 +1,10 @@
+{
+  "name": "codex-app-tools",
+  "version": "0.2.0",
+  "description": "Repository-owned MCP bridge for DasCowork desktop tools.",
+  "author": {
+    "name": "DasCowork contributors"
+  },
+  "license": "Proprietary",
+  "mcpServers": "./.mcp.json"
+}

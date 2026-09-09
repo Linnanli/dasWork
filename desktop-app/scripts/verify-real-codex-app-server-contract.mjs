@@ -1,5 +1,6 @@
-import { existsSync, realpathSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Runtime validation makes JSDoc return annotations redundant in this executable verifier. */
@@ -46,17 +47,22 @@ function requireThreadId(response) {
 export async function verifyRealCodexAppServerContract({
   root = desktopRoot,
   command = resolvePinnedCodexExecutable(root),
-  createClient = (settings) =>
-    new AppServerClient(
-      new StdioTransport({
-        command,
-        args: ['app-server', '--listen', 'stdio://'],
-        cwd: root
-      }),
-      settings
-    )
+  createClient
 } = {}) {
-  const client = createClient({ requestTimeoutMs: REQUEST_TIMEOUT_MS })
+  const isolatedCodexHome = mkdtempSync(join(tmpdir(), 'dascowork-codex-contract-'))
+  const clientFactory =
+    createClient ??
+    ((settings) =>
+      new AppServerClient(
+        new StdioTransport({
+          command,
+          args: ['app-server', '--listen', 'stdio://'],
+          cwd: root,
+          env: { ...process.env, CODEX_HOME: isolatedCodexHome }
+        }),
+        settings
+      ))
+  const client = clientFactory({ requestTimeoutMs: REQUEST_TIMEOUT_MS })
   let connected = false
 
   try {
@@ -76,6 +82,7 @@ export async function verifyRealCodexAppServerContract({
     return { ok: true, modelCount, threadId }
   } finally {
     if (connected) await client.disconnect()
+    rmSync(isolatedCodexHome, { recursive: true, force: true })
   }
 }
 

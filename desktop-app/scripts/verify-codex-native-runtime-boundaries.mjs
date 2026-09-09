@@ -74,12 +74,7 @@ const DEFAULT_TEST_ROOTS = [
   { label: 'core', root: resolve(desktopRoot, 'vendors/codex-app-server-client/src') }
 ]
 
-const DEFAULT_COMPATIBILITY_FIXTURE_ROOTS = [
-  {
-    label: 'legacy-provider-tests',
-    root: resolve(desktopRoot, 'vendors/ai-sdk-provider-codex-asp/tests')
-  }
-]
+const DEFAULT_COMPATIBILITY_FIXTURE_ROOTS = []
 
 /**
  * Exceptions must name exactly one file and one rule. Keep this empty unless a
@@ -150,6 +145,16 @@ function scan(files, rules, label, allowlist, usedAllowlist) {
 function normalizeRootEntries(entries, optionName) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error(`Codex native runtime boundary check failed: ${optionName} is empty`)
+  }
+  return entries.map((entry) => {
+    if (typeof entry === 'string') return { label: entry, root: entry, rules: [] }
+    return { rules: [], ...entry }
+  })
+}
+
+function normalizeOptionalRootEntries(entries, optionName) {
+  if (!Array.isArray(entries)) {
+    throw new Error(`Codex native runtime boundary check failed: ${optionName} is not an array`)
   }
   return entries.map((entry) => {
     if (typeof entry === 'string') return { label: entry, root: entry, rules: [] }
@@ -262,7 +267,7 @@ export function verifyCodexNativeRuntimeBoundaries({
 } = {}) {
   const normalizedProductionRoots = normalizeRootEntries(productionRoots, 'productionRoots')
   const normalizedTestRoots = normalizeRootEntries(testRoots, 'testRoots')
-  const normalizedCompatibilityFixtureRoots = normalizeRootEntries(
+  const normalizedCompatibilityFixtureRoots = normalizeOptionalRootEntries(
     compatibilityFixtureRoots,
     'compatibilityFixtureRoots'
   )

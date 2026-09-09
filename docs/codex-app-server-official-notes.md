@@ -17,7 +17,6 @@ Codex App Server 是 Codex 用来支撑富客户端集成的本地接口，例�
 - `codex/codex-rs/app-server/`
 - `codex/codex-rs/app-server-protocol/`
 - `desktop-app/vendors/codex-app-server-client/`
-- `desktop-app/vendors/ai-sdk-provider-codex-asp/`
 
 ## 协议
 
