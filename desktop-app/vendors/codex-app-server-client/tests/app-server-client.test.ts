@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppServerClient } from '../src/client/app-server-client'
 import type {
@@ -43,34 +43,48 @@ class MemoryTransport implements CodexTransport {
 }
 
 describe('AppServerClient', () => {
-  it('uses a 30 second submission-confirmation timeout by default', async () => {
-    vi.useFakeTimers()
-    try {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it.each(['plugin/installed', 'app/installed'])(
+    'lets app-server own the %s request lifetime by default',
+    async (method) => {
+      vi.useFakeTimers()
       const transport = new MemoryTransport()
       const client = new AppServerClient(transport)
       await client.connect()
 
-      const request = client.request('turn/start', { threadId: 'thread-1', input: [] })
-      let settled = false
-      void request.then(
-        () => {
-          settled = true
-        },
-        () => {
-          settled = true
-        }
-      )
-      const rejection = expect(request).rejects.toThrow('Request timed out: turn/start')
+      const request = client.request<{ items: unknown[] }>(method)
+      const settled = vi.fn()
+      void request.then(settled, settled)
 
-      await vi.advanceTimersByTimeAsync(29_999)
-      expect(transport.sentMessages).toHaveLength(1)
-      expect(settled).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      await rejection
-      expect(settled).toBe(true)
-    } finally {
-      vi.useRealTimers()
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      expect(settled).not.toHaveBeenCalled()
+      const outbound = transport.sentMessages[0]
+      expect(outbound).toMatchObject({ method })
+      if (!outbound || !('id' in outbound) || outbound.id === undefined) {
+        throw new Error('Expected an outbound JSON-RPC request')
+      }
+
+      transport.emit({ id: outbound.id, result: { items: [] } })
+      await expect(request).resolves.toEqual({ items: [] })
     }
+  )
+
+  it('still enforces an explicitly configured request deadline', async () => {
+    vi.useFakeTimers()
+    const transport = new MemoryTransport()
+    const client = new AppServerClient(transport, { requestTimeoutMs: 1_000 })
+    await client.connect()
+
+    const request = client.request('app/installed')
+    const rejection = expect(request).rejects.toThrow('Request timed out: app/installed')
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    await rejection
   })
 
   it('serializes asynchronous notifications received in one transport tick', async () => {

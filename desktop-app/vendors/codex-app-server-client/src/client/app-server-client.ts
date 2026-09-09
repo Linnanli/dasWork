@@ -29,6 +29,11 @@ export class JsonRpcError extends CodexProviderError
 
 export interface AppServerClientSettings
 {
+    /**
+     * Optional caller-owned deadline for outbound requests. When omitted, the
+     * app-server owns method-specific timeouts and the transport lifecycle is
+     * the request's cancellation boundary.
+     */
     requestTimeoutMs?: number;
     onPacket?: (packet: {
         direction: "inbound" | "outbound";
@@ -51,6 +56,8 @@ type ToolCallRequestHandler = (
 ) => CodexToolCallResult | Promise<CodexToolCallResult>;
 type TransportTerminationHandler = (error: CodexProviderError) => void;
 
+const DEFAULT_PENDING_REQUEST_DRAIN_TIMEOUT_MS = 30_000;
+
 function isResponse(message: JsonRpcMessage): message is JsonRpcResponse 
 {
     return (
@@ -71,7 +78,7 @@ function isRequestOrNotification(
 export class AppServerClient 
 {
     private readonly transport: CodexTransport;
-    private readonly requestTimeoutMs: number;
+    private readonly requestTimeoutMs: number | undefined;
     private readonly onPacket?: AppServerClientSettings["onPacket"];
     private nextId = 1;
 
@@ -80,7 +87,7 @@ export class AppServerClient
         {
             resolve: (value: unknown) => void;
             reject: (reason?: unknown) => void;
-            timer: NodeJS.Timeout;
+            timer: NodeJS.Timeout | undefined;
         }
     >();
 
@@ -107,7 +114,7 @@ export class AppServerClient
     constructor(transport: CodexTransport, settings: AppServerClientSettings = {}) 
     {
         this.transport = transport;
-        this.requestTimeoutMs = settings.requestTimeoutMs ?? 30_000;
+        this.requestTimeoutMs = settings.requestTimeoutMs;
         this.onPacket = settings.onPacket;
     }
 
@@ -166,7 +173,7 @@ export class AppServerClient
         const pendingRequestIds = [...this.pendingRequests.keys()];
         for (const pending of this.pendingRequests.values()) 
         {
-            clearTimeout(pending.timer);
+            clearRequestTimer(pending.timer);
             pending.reject(new CodexProviderError("Client disconnected."));
         }
         this.pendingRequests.clear();
@@ -194,13 +201,15 @@ export class AppServerClient
 
         const promise = new Promise<TResult>((resolve, reject) => 
         {
-            const timer = setTimeout(() => 
-            {
-                this.pendingRequests.delete(id);
-                this.resolvePendingRequestDrainWaiters();
-                this.transport.cancelRequest?.(id);
-                reject(new CodexProviderError(`Request timed out: ${method}`));
-            }, timeoutMs);
+            const timer = timeoutMs === undefined
+                ? undefined
+                : setTimeout(() =>
+                {
+                    this.pendingRequests.delete(id);
+                    this.resolvePendingRequestDrainWaiters();
+                    this.transport.cancelRequest?.(id);
+                    reject(new CodexProviderError(`Request timed out: ${method}`));
+                }, timeoutMs);
 
             this.pendingRequests.set(id, {
                 resolve: (value) => resolve(value as TResult),
@@ -219,7 +228,7 @@ export class AppServerClient
             const pending = this.pendingRequests.get(id);
             if (pending)
             {
-                clearTimeout(pending.timer);
+                clearRequestTimer(pending.timer);
                 this.pendingRequests.delete(id);
                 this.resolvePendingRequestDrainWaiters();
                 this.transport.cancelRequest?.(id);
@@ -300,7 +309,9 @@ export class AppServerClient
      * response, but a non-responsive peer must not pin a logical channel
      * forever.
      */
-    waitForPendingRequests(timeoutMs = this.requestTimeoutMs): Promise<boolean>
+    waitForPendingRequests(
+        timeoutMs = this.requestTimeoutMs ?? DEFAULT_PENDING_REQUEST_DRAIN_TIMEOUT_MS,
+    ): Promise<boolean>
     {
         if (this.pendingRequests.size === 0)
         {
@@ -383,7 +394,7 @@ export class AppServerClient
 
         for (const pending of this.pendingRequests.values())
         {
-            clearTimeout(pending.timer);
+            clearRequestTimer(pending.timer);
             pending.reject(error);
         }
         this.pendingRequests.clear();
@@ -411,7 +422,7 @@ export class AppServerClient
             return;
         }
 
-        clearTimeout(pending.timer);
+        clearRequestTimer(pending.timer);
         this.pendingRequests.delete(message.id);
         this.resolvePendingRequestDrainWaiters();
 
@@ -535,4 +546,12 @@ export class AppServerClient
 function isPromiseLike(value: void | Promise<void>): value is Promise<void>
 {
     return typeof value === "object" && value !== null && typeof value.then === "function";
+}
+
+function clearRequestTimer(timer: NodeJS.Timeout | undefined): void
+{
+    if (timer !== undefined)
+    {
+        clearTimeout(timer);
+    }
 }
