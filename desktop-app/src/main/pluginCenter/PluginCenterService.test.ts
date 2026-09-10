@@ -1197,10 +1197,13 @@ describe('PluginCenterService', () => {
 
     await service.getSnapshot({ version: PLUGIN_CENTER_API_VERSION })
 
-    expect(provider.listPluginCatalog).toHaveBeenCalledWith({
-      cwd: undefined,
-      forceRefetch: undefined
-    })
+    expect(provider.listPluginCatalog).toHaveBeenCalledWith(
+      {
+        cwd: undefined,
+        forceRefetch: undefined
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(provider.listSkillsForManagement).toHaveBeenCalledWith({
       cwd: undefined,
       forceReload: undefined

@@ -74,7 +74,11 @@ import { McpServerStatusService } from './mcp/McpServerStatusService'
 import { createListMcpServersHandler } from './mcp/mcpServerStatusIpc'
 import { PluginCenterService } from './pluginCenter/PluginCenterService'
 import { RecommendedSkillsService } from './pluginCenter/RecommendedSkillsService'
-import { createPluginCenterIpcHandlers } from './pluginCenter/registerPluginCenterIpc'
+import {
+  createPluginCenterCancelRequestHandler,
+  createPluginCenterIpcHandlers,
+  pluginCenterIpcChannels
+} from './pluginCenter/registerPluginCenterIpc'
 import type { ProjectApiService } from './projects/ProjectApiService'
 import type { ProjectService } from './projects/ProjectService'
 import { createProjectRuntimeServices } from './projects/projectRuntimeServices'
@@ -836,6 +840,7 @@ app.whenReady().then(async () => {
   )) {
     ipcMain.handle(channel, handler)
   }
+  ipcMain.on(pluginCenterIpcChannels.cancelRequest, createPluginCenterCancelRequestHandler())
   ipcMain.handle('codex:set-selected-model', (_, payload: unknown) => {
     const request = codexSetSelectedModelPayloadSchema.parse(payload)
     return runtime.setSelectedModel(request.modelId)

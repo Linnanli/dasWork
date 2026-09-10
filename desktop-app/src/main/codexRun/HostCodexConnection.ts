@@ -2,14 +2,19 @@ import {
   AppServerClient,
   CodexAppServerConnection,
   StdioTransport,
-  type CodexAppServerConnectionDiagnostics
+  type CodexAppServerConnectionDiagnostics,
+  type InitializeCapabilities,
+  type TransportContext
 } from '@dascowork/codex-app-server-client'
 
 import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
 import { createCodexClientInfo } from '../codexClientInfo'
 import { verifyCodexAppServerVersion } from './codexAppServerVersionPolicy'
 
-const CANONICAL_CAPABILITIES = { experimentalApi: true } as const
+const CANONICAL_CAPABILITIES = {
+  experimentalApi: true,
+  requestAttestation: false
+} satisfies InitializeCapabilities
 
 /**
  * Host-scoped owner of physical connection setup. Logical clients can only be
@@ -19,6 +24,8 @@ export class HostCodexConnection {
   private connection: CodexAppServerConnection | undefined
   private ready: Promise<void> | undefined
   private initializedGeneration: number | undefined
+  private hostHandlerConnection: CodexAppServerConnection | undefined
+  private unregisterHostHandlers: (() => void) | undefined
   private closed = false
 
   constructor(
@@ -27,15 +34,16 @@ export class HostCodexConnection {
     private readonly verifyVersion: typeof verifyCodexAppServerVersion = verifyCodexAppServerVersion
   ) {
     this.connection = sharedConnection
+    if (sharedConnection) this.ensureHostHandlers(sharedConnection)
   }
 
-  async acquire(threadId?: string): Promise<AppServerClient> {
+  async acquire(context?: string | TransportContext): Promise<AppServerClient> {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await this.ensureReady()
       if (!this.connection) throw new Error('Codex host connection is not available')
       const expectedGeneration = this.initializedGeneration
       const client = new AppServerClient(
-        this.connection.createTransport({ threadId }),
+        this.connection.createTransport(normalizeTransportContext(context)),
         appServerPacketLogger()
       )
       try {
@@ -51,11 +59,11 @@ export class HostCodexConnection {
     throw new Error('Codex host connection could not stabilize after transport recovery')
   }
 
-  async acquireLease(threadId?: string): Promise<{
+  async acquireLease(context?: string | TransportContext): Promise<{
     client: AppServerClient
     release(): Promise<void>
   }> {
-    const client = await this.acquire(threadId)
+    const client = await this.acquire(context)
     return {
       client,
       release: () => client.disconnect()
@@ -91,6 +99,9 @@ export class HostCodexConnection {
 
   async shutdown(): Promise<void> {
     this.closed = true
+    this.unregisterHostHandlers?.()
+    this.unregisterHostHandlers = undefined
+    this.hostHandlerConnection = undefined
     await this.connection?.shutdown()
   }
 
@@ -120,6 +131,7 @@ export class HostCodexConnection {
           }),
         idleTimeoutMs: 300_000
       })
+    this.ensureHostHandlers(connection)
     const client = new AppServerClient(connection.createTransport(), appServerPacketLogger())
     try {
       await client.connect()
@@ -137,6 +149,35 @@ export class HostCodexConnection {
       await client.disconnect()
     }
   }
+
+  private ensureHostHandlers(connection: CodexAppServerConnection): void {
+    if (this.hostHandlerConnection === connection) return
+    this.unregisterHostHandlers?.()
+    this.unregisterHostHandlers = connection.registerHostRequestHandler(
+      'currentTime/read',
+      (params) => {
+        if (!isCurrentTimeReadParams(params)) {
+          throw new Error('currentTime/read requires a threadId.')
+        }
+        return { currentTimeAt: Math.floor(Date.now() / 1_000) }
+      }
+    )
+    this.hostHandlerConnection = connection
+  }
+}
+
+function normalizeTransportContext(
+  context: string | TransportContext | undefined
+): TransportContext {
+  return typeof context === 'string' ? { threadId: context } : (context ?? {})
+}
+
+function isCurrentTimeReadParams(value: unknown): value is { threadId: string } {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    typeof (value as { threadId?: unknown }).threadId === 'string'
+  )
 }
 
 function appServerPacketLogger(): { onPacket?: (packet: unknown) => void } {

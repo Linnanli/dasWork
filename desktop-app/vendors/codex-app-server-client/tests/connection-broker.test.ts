@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { AppServerClient } from '../src/client/app-server-client'
 import { CodexAppServerConnection } from '../src/client/app-server-connection'
 import type {
   CodexTransport,
@@ -102,6 +103,8 @@ describe('CodexAppServerConnection', () => {
     await assertG08('诊断可关联而不泄露密钥', () => {
       expect(typeof diagnostics.generation).toBe('number')
       expect(diagnostics.pendingRequestCount).toBe(0)
+      expect(diagnostics.cancelledRequestCount).toBe(1)
+      expect(diagnostics.lateResponseCount).toBe(1)
       expect(JSON.stringify(diagnostics)).not.toContain('secret-')
       expect(JSON.stringify(diagnostics)).not.toContain('thread-')
     })
@@ -119,4 +122,185 @@ describe('CodexAppServerConnection', () => {
     })
     await connection.shutdown()
   })
+
+  it('routes registered host requests before thread owners while catalog requests remain pending', async () => {
+    const physical = new MemoryTransport()
+    const connection = new CodexAppServerConnection({
+      transportFactory: () => physical
+    })
+    const unregister = connection.registerHostRequestHandler('currentTime/read', () => ({
+      currentTimeAt: 1_800_000_000
+    }))
+    const catalogChannel = connection.createTransport()
+    const threadChannel = connection.createTransport({ threadId: 'thread-owned' })
+    const catalogReceived: JsonRpcMessage[] = []
+    const threadReceived: JsonRpcMessage[] = []
+
+    await Promise.all([catalogChannel.connect(), threadChannel.connect()])
+    catalogChannel.on('message', (message) => catalogReceived.push(message))
+    threadChannel.on('message', (message) => threadReceived.push(message))
+    await catalogChannel.sendMessage({ id: 'local-catalog', method: 'plugin/installed' })
+
+    const catalogWireRequest = physical.sentMessages.find(
+      (message): message is Extract<JsonRpcMessage, { id: string | number; method: string }> =>
+        'method' in message && message.method === 'plugin/installed'
+    )
+    expect(catalogWireRequest).toBeDefined()
+
+    physical.emit({
+      id: 'server-current-time',
+      method: 'currentTime/read',
+      params: { threadId: 'thread-owned' }
+    })
+    await Promise.resolve()
+
+    expect(
+      physical.sentMessages.find(
+        (message) => 'id' in message && message.id === 'server-current-time'
+      )
+    ).toEqual({
+      id: 'server-current-time',
+      result: { currentTimeAt: 1_800_000_000 }
+    })
+    expect(threadReceived).toEqual([])
+    expect(catalogReceived).toEqual([])
+
+    physical.emit({ id: catalogWireRequest!.id, result: { plugins: [] } })
+    expect(catalogReceived).toEqual([{ id: 'local-catalog', result: { plugins: [] } }])
+
+    unregister()
+    await Promise.all([catalogChannel.disconnect(), threadChannel.disconnect()])
+    await connection.shutdown()
+  })
+
+  it('rejects registered host requests for inactive thread ids without invoking the handler', async () => {
+    const physical = new MemoryTransport()
+    const connection = new CodexAppServerConnection({
+      transportFactory: () => physical
+    })
+    let calls = 0
+    const unregister = connection.registerHostRequestHandler('currentTime/read', () => {
+      calls += 1
+      return { currentTimeAt: 1 }
+    })
+    const channel = connection.createTransport()
+
+    await channel.connect()
+    physical.emit({
+      id: 'server-current-time',
+      method: 'currentTime/read',
+      params: { threadId: 'missing-thread' }
+    })
+    await Promise.resolve()
+
+    expect(calls).toBe(0)
+    expect(
+      physical.sentMessages.find(
+        (message) => 'id' in message && message.id === 'server-current-time'
+      )
+    ).toEqual({
+      id: 'server-current-time',
+      error: {
+        code: -32002,
+        message: 'Host capability request references an inactive thread.'
+      }
+    })
+
+    unregister()
+    await channel.disconnect()
+    await connection.shutdown()
+  })
+
+  it('returns method-not-found for untargeted unregistered server requests', async () => {
+    const physical = new MemoryTransport()
+    const connection = new CodexAppServerConnection({
+      transportFactory: () => physical
+    })
+    const channel = connection.createTransport()
+
+    await channel.connect()
+    physical.emit({ id: 'server-auth', method: 'account/chatgptAuthTokens/refresh' })
+    await Promise.resolve()
+
+    expect(
+      physical.sentMessages.find((message) => 'id' in message && message.id === 'server-auth')
+    ).toEqual({
+      id: 'server-auth',
+      error: {
+        code: -32601,
+        message: 'Method not found: account/chatgptAuthTokens/refresh'
+      }
+    })
+
+    await channel.disconnect()
+    await connection.shutdown()
+  })
+
+  it('does not attach a pre-aborted logical transport', async () => {
+    const physical = new MemoryTransport()
+    const connection = new CodexAppServerConnection({
+      transportFactory: () => physical
+    })
+    const controller = new AbortController()
+    controller.abort()
+    const channel = connection.createTransport({ signal: controller.signal })
+
+    await expect(channel.connect()).rejects.toThrow(/aborted/u)
+    expect(connection.getDiagnostics()).toMatchObject({
+      logicalChannelCount: 0,
+      activeLeaseCount: 0,
+      pendingRequestCount: 0
+    })
+    await connection.shutdown()
+  })
+
+  it('aborts an attached logical transport and tracks the cancelled late response once', async () => {
+    const physical = new MemoryTransport()
+    const connection = new CodexAppServerConnection({
+      transportFactory: () => physical
+    })
+    const controller = new AbortController()
+    const client = new AppServerClient(connection.createTransport({ signal: controller.signal }))
+
+    await client.connect()
+    const pending = client.request('plugin/installed')
+    const outbound = await waitForSentRequest(physical, 'plugin/installed')
+    expect(outbound).toBeDefined()
+
+    controller.abort()
+    await expect(pending).rejects.toThrow(/aborted/u)
+    expect(connection.getDiagnostics()).toMatchObject({
+      logicalChannelCount: 0,
+      activeLeaseCount: 0,
+      pendingRequestCount: 0,
+      cancelledRequestCount: 1,
+      lateResponseCount: 0
+    })
+
+    physical.emit({ id: outbound.id, result: { plugins: [] } })
+    expect(connection.getDiagnostics()).toMatchObject({
+      cancelledRequestCount: 1,
+      lateResponseCount: 1
+    })
+
+    await client.disconnect()
+    await connection.shutdown()
+  })
 })
+
+async function waitForSentRequest(
+  transport: MemoryTransport,
+  method: string
+): Promise<Extract<JsonRpcMessage, { id: string | number; method: string }>> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const outbound = transport.sentMessages.find(
+      (message): message is Extract<JsonRpcMessage, { id: string | number; method: string }> =>
+        'method' in message && message.method === method
+    )
+    if (outbound) {
+      return outbound
+    }
+    await Promise.resolve()
+  }
+  throw new Error(`Timed out waiting for ${method}`)
+}

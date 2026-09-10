@@ -25,10 +25,8 @@ import {
   pluginCenterUninstallSkillRequestSchema,
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcChannels,
-  type PluginCenterGetAppToolsRequest,
-  type PluginCenterGetAppToolsResult,
-  type PluginCenterInstalledPluginsRequest,
-  type PluginCenterInstalledPluginsResult
+  pluginCenterIpcCancelRequestSchema,
+  parsePluginCenterIpcRequestEnvelope
 } from '../../shared/pluginCenterApi'
 import type { PluginCenterService } from './PluginCenterService'
 
@@ -36,11 +34,35 @@ export { pluginCenterIpcChannels }
 
 const SNAPSHOT_ERROR_MESSAGE = '插件中心数据加载失败，请重试。'
 const MUTATION_ERROR_MESSAGE = '插件中心操作失败，请刷新后重试。'
+const CANCELLED_ERROR_MESSAGE = '插件中心请求已取消。'
+const DUPLICATE_REQUEST_ERROR_MESSAGE = '插件中心请求重复，请重试。'
 
-type PluginCenterServiceLike = Pick<
-  PluginCenterService,
+type PluginCenterInvokeChannel = Exclude<
+  (typeof pluginCenterIpcChannels)[keyof typeof pluginCenterIpcChannels],
+  (typeof pluginCenterIpcChannels)['cancelRequest']
+>
+
+type PluginCenterExecutionContext = {
+  signal: AbortSignal
+}
+
+type PluginCenterWebContents = {
+  id: number
+  isDestroyed?: () => boolean
+  once?: (event: string, listener: () => void) => void
+  off?: (event: string, listener: () => void) => void
+  removeListener?: (event: string, listener: () => void) => void
+}
+
+type PluginCenterIpcEvent = {
+  sender: { id: number }
+}
+
+type PluginCenterServiceMethod =
   | 'getSnapshot'
+  | 'getInstalledPlugins'
   | 'getPluginDetail'
+  | 'getAppTools'
   | 'getSkillContents'
   | 'getRecommendedSkills'
   | 'addMarketplace'
@@ -54,156 +76,510 @@ type PluginCenterServiceLike = Pick<
   | 'setMcpServerEnabled'
   | 'upsertMcpServer'
   | 'removeMcpServer'
-> & {
-  getInstalledPlugins(
-    input: PluginCenterInstalledPluginsRequest
-  ): Promise<PluginCenterInstalledPluginsResult>
-  getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
+
+type PluginCenterServiceLike = {
+  [Method in PluginCenterServiceMethod]: (
+    input: Parameters<PluginCenterService[Method]>[0],
+    context?: PluginCenterExecutionContext
+  ) => ReturnType<PluginCenterService[Method]>
+}
+
+type PendingPluginCenterRequest = {
+  key: string
+  requestId: string
+  webContentsId: number
+  controller: AbortController
+  cancellable: boolean
+}
+
+type WebContentsLifecycle = {
+  webContents: PluginCenterWebContents
+  refCount: number
+  onDestroyed: () => void
+  onRenderProcessGone: () => void
+}
+
+const pendingRequests = new Map<string, PendingPluginCenterRequest>()
+const webContentsLifecycles = new Map<number, WebContentsLifecycle>()
+const lifecycleCounters = {
+  completed: 0,
+  cancelled: 0,
+  ignoredCancels: 0,
+  failed: 0,
+  duplicateRequests: 0,
+  windowAborted: 0
 }
 
 export function createPluginCenterIpcHandlers(
   service: PluginCenterServiceLike
-): Record<
-  (typeof pluginCenterIpcChannels)[keyof typeof pluginCenterIpcChannels],
-  (_event: unknown, payload: unknown) => Promise<unknown>
-> {
+): Record<PluginCenterInvokeChannel, (_event: unknown, payload: unknown) => Promise<unknown>> {
   return {
-    [pluginCenterIpcChannels.getSnapshot]: async (_event, payload) => {
-      const input = pluginCenterSnapshotRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.getSnapshot]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterSnapshotRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterSnapshotResultSchema.parse(await service.getSnapshot(input)),
-        SNAPSHOT_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterSnapshotResultSchema.parse(await service.getSnapshot(input, context)),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.getInstalledPlugins]: async (_event, payload) => {
-      const input = pluginCenterInstalledPluginsRequestSchema.parse(payload)
-      return safePluginCenterCall(
-        async () =>
-          pluginCenterInstalledPluginsResultSchema.parse(await service.getInstalledPlugins(input)),
-        SNAPSHOT_ERROR_MESSAGE
+    [pluginCenterIpcChannels.getInstalledPlugins]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterInstalledPluginsRequestSchema
       )
-    },
-    [pluginCenterIpcChannels.getPluginDetail]: async (_event, payload) => {
-      const input = pluginCenterGetPluginDetailRequestSchema.parse(payload)
       return safePluginCenterCall(
-        async () =>
-          pluginCenterGetPluginDetailResultSchema.parse(await service.getPluginDetail(input)),
-        SNAPSHOT_ERROR_MESSAGE
-      )
-    },
-    [pluginCenterIpcChannels.getAppTools]: async (_event, payload) => {
-      const input = pluginCenterGetAppToolsRequestSchema.parse(payload)
-      return safePluginCenterCall(
-        async () => pluginCenterGetAppToolsResultSchema.parse(await service.getAppTools(input)),
-        SNAPSHOT_ERROR_MESSAGE
-      )
-    },
-    [pluginCenterIpcChannels.getSkillContents]: async (_event, payload) => {
-      const input = pluginCenterGetSkillContentsRequestSchema.parse(payload)
-      return safePluginCenterCall(
-        async () =>
-          pluginCenterGetSkillContentsResultSchema.parse(await service.getSkillContents(input)),
-        SNAPSHOT_ERROR_MESSAGE
-      )
-    },
-    [pluginCenterIpcChannels.getRecommendedSkills]: async (_event, payload) => {
-      const input = pluginCenterGetRecommendedSkillsRequestSchema.parse(payload)
-      return safePluginCenterCall(
-        async () =>
-          pluginCenterGetRecommendedSkillsResultSchema.parse(
-            await service.getRecommendedSkills(input)
+        async (context) =>
+          pluginCenterInstalledPluginsResultSchema.parse(
+            await service.getInstalledPlugins(input, context)
           ),
-        SNAPSHOT_ERROR_MESSAGE
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.addMarketplace]: async (_event, payload) => {
-      const input = pluginCenterAddMarketplaceRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.getPluginDetail]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterGetPluginDetailRequestSchema
+      )
       return safePluginCenterCall(
-        async () =>
-          pluginCenterAddMarketplaceResultSchema.parse(await service.addMarketplace(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterGetPluginDetailResultSchema.parse(
+            await service.getPluginDetail(input, context)
+          ),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.installPlugin]: async (_event, payload) => {
-      const input = pluginCenterInstallPluginRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.getAppTools]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterGetAppToolsRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.installPlugin(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterGetAppToolsResultSchema.parse(await service.getAppTools(input, context)),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.installRecommendedSkill]: async (_event, payload) => {
-      const input = pluginCenterInstallRecommendedSkillRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.getSkillContents]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterGetSkillContentsRequestSchema
+      )
       return safePluginCenterCall(
-        async () =>
-          pluginCenterMutationResultSchema.parse(await service.installRecommendedSkill(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterGetSkillContentsResultSchema.parse(
+            await service.getSkillContents(input, context)
+          ),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.uninstallPlugin]: async (_event, payload) => {
-      const input = pluginCenterUninstallPluginRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.getRecommendedSkills]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterGetRecommendedSkillsRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.uninstallPlugin(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterGetRecommendedSkillsResultSchema.parse(
+            await service.getRecommendedSkills(input, context)
+          ),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
       )
     },
-    [pluginCenterIpcChannels.uninstallSkill]: async (_event, payload) => {
-      const input = pluginCenterUninstallSkillRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.addMarketplace]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterAddMarketplaceRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.uninstallSkill(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterAddMarketplaceResultSchema.parse(
+            await service.addMarketplace(input, context)
+          ),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.setPluginEnabled]: async (_event, payload) => {
-      const input = pluginCenterSetPluginEnabledRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.installPlugin]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterInstallPluginRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.setPluginEnabled(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.installPlugin(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.setSkillEnabled]: async (_event, payload) => {
-      const input = pluginCenterSetSkillEnabledRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.installRecommendedSkill]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterInstallRecommendedSkillRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.setSkillEnabled(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(
+            await service.installRecommendedSkill(input, context)
+          ),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.setAppEnabled]: async (_event, payload) => {
-      const input = pluginCenterSetAppEnabledRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.uninstallPlugin]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterUninstallPluginRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.setAppEnabled(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.uninstallPlugin(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.setMcpServerEnabled]: async (_event, payload) => {
-      const input = pluginCenterSetMcpServerEnabledRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.uninstallSkill]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterUninstallSkillRequestSchema
+      )
       return safePluginCenterCall(
-        async () =>
-          pluginCenterMutationResultSchema.parse(await service.setMcpServerEnabled(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.uninstallSkill(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.upsertMcpServer]: async (_event, payload) => {
-      const input = pluginCenterUpsertMcpServerRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.setPluginEnabled]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterSetPluginEnabledRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.upsertMcpServer(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.setPluginEnabled(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
-    [pluginCenterIpcChannels.removeMcpServer]: async (_event, payload) => {
-      const input = pluginCenterRemoveMcpServerRequestSchema.parse(payload)
+    [pluginCenterIpcChannels.setSkillEnabled]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterSetSkillEnabledRequestSchema
+      )
       return safePluginCenterCall(
-        async () => pluginCenterMutationResultSchema.parse(await service.removeMcpServer(input)),
-        MUTATION_ERROR_MESSAGE
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.setSkillEnabled(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.setAppEnabled]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterSetAppEnabledRequestSchema
+      )
+      return safePluginCenterCall(
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.setAppEnabled(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.setMcpServerEnabled]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterSetMcpServerEnabledRequestSchema
+      )
+      return safePluginCenterCall(
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.setMcpServerEnabled(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.upsertMcpServer]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterUpsertMcpServerRequestSchema
+      )
+      return safePluginCenterCall(
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.upsertMcpServer(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.removeMcpServer]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterRemoveMcpServerRequestSchema
+      )
+      return safePluginCenterCall(
+        async (context) =>
+          pluginCenterMutationResultSchema.parse(await service.removeMcpServer(input, context)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     }
   }
 }
 
-async function safePluginCenterCall<T>(action: () => Promise<T>, message: string): Promise<T> {
-  try {
-    return await action()
-  } catch (cause) {
-    console.error('[plugin-center] IPC operation failed', cause)
-    throw new Error(message)
+export function createPluginCenterCancelRequestHandler(): (
+  event: PluginCenterIpcEvent,
+  payload: unknown
+) => void {
+  return (event, payload) => {
+    const { requestId } = pluginCenterIpcCancelRequestSchema.parse(payload)
+    const webContentsId = event.sender.id
+    const key = requestKey(webContentsId, requestId)
+    const pending = pendingRequests.get(key)
+    if (!pending) {
+      lifecycleCounters.ignoredCancels += 1
+      return
+    }
+    if (!pending.cancellable) {
+      lifecycleCounters.ignoredCancels += 1
+      return
+    }
+    lifecycleCounters.cancelled += 1
+    pending.controller.abort()
+    completePendingRequest(key)
   }
+}
+
+export function getPluginCenterIpcLifecycleDiagnostics(): {
+  pending: number
+  completed: number
+  cancelled: number
+  ignoredCancels: number
+  failed: number
+  duplicateRequests: number
+  windowAborted: number
+} {
+  return {
+    pending: pendingRequests.size,
+    ...lifecycleCounters
+  }
+}
+
+export function resetPluginCenterIpcLifecycleForTests(): void {
+  for (const key of [...pendingRequests.keys()]) completePendingRequest(key)
+  pendingRequests.clear()
+  webContentsLifecycles.clear()
+  lifecycleCounters.completed = 0
+  lifecycleCounters.cancelled = 0
+  lifecycleCounters.ignoredCancels = 0
+  lifecycleCounters.failed = 0
+  lifecycleCounters.duplicateRequests = 0
+  lifecycleCounters.windowAborted = 0
+}
+
+async function safePluginCenterCall<T>(
+  action: (context: PluginCenterExecutionContext) => Promise<T>,
+  event: unknown,
+  requestId: string,
+  message: string,
+  lifecycle: { cancellable: boolean }
+): Promise<T> {
+  const registration = registerPendingRequest(event, requestId, lifecycle)
+  if (!registration) {
+    lifecycleCounters.duplicateRequests += 1
+    throw new Error(DUPLICATE_REQUEST_ERROR_MESSAGE)
+  }
+  const { key, controller } = registration
+  try {
+    const operation = action({ signal: controller.signal })
+    const result = lifecycle.cancellable
+      ? await runUntilCancelled(operation, controller.signal)
+      : await operation
+    lifecycleCounters.completed += 1
+    return result
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new Error(CANCELLED_ERROR_MESSAGE)
+    }
+    lifecycleCounters.failed += 1
+    console.error('[plugin-center] IPC operation failed', safeErrorMetadata(cause))
+    throw new Error(message)
+  } finally {
+    completePendingRequest(key)
+  }
+}
+
+function parseEnvelope<T>(
+  payload: unknown,
+  payloadSchema: { parse(value: unknown, options?: { jitless: boolean }): T }
+): { requestId: string; payload: T } {
+  return parsePluginCenterIpcRequestEnvelope(payload, payloadSchema)
+}
+
+function registerPendingRequest(
+  event: unknown,
+  requestId: string,
+  lifecycle: { cancellable: boolean }
+): PendingPluginCenterRequest | null {
+  const webContents = senderFromEvent(event)
+  const key = requestKey(webContents.id, requestId)
+  if (pendingRequests.has(key)) return null
+
+  const pending = {
+    key,
+    requestId,
+    webContentsId: webContents.id,
+    controller: new AbortController(),
+    cancellable: lifecycle.cancellable
+  }
+  pendingRequests.set(key, pending)
+  retainWebContents(webContents)
+  return pending
+}
+
+function senderFromEvent(event: unknown): PluginCenterWebContents {
+  const sender = (event as Partial<PluginCenterIpcEvent> | null)?.sender
+  if (!sender || typeof sender.id !== 'number') {
+    throw new Error('Plugin Center IPC event is missing a sender')
+  }
+  return sender as PluginCenterWebContents
+}
+
+function requestKey(webContentsId: number, requestId: string): string {
+  return `${webContentsId}:${requestId}`
+}
+
+function runUntilCancelled<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  operation.catch(() => undefined)
+  if (signal.aborted) return Promise.reject(new Error(CANCELLED_ERROR_MESSAGE))
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      signal.removeEventListener('abort', onAbort)
+      reject(new Error(CANCELLED_ERROR_MESSAGE))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    operation.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
+}
+
+function retainWebContents(webContents: PluginCenterWebContents): void {
+  const existing = webContentsLifecycles.get(webContents.id)
+  if (existing) {
+    existing.refCount += 1
+    return
+  }
+
+  const onDestroyed = (): void => abortWebContentsRequests(webContents.id)
+  const onRenderProcessGone = (): void => abortWebContentsRequests(webContents.id)
+  webContents.once?.('destroyed', onDestroyed)
+  webContents.once?.('render-process-gone', onRenderProcessGone)
+  webContentsLifecycles.set(webContents.id, {
+    webContents,
+    refCount: 1,
+    onDestroyed,
+    onRenderProcessGone
+  })
+}
+
+function completePendingRequest(key: string): void {
+  const pending = pendingRequests.get(key)
+  if (!pending) return
+  pendingRequests.delete(key)
+  releaseWebContents(pending.webContentsId)
+}
+
+function releaseWebContents(webContentsId: number): void {
+  const lifecycle = webContentsLifecycles.get(webContentsId)
+  if (!lifecycle) return
+  lifecycle.refCount -= 1
+  if (lifecycle.refCount > 0) return
+
+  removeWebContentsListener(lifecycle.webContents, 'destroyed', lifecycle.onDestroyed)
+  removeWebContentsListener(
+    lifecycle.webContents,
+    'render-process-gone',
+    lifecycle.onRenderProcessGone
+  )
+  webContentsLifecycles.delete(webContentsId)
+}
+
+function abortWebContentsRequests(webContentsId: number): void {
+  const keys = [...pendingRequests.entries()]
+    .filter(([, pending]) => pending.webContentsId === webContentsId)
+    .map(([key]) => key)
+  lifecycleCounters.windowAborted += keys.length
+  for (const key of keys) {
+    const pending = pendingRequests.get(key)
+    if (pending?.cancellable) pending.controller.abort()
+    completePendingRequest(key)
+  }
+}
+
+function safeErrorMetadata(cause: unknown): { errorName: string; errorType: string } {
+  if (cause instanceof Error) {
+    return { errorName: cause.name, errorType: 'error' }
+  }
+  return { errorName: 'NonError', errorType: typeof cause }
+}
+
+function removeWebContentsListener(
+  webContents: PluginCenterWebContents,
+  event: 'destroyed' | 'render-process-gone',
+  listener: () => void
+): void {
+  if (webContents.isDestroyed?.()) return
+  if (webContents.off) {
+    webContents.off(event, listener)
+    return
+  }
+  webContents.removeListener?.(event, listener)
 }

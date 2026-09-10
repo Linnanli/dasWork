@@ -57,30 +57,60 @@ type JsonRecord = Record<string, unknown>
  * this object, raw config, config paths, or arbitrary JSON-RPC access.
  */
 export type PluginCenterProvider = {
-  listPluginCatalog(input: { cwd?: string; forceRefetch?: boolean }): Promise<unknown>
-  listInstalledPluginsForManagement?(input: { cwd?: string }): Promise<unknown>
+  listPluginCatalog(
+    input: { cwd?: string; forceRefetch?: boolean },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  listInstalledPluginsForManagement?(
+    input: { cwd?: string },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
   readPluginDetailsForManagement?(input: { cwd?: string; forceRefetch?: boolean }): Promise<unknown>
-  readPluginDetailForManagement?(input: {
-    marketplacePath?: string
-    remoteMarketplaceName?: string
-    pluginName: string
-  }): Promise<unknown>
-  readSkillFileContents?(input: { path: string; maxBytes?: number }): Promise<string>
-  readRemotePluginSkillContents?(input: {
-    remoteMarketplaceName: string
-    remotePluginId: string
-    skillName: string
-    maxBytes?: number
-  }): Promise<string | null>
-  listSkillsForManagement(input: { cwd?: string; forceReload?: boolean }): Promise<unknown>
-  readAppsForManagement?(input: {
-    appIds: string[]
-    threadId?: string
-    includeTools?: boolean
-  }): Promise<unknown>
-  listAppsForManagement(input?: { forceRefetch?: boolean }): Promise<unknown>
-  readConfigForManagement?(input: { cwd?: string }): Promise<unknown>
-  readMcpManagementSnapshot(input: { cwd?: string }): Promise<unknown>
+  readPluginDetailForManagement?(
+    input: {
+      marketplacePath?: string
+      remoteMarketplaceName?: string
+      pluginName: string
+    },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  readSkillFileContents?(
+    input: { path: string; maxBytes?: number },
+    context?: PluginCenterExecutionContext
+  ): Promise<string>
+  readRemotePluginSkillContents?(
+    input: {
+      remoteMarketplaceName: string
+      remotePluginId: string
+      skillName: string
+      maxBytes?: number
+    },
+    context?: PluginCenterExecutionContext
+  ): Promise<string | null>
+  listSkillsForManagement(
+    input: { cwd?: string; forceReload?: boolean },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  readAppsForManagement?(
+    input: {
+      appIds: string[]
+      threadId?: string
+      includeTools?: boolean
+    },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  listAppsForManagement(
+    input?: { forceRefetch?: boolean },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  readConfigForManagement?(
+    input: { cwd?: string },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
+  readMcpManagementSnapshot(
+    input: { cwd?: string },
+    context?: PluginCenterExecutionContext
+  ): Promise<unknown>
   installPlugin(input: {
     marketplacePath?: string | null
     remoteMarketplaceName?: string | null
@@ -150,7 +180,22 @@ type SharedCacheEntry<T> = {
   gcAt: number
   promise: Promise<T>
   pending: boolean
+  ownerController?: AbortController
+  retainedByPrewarm: boolean
+  waiters: number
   value?: T
+}
+
+export type PluginCenterExecutionContext = {
+  readonly signal?: AbortSignal
+  readonly retainCacheOwner?: boolean
+}
+
+class PluginCenterAbortError extends Error {
+  constructor() {
+    super('Plugin Center request was cancelled')
+    this.name = 'AbortError'
+  }
 }
 
 type CacheFreshness<T> = number | ((value: T) => number)
@@ -229,7 +274,10 @@ export class PluginCenterService {
     }
   ) {}
 
-  async getSnapshot(input: PluginCenterSnapshotRequest): Promise<PluginCenterSnapshotResult> {
+  async getSnapshot(
+    input: PluginCenterSnapshotRequest,
+    context: PluginCenterExecutionContext = {}
+  ): Promise<PluginCenterSnapshotResult> {
     const requestId = ++this.snapshotRequestSequence
     const snapshotStartedAt = this.nowMs()
     const cwd = this.cwdFor(input)
@@ -262,12 +310,12 @@ export class PluginCenterService {
     ] = await Promise.all([
       includePlugins
         ? this.readSnapshotSection(requestId, 'plugin/list', () =>
-            this.readPluginCatalog(cwd, input.forceRefresh === true, requestId)
+            this.readPluginCatalog(cwd, input.forceRefresh === true, requestId, context)
           )
         : Promise.resolve({ ok: true, value: {} } satisfies SafeResult<unknown>),
       includePlugins
         ? this.readSnapshotSection(requestId, 'plugin/installed', () =>
-            this.readInstalledPlugins(cwd, input.forceRefresh === true, requestId)
+            this.readInstalledPlugins(cwd, input.forceRefresh === true, requestId, context)
           )
         : Promise.resolve({ ok: true, value: [] } satisfies SafeResult<PluginCenterPlugin[]>),
       includePluginDetails && this.dependencies.provider.readPluginDetailsForManagement
@@ -277,10 +325,13 @@ export class PluginCenterService {
         : Promise.resolve({ ok: true, value: [] } satisfies SafeResult<unknown[]>),
       includeSkills
         ? this.readSnapshotSection(requestId, 'skills/list', () =>
-            this.dependencies.provider.listSkillsForManagement({
-              cwd,
-              forceReload: input.forceRefresh
-            })
+            this.dependencies.provider.listSkillsForManagement(
+              {
+                cwd,
+                forceReload: input.forceRefresh
+              },
+              ...pluginCenterProviderContextArgs(context)
+            )
           )
         : Promise.resolve({ ok: true, value: [] } satisfies SafeResult<unknown>),
       needsManagedRecommendedSkills && this.dependencies.recommendedSkills
@@ -293,14 +344,20 @@ export class PluginCenterService {
           } satisfies SafeResult<PluginCenterGetRecommendedSkillsResult | null>),
       includeApps
         ? this.readSnapshotSection(requestId, 'app/list', () =>
-            this.dependencies.provider.listAppsForManagement({ forceRefetch: input.forceRefresh })
+            this.dependencies.provider.listAppsForManagement(
+              { forceRefetch: input.forceRefresh },
+              ...pluginCenterProviderContextArgs(context)
+            )
           )
         : Promise.resolve({ ok: true, value: [] } satisfies SafeResult<unknown>),
       includeMcp
         ? this.readSnapshotSection(requestId, 'mcp', () =>
-            this.dependencies.provider.readMcpManagementSnapshot({
-              cwd
-            })
+            this.dependencies.provider.readMcpManagementSnapshot(
+              {
+                cwd
+              },
+              ...pluginCenterProviderContextArgs(context)
+            )
           )
         : Promise.resolve({ ok: true, value: {} } satisfies SafeResult<unknown>)
     ])
@@ -365,7 +422,8 @@ export class PluginCenterService {
   }
 
   async getInstalledPlugins(
-    input: PluginCenterInstalledPluginsRequest
+    input: PluginCenterInstalledPluginsRequest,
+    context: PluginCenterExecutionContext = {}
   ): Promise<PluginCenterInstalledPluginsResult> {
     const requestId = ++this.snapshotRequestSequence
     const cwd = this.cwdFor(input)
@@ -373,7 +431,12 @@ export class PluginCenterService {
       requestId,
       hasCwd: Boolean(cwd)
     })
-    const plugins = await this.readInstalledPlugins(cwd, input.forceRefresh === true, requestId)
+    const plugins = await this.readInstalledPlugins(
+      cwd,
+      input.forceRefresh === true,
+      requestId,
+      context
+    )
     const result = pluginCenterInstalledPluginsResultSchema.parse({
       version: PLUGIN_CENTER_API_VERSION,
       generatedAt: (this.dependencies.now ?? (() => new Date()))().toISOString(),
@@ -387,7 +450,8 @@ export class PluginCenterService {
   }
 
   async getPluginDetail(
-    input: PluginCenterGetPluginDetailRequest
+    input: PluginCenterGetPluginDetailRequest,
+    context: PluginCenterExecutionContext = {}
   ): Promise<PluginCenterGetPluginDetailResult> {
     this.assertUserManagedPlugin(input.plugin)
     const cwd = this.cwdFor(input)
@@ -411,15 +475,18 @@ export class PluginCenterService {
       detailPromise = cached.promise
     } else {
       detailPromise = this.dependencies.provider
-        .readPluginDetailForManagement({
-          ...(located.locator.marketplacePath
-            ? { marketplacePath: located.locator.marketplacePath }
-            : {}),
-          ...(located.locator.remoteMarketplaceName
-            ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
-            : {}),
-          pluginName: pluginReadOrInstallRequestName(located.locator)
-        })
+        .readPluginDetailForManagement(
+          {
+            ...(located.locator.marketplacePath
+              ? { marketplacePath: located.locator.marketplacePath }
+              : {}),
+            ...(located.locator.remoteMarketplaceName
+              ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
+              : {}),
+            pluginName: pluginReadOrInstallRequestName(located.locator)
+          },
+          ...pluginCenterProviderContextArgs(context)
+        )
         .then(async (rawDetail) => {
           const appIds = arrayValue(objectValue(rawDetail).apps)
             .map((app) => stringValue(objectValue(app).id))
@@ -430,15 +497,27 @@ export class PluginCenterService {
             this.readInstalledPlugins(
               cwd,
               input.forceRefresh === true,
-              ++this.snapshotRequestSequence
+              ++this.snapshotRequestSequence,
+              context
             )
           )
           const readAppsPromise =
             readAppsForManagement && appIds.length > 0
-              ? safeRead(() => readAppsForManagement.call(provider, { appIds }))
+              ? safeRead(() =>
+                  readAppsForManagement.call(
+                    provider,
+                    { appIds },
+                    ...pluginCenterProviderContextArgs(context)
+                  )
+                )
               : Promise.resolve(null)
           const readConfigPromise = provider.readConfigForManagement
-            ? safeRead(() => provider.readConfigForManagement!({ cwd }))
+            ? safeRead(() =>
+                provider.readConfigForManagement!(
+                  { cwd },
+                  ...pluginCenterProviderContextArgs(context)
+                )
+              )
             : Promise.resolve(null)
           const [
             directoryAppsResult,
@@ -448,16 +527,22 @@ export class PluginCenterService {
             configResult
           ] = await Promise.all([
             safeRead(() =>
-              this.dependencies.provider.listAppsForManagement({
-                forceRefetch: input.forceRefresh
-              })
+              this.dependencies.provider.listAppsForManagement(
+                {
+                  forceRefetch: input.forceRefresh
+                },
+                ...pluginCenterProviderContextArgs(context)
+              )
             ),
             readAppsPromise,
             safeRead(() =>
-              this.dependencies.provider.listSkillsForManagement({
-                ...(cwd ? { cwd } : {}),
-                forceReload: input.forceRefresh
-              })
+              this.dependencies.provider.listSkillsForManagement(
+                {
+                  ...(cwd ? { cwd } : {}),
+                  forceReload: input.forceRefresh
+                },
+                ...pluginCenterProviderContextArgs(context)
+              )
             ),
             installedPluginsPromise,
             readConfigPromise
@@ -487,17 +572,24 @@ export class PluginCenterService {
     })
   }
 
-  async getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult> {
+  async getAppTools(
+    input: PluginCenterGetAppToolsRequest,
+    context: PluginCenterExecutionContext = {}
+  ): Promise<PluginCenterGetAppToolsResult> {
     const readAppsForManagement = this.dependencies.provider.readAppsForManagement
     if (!readAppsForManagement) {
       throw new Error('当前 Codex app server 不支持读取应用工具')
     }
 
-    const rawRead = await readAppsForManagement.call(this.dependencies.provider, {
-      appIds: [input.app.id],
-      ...(input.threadId ? { threadId: input.threadId } : {}),
-      includeTools: true
-    })
+    const rawRead = await readAppsForManagement.call(
+      this.dependencies.provider,
+      {
+        appIds: [input.app.id],
+        ...(input.threadId ? { threadId: input.threadId } : {}),
+        includeTools: true
+      },
+      ...pluginCenterProviderContextArgs(context)
+    )
     const read = normalizeReadAppsResponse(rawRead)
     const app = read.apps.find((candidate) => stringValue(candidate.id) === input.app.id)
     if (!app) {
@@ -513,7 +605,11 @@ export class PluginCenterService {
     const readConfigForManagement = this.dependencies.provider.readConfigForManagement
     if (readConfigForManagement) {
       const configResult = await safeRead(() =>
-        readConfigForManagement.call(this.dependencies.provider, { cwd: this.cwdFor(input) })
+        readConfigForManagement.call(
+          this.dependencies.provider,
+          { cwd: this.cwdFor(input) },
+          ...pluginCenterProviderContextArgs(context)
+        )
       )
       if (configResult.ok) {
         configOrigins = normalizeConfigReadSnapshot(configResult.value).origins
@@ -528,10 +624,11 @@ export class PluginCenterService {
   }
 
   async getSkillContents(
-    input: PluginCenterGetSkillContentsRequest
+    input: PluginCenterGetSkillContentsRequest,
+    context: PluginCenterExecutionContext = {}
   ): Promise<PluginCenterGetSkillContentsResult> {
     const plugin = input.plugin
-    if (!plugin) return this.getLocalSkillContents(input)
+    if (!plugin) return this.getLocalSkillContents(input, context)
 
     const pluginInput = { ...input, plugin }
     const located = await this.resolvePluginLocator(pluginInput)
@@ -549,21 +646,28 @@ export class PluginCenterService {
       return this.missingSkillContents(input, 'unavailable')
     }
 
-    const rawDetail = await readPluginDetailForManagement.call(this.dependencies.provider, {
-      ...(located.locator.marketplacePath
-        ? { marketplacePath: located.locator.marketplacePath }
-        : {}),
-      ...(located.locator.remoteMarketplaceName
-        ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
-        : {}),
-      pluginName: pluginReadOrInstallRequestName(located.locator)
-    })
+    const rawDetail = await readPluginDetailForManagement.call(
+      this.dependencies.provider,
+      {
+        ...(located.locator.marketplacePath
+          ? { marketplacePath: located.locator.marketplacePath }
+          : {}),
+        ...(located.locator.remoteMarketplaceName
+          ? { remoteMarketplaceName: located.locator.remoteMarketplaceName }
+          : {}),
+        pluginName: pluginReadOrInstallRequestName(located.locator)
+      },
+      ...pluginCenterProviderContextArgs(context)
+    )
     const cwd = this.cwdFor(input)
     const installedSkills = await safeRead(() =>
-      this.dependencies.provider.listSkillsForManagement({
-        ...(cwd ? { cwd } : {}),
-        forceReload: input.forceRefresh
-      })
+      this.dependencies.provider.listSkillsForManagement(
+        {
+          ...(cwd ? { cwd } : {}),
+          forceReload: input.forceRefresh
+        },
+        ...pluginCenterProviderContextArgs(context)
+      )
     )
     const trustedSkill = findTrustedPluginSkill(
       located.locator,
@@ -580,10 +684,14 @@ export class PluginCenterService {
       if (!readSkillFileContents) {
         return this.missingSkillContents(input, 'unavailable')
       }
-      const contents = await readSkillFileContents.call(this.dependencies.provider, {
-        path: trustedSkill.localPath,
-        maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
-      })
+      const contents = await readSkillFileContents.call(
+        this.dependencies.provider,
+        {
+          path: trustedSkill.localPath,
+          maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+        },
+        ...pluginCenterProviderContextArgs(context)
+      )
       return pluginCenterGetSkillContentsResultSchema.parse({
         version: PLUGIN_CENTER_API_VERSION,
         status: 'ready',
@@ -602,12 +710,16 @@ export class PluginCenterService {
     ) {
       return this.missingSkillContents(input, 'unavailable')
     }
-    const contents = await readRemotePluginSkillContents.call(this.dependencies.provider, {
-      remoteMarketplaceName: trustedSkill.remoteMarketplaceName,
-      remotePluginId: trustedSkill.remotePluginId,
-      skillName: trustedSkill.name,
-      maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
-    })
+    const contents = await readRemotePluginSkillContents.call(
+      this.dependencies.provider,
+      {
+        remoteMarketplaceName: trustedSkill.remoteMarketplaceName,
+        remotePluginId: trustedSkill.remotePluginId,
+        skillName: trustedSkill.name,
+        maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+      },
+      ...pluginCenterProviderContextArgs(context)
+    )
     if (contents === null) {
       return this.missingSkillContents(input, 'not_found')
     }
@@ -657,27 +769,35 @@ export class PluginCenterService {
   }
 
   private async getLocalSkillContents(
-    input: PluginCenterGetSkillContentsRequest
+    input: PluginCenterGetSkillContentsRequest,
+    context: PluginCenterExecutionContext = {}
   ): Promise<PluginCenterGetSkillContentsResult> {
     const readSkillFileContents = this.dependencies.provider.readSkillFileContents
     if (!readSkillFileContents) return this.missingSkillContents(input, 'unavailable')
 
     const cwd = this.cwdFor(input)
     const rawSkills = await safeRead(() =>
-      this.dependencies.provider.listSkillsForManagement({
-        ...(cwd ? { cwd } : {}),
-        forceReload: input.forceRefresh
-      })
+      this.dependencies.provider.listSkillsForManagement(
+        {
+          ...(cwd ? { cwd } : {}),
+          forceReload: input.forceRefresh
+        },
+        ...pluginCenterProviderContextArgs(context)
+      )
     )
     if (!rawSkills.ok) return this.missingSkillContents(input, 'unavailable')
 
     const localPath = findTrustedLocalSkillPath(rawSkills.value, input.skill)
     if (!localPath) return this.missingSkillContents(input, 'not_found')
 
-    const contents = await readSkillFileContents.call(this.dependencies.provider, {
-      path: localPath,
-      maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
-    })
+    const contents = await readSkillFileContents.call(
+      this.dependencies.provider,
+      {
+        path: localPath,
+        maxBytes: PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES
+      },
+      ...pluginCenterProviderContextArgs(context)
+    )
     return pluginCenterGetSkillContentsResultSchema.parse({
       version: PLUGIN_CENTER_API_VERSION,
       status: 'ready',
@@ -708,12 +828,15 @@ export class PluginCenterService {
       sections: (input.sections ?? ['plugins']).join(','),
       hasCwd: Boolean(cwd)
     })
-    void this.getSnapshot({
-      ...input,
-      sections: input.sections ?? ['plugins'],
-      includePluginDetails: input.includePluginDetails ?? false,
-      forceRefresh: false
-    })
+    void this.getSnapshot(
+      {
+        ...input,
+        sections: input.sections ?? ['plugins'],
+        includePluginDetails: input.includePluginDetails ?? false,
+        forceRefresh: false
+      },
+      { retainCacheOwner: true }
+    )
       .then((result) => {
         this.logPerformance('prefetch:complete', {
           requestId,
@@ -729,7 +852,8 @@ export class PluginCenterService {
   private async readPluginCatalog(
     cwd: string | undefined,
     forceRefresh: boolean,
-    requestId: number
+    requestId: number,
+    context: PluginCenterExecutionContext = {}
   ): Promise<unknown> {
     const key = cacheKeyForCwd(cwd)
     const lastCompleteCatalog = this.catalogCache.get(key)?.value?.lastCompleteCatalog
@@ -740,14 +864,19 @@ export class PluginCenterService {
       cwd,
       forceRefresh,
       freshForMs: (value) => (value.degraded ? 0 : CATALOG_CACHE_FRESH_MS),
-      read: async (): Promise<PluginCatalogCacheValue> => {
+      context,
+      read: async (signal): Promise<PluginCatalogCacheValue> => {
         let catalog: unknown
         try {
-          catalog = await this.dependencies.provider.listPluginCatalog({
-            cwd,
-            forceRefetch: forceRefresh ? true : undefined
-          })
+          catalog = await this.dependencies.provider.listPluginCatalog(
+            {
+              cwd,
+              forceRefetch: forceRefresh ? true : undefined
+            },
+            { signal }
+          )
         } catch (error) {
+          if (isPluginCenterAbortError(error)) throw error
           if (lastCompleteCatalog === undefined) throw error
           this.logPerformance('catalog:degraded', {
             requestId,
@@ -775,7 +904,8 @@ export class PluginCenterService {
   private async readInstalledPlugins(
     cwd: string | undefined,
     forceRefresh: boolean,
-    requestId: number
+    requestId: number,
+    context: PluginCenterExecutionContext = {}
   ): Promise<PluginCenterPlugin[]> {
     return this.readSharedCache({
       requestId,
@@ -784,10 +914,11 @@ export class PluginCenterService {
       cwd,
       forceRefresh,
       freshForMs: INSTALLED_CACHE_FRESH_MS,
-      read: async () => {
+      context,
+      read: async (signal) => {
         const raw = this.dependencies.provider.listInstalledPluginsForManagement
-          ? await this.dependencies.provider.listInstalledPluginsForManagement({ cwd })
-          : await this.readPluginCatalog(cwd, forceRefresh, requestId)
+          ? await this.dependencies.provider.listInstalledPluginsForManagement({ cwd }, { signal })
+          : await this.readPluginCatalog(cwd, forceRefresh, requestId, { signal })
         return normalizePlugins(objectValue(raw), [])
           .filter((plugin) => plugin.installed)
           .filter((plugin) => !this.isInternalPlugin(plugin))
@@ -809,6 +940,7 @@ export class PluginCenterService {
     cwd,
     forceRefresh,
     freshForMs,
+    context,
     read
   }: {
     requestId: number
@@ -817,7 +949,8 @@ export class PluginCenterService {
     cwd: string | undefined
     forceRefresh: boolean
     freshForMs: CacheFreshness<T>
-    read: () => Promise<T>
+    context: PluginCenterExecutionContext
+    read: (signal: AbortSignal) => Promise<T>
   }): Promise<T> {
     const key = cacheKeyForCwd(cwd)
     const now = this.nowMs()
@@ -825,6 +958,7 @@ export class PluginCenterService {
     const cached = cache.get(key)
     if (!forceRefresh && cached) {
       cached.gcAt = now + SHARED_CACHE_GC_MS
+      if (context.retainCacheOwner && cached.pending) cached.retainedByPrewarm = true
       if (cached.freshUntil > now) {
         this.logPerformance('cache:hit', {
           requestId,
@@ -834,7 +968,7 @@ export class PluginCenterService {
           providerCallCount: 0,
           key: cacheLogKey(key)
         })
-        return cached.promise
+        return this.waitForSharedCache(cache, cached, context.signal)
       }
       this.logPerformance('cache:hit', {
         requestId,
@@ -852,14 +986,24 @@ export class PluginCenterService {
           providerCallCount: 0,
           key: cacheLogKey(key)
         })
-        return cached.promise
+        return this.waitForSharedCache(cache, cached, context.signal)
       }
       if (cached.value !== undefined) {
-        return this.refreshSharedCache(cache, cached, freshForMs, read, requestId, kind)
+        const promise = this.refreshSharedCache(
+          cache,
+          cached,
+          freshForMs,
+          read,
+          requestId,
+          kind,
+          context
+        )
+        return this.waitForSharedCache(cache, cached, context.signal, promise)
       }
-      return cached.promise
+      return this.waitForSharedCache(cache, cached, context.signal)
     }
     if (cached?.pending && forceRefresh) {
+      if (context.retainCacheOwner) cached.retainedByPrewarm = true
       this.logPerformance('cache:join-inflight', {
         requestId,
         kind,
@@ -867,7 +1011,7 @@ export class PluginCenterService {
         providerCallCount: 0,
         key: cacheLogKey(key)
       })
-      return cached.promise
+      return this.waitForSharedCache(cache, cached, context.signal)
     }
     this.logPerformance('cache:miss', {
       requestId,
@@ -877,38 +1021,49 @@ export class PluginCenterService {
       cacheStatus: 'miss',
       providerCallCount: 1
     })
+    const ownerController = new AbortController()
     const entry: SharedCacheEntry<T> = {
       key,
       freshUntil: Number.POSITIVE_INFINITY,
       gcAt: now + SHARED_CACHE_GC_MS,
-      promise: read(),
-      pending: true
+      promise: Promise.resolve(undefined as T),
+      pending: true,
+      ownerController,
+      retainedByPrewarm: context.retainCacheOwner === true,
+      waiters: 0
     }
-    entry.promise = entry.promise
+    entry.promise = read(ownerController.signal)
       .then((value) => {
         entry.value = value
         entry.pending = false
+        entry.ownerController = undefined
+        entry.retainedByPrewarm = false
         entry.freshUntil = this.nowMs() + resolveCacheFreshness(freshForMs, value)
         entry.gcAt = this.nowMs() + SHARED_CACHE_GC_MS
         return value
       })
       .catch((error) => {
+        entry.pending = false
+        entry.ownerController = undefined
+        entry.retainedByPrewarm = false
         if (cache.get(key) === entry) cache.delete(key)
         throw error
       })
+    void entry.promise.catch(() => undefined)
     cache.set(key, entry)
     this.trimCatalogCwdKeys()
     this.trimInstalledCwdKeys()
-    return entry.promise
+    return this.waitForSharedCache(cache, entry, context.signal)
   }
 
   private refreshSharedCache<T>(
     cache: Map<string, SharedCacheEntry<T>>,
     entry: SharedCacheEntry<T>,
     freshForMs: CacheFreshness<T>,
-    read: () => Promise<T>,
+    read: (signal: AbortSignal) => Promise<T>,
     requestId: number,
-    kind: CachedReadName
+    kind: CachedReadName,
+    context: PluginCenterExecutionContext
   ): Promise<T> {
     if (entry.pending) return entry.promise
     this.logPerformance('cache:revalidate', {
@@ -919,16 +1074,22 @@ export class PluginCenterService {
       key: cacheLogKey(entry.key)
     })
     entry.pending = true
-    entry.promise = read()
+    entry.ownerController = new AbortController()
+    entry.retainedByPrewarm = context.retainCacheOwner === true
+    entry.promise = read(entry.ownerController.signal)
       .then((value) => {
         entry.value = value
         entry.pending = false
+        entry.ownerController = undefined
+        entry.retainedByPrewarm = false
         entry.freshUntil = this.nowMs() + resolveCacheFreshness(freshForMs, value)
         entry.gcAt = this.nowMs() + SHARED_CACHE_GC_MS
         return value
       })
       .catch((error) => {
         entry.pending = false
+        entry.ownerController = undefined
+        entry.retainedByPrewarm = false
         if (entry.value === undefined && cache.get(entry.key) === entry) cache.delete(entry.key)
         throw error
       })
@@ -936,9 +1097,50 @@ export class PluginCenterService {
     return entry.promise
   }
 
+  private waitForSharedCache<T>(
+    cache: Map<string, SharedCacheEntry<T>>,
+    entry: SharedCacheEntry<T>,
+    signal: AbortSignal | undefined,
+    promise: Promise<T> = entry.promise
+  ): Promise<T> {
+    if (!signal) return promise
+    if (signal.aborted) return Promise.reject(new PluginCenterAbortError())
+
+    entry.waiters += 1
+    return new Promise<T>((resolve, reject) => {
+      let settled = false
+      const settle = (action: () => void): void => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener('abort', abort)
+        entry.waiters = Math.max(0, entry.waiters - 1)
+        this.abortSharedCacheOwnerIfUnused(cache, entry)
+        action()
+      }
+      const abort = (): void => settle(() => reject(new PluginCenterAbortError()))
+      signal.addEventListener('abort', abort, { once: true })
+      promise.then(
+        (value) => settle(() => resolve(value)),
+        (error) => settle(() => reject(error))
+      )
+    })
+  }
+
+  private abortSharedCacheOwnerIfUnused<T>(
+    cache: Map<string, SharedCacheEntry<T>>,
+    entry: SharedCacheEntry<T>
+  ): void {
+    if (!entry.pending || entry.waiters > 0 || entry.retainedByPrewarm) return
+    entry.ownerController?.abort()
+    if (cache.get(entry.key) === entry && entry.value === undefined) cache.delete(entry.key)
+  }
+
   private gcSharedCache<T>(cache: Map<string, SharedCacheEntry<T>>, now: number): void {
     for (const [key, entry] of cache) {
-      if (entry.gcAt <= now && entry.freshUntil <= now) cache.delete(key)
+      if (entry.gcAt <= now && entry.freshUntil <= now) {
+        entry.ownerController?.abort()
+        cache.delete(key)
+      }
     }
   }
 
@@ -990,7 +1192,19 @@ export class PluginCenterService {
     read: () => Promise<T>
   ): Promise<SafeResult<T>> {
     const startedAt = this.nowMs()
-    const result = await safeRead(read)
+    let result: SafeResult<T>
+    try {
+      result = { ok: true, value: await read() }
+    } catch (error) {
+      if (isPluginCenterAbortError(error)) throw error
+      result = {
+        ok: false,
+        restriction: {
+          code: 'error',
+          message: '该数据源暂时不可用'
+        }
+      }
+    }
     this.logPerformance('snapshot:section', {
       requestId,
       name,
@@ -3070,7 +3284,8 @@ function normalizeAuthStatus(value: unknown): PluginCenterStdioMcpServer['authSt
 async function safeRead<T>(read: () => Promise<T>): Promise<SafeResult<T>> {
   try {
     return { ok: true, value: await read() }
-  } catch {
+  } catch (error) {
+    if (isPluginCenterAbortError(error)) throw error
     return {
       ok: false,
       restriction: {
@@ -3079,6 +3294,28 @@ async function safeRead<T>(read: () => Promise<T>): Promise<SafeResult<T>> {
       }
     }
   }
+}
+
+function isPluginCenterAbortError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : ''
+  return (
+    error instanceof PluginCenterAbortError ||
+    (error instanceof Error && error.name === 'AbortError') ||
+    (error instanceof Error && error.constructor.name === 'CodexRequestCancelledError') ||
+    code === 'app_server_request_cancelled' ||
+    (typeof DOMException !== 'undefined' &&
+      error instanceof DOMException &&
+      error.name === 'AbortError')
+  )
+}
+
+function pluginCenterProviderContextArgs(
+  context: PluginCenterExecutionContext
+): [] | [PluginCenterExecutionContext] {
+  return context.signal ? [{ signal: context.signal }] : []
 }
 
 function capabilityFor(...results: SafeResult<unknown>[]): SnapshotCapability {

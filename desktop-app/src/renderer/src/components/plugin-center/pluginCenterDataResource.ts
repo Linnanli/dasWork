@@ -65,7 +65,40 @@ type ApiResources = {
 
 type InFlightRequest = {
   generation: number
+  controller: AbortController
   promise: Promise<void>
+}
+
+type PluginCenterRequestOptions = {
+  signal?: AbortSignal
+  requestId?: string
+}
+
+type AbortableDesktopPluginCenterApi = DesktopPluginCenterApi & {
+  getSnapshot(
+    input: Parameters<DesktopPluginCenterApi['getSnapshot']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getSnapshot']>
+  getInstalledPlugins(
+    input: Parameters<DesktopPluginCenterApi['getInstalledPlugins']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getInstalledPlugins']>
+  getPluginDetail(
+    input: Parameters<DesktopPluginCenterApi['getPluginDetail']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getPluginDetail']>
+  getAppTools(
+    input: Parameters<DesktopPluginCenterApi['getAppTools']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getAppTools']>
+  getSkillContents(
+    input: Parameters<DesktopPluginCenterApi['getSkillContents']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getSkillContents']>
+  getRecommendedSkills(
+    input: Parameters<DesktopPluginCenterApi['getRecommendedSkills']>[0],
+    options?: PluginCenterRequestOptions
+  ): ReturnType<DesktopPluginCenterApi['getRecommendedSkills']>
 }
 
 const resourcesByApi = new WeakMap<DesktopPluginCenterApi, ApiResources>()
@@ -136,11 +169,13 @@ function evictOldestCwdResource<T>(
 function createResource<T>({
   freshMs,
   load,
-  onRelease
+  onRelease,
+  cancelRequest
 }: {
   freshMs: number | ((data: T) => number)
-  load(forceRefresh: boolean): Promise<T>
+  load(forceRefresh: boolean, options: PluginCenterRequestOptions): Promise<T>
   onRelease(): void
+  cancelRequest?: (requestId: string) => void
 }): ResourceStore<T> {
   const listeners = new Set<() => void>()
   let gcTimer: ReturnType<typeof setTimeout> | null = null
@@ -188,6 +223,13 @@ function createResource<T>({
       return
     }
 
+    inFlight?.controller.abort()
+    const controller = new AbortController()
+    const requestId = createPluginCenterRequestId()
+    const cancel = (): void => {
+      cancelRequest?.(requestId)
+    }
+    controller.signal.addEventListener('abort', cancel, { once: true })
     snapshot = {
       ...snapshot,
       error: null,
@@ -196,7 +238,7 @@ function createResource<T>({
     }
     emit()
 
-    const requestPromise = load(forceRefresh)
+    const requestPromise = load(forceRefresh, { signal: controller.signal, requestId })
       .then((data) => {
         if (requestGeneration !== generation) return
         snapshot = {
@@ -209,6 +251,7 @@ function createResource<T>({
       })
       .catch((error: unknown) => {
         if (requestGeneration !== generation) return
+        if (isAbortError(error)) return
         snapshot = {
           ...snapshot,
           error: errorMessage(error),
@@ -217,13 +260,14 @@ function createResource<T>({
         }
       })
       .finally(() => {
+        controller.signal.removeEventListener('abort', cancel)
         if (inFlight?.promise !== requestPromise) return
         inFlight = null
         if (listeners.size === 0) scheduleGc()
         if (requestGeneration === generation) emit()
       })
 
-    inFlight = { generation: requestGeneration, promise: requestPromise }
+    inFlight = { generation: requestGeneration, controller, promise: requestPromise }
     await requestPromise
   }
 
@@ -263,6 +307,7 @@ function createResource<T>({
     },
     invalidate() {
       generation += 1
+      inFlight?.controller.abort()
       snapshot = {
         ...snapshot,
         updatedAt: 0
@@ -271,12 +316,23 @@ function createResource<T>({
     release() {
       clearGcTimer()
       listeners.clear()
+      inFlight?.controller.abort()
       onRelease()
     }
   }
 
   scheduleGc()
   return resource
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function createPluginCenterRequestId(): string {
+  const requestId = globalThis.crypto?.randomUUID?.()
+  if (requestId) return requestId
+  return `plugin-center-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function supplementalFreshMs(section: PluginCenterSupplementalSection): number {
@@ -319,7 +375,8 @@ export function getPluginCenterSupplementalResource(
 
   const resource = createResource({
     freshMs: supplementalFreshMs(section),
-    load: async (forceRefresh) => {
+    load: async (forceRefresh, options) => {
+      const requestApi = api as AbortableDesktopPluginCenterApi
       const request = {
         version: PLUGIN_CENTER_API_VERSION,
         cwd: normalizedCwd || undefined,
@@ -328,10 +385,10 @@ export function getPluginCenterSupplementalResource(
         ...(normalizedSkillListMode ? { skillListMode: normalizedSkillListMode } : {}),
         forceRefresh
       }
-      let result = await api.getSnapshot(request)
+      let result = await requestApi.getSnapshot(request, options)
       let unavailableMessage = unavailableMcpMessage(result.snapshot, section)
       if (unavailableMessage && !forceRefresh) {
-        result = await api.getSnapshot({ ...request, forceRefresh: true })
+        result = await requestApi.getSnapshot({ ...request, forceRefresh: true }, options)
         unavailableMessage = unavailableMcpMessage(result.snapshot, section)
       }
       if (unavailableMessage) throw new Error(unavailableMessage)
@@ -339,7 +396,8 @@ export function getPluginCenterSupplementalResource(
     },
     onRelease: () => {
       resourceMap.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resourceMap.set(key, resource)
   evictOldestCwdResource(resourceMap)
@@ -360,19 +418,23 @@ export function getPluginCenterCatalogResource(
 
   const resource = createResource<PluginCenterSnapshot>({
     freshMs: (snapshot) => (snapshot.catalogUnavailableReason ? 0 : CATALOG_FRESH_MS),
-    load: async (forceRefresh) => {
-      const result = await api.getSnapshot({
-        version: PLUGIN_CENTER_API_VERSION,
-        cwd: key || undefined,
-        sections: ['plugins'],
-        includePluginDetails: false,
-        forceRefresh
-      })
+    load: async (forceRefresh, options) => {
+      const result = await (api as AbortableDesktopPluginCenterApi).getSnapshot(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          cwd: key || undefined,
+          sections: ['plugins'],
+          includePluginDetails: false,
+          forceRefresh
+        },
+        options
+      )
       return result.snapshot
     },
     onRelease: () => {
       resources.catalog.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.catalog.set(key, resource)
   evictOldestCwdResource(resources.catalog)
@@ -393,17 +455,21 @@ export function getPluginCenterInstalledResource(
 
   const resource = createResource({
     freshMs: INSTALLED_FRESH_MS,
-    load: async (forceRefresh) => {
-      const result = await api.getInstalledPlugins({
-        version: PLUGIN_CENTER_API_VERSION,
-        cwd: key || undefined,
-        forceRefresh
-      })
+    load: async (forceRefresh, options) => {
+      const result = await (api as AbortableDesktopPluginCenterApi).getInstalledPlugins(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          cwd: key || undefined,
+          forceRefresh
+        },
+        options
+      )
       return result.plugins
     },
     onRelease: () => {
       resources.installed.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.installed.set(key, resource)
   evictOldestCwdResource(resources.installed)
@@ -426,16 +492,20 @@ export function getPluginCenterPluginDetailResource(
 
   const resource = createResource({
     freshMs: PLUGIN_DETAIL_FRESH_MS,
-    load: (forceRefresh) =>
-      api.getPluginDetail({
-        version: PLUGIN_CENTER_API_VERSION,
-        cwd: normalizedCwd || undefined,
-        plugin,
-        forceRefresh
-      }),
+    load: (forceRefresh, options) =>
+      (api as AbortableDesktopPluginCenterApi).getPluginDetail(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          cwd: normalizedCwd || undefined,
+          plugin,
+          forceRefresh
+        },
+        options
+      ),
     onRelease: () => {
       resources.details.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.details.set(key, resource)
   evictOldestCwdResource(resources.details, MAX_PLUGIN_DETAIL_RESOURCES)
@@ -460,17 +530,21 @@ export function getPluginCenterAppToolsResource(
 
   const resource = createResource({
     freshMs: APP_TOOLS_FRESH_MS,
-    load: (forceRefresh) =>
-      api.getAppTools({
-        version: PLUGIN_CENTER_API_VERSION,
-        cwd: normalizedCwd || undefined,
-        threadId: normalizedThreadId || undefined,
-        app: { id: appId },
-        ...(forceRefresh ? { forceRefresh: true } : {})
-      }),
+    load: (forceRefresh, options) =>
+      (api as AbortableDesktopPluginCenterApi).getAppTools(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          cwd: normalizedCwd || undefined,
+          threadId: normalizedThreadId || undefined,
+          app: { id: appId },
+          ...(forceRefresh ? { forceRefresh: true } : {})
+        },
+        options
+      ),
     onRelease: () => {
       resources.appTools.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.appTools.set(key, resource)
   evictOldestCwdResource(resources.appTools, MAX_APP_TOOLS_RESOURCES)
@@ -494,17 +568,21 @@ export function getPluginCenterSkillContentsResource(
 
   const resource = createResource({
     freshMs: APP_TOOLS_FRESH_MS,
-    load: (forceRefresh) =>
-      api.getSkillContents({
-        version: PLUGIN_CENTER_API_VERSION,
-        cwd: normalizedCwd || undefined,
-        ...(plugin ? { plugin } : {}),
-        skill,
-        ...(forceRefresh ? { forceRefresh: true } : {})
-      }),
+    load: (forceRefresh, options) =>
+      (api as AbortableDesktopPluginCenterApi).getSkillContents(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          cwd: normalizedCwd || undefined,
+          ...(plugin ? { plugin } : {}),
+          skill,
+          ...(forceRefresh ? { forceRefresh: true } : {})
+        },
+        options
+      ),
     onRelease: () => {
       resources.skillContents.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.skillContents.set(key, resource)
   evictOldestCwdResource(resources.skillContents, MAX_SKILL_CONTENTS_RESOURCES)
@@ -525,14 +603,18 @@ export function getPluginCenterRecommendedSkillsResource(
 
   const resource = createResource({
     freshMs: RECOMMENDED_SKILLS_FRESH_MS,
-    load: (forceRefresh) =>
-      api.getRecommendedSkills({
-        version: PLUGIN_CENTER_API_VERSION,
-        forceRefresh
-      }),
+    load: (forceRefresh, options) =>
+      (api as AbortableDesktopPluginCenterApi).getRecommendedSkills(
+        {
+          version: PLUGIN_CENTER_API_VERSION,
+          forceRefresh
+        },
+        options
+      ),
     onRelease: () => {
       resources.recommendedSkills.delete(key)
-    }
+    },
+    cancelRequest: api.cancelRequest
   })
   resources.recommendedSkills.set(key, resource)
   return resource

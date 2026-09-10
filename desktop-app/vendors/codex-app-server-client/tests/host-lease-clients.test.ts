@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createCodexContextCatalogClient, createCodexHistoryClient } from '../src'
+import {
+  CodexRequestCancelledError,
+  createCodexContextCatalogClient,
+  createCodexHistoryClient
+} from '../src'
 
 describe('host-owned client leases', () => {
   it('uses an acquired history lease without performing another initialize handshake', async () => {
@@ -44,6 +48,49 @@ describe('host-owned client leases', () => {
     expect(client.connect).not.toHaveBeenCalled()
     expect(client.notification).not.toHaveBeenCalled()
     expect(client.request).toHaveBeenCalledWith('skills/list', { cwds: ['/workspace'] })
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('passes the caller signal into an acquired catalog lease', async () => {
+    const client = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      notification: vi.fn(),
+      onNotification: vi.fn(() => () => undefined),
+      request: vi.fn().mockResolvedValue({ marketplaces: [] })
+    }
+    const release = vi.fn().mockResolvedValue(undefined)
+    const acquireClient = vi.fn().mockResolvedValue({ client, release })
+    const catalog = createCodexContextCatalogClient({ acquireClient })
+    const controller = new AbortController()
+
+    await expect(
+      catalog.listPluginCatalog({ cwd: '/workspace' }, { signal: controller.signal })
+    ).resolves.toEqual({ marketplaces: [] })
+
+    expect(acquireClient).toHaveBeenCalledWith({ signal: controller.signal })
+    expect(client.request).toHaveBeenCalledWith('plugin/list', { cwds: ['/workspace'] })
+    expect(release).toHaveBeenCalledOnce()
+  })
+
+  it('does not fall back to app/list when app/installed was cancelled', async () => {
+    const cancellation = new CodexRequestCancelledError()
+    const client = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      notification: vi.fn(),
+      onNotification: vi.fn(() => () => undefined),
+      request: vi.fn().mockRejectedValue(cancellation)
+    }
+    const release = vi.fn().mockResolvedValue(undefined)
+    const catalog = createCodexContextCatalogClient({
+      acquireClient: vi.fn().mockResolvedValue({ client, release })
+    })
+
+    await expect(catalog.listAppsForManagement()).rejects.toBe(cancellation)
+
+    expect(client.request).toHaveBeenCalledTimes(1)
+    expect(client.request).toHaveBeenCalledWith('app/installed', {})
     expect(release).toHaveBeenCalledOnce()
   })
 })

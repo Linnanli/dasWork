@@ -123,6 +123,20 @@ type Case = {
   result: unknown
 }
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
 const cases: Case[] = [
   {
     method: 'getSnapshot',
@@ -335,7 +349,8 @@ describe('createPluginCenterBridge', () => {
       setAppEnabled: 'codex:plugin-center:set-app-enabled',
       setMcpServerEnabled: 'codex:plugin-center:set-mcp-server-enabled',
       upsertMcpServer: 'codex:plugin-center:upsert-mcp-server',
-      removeMcpServer: 'codex:plugin-center:remove-mcp-server'
+      removeMcpServer: 'codex:plugin-center:remove-mcp-server',
+      cancelRequest: 'codex:plugin-center:cancel-request'
     })
   })
 
@@ -347,17 +362,20 @@ describe('createPluginCenterBridge', () => {
 
       await expect(bridge[method](input as never)).resolves.toEqual(result)
       expect(invoke).toHaveBeenCalledTimes(1)
-      expect(invoke).toHaveBeenCalledWith(channel, expectedPayload)
+      expect(invoke).toHaveBeenCalledWith(channel, {
+        requestId: expect.any(String),
+        payload: expectedPayload
+      })
     }
   )
 
   it.each(cases)(
     'rejects an invalid $method request before invoking ipcRenderer',
-    ({ method, invalidInput }) => {
+    async ({ method, invalidInput }) => {
       const invoke = vi.fn(async () => MUTATION_RESULT)
       const bridge = createPluginCenterBridge(invoke)
 
-      expect(() => bridge[method](invalidInput as never)).toThrow()
+      await expect(bridge[method](invalidInput as never)).rejects.toThrow()
       expect(invoke).not.toHaveBeenCalled()
     }
   )
@@ -381,5 +399,86 @@ describe('createPluginCenterBridge', () => {
     const bridge = createPluginCenterBridge(invoke)
 
     await expect(bridge[method](input as never)).rejects.toBe(error)
+  })
+
+  it('sends a single cancel message for an aborted in-flight request', async () => {
+    const pending = deferred<typeof SNAPSHOT_RESULT>()
+    let capturedPayload: unknown
+    const invoke = vi.fn(async (_channel: string, payload: unknown) => {
+      capturedPayload = payload
+      return pending.promise
+    })
+    const send = vi.fn()
+    const bridge = createPluginCenterBridge(invoke, send)
+    const controller = new AbortController()
+
+    const promise = bridge.getSnapshot(VALID_CONTEXT, { signal: controller.signal })
+    await Promise.resolve()
+    const envelope = capturedPayload as { requestId: string }
+
+    controller.abort()
+    controller.abort()
+    pending.resolve(SNAPSHOT_RESULT)
+
+    await expect(promise).resolves.toEqual(SNAPSHOT_RESULT)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith(pluginCenterIpcChannels.cancelRequest, {
+      requestId: envelope.requestId
+    })
+  })
+
+  it('uses the renderer request id and tolerates a context-bridge-cloned signal', async () => {
+    const invoke = vi.fn(async () => SNAPSHOT_RESULT)
+    const send = vi.fn()
+    const bridge = createPluginCenterBridge(invoke, send)
+    const requestId = 'renderer-request-id-1234'
+
+    await expect(
+      bridge.getSnapshot(VALID_CONTEXT, {
+        requestId,
+        signal: {} as AbortSignal
+      })
+    ).resolves.toEqual(SNAPSHOT_RESULT)
+
+    expect(invoke).toHaveBeenCalledWith(pluginCenterIpcChannels.getSnapshot, {
+      requestId,
+      payload: VALID_CONTEXT
+    })
+    bridge.cancelRequest(requestId)
+    expect(send).toHaveBeenCalledWith(pluginCenterIpcChannels.cancelRequest, { requestId })
+  })
+
+  it('does not cancel a mutation after it has been dispatched', async () => {
+    const pending = deferred<typeof MUTATION_RESULT>()
+    const invoke = vi.fn(async () => pending.promise)
+    const send = vi.fn()
+    const bridge = createPluginCenterBridge(invoke, send)
+    const controller = new AbortController()
+
+    const promise = bridge.installPlugin(
+      { ...VALID_CONTEXT, plugin: { id: 'plugin-a', marketplaceId: 'market-main' } },
+      { signal: controller.signal }
+    )
+    await Promise.resolve()
+    controller.abort()
+    pending.resolve(MUTATION_RESULT)
+
+    await expect(promise).resolves.toEqual(MUTATION_RESULT)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('does not invoke ipcRenderer when the signal is already aborted', async () => {
+    const invoke = vi.fn(async () => SNAPSHOT_RESULT)
+    const send = vi.fn()
+    const bridge = createPluginCenterBridge(invoke, send)
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(bridge.getSnapshot(VALID_CONTEXT, { signal: controller.signal })).rejects.toThrow(
+      'Plugin Center request was cancelled'
+    )
+    expect(invoke).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
   })
 })
