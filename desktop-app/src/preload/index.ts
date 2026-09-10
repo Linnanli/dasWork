@@ -30,7 +30,7 @@ import {
   artifactPreviewComposerAttachmentResultSchema,
   artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
   artifactPreviewRegisterWorkspaceSourceRequestSchema,
-  artifactPreviewSourceChangeEventSchema,
+  artifactPreviewSourceChangeEventSchema
 } from '../shared/artifactPreviewApi'
 import {
   browserWorkspaceCreateRequestSchema,
@@ -214,8 +214,9 @@ const desktopComposerContext: DesktopComposerContextApi = createComposerContextB
   }
 )
 
-const desktopPlugins = createPluginCenterBridge((channel, payload) =>
-  ipcRenderer.invoke(channel, payload)
+const desktopPlugins = createPluginCenterBridge(
+  (channel, payload) => ipcRenderer.invoke(channel, payload),
+  (channel, payload) => ipcRenderer.send(channel, payload)
 )
 
 const desktopProjects: DesktopProjectsApi = {
@@ -571,7 +572,9 @@ const desktopRightWorkspace: DesktopRightWorkspaceApi = {
           rightWorkspaceIpcChannels.createArtifactComposerAttachment,
           parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
         )
-        .then((result) => artifactPreviewComposerAttachmentResultSchema.parse(result, { jitless: true })),
+        .then((result) =>
+          artifactPreviewComposerAttachmentResultSchema.parse(result, { jitless: true })
+        ),
     metadata: (input) =>
       ipcRenderer.invoke(
         rightWorkspaceIpcChannels.artifactMetadata,

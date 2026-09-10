@@ -1,7 +1,15 @@
+import { EventEmitter } from 'node:events'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { PLUGIN_CENTER_API_VERSION } from '../../shared/pluginCenterApi'
-import { createPluginCenterIpcHandlers, pluginCenterIpcChannels } from './registerPluginCenterIpc'
+import {
+  createPluginCenterCancelRequestHandler,
+  createPluginCenterIpcHandlers,
+  getPluginCenterIpcLifecycleDiagnostics,
+  pluginCenterIpcChannels,
+  resetPluginCenterIpcLifecycleForTests
+} from './registerPluginCenterIpc'
 
 const VALID_CONTEXT = { version: PLUGIN_CENTER_API_VERSION, cwd: '/repo' } as const
 
@@ -93,6 +101,8 @@ const MARKETPLACE_RESULT = {
   },
   alreadyAdded: false
 } as const
+
+const REQUEST_ID = 'request-0000000001'
 
 type ServiceMethod =
   | 'getSnapshot'
@@ -343,8 +353,33 @@ function createService(
   }
 }
 
+function envelope(payload: unknown, requestId = REQUEST_ID): unknown {
+  return { requestId, payload }
+}
+
+function createIpcEvent(webContentsId = 1): {
+  sender: EventEmitter & { id: number; isDestroyed: () => boolean }
+  emit: (event: 'destroyed' | 'render-process-gone') => void
+} {
+  const sender = new EventEmitter() as EventEmitter & {
+    id: number
+    isDestroyed: () => boolean
+  }
+  let destroyed = false
+  sender.id = webContentsId
+  sender.isDestroyed = () => destroyed
+  return {
+    sender,
+    emit: (event) => {
+      if (event === 'destroyed') destroyed = true
+      sender.emit(event)
+    }
+  }
+}
+
 describe('createPluginCenterIpcHandlers', () => {
   beforeEach(() => {
+    resetPluginCenterIpcLifecycleForTests()
     vi.restoreAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
   })
@@ -367,11 +402,16 @@ describe('createPluginCenterIpcHandlers', () => {
       setAppEnabled: 'codex:plugin-center:set-app-enabled',
       setMcpServerEnabled: 'codex:plugin-center:set-mcp-server-enabled',
       upsertMcpServer: 'codex:plugin-center:upsert-mcp-server',
-      removeMcpServer: 'codex:plugin-center:remove-mcp-server'
+      removeMcpServer: 'codex:plugin-center:remove-mcp-server',
+      cancelRequest: 'codex:plugin-center:cancel-request'
     })
 
     const handlers = createPluginCenterIpcHandlers(createService() as never)
-    expect(Object.keys(handlers).sort()).toEqual(Object.values(pluginCenterIpcChannels).sort())
+    expect(Object.keys(handlers).sort()).toEqual(
+      Object.values(pluginCenterIpcChannels)
+        .filter((channel) => channel !== pluginCenterIpcChannels.cancelRequest)
+        .sort()
+    )
   })
 
   it.each(cases)(
@@ -379,12 +419,16 @@ describe('createPluginCenterIpcHandlers', () => {
     async ({ channel, method, validPayload, expectedPayload, validResult }) => {
       const service = createService({ [method]: validResult })
       const handlers = createPluginCenterIpcHandlers(service as never)
+      const event = createIpcEvent()
 
-      const result = await handlers[channel]({}, validPayload)
+      const result = await handlers[channel](event, envelope(validPayload))
 
       expect(result).toEqual(validResult)
       expect(service[method]).toHaveBeenCalledTimes(1)
-      expect(service[method]).toHaveBeenCalledWith(expectedPayload)
+      expect(service[method]).toHaveBeenCalledWith(expectedPayload, {
+        signal: expect.any(AbortSignal)
+      })
+      expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({ pending: 0, completed: 1 })
     }
   )
 
@@ -394,7 +438,7 @@ describe('createPluginCenterIpcHandlers', () => {
       const service = createService()
       const handlers = createPluginCenterIpcHandlers(service as never)
 
-      await expect(handlers[channel]({}, invalidPayload)).rejects.toThrow()
+      await expect(handlers[channel](createIpcEvent(), envelope(invalidPayload))).rejects.toThrow()
       expect(service[method]).not.toHaveBeenCalled()
     }
   )
@@ -405,7 +449,7 @@ describe('createPluginCenterIpcHandlers', () => {
       const service = createService({ [method]: { version: PLUGIN_CENTER_API_VERSION } })
       const handlers = createPluginCenterIpcHandlers(service as never)
 
-      await expect(handlers[channel]({}, validPayload)).rejects.toThrow()
+      await expect(handlers[channel](createIpcEvent(), envelope(validPayload))).rejects.toThrow()
       expect(service[method]).toHaveBeenCalledTimes(1)
     }
   )
@@ -428,8 +472,174 @@ describe('createPluginCenterIpcHandlers', () => {
         method === 'getRecommendedSkills'
           ? '插件中心数据加载失败，请重试。'
           : '插件中心操作失败，请刷新后重试。'
-      await expect(handlers[channel]({}, validPayload)).rejects.toThrow(expectedMessage)
-      expect(console.error).toHaveBeenCalledWith('[plugin-center] IPC operation failed', error)
+      await expect(handlers[channel](createIpcEvent(), envelope(validPayload))).rejects.toThrow(
+        expectedMessage
+      )
+      expect(console.error).toHaveBeenCalledWith('[plugin-center] IPC operation failed', {
+        errorName: 'Error',
+        errorType: 'error'
+      })
+      expect(console.error).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.stringContaining(sensitiveDetail)
+      )
     }
   )
+
+  it('logs only redacted service error metadata at the IPC boundary', async () => {
+    const service = createService()
+    service.getSnapshot.mockRejectedValueOnce(
+      new Error('failed with access-token-secret and /private/workspace')
+    )
+    const handlers = createPluginCenterIpcHandlers(service as never)
+
+    await expect(
+      handlers[pluginCenterIpcChannels.getSnapshot](createIpcEvent(), envelope(VALID_CONTEXT))
+    ).rejects.toThrow('插件中心数据加载失败，请重试。')
+
+    const output = JSON.stringify((console.error as ReturnType<typeof vi.fn>).mock.calls)
+    expect(output).not.toContain('access-token-secret')
+    expect(output).not.toContain('/private/workspace')
+    expect(output).toContain('errorName')
+  })
+
+  it('rejects duplicate active request ids for the same webContents', async () => {
+    const service = createService()
+    const pending = new Promise<typeof SNAPSHOT_RESULT>(() => undefined)
+    service.getSnapshot.mockReturnValueOnce(pending)
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const event = createIpcEvent(7)
+
+    const first = handlers[pluginCenterIpcChannels.getSnapshot](event, envelope(VALID_CONTEXT))
+    await Promise.resolve()
+
+    await expect(
+      handlers[pluginCenterIpcChannels.getSnapshot](event, envelope(VALID_CONTEXT))
+    ).rejects.toThrow('插件中心请求重复，请重试。')
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 1,
+      duplicateRequests: 1
+    })
+    createPluginCenterCancelRequestHandler()(event, { requestId: REQUEST_ID })
+    await expect(first).rejects.toThrow('插件中心请求已取消。')
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({ pending: 0 })
+  })
+
+  it('cancels active requests by webContents id and request id', async () => {
+    const service = createService()
+    let observedSignal: AbortSignal | undefined
+    service.getSnapshot.mockImplementationOnce(
+      async (_input: unknown, context?: { signal: AbortSignal }) => {
+        observedSignal = context?.signal
+        return new Promise<typeof SNAPSHOT_RESULT>(() => undefined)
+      }
+    )
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const event = createIpcEvent(3)
+
+    const result = handlers[pluginCenterIpcChannels.getSnapshot](event, envelope(VALID_CONTEXT))
+    await Promise.resolve()
+    createPluginCenterCancelRequestHandler()(event, { requestId: REQUEST_ID })
+    createPluginCenterCancelRequestHandler()(event, { requestId: REQUEST_ID })
+
+    await expect(result).rejects.toThrow('插件中心请求已取消。')
+    expect(observedSignal?.aborted).toBe(true)
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 0,
+      cancelled: 1,
+      ignoredCancels: 1
+    })
+  })
+
+  it('does not cancel a dispatched mutation from the cancel channel', async () => {
+    const service = createService()
+    let observedSignal: AbortSignal | undefined
+    service.installPlugin.mockImplementationOnce(
+      async (_input: unknown, context?: { signal: AbortSignal }) => {
+        observedSignal = context?.signal
+        return MUTATION_RESULT
+      }
+    )
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const event = createIpcEvent(9)
+
+    const result = handlers[pluginCenterIpcChannels.installPlugin](
+      event,
+      envelope({
+        ...VALID_CONTEXT,
+        plugin: { id: 'plugin-a', marketplaceId: 'market-main' }
+      })
+    )
+    createPluginCenterCancelRequestHandler()(event, { requestId: REQUEST_ID })
+
+    await expect(result).resolves.toEqual(MUTATION_RESULT)
+    expect(observedSignal?.aborted).toBe(false)
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 0,
+      ignoredCancels: 1
+    })
+  })
+
+  it('ignores cancel requests from other webContents', async () => {
+    const service = createService()
+    service.getSnapshot.mockReturnValueOnce(new Promise(() => undefined))
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const ownerEvent = createIpcEvent(11)
+    const otherEvent = createIpcEvent(12)
+
+    const result = handlers[pluginCenterIpcChannels.getSnapshot](
+      ownerEvent,
+      envelope(VALID_CONTEXT)
+    )
+    await Promise.resolve()
+    createPluginCenterCancelRequestHandler()(otherEvent, { requestId: REQUEST_ID })
+
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 1,
+      ignoredCancels: 1
+    })
+    createPluginCenterCancelRequestHandler()(ownerEvent, { requestId: REQUEST_ID })
+    await expect(result).rejects.toThrow('插件中心请求已取消。')
+  })
+
+  it('aborts and unregisters active requests when the webContents is destroyed', async () => {
+    const service = createService()
+    let observedSignal: AbortSignal | undefined
+    service.getSnapshot.mockImplementationOnce(
+      async (_input: unknown, context?: { signal: AbortSignal }) => {
+        observedSignal = context?.signal
+        return new Promise<typeof SNAPSHOT_RESULT>(() => undefined)
+      }
+    )
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const event = createIpcEvent(5)
+
+    const result = handlers[pluginCenterIpcChannels.getSnapshot](event, envelope(VALID_CONTEXT))
+    await Promise.resolve()
+    event.emit('destroyed')
+
+    await expect(result).rejects.toThrow('插件中心请求已取消。')
+    expect(observedSignal?.aborted).toBe(true)
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 0,
+      windowAborted: 1
+    })
+  })
+
+  it('aborts and unregisters active requests when the render process exits', async () => {
+    const service = createService()
+    service.getSnapshot.mockReturnValueOnce(new Promise(() => undefined))
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const event = createIpcEvent(6)
+
+    const result = handlers[pluginCenterIpcChannels.getSnapshot](event, envelope(VALID_CONTEXT))
+    await Promise.resolve()
+    event.emit('render-process-gone')
+
+    await expect(result).rejects.toThrow('插件中心请求已取消。')
+    expect(getPluginCenterIpcLifecycleDiagnostics()).toMatchObject({
+      pending: 0,
+      windowAborted: 1
+    })
+  })
 })

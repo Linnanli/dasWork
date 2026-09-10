@@ -565,7 +565,6 @@ const SERVER_REQUEST_METHODS: ServerRequest['method'][] = [
   'item/tool/call',
   'account/chatgptAuthTokens/refresh',
   'attestation/generate',
-  'currentTime/read',
   'applyPatchApproval',
   'execCommandApproval'
 ]

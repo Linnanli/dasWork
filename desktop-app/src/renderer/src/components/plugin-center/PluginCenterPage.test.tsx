@@ -89,6 +89,7 @@ function noopResizeObserverMethod(): void {
 function pluginApiMock(snapshot: PluginCenterSnapshot): DesktopPluginCenterApi {
   let installedPlugins = snapshot.plugins.filter((plugin) => plugin.installed)
   return {
+    cancelRequest: vi.fn(),
     getSnapshot: vi.fn(async () => ({ version: PLUGIN_CENTER_API_VERSION, snapshot })),
     getInstalledPlugins: vi.fn(async () => ({
       version: PLUGIN_CENTER_API_VERSION,
@@ -538,18 +539,25 @@ describe('PluginCenterPage', () => {
     const onSurfaceChange = vi.fn()
     const container = await renderPluginCenter(api, onSurfaceChange)
 
-    expect(api.getSnapshot).toHaveBeenNthCalledWith(1, {
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      forceRefresh: false,
-      sections: ['plugins'],
-      includePluginDetails: false
-    })
-    expect(api.getInstalledPlugins).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      forceRefresh: false
-    })
+    expect(api.getSnapshot).toHaveBeenNthCalledWith(
+      1,
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        forceRefresh: false,
+        sections: ['plugins'],
+        includePluginDetails: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(api.getInstalledPlugins).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('GitHub')
     expect(container.textContent).toContain('精选')
@@ -570,11 +578,14 @@ describe('PluginCenterPage', () => {
     })
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(api.getInstalledPlugins).toHaveBeenCalledTimes(2)
-    expect(api.getInstalledPlugins).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      forceRefresh: true
-    })
+    expect(api.getInstalledPlugins).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(container.querySelector('[data-slot="installed-plugin-icon"]')).not.toBeNull()
     expect(container.querySelector('[role="switch"]')).toBeNull()
     expect(onSurfaceChange).not.toHaveBeenCalled()
@@ -1025,12 +1036,15 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(detailApi.getPluginDetail).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
-      forceRefresh: false
-    })
+    expect(detailApi.getPluginDetail).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(
       detailContainer.querySelector('[data-slot="plugin-detail-page"]')?.textContent
     ).toContain('Pull request review')
@@ -1118,12 +1132,15 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getSkillContents).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
-      skill: { id: 'github-review', name: 'GitHub review' }
-    })
+    expect(api.getSkillContents).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+        skill: { id: 'github-review', name: 'GitHub review' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(document.body.querySelector('[data-slot="plugin-skill-preview-dialog"]')).not.toBeNull()
   })
 
@@ -1164,7 +1181,8 @@ describe('PluginCenterPage', () => {
         sections: ['skills'],
         includePluginDetails: false,
         skillListMode: 'manage'
-      })
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
 
     await act(async () => {
@@ -1187,11 +1205,14 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getSkillContents).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      skill: { id: '/workspace/skills/review/SKILL.md', name: 'review' }
-    })
+    expect(api.getSkillContents).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        skill: { id: '/workspace/skills/review/SKILL.md', name: 'review' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(document.body.querySelector('[data-slot="plugin-skill-preview-dialog"]')).not.toBeNull()
   })
 
@@ -1433,12 +1454,15 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getAppTools).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      threadId: undefined,
-      app: { id: 'github-app' }
-    })
+    expect(api.getAppTools).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        threadId: undefined,
+        app: { id: 'github-app' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(api.setAppEnabled).not.toHaveBeenCalled()
   })
 
@@ -1470,12 +1494,15 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getAppTools).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      threadId: undefined,
-      app: { id: 'github-app' }
-    })
+    expect(api.getAppTools).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        threadId: undefined,
+        app: { id: 'github-app' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(document.body.textContent).toContain('会更改数据 1')
     expect(document.body.textContent).toContain('只读 1')
 
@@ -1548,12 +1575,15 @@ describe('PluginCenterPage', () => {
       window.dispatchEvent(new Event('focus'))
       await Promise.resolve()
     })
-    expect(api.getPluginDetail).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
-      forceRefresh: true
-    })
+    expect(api.getPluginDetail).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it.each([
@@ -1784,21 +1814,27 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    expect(api.getAppTools).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      threadId: undefined,
-      app: { id: 'github-app' }
-    })
+    expect(api.getAppTools).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        threadId: undefined,
+        app: { id: 'github-app' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(document.body.querySelector('[data-slot="plugin-app-tools-dialog"]')).not.toBeNull()
-    expect(api.getSnapshot).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      threadId: undefined,
-      forceRefresh: false,
-      sections: ['apps'],
-      includePluginDetails: false
-    })
+    expect(api.getSnapshot).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        threadId: undefined,
+        forceRefresh: false,
+        sections: ['apps'],
+        includePluginDetails: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('keeps configured MCP servers inline with settings and an independently writable switch', async () => {
@@ -2201,11 +2237,14 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getSkillContents).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      skill: { id: '/workspace/skills/review/SKILL.md', name: 'review' }
-    })
+    expect(api.getSkillContents).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        skill: { id: '/workspace/skills/review/SKILL.md', name: 'review' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     const previewDialog = [
       ...document.body.querySelectorAll<HTMLElement>('[data-slot="plugin-skill-preview-dialog"]')
     ].at(-1)
@@ -2565,10 +2604,13 @@ describe('PluginCenterPage', () => {
       await Promise.resolve()
     })
 
-    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      forceRefresh: true
-    })
+    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('previews six plugins per category and opens the full category view from the more row', async () => {
@@ -2798,13 +2840,16 @@ describe('PluginCenterPage', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(api.getSnapshot).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      sections: ['plugins'],
-      includePluginDetails: false,
-      forceRefresh: true
-    })
+    expect(api.getSnapshot).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        sections: ['plugins'],
+        includePluginDetails: false,
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(container.querySelector('[data-slot="plugin-catalog-warning"]')).toBeNull()
     expect(container.textContent).toContain('GitHub')
   })
@@ -2814,13 +2859,17 @@ describe('PluginCenterPage', () => {
     const container = await renderPluginCenter(api)
 
     expect(container.textContent).toContain('GitHub')
-    expect(api.getSnapshot).toHaveBeenNthCalledWith(1, {
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: undefined,
-      forceRefresh: false,
-      sections: ['plugins'],
-      includePluginDetails: false
-    })
+    expect(api.getSnapshot).toHaveBeenNthCalledWith(
+      1,
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: undefined,
+        forceRefresh: false,
+        sections: ['plugins'],
+        includePluginDetails: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(api.getInstalledPlugins).toHaveBeenCalledTimes(1)
   })
@@ -2867,7 +2916,8 @@ describe('PluginCenterPage', () => {
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
     expect(api.getInstalledPlugins).toHaveBeenCalledTimes(1)
     expect(api.getSnapshot).toHaveBeenCalledWith(
-      expect.not.objectContaining({ threadId: expect.anything() })
+      expect.not.objectContaining({ threadId: expect.anything() }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
 
     await renderPluginCenter(api, vi.fn(), { page: 'browse', tab: 'plugins' }, false, {
@@ -2889,15 +2939,21 @@ describe('PluginCenterPage', () => {
 
       await renderPluginCenter(api, vi.fn(), { page: 'manage', tab })
 
-      expect(api.getSnapshot).toHaveBeenCalledWith(expect.objectContaining({ sections: [section] }))
+      expect(api.getSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({ sections: [section] }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      )
       if (needsPluginContext) {
-        expect(api.getSnapshot).toHaveBeenCalledWith({
-          version: PLUGIN_CENTER_API_VERSION,
-          cwd: undefined,
-          forceRefresh: false,
-          sections: ['plugins'],
-          includePluginDetails: false
-        })
+        expect(api.getSnapshot).toHaveBeenCalledWith(
+          {
+            version: PLUGIN_CENTER_API_VERSION,
+            cwd: undefined,
+            forceRefresh: false,
+            sections: ['plugins'],
+            includePluginDetails: false
+          },
+          expect.objectContaining({ signal: expect.any(AbortSignal) })
+        )
         expect(api.getInstalledPlugins).toHaveBeenCalledTimes(1)
       } else {
         expect(api.getSnapshot).toHaveBeenCalledTimes(1)

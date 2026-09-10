@@ -108,6 +108,7 @@ function mcpSnapshot(
 
 function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterApi {
   return {
+    cancelRequest: vi.fn(),
     getSnapshot: vi.fn(async () => ({
       version: PLUGIN_CENTER_API_VERSION,
       snapshot: snapshotResult
@@ -174,13 +175,16 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
 
     expect(api.getSnapshot).toHaveBeenCalledTimes(1)
-    expect(api.getSnapshot).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      sections: ['plugins'],
-      includePluginDetails: false,
-      forceRefresh: false
-    })
+    expect(api.getSnapshot).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        sections: ['plugins'],
+        includePluginDetails: false,
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(resource.getSnapshot().data?.plugins).toHaveLength(1)
   })
 
@@ -272,6 +276,29 @@ describe('pluginCenterDataResource', () => {
     await Promise.all([first, second])
   })
 
+  it('aborts an in-flight read when the resource is released', async () => {
+    const pending = deferred<{
+      version: typeof PLUGIN_CENTER_API_VERSION
+      snapshot: PluginCenterSnapshot
+    }>()
+    const api = createApi()
+    let signal: AbortSignal | undefined
+    vi.mocked(api.getSnapshot).mockImplementation(async (_input, options) => {
+      signal = options?.signal
+      return pending.promise
+    })
+    const resource = getPluginCenterCatalogResource(api, '/repo')
+
+    const loading = resource.prefetch()
+    await Promise.resolve()
+    resource.release()
+
+    expect(signal?.aborted).toBe(true)
+    expect(api.cancelRequest).toHaveBeenCalledWith(expect.any(String))
+    pending.resolve({ version: PLUGIN_CENTER_API_VERSION, snapshot: snapshot([githubPlugin]) })
+    await loading
+  })
+
   it('caches installed plugins independently for one minute', async () => {
     const installed = { ...githubPlugin, installed: true, enabled: true }
     const api = createApi()
@@ -298,11 +325,14 @@ describe('pluginCenterDataResource', () => {
 
     await resource.refresh(true)
 
-    expect(api.getInstalledPlugins).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      forceRefresh: true
-    })
+    expect(api.getInstalledPlugins).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('reads one plugin detail by its exact locator and caches it for thirty seconds', async () => {
@@ -317,12 +347,15 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
 
     expect(api.getPluginDetail).toHaveBeenCalledTimes(1)
-    expect(api.getPluginDetail).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
-      forceRefresh: false
-    })
+    expect(api.getPluginDetail).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('lazily reads one app tool list per cwd, thread, and app identity for five minutes', async () => {
@@ -339,12 +372,15 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
 
     expect(api.getAppTools).toHaveBeenCalledTimes(1)
-    expect(api.getAppTools).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      threadId: 'thread-a',
-      app: { id: 'github-app' }
-    })
+    expect(api.getAppTools).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        threadId: 'thread-a',
+        app: { id: 'github-app' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(resource.getSnapshot().data).toMatchObject({
       status: 'ready',
       tools: [{ name: 'github.search' }]
@@ -379,12 +415,15 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
 
     expect(api.getSkillContents).toHaveBeenCalledTimes(1)
-    expect(api.getSkillContents).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
-      skill: { id: 'github-review', name: 'GitHub review' }
-    })
+    expect(api.getSkillContents).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        plugin: { id: 'plugin:github', marketplaceId: 'marketplace:personal' },
+        skill: { id: 'github-review', name: 'GitHub review' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(resource.getSnapshot().data).toMatchObject({
       status: 'ready',
       contents: '# GitHub review\nUse GitHub.'
@@ -398,17 +437,23 @@ describe('pluginCenterDataResource', () => {
     await resource.prefetch()
     await resource.prefetch()
     expect(api.getRecommendedSkills).toHaveBeenCalledTimes(1)
-    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      forceRefresh: false
-    })
+    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
 
     await resource.refresh(true)
     expect(api.getRecommendedSkills).toHaveBeenCalledTimes(2)
-    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      forceRefresh: true
-    })
+    expect(api.getRecommendedSkills).toHaveBeenLastCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        forceRefresh: true
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('ignores an older installed-state response after invalidation starts a readback', async () => {
@@ -458,11 +503,14 @@ describe('pluginCenterDataResource', () => {
 
     await resource.prefetch()
 
-    expect(api.getSkillContents).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
-    })
+    expect(api.getSkillContents).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        skill: { id: '/skills/writer/SKILL.md', name: 'writer' }
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it.each([
@@ -544,7 +592,8 @@ describe('pluginCenterDataResource', () => {
     expect(api.getSnapshot).toHaveBeenCalledTimes(2)
     expect(api.getSnapshot).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ sections: ['mcp'], forceRefresh: true })
+      expect.objectContaining({ sections: ['mcp'], forceRefresh: true }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
     expect(resource.getSnapshot()).toMatchObject({
       status: 'ready',
@@ -575,13 +624,16 @@ describe('pluginCenterDataResource', () => {
 
     await resource.prefetch()
 
-    expect(api.getSnapshot).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      sections: ['mcp'],
-      includePluginDetails: false,
-      forceRefresh: false
-    })
+    expect(api.getSnapshot).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        sections: ['mcp'],
+        includePluginDetails: false,
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('uses a separate, filtered resource for managed skills', async () => {
@@ -593,14 +645,17 @@ describe('pluginCenterDataResource', () => {
 
     await managedResource.prefetch()
 
-    expect(api.getSnapshot).toHaveBeenCalledWith({
-      version: PLUGIN_CENTER_API_VERSION,
-      cwd: '/repo',
-      sections: ['skills'],
-      includePluginDetails: false,
-      skillListMode: 'manage',
-      forceRefresh: false
-    })
+    expect(api.getSnapshot).toHaveBeenCalledWith(
+      {
+        version: PLUGIN_CENTER_API_VERSION,
+        cwd: '/repo',
+        sections: ['skills'],
+        includePluginDetails: false,
+        skillListMode: 'manage',
+        forceRefresh: false
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('prefetches catalog and installed state together and keeps both subscribed', async () => {

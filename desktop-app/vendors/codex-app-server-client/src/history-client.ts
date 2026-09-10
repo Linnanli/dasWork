@@ -285,7 +285,10 @@ export class CodexHistoryClient {
         name: PACKAGE_NAME,
         version: PACKAGE_VERSION
       },
-      capabilities: { experimentalApi: this.settings.experimentalApi ?? true }
+      capabilities: {
+        experimentalApi: this.settings.experimentalApi ?? true,
+        requestAttestation: false
+      }
     })
   }
 }

@@ -762,10 +762,13 @@ describe('PluginCenterService', () => {
       missingReason: 'not_found'
     })
     expect(provider.readPluginDetailForManagement).toHaveBeenCalledTimes(1)
-    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith({
-      remoteMarketplaceName: 'openai-curated-remote',
-      pluginName: 'github'
-    })
+    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith(
+      {
+        remoteMarketplaceName: 'openai-curated-remote',
+        pluginName: 'github'
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it('preserves the installation timestamp returned by plugin/installed', async () => {
@@ -1197,10 +1200,13 @@ describe('PluginCenterService', () => {
 
     await service.getSnapshot({ version: PLUGIN_CENTER_API_VERSION })
 
-    expect(provider.listPluginCatalog).toHaveBeenCalledWith({
-      cwd: undefined,
-      forceRefetch: undefined
-    })
+    expect(provider.listPluginCatalog).toHaveBeenCalledWith(
+      {
+        cwd: undefined,
+        forceRefetch: undefined
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(provider.listSkillsForManagement).toHaveBeenCalledWith({
       cwd: undefined,
       forceReload: undefined
@@ -1436,6 +1442,79 @@ describe('PluginCenterService', () => {
     expect(provider.listPluginCatalog).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps a shared catalog read alive when a cancellable consumer leaves but an ordinary consumer remains', async () => {
+    const catalog = await createProvider().listPluginCatalog({ cwd: '/repo' })
+    const pendingCatalog = deferred<unknown>()
+    let ownerSignal: AbortSignal | undefined
+    const provider = createProvider({
+      listPluginCatalog: vi.fn((_input, context?: { signal?: AbortSignal }) => {
+        ownerSignal = context?.signal
+        return pendingCatalog.promise
+      })
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+    const controller = new AbortController()
+
+    const cancelled = service.getSnapshot(
+      { version: PLUGIN_CENTER_API_VERSION, sections: ['plugins'] },
+      { signal: controller.signal }
+    )
+    const remaining = service.getSnapshot({
+      version: PLUGIN_CENTER_API_VERSION,
+      sections: ['plugins'],
+      forceRefresh: true
+    })
+
+    await vi.waitFor(() => expect(provider.listPluginCatalog).toHaveBeenCalledOnce())
+    controller.abort()
+
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(ownerSignal?.aborted).toBe(false)
+
+    pendingCatalog.resolve(catalog)
+    await expect(remaining).resolves.toMatchObject({
+      snapshot: { plugins: [{ id: 'git@official' }] }
+    })
+  })
+
+  it('does not let a cancelled plugin-detail consumer poison another shared reader', async () => {
+    const rawDetail = await createProvider().readPluginDetailForManagement!({
+      marketplacePath: '/plugins',
+      pluginName: 'git'
+    })
+    const pendingDetail = deferred<unknown>()
+    let ownerSignal: AbortSignal | undefined
+    const provider = createProvider({
+      readPluginDetailForManagement: vi.fn((_input, context?: { signal?: AbortSignal }) => {
+        ownerSignal = context?.signal
+        return pendingDetail.promise
+      })
+    })
+    const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
+    const controller = new AbortController()
+    const input = {
+      version: PLUGIN_CENTER_API_VERSION,
+      plugin: { id: 'git@official', marketplaceId: 'official' }
+    }
+
+    const cancelled = service.getPluginDetail(input, { signal: controller.signal })
+    await vi.waitFor(() => expect(provider.readPluginDetailForManagement).toHaveBeenCalledOnce())
+    const remaining = service.getPluginDetail(input)
+    await vi.waitFor(() => expect(provider.readPluginDetailForManagement).toHaveBeenCalledOnce())
+
+    controller.abort()
+
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(ownerSignal).not.toBe(controller.signal)
+    expect(ownerSignal?.aborted).toBe(false)
+
+    pendingDetail.resolve(rawDetail)
+    await expect(remaining).resolves.toMatchObject({
+      status: 'ready',
+      detail: { plugin: { id: 'git@official' } }
+    })
+  })
+
   it('limits installed-state cache entries to the three most recent cwd keys', async () => {
     const provider = createProvider()
     const service = new PluginCenterService({ provider, defaultCwd: () => '/repo' })
@@ -1544,10 +1623,13 @@ describe('PluginCenterService', () => {
     await service.installPlugin(input)
     await service.uninstallPlugin(input)
 
-    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith({
-      remoteMarketplaceName: 'openai-curated-remote',
-      pluginName: 'plugins~Plugin_gmail_123'
-    })
+    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith(
+      {
+        remoteMarketplaceName: 'openai-curated-remote',
+        pluginName: 'plugins~Plugin_gmail_123'
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(provider.installPlugin).toHaveBeenCalledWith({
       remoteMarketplaceName: 'openai-curated-remote',
       installAttemptId: expect.any(String),
@@ -2489,18 +2571,25 @@ describe('PluginCenterService', () => {
     })
     expect(result.status === 'ready' && result.detail.privacyPolicyUrl).toBeUndefined()
     expect(result.status === 'ready' && result.detail.apps).toHaveLength(2)
-    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith({
-      remoteMarketplaceName: 'official',
-      pluginName: 'git'
-    })
-    expect(provider.listAppsForManagement).toHaveBeenCalledWith({ forceRefetch: undefined })
-    expect(provider.readAppsForManagement).toHaveBeenCalledWith({
-      appIds: ['github', 'fallback-app']
-    })
-    expect(provider.listSkillsForManagement).toHaveBeenCalledWith({
-      cwd: '/repo',
-      forceReload: undefined
-    })
+    expect(provider.readPluginDetailForManagement).toHaveBeenCalledWith(
+      {
+        remoteMarketplaceName: 'official',
+        pluginName: 'git'
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(provider.listAppsForManagement).toHaveBeenCalledWith(
+      { forceRefetch: undefined },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(provider.readAppsForManagement).toHaveBeenCalledWith(
+      { appIds: ['github', 'fallback-app'] },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    expect(provider.listSkillsForManagement).toHaveBeenCalledWith(
+      { cwd: '/repo', forceReload: undefined },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(provider.readPluginDetailsForManagement).not.toHaveBeenCalled()
   })
 
@@ -2617,3 +2706,11 @@ describe('PluginCenterService', () => {
     expect(provider.readPluginDetailForManagement).not.toHaveBeenCalled()
   })
 })
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
+}

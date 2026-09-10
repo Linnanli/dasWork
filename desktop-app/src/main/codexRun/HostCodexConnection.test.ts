@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   CodexAppServerConnection,
@@ -10,6 +10,7 @@ import {
 import { HostCodexConnection, redactAppServerDebugPacket } from './HostCodexConnection'
 
 class FakePhysicalTransport implements CodexTransport {
+  readonly sentMessages: JsonRpcMessage[] = []
   readonly requests: Array<Extract<JsonRpcMessage, { id: string | number; method: string }>> = []
   readonly notifications: Array<{ method: string; params?: unknown }> = []
   private readonly closeListeners = new Set<CodexTransportEventMap['close']>()
@@ -25,6 +26,7 @@ class FakePhysicalTransport implements CodexTransport {
   }
 
   async sendMessage(message: JsonRpcMessage): Promise<void> {
+    this.sentMessages.push(message)
     if (!('method' in message) || !('id' in message)) return
     this.requests.push(message)
     queueMicrotask(() => {
@@ -59,7 +61,7 @@ class FakePhysicalTransport implements CodexTransport {
     for (const listener of this.closeListeners) listener(1, null)
   }
 
-  private emitMessage(message: JsonRpcMessage): void {
+  emitMessage(message: JsonRpcMessage): void {
     for (const listener of this.messageListeners) listener(message)
   }
 }
@@ -144,10 +146,50 @@ describe('HostCodexConnection', () => {
     expect(physicalTransports).toHaveLength(2)
     for (const transport of physicalTransports) {
       expect(transport.requests.map((request) => request.method)).toEqual(['initialize'])
+      expect(transport.requests[0]?.params).toMatchObject({
+        capabilities: {
+          experimentalApi: true,
+          requestAttestation: false
+        }
+      })
       expect(transport.notifications.map((notification) => notification.method)).toEqual([
         'initialized'
       ])
     }
     expect(host.diagnostics()?.generation).toBe(1)
+  })
+
+  it('answers currentTime/read as a host capability for active threads', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-09T12:00:07.000Z'))
+      const physical = new FakePhysicalTransport()
+      const connection = new CodexAppServerConnection({
+        transportFactory: () => physical
+      })
+      const host = new HostCodexConnection(launch, connection, async () => '0.148.0-alpha.21')
+
+      const client = await host.acquire('thread-clock')
+      physical.emitMessage({
+        id: 'server-current-time',
+        method: 'currentTime/read',
+        params: { threadId: 'thread-clock' }
+      })
+      await Promise.resolve()
+
+      expect(
+        physical.sentMessages.find(
+          (message) => 'id' in message && message.id === 'server-current-time'
+        )
+      ).toEqual({
+        id: 'server-current-time',
+        result: { currentTimeAt: 1_788_955_207 }
+      })
+
+      await client.disconnect()
+      await host.shutdown()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

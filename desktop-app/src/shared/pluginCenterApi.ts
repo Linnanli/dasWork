@@ -21,7 +21,8 @@ export const pluginCenterIpcChannels = {
   setAppEnabled: 'codex:plugin-center:set-app-enabled',
   setMcpServerEnabled: 'codex:plugin-center:set-mcp-server-enabled',
   upsertMcpServer: 'codex:plugin-center:upsert-mcp-server',
-  removeMcpServer: 'codex:plugin-center:remove-mcp-server'
+  removeMcpServer: 'codex:plugin-center:remove-mcp-server',
+  cancelRequest: 'codex:plugin-center:cancel-request'
 } as const
 
 const nonEmptyStringSchema = z.string().trim().min(1)
@@ -32,6 +33,45 @@ const optionalDisplayStringSchema = z
   .max(PLUGIN_CENTER_DISPLAY_TEXT_MAX_LENGTH)
   .optional()
 const idSchema = z.string().trim().min(1).max(300)
+export const pluginCenterIpcRequestIdSchema = z
+  .string()
+  .trim()
+  .min(16)
+  .max(200)
+  .regex(/^[A-Za-z0-9_-]+$/)
+export const pluginCenterIpcCancelRequestSchema = z
+  .object({
+    requestId: pluginCenterIpcRequestIdSchema
+  })
+  .strict()
+
+export type PluginCenterIpcCancelRequest = z.infer<typeof pluginCenterIpcCancelRequestSchema>
+
+export const pluginCenterIpcRequestEnvelopeBaseSchema = z
+  .object({
+    requestId: pluginCenterIpcRequestIdSchema,
+    payload: z.unknown()
+  })
+  .strict()
+
+export function parsePluginCenterIpcRequestEnvelope<T>(
+  value: unknown,
+  payloadSchema: { parse(value: unknown, options?: { jitless: boolean }): T },
+  options?: { jitless: boolean }
+): { requestId: string; payload: T } {
+  const envelope = pluginCenterIpcRequestEnvelopeBaseSchema.parse(value, options)
+  return {
+    requestId: envelope.requestId,
+    payload: payloadSchema.parse(envelope.payload, options)
+  }
+}
+
+export type PluginCenterRequestOptions = {
+  signal?: AbortSignal
+  /** Renderer-owned request id used to relay cancellation across Electron's context bridge. */
+  requestId?: string
+}
+
 const stringListSchema = z.array(nonEmptyStringSchema).default([])
 const recommendedSkillRepoPathSchema = z
   .string()
@@ -934,35 +974,73 @@ export type PluginCenterAddMarketplaceResult = z.infer<
 >
 
 export type DesktopPluginCenterApi = {
-  getSnapshot(input: PluginCenterSnapshotRequest): Promise<PluginCenterSnapshotResult>
+  cancelRequest(requestId: string): void
+  getSnapshot(
+    input: PluginCenterSnapshotRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterSnapshotResult>
   getInstalledPlugins(
-    input: PluginCenterInstalledPluginsRequest
+    input: PluginCenterInstalledPluginsRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterInstalledPluginsResult>
   getPluginDetail(
-    input: PluginCenterGetPluginDetailRequest
+    input: PluginCenterGetPluginDetailRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterGetPluginDetailResult>
-  getAppTools(input: PluginCenterGetAppToolsRequest): Promise<PluginCenterGetAppToolsResult>
+  getAppTools(
+    input: PluginCenterGetAppToolsRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterGetAppToolsResult>
   getSkillContents(
-    input: PluginCenterGetSkillContentsRequest
+    input: PluginCenterGetSkillContentsRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterGetSkillContentsResult>
   getRecommendedSkills(
-    input: PluginCenterGetRecommendedSkillsRequest
+    input: PluginCenterGetRecommendedSkillsRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterGetRecommendedSkillsResult>
   addMarketplace(
-    input: PluginCenterAddMarketplaceRequest
+    input: PluginCenterAddMarketplaceRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterAddMarketplaceResult>
-  installPlugin(input: PluginCenterInstallPluginRequest): Promise<PluginCenterMutationResult>
+  installPlugin(
+    input: PluginCenterInstallPluginRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
   installRecommendedSkill(
-    input: PluginCenterInstallRecommendedSkillRequest
+    input: PluginCenterInstallRecommendedSkillRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterMutationResult>
-  uninstallPlugin(input: PluginCenterUninstallPluginRequest): Promise<PluginCenterMutationResult>
-  uninstallSkill(input: PluginCenterUninstallSkillRequest): Promise<PluginCenterMutationResult>
-  setPluginEnabled(input: PluginCenterSetPluginEnabledRequest): Promise<PluginCenterMutationResult>
-  setSkillEnabled(input: PluginCenterSetSkillEnabledRequest): Promise<PluginCenterMutationResult>
-  setAppEnabled(input: PluginCenterSetAppEnabledRequest): Promise<PluginCenterMutationResult>
+  uninstallPlugin(
+    input: PluginCenterUninstallPluginRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
+  uninstallSkill(
+    input: PluginCenterUninstallSkillRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
+  setPluginEnabled(
+    input: PluginCenterSetPluginEnabledRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
+  setSkillEnabled(
+    input: PluginCenterSetSkillEnabledRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
+  setAppEnabled(
+    input: PluginCenterSetAppEnabledRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
   setMcpServerEnabled(
-    input: PluginCenterSetMcpServerEnabledRequest
+    input: PluginCenterSetMcpServerEnabledRequest,
+    options?: PluginCenterRequestOptions
   ): Promise<PluginCenterMutationResult>
-  upsertMcpServer(input: PluginCenterUpsertMcpServerRequest): Promise<PluginCenterMutationResult>
-  removeMcpServer(input: PluginCenterRemoveMcpServerRequest): Promise<PluginCenterMutationResult>
+  upsertMcpServer(
+    input: PluginCenterUpsertMcpServerRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
+  removeMcpServer(
+    input: PluginCenterRemoveMcpServerRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterMutationResult>
 }

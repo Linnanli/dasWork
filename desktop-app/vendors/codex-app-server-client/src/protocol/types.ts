@@ -22,6 +22,7 @@ import type { CommandExecutionRequestApprovalResponse } from './app-server-proto
 import type { FileChangeApprovalDecision } from './app-server-protocol/v2/FileChangeApprovalDecision'
 import type { FileChangeRequestApprovalParams } from './app-server-protocol/v2/FileChangeRequestApprovalParams'
 import type { FileChangeRequestApprovalResponse } from './app-server-protocol/v2/FileChangeRequestApprovalResponse'
+import type { InitializeCapabilities } from './app-server-protocol/InitializeCapabilities'
 import type { McpServerElicitationRequestParams } from './app-server-protocol/v2/McpServerElicitationRequestParams'
 import type { McpServerElicitationRequestResponse } from './app-server-protocol/v2/McpServerElicitationRequestResponse'
 import type { PermissionsRequestApprovalParams } from './app-server-protocol/v2/PermissionsRequestApprovalParams'
@@ -64,6 +65,7 @@ export type { CommandExecutionRequestApprovalResponse }
 export type { FileChangeApprovalDecision }
 export type { FileChangeRequestApprovalParams }
 export type { FileChangeRequestApprovalResponse }
+export type { InitializeCapabilities }
 export type { SandboxMode }
 export type { SandboxPolicy }
 export type { ThreadCompactStartParams }
@@ -117,9 +119,7 @@ export interface CodexInitializeParams {
     version: string
     title?: string
   }
-  capabilities?: {
-    experimentalApi?: boolean
-  }
+  capabilities?: InitializeCapabilities
 }
 
 export interface CodexInitializeResult {
@@ -216,7 +216,8 @@ export interface CodexToolCallRequestParams {
 }
 
 export type CodexToolResultContentItem =
-  { type: 'inputText'; text: string } | { type: 'inputImage'; imageUrl: string }
+  | { type: 'inputText'; text: string }
+  | { type: 'inputImage'; imageUrl: string }
 
 export interface CodexToolCallResult {
   success: boolean
