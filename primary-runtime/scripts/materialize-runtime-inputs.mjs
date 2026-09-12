@@ -199,7 +199,7 @@ try {
   await rm(workRoot, { recursive: true, force: true });
 }
 
-async function extractLockedArtifact({ artifact, output, cacheRoot }) {
+async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
   if (!artifact)
     throw new Error("AT-RT-INPUT-01 blocked: locked artifact is missing.");
   await mkdir(output, { recursive: true });

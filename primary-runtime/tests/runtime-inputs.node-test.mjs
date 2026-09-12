@@ -231,6 +231,27 @@ test("P1 command line tools accept the documented equals-form arguments", async 
   }
 });
 
+test("P1 scripts resolve default lock paths through file URLs safely on Windows", async () => {
+  const scriptFiles = [
+    fetchScript,
+    materializeScript,
+    verifyInputsScript,
+    verifyPlatformScript,
+    resolve(import.meta.dirname, "../scripts/build-runtime.mjs"),
+    resolve(import.meta.dirname, "../scripts/verify-runtime.mjs"),
+    resolve(import.meta.dirname, "../scripts/source-lock.mjs"),
+  ];
+  for (const scriptFile of scriptFiles) {
+    const source = await readFile(scriptFile, "utf8");
+    assert.match(source, /fileURLToPath/u, `${scriptFile} must use fileURLToPath`);
+    assert.doesNotMatch(
+      source,
+      /new URL\([^)]*import\.meta\.url\)\.pathname/u,
+      `${scriptFile} must not pass a file URL pathname to path.resolve`,
+    );
+  }
+});
+
 async function createInputFixture() {
   const root = await (
     await import("node:fs/promises")
