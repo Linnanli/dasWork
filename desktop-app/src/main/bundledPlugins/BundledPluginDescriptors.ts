@@ -11,14 +11,30 @@ const bundleFileSchema = z.object({
   mode: z.literal('executable').optional()
 })
 
-const bundleProvenanceSchema = z
-  .object({
-    kind: z.literal('repo-owned'),
-    sourcePath: z.string().regex(/^desktop-app\/(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
-    licensePath: z.string().regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
-    reviewStatus: z.enum(['pending-independent-review', 'approved'])
-  })
-  .strict()
+const relativeBundlePathSchema = z
+  .string()
+  .regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u)
+
+const bundleProvenanceSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('repo-owned'),
+      sourcePath: z.string().regex(/^desktop-app\/(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
+      licensePath: relativeBundlePathSchema,
+      reviewStatus: z.enum(['pending-independent-review', 'approved'])
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('locked-source'),
+      sourceLock: z.literal('primary-runtime/runtime-sources.lock.json'),
+      sourceCommit: z.string().regex(/^[a-f0-9]{40}$/u),
+      sourceArchiveSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+      licensePath: relativeBundlePathSchema,
+      reviewStatus: z.literal('approved')
+    })
+    .strict()
+])
 
 const bundlePluginSchema = z.object({
   name: z.string().min(1),
@@ -74,6 +90,8 @@ export type BundledPluginDescriptor = {
   installWhenMissing: boolean
   internal: boolean
   sourceKind: BundledPluginSourceKind
+  /** Identifies the component allowed to reconcile this internal plugin. */
+  owner: 'app-bundled' | `primary-runtime:${string}`
 }
 
 export type BundledPluginLock = z.infer<typeof bundleLockSchema>
@@ -163,7 +181,8 @@ async function descriptorsFromBundleLock(
         version: plugin.version,
         installWhenMissing: plugin.installWhenMissing,
         internal: plugin.internal,
-        sourceKind
+        sourceKind,
+        owner: sourceKind === 'app-resource' ? 'app-bundled' : 'primary-runtime:unversioned'
       }
     })
   )
@@ -197,7 +216,8 @@ async function readMarketplaceDescriptors(
       version: pluginManifest.version,
       installWhenMissing: true,
       internal: true,
-      sourceKind
+      sourceKind,
+      owner: sourceKind === 'app-resource' ? 'app-bundled' : 'primary-runtime:unversioned'
     })
   }
   return descriptors
@@ -225,11 +245,15 @@ export async function readPrimaryRuntimeBundledPluginDescriptors(
 
   const descriptors: BundledPluginDescriptor[] = []
   for (const marketplace of diagnostic.manifest.bundledPlugins) {
+    const marketplaceDescriptors = await readBundledPluginDescriptorsFromMarketplaceRoot(
+      join(diagnostic.root, marketplace.path),
+      'primary-runtime'
+    )
     descriptors.push(
-      ...(await readBundledPluginDescriptorsFromMarketplaceRoot(
-        join(diagnostic.root, marketplace.path),
-        'primary-runtime'
-      ))
+      ...marketplaceDescriptors.map((descriptor) => ({
+        ...descriptor,
+        owner: `primary-runtime:${diagnostic.manifest!.bundleVersion}` as const
+      }))
     )
   }
   return descriptors

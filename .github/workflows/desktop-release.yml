@@ -56,9 +56,14 @@ jobs:
           mkdir -p test-results/contracts
           node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
 
-      - name: Verify App Tools release-gate contract
-        run: npm run verify:app-tools-release-gates
+      - name: Verify App Tools release-gate specification
+        run: npm run verify:app-tools-release-gate-spec
         working-directory: desktop-app
+
+      - name: Verify Primary Runtime builder and feed contracts
+        run: |
+          npm --prefix primary-runtime test
+          npm --prefix services/primary-runtime-feed test
 
       - name: Upload native runtime boundary report
         if: always()
@@ -104,6 +109,13 @@ jobs:
           DASCOWORK_RELEASE_ADMIN_BACKEND_URL: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_URL }}
           DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID }}
           DASCOWORK_RELEASE_EXTERNAL_RETRY: ${{ secrets.DASCOWORK_RELEASE_EXTERNAL_RETRY }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS }}
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:release-llm
 
       - name: Check change scope
@@ -192,8 +204,25 @@ jobs:
         run: npm run build:codex-app-server-client
         working-directory: desktop-app
 
+      - name: Prepare signed Primary Runtime product configuration
+        env:
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON }}
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS }}
+        run: node scripts/write-primary-runtime-product-config.mjs
+        working-directory: desktop-app
+
       - name: Build installer
         run: npm run ${{ matrix.command }} -- --${{ matrix.arch }}
+        working-directory: desktop-app
+
+      - name: Restore disabled Primary Runtime product configuration
+        if: always()
+        run: node scripts/write-primary-runtime-product-config.mjs --disabled
         working-directory: desktop-app
 
       - name: Enable Codex workspace sandbox on Linux

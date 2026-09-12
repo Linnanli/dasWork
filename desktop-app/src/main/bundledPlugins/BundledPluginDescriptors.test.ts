@@ -42,7 +42,8 @@ describe('BundledPluginDescriptors', () => {
         version: '0.2.0',
         installWhenMissing: true,
         internal: true,
-        sourceKind: 'app-resource'
+        sourceKind: 'app-resource',
+        owner: 'app-bundled'
       }
     ])
   })
@@ -88,22 +89,23 @@ describe('BundledPluginDescriptors', () => {
       readBundledPluginDescriptorsFromMarketplaceRoot(marketplaceRoot, 'primary-runtime')
     ).resolves.toEqual([
       {
-        marketplaceName: 'openai-primary-runtime',
+        marketplaceName: 'presentation-skill',
         marketplaceRoot,
         marketplacePath: join(marketplaceRoot, '.agents', 'plugins', 'marketplace.json'),
-        pluginRoot: join(marketplaceRoot, 'plugins', 'presentations'),
-        pluginName: 'presentations',
-        version: '26.904.11930',
+        pluginRoot: join(marketplaceRoot, 'plugins', 'presentation-skill'),
+        pluginName: 'presentation-skill',
+        version: 'v0.8.0',
         installWhenMissing: true,
         internal: true,
-        sourceKind: 'primary-runtime'
+        sourceKind: 'primary-runtime',
+        owner: 'primary-runtime:unversioned'
       }
     ])
   })
 
   it('rejects marketplace entries that do not match their plugin manifests', async () => {
     const marketplaceRoot = await fixtureRuntimeMarketplace({
-      marketplacePluginName: 'presentations',
+      marketplacePluginName: 'presentation-skill',
       manifestPluginName: 'documents'
     })
 
@@ -122,20 +124,20 @@ describe('BundledPluginDescriptors', () => {
     await writeFile(
       join(root, '.agents', 'plugins', 'marketplace.json'),
       JSON.stringify({
-        name: 'openai-primary-runtime',
+        name: 'presentation-skill',
         plugins: [
           {
-            name: 'presentations',
-            source: { source: 'local', path: './plugins/presentations' }
+            name: 'presentation-skill',
+            source: { source: 'local', path: './plugins/presentation-skill' }
           }
         ]
       })
     )
     await writeFile(
       join(outside, '.codex-plugin', 'plugin.json'),
-      JSON.stringify({ name: 'presentations', version: '26.904.11930' })
+      JSON.stringify({ name: 'presentation-skill', version: 'v0.8.0' })
     )
-    await symlink(outside, join(root, 'plugins', 'presentations'), 'dir')
+    await symlink(outside, join(root, 'plugins', 'presentation-skill'), 'dir')
 
     await expect(
       readBundledPluginDescriptorsFromMarketplaceRoot(root, 'primary-runtime')
@@ -165,6 +167,38 @@ describe('BundledPluginDescriptors', () => {
         ]
       })
     ).toThrow()
+  })
+
+  it('accepts a Runtime plugin lock bound to the audited source record', () => {
+    expect(() =>
+      parseBundledPluginLock({
+        bundleFormatVersion: 2,
+        marketplace: { name: 'presentation-skill', pluginRoot: 'plugins' },
+        plugins: [
+          {
+            name: 'presentation-skill',
+            version: 'v0.8.0',
+            installWhenMissing: true,
+            internal: true,
+            provenance: {
+              kind: 'locked-source',
+              sourceLock: 'primary-runtime/runtime-sources.lock.json',
+              sourceCommit: 'a25708686160a13a4cdcb9cc1cc206fa9cb86219',
+              sourceArchiveSha256:
+                '763827964186eeac53ee19d18055b640766ad840839cd35488c32fac9ed95fb7',
+              licensePath: 'LICENSE',
+              reviewStatus: 'approved'
+            },
+            files: [
+              {
+                path: 'skills/presentation-skill/SKILL.md',
+                sha256: 'a'.repeat(64)
+              }
+            ]
+          }
+        ]
+      })
+    ).not.toThrow()
   })
 })
 
@@ -223,7 +257,7 @@ async function writeFixtureMarketplace(root: string): Promise<void> {
 async function fixtureRuntimeMarketplace(
   options: { marketplacePluginName?: string; manifestPluginName?: string } = {}
 ): Promise<string> {
-  const marketplacePluginName = options.marketplacePluginName ?? 'presentations'
+  const marketplacePluginName = options.marketplacePluginName ?? 'presentation-skill'
   const manifestPluginName = options.manifestPluginName ?? marketplacePluginName
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-marketplace-')))
   directories.push(root)
@@ -232,7 +266,7 @@ async function fixtureRuntimeMarketplace(
   await writeFile(
     join(root, '.agents', 'plugins', 'marketplace.json'),
     JSON.stringify({
-      name: 'openai-primary-runtime',
+      name: 'presentation-skill',
       plugins: [
         {
           name: marketplacePluginName,
@@ -243,7 +277,7 @@ async function fixtureRuntimeMarketplace(
   )
   await writeFile(
     join(root, 'plugins', marketplacePluginName, '.codex-plugin', 'plugin.json'),
-    JSON.stringify({ name: manifestPluginName, version: '26.904.11930' })
+    JSON.stringify({ name: manifestPluginName, version: 'v0.8.0' })
   )
   return root
 }

@@ -108,6 +108,28 @@ export class PrimaryRuntimeActivePointer {
     return pointer
   }
 
+  /**
+   * Repoints to an already validated version after a later activation phase
+   * fails. The pointer generation still advances, so readers never mistake a
+   * recovery for a stale file replay.
+   */
+  async restore(
+    record: PrimaryRuntimeActivePointerRecord
+  ): Promise<PrimaryRuntimeActivePointerRecord> {
+    const existing = await this.readCurrentPointer()
+    const restored: PrimaryRuntimeActivePointerRecord = {
+      ...record,
+      generation: (existing?.generation ?? 0) + 1
+    }
+    await this.writeAtomically(restored)
+    return restored
+  }
+
+  async clear(): Promise<void> {
+    await rm(this.pendingPointerPath, { force: true })
+    await rm(this.pointerPath, { force: true })
+  }
+
   /** Removes an interrupted, not-yet-published pointer write. */
   async recover(): Promise<void> {
     await rm(this.pendingPointerPath, { force: true })

@@ -1,0 +1,24 @@
+{
+  "name": "@dascowork/primary-runtime-builder",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.node-test.mjs",
+    "build": "node scripts/build-runtime.mjs",
+    "build:synthetic": "node scripts/build-synthetic-runtime.mjs",
+    "verify": "node scripts/verify-runtime.mjs",
+    "fetch:sources": "node scripts/fetch-runtime-sources.mjs",
+    "materialize:inputs": "node scripts/materialize-runtime-inputs.mjs",
+    "verify:inputs": "node scripts/verify-runtime-inputs.mjs",
+    "measure:unpack": "node scripts/measure-runtime-unpack.mjs",
+    "verify:platform": "node scripts/verify-runtime-platform.mjs",
+    "verify:hard-limits": "node scripts/verify-runtime-hard-limits.mjs",
+    "verify:budgets": "node scripts/verify-runtime-budgets.mjs",
+    "calibrate:budgets": "node scripts/calibrate-runtime-budgets.mjs",
+    "assemble:performance": "node scripts/assemble-runtime-performance-report.mjs",
+    "create-provenance": "node scripts/create-provenance.mjs"
+  }
+}

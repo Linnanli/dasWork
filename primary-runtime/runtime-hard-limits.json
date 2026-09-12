@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-hard-limits.v1",
+  "purpose": "P1a candidate abuse ceilings. These values are reviewed source, are not release budgets, and build scripts may only read them.",
+  "targets": {
+    "darwin-x64": {
+      "maxArchiveBytes": 2147483648,
+      "maxUnpackedBytes": 8589934592,
+      "minimumFreeDiskBytes": 21474836480
+    },
+    "darwin-arm64": {
+      "maxArchiveBytes": 2147483648,
+      "maxUnpackedBytes": 8589934592,
+      "minimumFreeDiskBytes": 21474836480
+    },
+    "win32-x64": {
+      "maxArchiveBytes": 2147483648,
+      "maxUnpackedBytes": 8589934592,
+      "minimumFreeDiskBytes": 21474836480
+    },
+    "linux-x64": {
+      "maxArchiveBytes": 2147483648,
+      "maxUnpackedBytes": 8589934592,
+      "minimumFreeDiskBytes": 21474836480
+    }
+  }
+}

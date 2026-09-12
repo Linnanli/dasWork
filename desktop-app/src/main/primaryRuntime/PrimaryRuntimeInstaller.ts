@@ -25,11 +25,35 @@ export type PrimaryRuntimeInstallResult = {
   diagnostic: PrimaryRuntimeReadyDiagnostic
 }
 
+export type PreparedPrimaryRuntimeInstall = {
+  version: string
+  archiveSha256: string
+  versionDirectory: string
+  versionRoot: string
+  manifestSha256: string
+  diagnostic: PrimaryRuntimeReadyDiagnostic
+}
+
 export type PrimaryRuntimeInstallerInput = {
   cacheRoot: string
   releaseProvider?: PrimaryRuntimeReleaseProvider
   diagnostics?: PrimaryRuntimeDiagnostics
+  releaseBudget?: PrimaryRuntimeInstallBudget
   availableDiskBytes?: (path: string) => Promise<number>
+  /** Main-only progress hook; it must not affect installation correctness. */
+  onProgress?: (progress: PrimaryRuntimeInstallerProgress) => void | Promise<void>
+}
+
+export type PrimaryRuntimeInstallBudget = {
+  maxArchiveBytes: number
+  maxUnpackedBytes: number
+  minimumFreeDiskBytes: number
+}
+
+export type PrimaryRuntimeInstallerProgress = {
+  phase: 'downloading' | 'installing' | 'verifying'
+  downloadedBytes?: number
+  totalBytes?: number
 }
 
 const STAGING_PREFIX = '.staging-'
@@ -47,14 +71,13 @@ const MAX_ARCHIVE_ENTRIES = 200_000
  */
 export class PrimaryRuntimeInstaller {
   private readonly diagnostics: PrimaryRuntimeDiagnostics
-  private readonly maxArchiveBytes: number
   private readonly availableDiskBytes: (path: string) => Promise<number>
   private readonly activePointer: PrimaryRuntimeActivePointer
   private recoveryTail: Promise<void> = Promise.resolve()
 
   constructor(private readonly input: PrimaryRuntimeInstallerInput) {
     this.diagnostics = input.diagnostics ?? new PrimaryRuntimeDiagnostics()
-    this.maxArchiveBytes = DEFAULT_MAX_ARCHIVE_BYTES
+    assertInstallBudget(input.releaseBudget)
     this.availableDiskBytes = input.availableDiskBytes ?? readAvailableDiskBytes
     this.activePointer = new PrimaryRuntimeActivePointer(input.cacheRoot)
   }
@@ -63,6 +86,15 @@ export class PrimaryRuntimeInstaller {
     signal: AbortSignal,
     descriptor?: PrimaryRuntimeReleaseDescriptor
   ): Promise<PrimaryRuntimeInstallResult> {
+    const prepared = await this.prepare(signal, descriptor)
+    return this.commitPrepared(prepared)
+  }
+
+  /** Extracts and validates an immutable candidate without changing active.json. */
+  async prepare(
+    signal: AbortSignal,
+    descriptor?: PrimaryRuntimeReleaseDescriptor
+  ): Promise<PreparedPrimaryRuntimeInstall> {
     await this.cleanupStaging()
     throwIfAborted(signal)
 
@@ -74,10 +106,14 @@ export class PrimaryRuntimeInstaller {
     if (!resolvedDescriptor) {
       throw new Error('Primary Runtime release descriptor is not configured.')
     }
-    assertSupportedDescriptor(resolvedDescriptor, this.maxArchiveBytes)
+    const budget = installBudgetFor(resolvedDescriptor, this.input.releaseBudget)
+    assertSupportedDescriptor(resolvedDescriptor, budget.maxArchiveBytes)
     await assertDiskCapacity(
       this.input.cacheRoot,
-      Math.max(MINIMUM_INSTALL_HEADROOM_BYTES, resolvedDescriptor.archiveSizeBytes * 8),
+      Math.max(
+        budget.minimumFreeDiskBytes,
+        resolvedDescriptor.archiveSizeBytes * 8
+      ),
       this.availableDiskBytes
     )
 
@@ -86,11 +122,17 @@ export class PrimaryRuntimeInstaller {
       DOWNLOADS_DIRECTORY,
       `${resolvedDescriptor.archiveSha256}.zip`
     )
+    this.reportProgress({
+      phase: 'downloading',
+      downloadedBytes: 0,
+      totalBytes: resolvedDescriptor.archiveSizeBytes
+    })
     await ensureVerifiedArchive({
       archivePath,
       descriptor: resolvedDescriptor,
       releaseProvider,
-      signal
+      signal,
+      onProgress: (progress) => this.reportProgress({ phase: 'downloading', ...progress })
     })
     throwIfAborted(signal)
 
@@ -100,10 +142,18 @@ export class PrimaryRuntimeInstaller {
     )
     const extractedRoot = join(stagingRoot, 'runtime')
     try {
+      this.reportProgress({ phase: 'installing' })
       await mkdir(extractedRoot, { recursive: true })
-      await extractRuntimeZip(archivePath, extractedRoot, signal, this.availableDiskBytes)
+      await extractRuntimeZip(
+        archivePath,
+        extractedRoot,
+        signal,
+        this.availableDiskBytes,
+        budget.maxUnpackedBytes
+      )
       throwIfAborted(signal)
 
+      this.reportProgress({ phase: 'verifying' })
       const diagnostic = await this.diagnostics.diagnose(extractedRoot)
       if (diagnostic.status !== 'ready') {
         throw new PrimaryRuntimeInstallValidationError(diagnostic)
@@ -115,36 +165,49 @@ export class PrimaryRuntimeInstaller {
       )
       const versionRoot = join(this.input.cacheRoot, versionDirectory)
       await publishImmutableRuntime(extractedRoot, versionRoot, this.diagnostics)
+      this.reportProgress({ phase: 'verifying' })
       const publishedDiagnostic = await this.diagnostics.diagnose(versionRoot)
       if (publishedDiagnostic.status !== 'ready') {
         throw new PrimaryRuntimeInstallValidationError(publishedDiagnostic)
       }
 
-      const manifestSha256 = await sha256File(join(versionRoot, 'runtime.json'))
-      await this.activePointer.publish({
+      return {
         version: resolvedDescriptor.version,
         archiveSha256: resolvedDescriptor.archiveSha256,
-        manifestSha256,
-        directory: versionDirectory
-      })
-      const activeRoot = await this.activePointer.resolveRoot()
-      if (!activeRoot) {
-        throw new Error('Primary Runtime active pointer was not published.')
-      }
-      const activeDiagnostic = await this.diagnostics.diagnose(activeRoot)
-      if (activeDiagnostic.status !== 'ready') {
-        throw new PrimaryRuntimeInstallValidationError(activeDiagnostic)
-      }
-
-      return {
-        status: 'installed',
-        version: resolvedDescriptor.version,
-        activeRoot,
-        diagnostic: readyRuntimeDiagnostic(activeDiagnostic)
+        versionDirectory,
+        versionRoot,
+        manifestSha256: await sha256File(join(versionRoot, 'runtime.json')),
+        diagnostic: readyRuntimeDiagnostic(publishedDiagnostic)
       }
     } finally {
       await makeRuntimeTreeWritable(stagingRoot).catch(() => undefined)
       await rm(stagingRoot, { recursive: true, force: true })
+    }
+  }
+
+  /** Publishes a previously prepared candidate and validates the readback. */
+  async commitPrepared(
+    prepared: PreparedPrimaryRuntimeInstall
+  ): Promise<PrimaryRuntimeInstallResult> {
+    await this.activePointer.publish({
+      version: prepared.version,
+      archiveSha256: prepared.archiveSha256,
+      manifestSha256: prepared.manifestSha256,
+      directory: prepared.versionDirectory
+    })
+    const activeRoot = await this.activePointer.resolveRoot()
+    if (!activeRoot) {
+      throw new Error('Primary Runtime active pointer was not published.')
+    }
+    const activeDiagnostic = await this.diagnostics.diagnose(activeRoot)
+    if (activeDiagnostic.status !== 'ready') {
+      throw new PrimaryRuntimeInstallValidationError(activeDiagnostic)
+    }
+    return {
+      status: 'installed',
+      version: prepared.version,
+      activeRoot,
+      diagnostic: readyRuntimeDiagnostic(activeDiagnostic)
     }
   }
 
@@ -175,6 +238,14 @@ export class PrimaryRuntimeInstaller {
     this.recoveryTail = recovery.catch(() => undefined)
     return recovery
   }
+
+  private reportProgress(progress: PrimaryRuntimeInstallerProgress): void {
+    try {
+      void Promise.resolve(this.input.onProgress?.(progress)).catch(() => undefined)
+    } catch {
+      // Observability must not weaken fail-closed installation behavior.
+    }
+  }
 }
 
 export class PrimaryRuntimeInstallValidationError extends Error {
@@ -188,16 +259,25 @@ async function ensureVerifiedArchive({
   archivePath,
   descriptor,
   releaseProvider,
-  signal
+  signal,
+  onProgress
 }: {
   archivePath: string
   descriptor: PrimaryRuntimeReleaseDescriptor
   releaseProvider: PrimaryRuntimeReleaseProvider
   signal: AbortSignal
+  onProgress?: (
+    progress: import('./PrimaryRuntimeReleaseProvider').PrimaryRuntimeDownloadProgress
+  ) => void
 }): Promise<void> {
   if (await verifyArchiveFile(archivePath, descriptor).catch(() => false)) return
   await rm(archivePath, { force: true })
-  const downloaded = await releaseProvider.downloadArchive(descriptor, archivePath, signal)
+  const downloaded = await releaseProvider.downloadArchive(
+    descriptor,
+    archivePath,
+    signal,
+    onProgress
+  )
   if (downloaded.path !== archivePath) {
     throw new Error('Primary Runtime release provider wrote the archive to an unexpected path.')
   }
@@ -254,7 +334,8 @@ async function extractRuntimeZip(
   archivePath: string,
   targetRoot: string,
   signal: AbortSignal,
-  availableDiskBytes: (path: string) => Promise<number>
+  availableDiskBytes: (path: string) => Promise<number>,
+  maxUnpackedBytes: number
 ): Promise<void> {
   const archive = await openZip(archivePath)
   let entries = 0
@@ -303,7 +384,11 @@ async function extractRuntimeZip(
               return
             }
 
-            unpackedBytes = checkedUnpackedBytes(unpackedBytes, entry.uncompressedSize)
+            unpackedBytes = checkedUnpackedBytes(
+              unpackedBytes,
+              entry.uncompressedSize,
+              maxUnpackedBytes
+            )
             await assertDiskCapacity(targetRoot, unpackedBytes, availableDiskBytes)
             await mkdir(dirname(targetPath), { recursive: true })
             const stream = await openEntryReadStream(archive, entry)
@@ -324,12 +409,12 @@ async function extractRuntimeZip(
   }
 }
 
-function checkedUnpackedBytes(total: number, entrySize: number): number {
+function checkedUnpackedBytes(total: number, entrySize: number, maxUnpackedBytes: number): number {
   if (!Number.isSafeInteger(entrySize) || entrySize < 0) {
     throw new Error('Primary Runtime archive contains an entry with an invalid size.')
   }
   const next = total + entrySize
-  if (!Number.isSafeInteger(next) || next > MAX_UNPACKED_RUNTIME_BYTES) {
+  if (!Number.isSafeInteger(next) || next > maxUnpackedBytes) {
     throw new Error('Primary Runtime archive expands beyond the configured size limit.')
   }
   return next
@@ -436,6 +521,37 @@ function assertSupportedDescriptor(
   if (!/^[a-f0-9]{64}$/u.test(descriptor.archiveSha256)) {
     throw new Error('Primary Runtime release archive SHA256 is invalid.')
   }
+}
+
+function assertInstallBudget(budget: PrimaryRuntimeInstallBudget | undefined): void {
+  if (!budget) return
+  for (const [name, value] of Object.entries(budget)) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(`Primary Runtime ${name} must be a positive safe integer.`)
+    }
+  }
+  if (budget.maxArchiveBytes > DEFAULT_MAX_ARCHIVE_BYTES) {
+    throw new Error('Primary Runtime archive budget exceeds the installer hard limit.')
+  }
+  if (budget.maxUnpackedBytes > MAX_UNPACKED_RUNTIME_BYTES) {
+    throw new Error('Primary Runtime unpacked budget exceeds the installer hard limit.')
+  }
+}
+
+function installBudgetFor(
+  descriptor: PrimaryRuntimeReleaseDescriptor,
+  configuredBudget: PrimaryRuntimeInstallBudget | undefined
+): PrimaryRuntimeInstallBudget {
+  const budget = descriptor.budget ?? configuredBudget
+  if (!budget) {
+    return {
+      maxArchiveBytes: DEFAULT_MAX_ARCHIVE_BYTES,
+      maxUnpackedBytes: MAX_UNPACKED_RUNTIME_BYTES,
+      minimumFreeDiskBytes: MINIMUM_INSTALL_HEADROOM_BYTES
+    }
+  }
+  assertInstallBudget(budget)
+  return budget
 }
 
 function normalizedArchivePath(path: string): string {

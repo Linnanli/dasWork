@@ -43,6 +43,26 @@ type ReleaseContext = {
 
 type ReleaseAppOptions = {
   configureCodexHome?: (codexHomeDir: string) => Promise<void>
+  requirePrimaryRuntime?: boolean
+}
+
+type R07Fact = {
+  id: string
+  value: string
+}
+
+type R07PageType = {
+  id: 'cover' | 'agenda' | 'summary' | 'table' | 'chart' | 'image'
+  titleToken: string
+}
+
+type R07PresentationFixture = {
+  inputFile: string
+  outputFile: string
+  expectedPageTypes: readonly R07PageType[]
+  requiredChineseFont: string
+  requiredImageAltText: string
+  facts: readonly R07Fact[]
 }
 
 test.describe('real-model smoke gate', () => {
@@ -207,6 +227,57 @@ test.describe('real-model smoke gate', () => {
       await expectReleaseRuntime(page, runtime)
     })
   })
+
+  test('R07/PRESENTATION-SKILL Primary Runtime creates a six-page PPTX from workspace HTML', async ({
+    browserName
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+    requirePrimaryRuntimeLiveFeed()
+    await withR07PresentationWorkspace(
+      async ({ root, htmlFile, outputFile, expectedPageTypes, facts }) => {
+        await withReleaseApp(
+          testInfo,
+          async ({ page, runtime }) => {
+            await sendReleaseMessage(
+              [
+                `请读取当前工作区的 ${htmlFile}，并生成 ${outputFile}。`,
+                '必须先调用 load_workspace_dependencies，然后遵循已锁定 presentation-skill 的 SKILL.md，使用返回的 Runtime Node、Node modules、Python 或 binaries 通过普通命令创建新 PPTX。',
+                '不得使用系统 Node、officecli、python-pptx、临时 npm/pip 安装、在线依赖或复制/修改已有 PPTX。',
+                `演示文稿至少六页，六个独立页面标题必须包含：${expectedPageTypes.map((pageType) => pageType.titleToken).join('、')}。`,
+                `必须在演示文稿中保留这些 HTML 数据事实：${facts.map((fact) => fact.value).join('；')}。`,
+                '数据表页必须有至少两行两列；数据图页必须有真实 chart relationship；图片页必须有图片 relationship 和 alt text；中文使用 Noto Sans CJK SC；所有元素不得越出页面边界。',
+                '完成后运行 skill 的离线 QA，保留 PPTX、QA receipt 和预览所需文件，并简要说明已完成。'
+              ].join('\n')
+            )
+            const dynamicTools = page.locator(
+              '[data-slot="tool-group-unit"][data-tool-group-kind="dynamic"]'
+            )
+            await expect(dynamicTools).toContainText('Runtime Node:', {
+              timeout: realModelAssertionTimeoutMs
+            })
+            await expectReleaseTurnSucceeded(page, runtime)
+            await expect
+              .poll(
+                async () => {
+                  try {
+                    await access(join(root, outputFile))
+                    return true
+                  } catch {
+                    return false
+                  }
+                },
+                { timeout: realModelAssertionTimeoutMs }
+              )
+              .toBe(true)
+            await verifyR07Presentation(join(root, outputFile))
+            await openR07PresentationInWorkspace(page, outputFile)
+          },
+          root,
+          { requirePrimaryRuntime: true }
+        )
+      }
+    )
+  })
 })
 
 async function withReleaseApp(
@@ -240,6 +311,7 @@ async function withReleaseApp(
           // backend. Real catalog backends may reject it, so omit user_id unless explicitly set.
           ADMIN_BACKEND_MODEL_USER_ID: adminBackendUserId ?? '',
           CODEX_APP_SERVER_BIN: undefined,
+          ...withoutDirectPrimaryRuntimeOverrides(),
           CODEX_ASP_DEBUG_PACKETS: process.env.DASCOWORK_RELEASE_LLM_DEBUG === '1' ? '1' : undefined
         },
         executablePath: isReleaseRuntime ? packagedExecutable : undefined,
@@ -249,6 +321,7 @@ async function withReleaseApp(
     const page = await app.firstWindow()
     collectRendererLogs(page, logs)
     await selectReleaseModel(page)
+    if (options.requirePrimaryRuntime) await expectPrimaryRuntimeReady(page)
     await createLocalProject(page, 'Release LLM smoke project', workspaceRoot)
     const runtimeInfo = await app.evaluate(({ app: electronApp }) => ({
       isPackaged: electronApp.isPackaged,
@@ -412,6 +485,206 @@ async function expectReleaseRuntime(page: Page, runtime: RuntimeExpectation): Pr
   const status = await page.evaluate(() => window.desktopApp.codex.getStatus())
   expect(status.binary).toBe(runtime.expectedBinary)
   expect(status.binary).not.toMatch(/(?:^|\s)cargo(?:\s|$)/u)
+}
+
+async function expectPrimaryRuntimeReady(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
+          return result.runtime.state
+        }),
+      { timeout: realModelAssertionTimeoutMs }
+    )
+    .toBe('ready')
+}
+
+async function withR07PresentationWorkspace(
+  run: (workspace: {
+    root: string
+    htmlFile: string
+    outputFile: string
+    expectedPageTypes: readonly R07PageType[]
+    facts: readonly R07Fact[]
+  }) => Promise<void>
+): Promise<void> {
+  const root = await mkdtemp(join(tmpdir(), 'dascowork-r07-presentations-'))
+  const fixture = await readR07PresentationFixture()
+  const htmlFile = fixture.inputFile
+  const outputFile = fixture.outputFile
+  try {
+    await writeFile(join(root, htmlFile), fixture.html, 'utf8')
+    await run({
+      root,
+      htmlFile,
+      outputFile,
+      expectedPageTypes: fixture.expectedPageTypes,
+      facts: fixture.facts
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
+async function readR07PresentationFixture(): Promise<R07PresentationFixture & { html: string }> {
+  const fixtureDirectory = join(appRoot, 'tests', 'fixtures', 'presentations')
+  const expectedPath = join(fixtureDirectory, 'ai-agent-security-market.expected.json')
+  const expected = JSON.parse(
+    await readFile(expectedPath, 'utf8')
+  ) as Partial<R07PresentationFixture> & {
+    schemaVersion?: unknown
+  }
+  if (
+    expected.schemaVersion !== 'dascowork-r07-presentations-expected.v2' ||
+    typeof expected.inputFile !== 'string' ||
+    !/^[a-z0-9][a-z0-9.-]*\.html$/u.test(expected.inputFile) ||
+    typeof expected.outputFile !== 'string' ||
+    !/^[a-z0-9][a-z0-9.-]*\.pptx$/u.test(expected.outputFile) ||
+    !Array.isArray(expected.expectedPageTypes) ||
+    !hasR07PageTypes(expected.expectedPageTypes) ||
+    typeof expected.requiredChineseFont !== 'string' ||
+    expected.requiredChineseFont.length === 0 ||
+    typeof expected.requiredImageAltText !== 'string' ||
+    expected.requiredImageAltText.length === 0 ||
+    !Array.isArray(expected.facts) ||
+    expected.facts.length < 4 ||
+    !expected.facts.every(
+      (fact) =>
+        fact !== null &&
+        typeof fact === 'object' &&
+        typeof fact.id === 'string' &&
+        typeof fact.value === 'string' &&
+        fact.id.length > 0 &&
+        fact.value.length > 0
+    )
+  ) {
+    throw new Error('R07 presentation fixture has an invalid schema.')
+  }
+  return {
+    inputFile: expected.inputFile,
+    outputFile: expected.outputFile,
+    expectedPageTypes: expected.expectedPageTypes,
+    requiredChineseFont: expected.requiredChineseFont,
+    requiredImageAltText: expected.requiredImageAltText,
+    facts: expected.facts,
+    html: await readFile(join(fixtureDirectory, expected.inputFile), 'utf8')
+  }
+}
+
+async function verifyR07Presentation(path: string): Promise<void> {
+  const fixtureDirectory = join(appRoot, 'tests', 'fixtures', 'presentations')
+  const expectedPath = join(fixtureDirectory, 'ai-agent-security-market.expected.json')
+  const reportPath = join(dirname(path), '.r07-presentation-verification.json')
+  try {
+    const { stdout } = await execFile(process.execPath, [
+      join(appRoot, 'scripts', 'verify-live-presentation-artifact.mjs'),
+      '--input',
+      path,
+      '--expected',
+      expectedPath,
+      '--report',
+      reportPath
+    ])
+    const report = JSON.parse(stdout) as {
+      schemaVersion?: string
+      status?: string
+      artifact?: { sha256?: string }
+      slides?: {
+        count?: number
+        hasTable?: boolean
+        hasChart?: boolean
+        hasImage?: boolean
+        hasChineseFont?: boolean
+      }
+    }
+    expect(report.schemaVersion).toBe('dascowork-live-presentation-artifact-report.v1')
+    expect(report.status).toBe('passed')
+    expect(report.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u)
+    expect(report.slides?.count).toBeGreaterThanOrEqual(6)
+    expect(report.slides).toMatchObject({
+      hasTable: true,
+      hasChart: true,
+      hasImage: true,
+      hasChineseFont: true
+    })
+  } finally {
+    await rm(reportPath, { force: true })
+  }
+}
+
+function hasR07PageTypes(value: unknown[]): value is R07PageType[] {
+  const expectedIds = ['agenda', 'chart', 'cover', 'image', 'summary', 'table']
+  return (
+    value.every(
+      (pageType) =>
+        pageType !== null &&
+        typeof pageType === 'object' &&
+        expectedIds.includes((pageType as { id?: string }).id ?? '') &&
+        typeof (pageType as { titleToken?: unknown }).titleToken === 'string' &&
+        (pageType as { titleToken: string }).titleToken.length > 0
+    ) &&
+    [...value.map((pageType) => (pageType as { id: string }).id)].sort().join(',') ===
+      expectedIds.join(',')
+  )
+}
+
+async function openR07PresentationInWorkspace(page: Page, outputFile: string): Promise<void> {
+  const openWorkspace = page.getByRole('button', { name: '打开工作区', exact: true })
+  const closeWorkspace = page.getByRole('button', { name: '关闭工作区', exact: true })
+  if (await openWorkspace.isVisible().catch(() => false)) {
+    await openWorkspace.click()
+  }
+  await expect(closeWorkspace).toBeVisible({ timeout: realModelAssertionTimeoutMs })
+
+  const rightPanel = page.locator('[data-slot="right-workspace-shell"]')
+  await page.getByRole('button', { name: 'Open Files', exact: true }).click()
+  const presentationFile = rightPanel.getByRole('treeitem', { name: outputFile, exact: true })
+  await expect(presentationFile).toBeVisible({ timeout: realModelAssertionTimeoutMs })
+  await presentationFile.click()
+  await expect(
+    rightPanel.locator(`[role="tab"][data-workspace-tab-id="artifact:workspace:${outputFile}"]`)
+  ).toBeVisible()
+  await expect(rightPanel.locator('[data-slot="artifact-tab-content"]')).toBeVisible()
+  await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toBeVisible()
+}
+
+function requirePrimaryRuntimeLiveFeed(): void {
+  const required = [
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL',
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS',
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS',
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL',
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON',
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON'
+  ]
+  const missing = required.filter((name) => !process.env[name]?.trim())
+  if (missing.length > 0) {
+    throw new Error(`R07 requires signed Primary Runtime product config: ${missing.join(', ')}`)
+  }
+  if (
+    !isReleaseRuntime &&
+    !process.env.DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH?.trim()
+  ) {
+    throw new Error('Development R07 requires a Main-only local feed CA path.')
+  }
+  if (isReleaseRuntime && process.env.DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH?.trim()) {
+    throw new Error('Packaged R07 cannot use a local test CA.')
+  }
+}
+
+function withoutDirectPrimaryRuntimeOverrides(): NodeJS.ProcessEnv {
+  return {
+    DASCOWORK_PRIMARY_RUNTIME_ROOT: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_VERSION: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: undefined
+  }
 }
 
 async function expectNoBundledAppServerResources(resourcesPath: string): Promise<void> {

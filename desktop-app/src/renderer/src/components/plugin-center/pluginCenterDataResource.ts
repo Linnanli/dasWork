@@ -700,7 +700,7 @@ export function mergePluginCatalogWithInstalled(
   return merged
 }
 
-const BUNDLED_PLUGIN_MARKETPLACES = new Set(['openai-bundled', 'openai-primary-runtime'])
+const BUNDLED_PLUGIN_MARKETPLACES = new Set(['openai-bundled', 'presentation-skill'])
 
 const BROWSER_EXTENSION_PLUGIN_NAMES = new Set(['chrome', 'chrome-dev', 'chrome-internal'])
 const BROWSER_EXTENSION_UNIFICATION_ENABLED = true

@@ -48,6 +48,15 @@ describe('loadDesktopRuntimeConfig', () => {
     })
   })
 
+  it('loads an explicit product feature gate and rejects non-boolean values', () => {
+    expect(loadDesktopRuntimeConfig({ DASCOWORK_WORKSPACE_DEPENDENCIES_ENABLED: 'false' })).toEqual(
+      { workspaceDependenciesFeatureEnabled: false }
+    )
+    expect(() =>
+      loadDesktopRuntimeConfig({ DASCOWORK_WORKSPACE_DEPENDENCIES_ENABLED: 'sometimes' })
+    ).toThrow('must be true or false')
+  })
+
   it('loads a complete, immutable primary runtime release descriptor', () => {
     expect(
       loadDesktopRuntimeConfig({
@@ -80,6 +89,38 @@ describe('loadDesktopRuntimeConfig', () => {
         manifestUrl: 'https://releases.example.test/manifest.json',
         allowedOrigins: ['https://releases.example.test'],
         channel: 'stable'
+      }
+    })
+  })
+
+  it('loads a role-separated signed Runtime product config for Main only', () => {
+    const keyring = JSON.stringify({
+      'runtime-config-1': '-----BEGIN PUBLIC KEY-----\nconfig\n-----END PUBLIC KEY-----'
+    })
+    const manifestKeyring = JSON.stringify({
+      'runtime-manifest-1': '-----BEGIN PUBLIC KEY-----\nmanifest\n-----END PUBLIC KEY-----'
+    })
+    expect(
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: 'https://feed.example.test/v1/runtime/config.json',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: 'https://feed.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: 'https://feed.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: 'stable',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: keyring,
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: manifestKeyring,
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: '30000',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: '/private/tmp/runtime-feed-ca.pem'
+      })
+    ).toMatchObject({
+      primaryRuntimeProductConfig: {
+        configUrl: 'https://feed.example.test/v1/runtime/config.json',
+        allowedConfigOrigins: ['https://feed.example.test'],
+        allowedManifestOrigins: ['https://feed.example.test'],
+        channel: 'stable',
+        pollIntervalMs: 30_000,
+        localTestCaPath: '/private/tmp/runtime-feed-ca.pem',
+        configPublicKeys: JSON.parse(keyring),
+        manifestPublicKeys: JSON.parse(manifestKeyring)
       }
     })
   })
@@ -133,6 +174,31 @@ describe('loadDesktopRuntimeConfig', () => {
         DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: 'stable'
       })
     ).toThrow('cannot be used together')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: 'https://feed.example.test/v1/runtime/config.json'
+      })
+    ).toThrow('must provide URL')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: 'relative-ca.pem'
+      })
+    ).toThrow('requires signed product config')
+    expect(() =>
+      loadDesktopRuntimeConfig({
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: 'https://feed.example.test/v1/runtime/config.json',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: 'https://feed.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: 'https://feed.example.test',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: 'stable',
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: JSON.stringify({
+          config: '-----BEGIN PUBLIC KEY-----\nkey\n-----END PUBLIC KEY-----'
+        }),
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: JSON.stringify({
+          manifest: '-----BEGIN PUBLIC KEY-----\nkey\n-----END PUBLIC KEY-----'
+        }),
+        DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: 'relative-ca.pem'
+      })
+    ).toThrow('must be absolute')
   })
 
   it('rejects multiline remote Codex commands', () => {

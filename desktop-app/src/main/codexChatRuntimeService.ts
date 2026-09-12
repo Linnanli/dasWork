@@ -745,9 +745,7 @@ export class CodexChatRuntimeService {
         system: effectiveRequest.body?.system,
         projectAssignment: conversation.projectAssignment,
         capabilities: {
-          workspaceDependencies: capabilitySnapshot.availableToolNames.includes(
-            'load_workspace_dependencies'
-          )
+          workspaceDependencies: capabilitySnapshot.workspaceInstructionsEnabled
         },
         availableToolNames: capabilitySnapshot.availableToolNames
       })
