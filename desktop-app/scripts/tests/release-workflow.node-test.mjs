@@ -175,6 +175,11 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /windows-2025/u)
   assert.match(buildWorkflow, /ubuntu-24\.04/u)
   assert.match(buildWorkflow, /needs: source-and-contract/u)
+  assert.match(buildWorkflow, /Install desktop contract test dependencies/u)
+  assert.ok(
+    buildWorkflow.indexOf('Install desktop contract test dependencies') <
+      buildWorkflow.indexOf('Verify desktop release\/workflow contracts')
+  )
   assert.match(buildWorkflow, /npm --prefix primary-runtime run build/u)
   assert.match(buildWorkflow, /Install desktop dependencies for P3a\/P3b installer gates/u)
   assert.match(

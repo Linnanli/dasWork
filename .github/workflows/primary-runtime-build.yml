@@ -52,6 +52,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install desktop contract test dependencies
+        run: npm --prefix desktop-app ci --ignore-scripts
+
       - name: Verify Runtime producer contracts
         run: npm --prefix primary-runtime test
 
