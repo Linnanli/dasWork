@@ -394,7 +394,7 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
       : "dependencies/node/bin/node";
   const pythonPath =
     platform === "win32"
-      ? "dependencies/python/bin/python.exe"
+      ? "dependencies/python/python.exe"
       : "dependencies/python/bin/python";
   await writeExecutable(join(inputRoot, nodePath), "#!/bin/sh\nexit 0\n");
   await writeExecutable(join(inputRoot, pythonPath), "#!/bin/sh\nexit 0\n");

@@ -650,7 +650,7 @@ function runtimePythonExecutable({ outputRoot, target }) {
   return join(
     outputRoot,
     target.startsWith("win32")
-      ? "dependencies/python/bin/python.exe"
+      ? "dependencies/python/python.exe"
       : "dependencies/python/bin/python",
   );
 }

@@ -231,7 +231,7 @@ function buildRuntimeManifest({
     python: {
       path:
         platform === "win32"
-          ? "dependencies/python/bin/python.exe"
+          ? "dependencies/python/python.exe"
           : "dependencies/python/bin/python",
       packages: lock.components.python.map((component) => ({
         name: component.name,

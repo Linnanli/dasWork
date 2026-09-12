@@ -23,7 +23,9 @@ const sourceLock = await readRuntimeSourcesLock(options.sourceLock);
 const commands = [];
 const extension = target.startsWith("win32") ? ".exe" : "";
 const node = join(options.inputRoot, "dependencies/node/bin", `node${extension}`);
-const python = join(options.inputRoot, "dependencies/python/bin", `python${extension}`);
+const python = target.startsWith("win32")
+  ? join(options.inputRoot, "dependencies/python/python.exe")
+  : join(options.inputRoot, "dependencies/python/bin/python");
 const binaries = Object.fromEntries(
   [
     ["soffice", "libreoffice/program/soffice"],
