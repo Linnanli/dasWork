@@ -6,7 +6,7 @@
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -133,7 +133,7 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -260,7 +260,7 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "make", "cmake", "ninja", "cl"]
+        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "cl"]
       },
       "node": {
         "name": "node-runtime",
@@ -387,7 +387,7 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "make", "cmake", "ninja", "gcc"]
+        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "gcc"]
       },
       "node": {
         "name": "node-runtime",

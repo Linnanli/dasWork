@@ -215,10 +215,18 @@ async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
 
 async function verifyLockedBuilderToolchain({ target, builder }) {
   const tools = [];
+  const useMsysShell = target === "win32-x64" && process.env.MSYSTEM === "MSYS";
   for (const command of builder.tools) {
     let result;
+    const versionArgs = command === "cl" ? [] : ["--version"];
     try {
-      result = await run(command, ["--version"], { env: process.env });
+      result = useMsysShell
+        ? await run(
+            "bash",
+            ["-lc", 'exec "$@"', "bash", command, ...versionArgs],
+            { env: process.env },
+          )
+        : await run(command, versionArgs, { env: process.env });
     } catch (error) {
       throw new Error(
         `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,

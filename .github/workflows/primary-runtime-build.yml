@@ -212,16 +212,23 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install autoconf automake make
+          brew install autoconf automake gperf make pkgconf
           builder_bin="$RUNNER_TEMP/primary-runtime-builder-bin"
+          homebrew_bin="$(dirname "$(command -v brew)")"
           mkdir -p "$builder_bin"
           ln -sf "$(brew --prefix make)/bin/gmake" "$builder_bin/make"
+          cat > "$builder_bin/pkgconf" <<EOF
+          #!/bin/sh
+          export PKG_CONFIG_LIBDIR=/nonexistent
+          exec "$homebrew_bin/pkgconf" "\$@"
+          EOF
+          chmod +x "$builder_bin/pkgconf"
           printf '%s\n' "$builder_bin" "$(brew --prefix automake)/bin" "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
 
       - name: Install locked Linux builder prerequisites
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get install --yes --no-install-recommends libfontconfig1-dev
+        run: sudo apt-get install --yes --no-install-recommends libfontconfig1-dev gperf
 
       - name: Provision locked Windows MSYS2 builder tools
         if: runner.os == 'Windows'
@@ -235,6 +242,7 @@ jobs:
           install: >-
             autoconf
             automake
+            gperf
             make
 
       - name: Expose provisioned Windows MSYS2 builder tools
