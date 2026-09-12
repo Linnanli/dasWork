@@ -215,10 +215,14 @@ async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
 
 async function verifyLockedBuilderToolchain({ target, builder }) {
   const tools = [];
-  const useMsysShell = target === "win32-x64" && process.env.MSYSTEM === "MSYS";
+  const msysScriptTools = new Set(["aclocal", "autoconf", "automake"]);
   for (const command of builder.tools) {
     let result;
     const versionArgs = command === "cl" ? [] : ["--version"];
+    const useMsysShell =
+      target === "win32-x64" &&
+      process.env.MSYSTEM === "MSYS" &&
+      msysScriptTools.has(command);
     try {
       result = useMsysShell
         ? await run(

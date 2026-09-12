@@ -176,7 +176,11 @@ test("LibreOffice source recipes invoke its Perl autogen entrypoint explicitly",
 test("Windows MSYS2 builder scripts are probed through the selected Bash runtime", async () => {
   const source = await readFile(materializeScript, "utf8");
 
-  assert.match(source, /target === "win32-x64" && process\.env\.MSYSTEM === "MSYS"/u);
+  assert.match(source, /new Set\(\["aclocal", "autoconf", "automake"\]\)/u);
+  assert.match(
+    source,
+    /target === "win32-x64" &&\s+process\.env\.MSYSTEM === "MSYS" &&\s+msysScriptTools\.has\(command\)/u
+  );
   assert.match(source, /\["-lc", 'exec "\$@"', "bash", command, \.\.\.versionArgs\]/u);
   assert.match(source, /command === "cl" \? \[\] : \["--version"\]/u);
 });

@@ -219,6 +219,7 @@ jobs:
           ln -sf "$(brew --prefix make)/bin/gmake" "$builder_bin/make"
           cat > "$builder_bin/pkgconf" <<EOF
           #!/bin/sh
+          unset PKG_CONFIG_PATH
           export PKG_CONFIG_LIBDIR=/nonexistent
           exec "$homebrew_bin/pkgconf" "\$@"
           EOF
@@ -228,7 +229,7 @@ jobs:
       - name: Install locked Linux builder prerequisites
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get install --yes --no-install-recommends libfontconfig1-dev gperf
+        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev nasm
 
       - name: Provision locked Windows MSYS2 builder tools
         if: runner.os == 'Windows'

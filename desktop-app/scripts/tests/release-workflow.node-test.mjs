@@ -146,12 +146,13 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /brew install autoconf automake gperf make pkgconf/u)
   assert.match(buildWorkflow, /primary-runtime-builder-bin/u)
   assert.match(buildWorkflow, /gmake" "\$builder_bin\/make/u)
+  assert.match(buildWorkflow, /unset PKG_CONFIG_PATH/u)
   assert.match(buildWorkflow, /PKG_CONFIG_LIBDIR=\/nonexistent/u)
   assert.match(buildWorkflow, /brew --prefix make/u)
   assert.match(buildWorkflow, /Install locked Linux builder prerequisites/u)
   assert.match(
     buildWorkflow,
-    /apt-get install --yes --no-install-recommends libfontconfig1-dev gperf/u
+    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev nasm/u
   )
   assert.match(buildWorkflow, /Provision locked Windows MSYS2 builder tools/u)
   assert.match(

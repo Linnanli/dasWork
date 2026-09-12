@@ -387,7 +387,7 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "gcc"]
+        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "nasm", "ninja", "gcc"]
       },
       "node": {
         "name": "node-runtime",
