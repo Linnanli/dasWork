@@ -216,7 +216,20 @@ jobs:
           echo "$(brew --prefix automake)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
 
-      - name: Expose preinstalled Windows MSYS2 builder tools
+      - name: Provision locked Windows MSYS2 builder tools
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2.30.0
+        with:
+          msystem: MSYS
+          release: false
+          update: false
+          cache: false
+          install: >-
+            autoconf
+            automake
+            make
+
+      - name: Expose provisioned Windows MSYS2 builder tools
         if: runner.os == 'Windows'
         shell: bash
         run: |

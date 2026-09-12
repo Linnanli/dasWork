@@ -145,7 +145,16 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Install locked macOS builder prerequisites/u)
   assert.match(buildWorkflow, /brew install autoconf automake make/u)
   assert.match(buildWorkflow, /brew --prefix make/u)
-  assert.match(buildWorkflow, /Expose preinstalled Windows MSYS2 builder tools/u)
+  assert.match(buildWorkflow, /Provision locked Windows MSYS2 builder tools/u)
+  assert.match(
+    buildWorkflow,
+    /msys2\/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda/u
+  )
+  assert.match(buildWorkflow, /release: false/u)
+  assert.match(buildWorkflow, /update: false/u)
+  assert.match(buildWorkflow, /cache: false/u)
+  assert.match(buildWorkflow, /install: >-\s+autoconf\s+automake\s+make/u)
+  assert.match(buildWorkflow, /Expose provisioned Windows MSYS2 builder tools/u)
   assert.match(buildWorkflow, /C:\\msys64\\usr\\bin/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
   assert.match(buildWorkflow, /ImageOS/u)
