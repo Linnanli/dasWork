@@ -158,7 +158,7 @@ jobs:
           path: ${{ runner.temp }}/reviewed-calibration
 
   build-target:
-    name: ${{ env.PRIMARY_RUNTIME_MODE }} native Runtime ${{ matrix.target }}
+    name: ${{ inputs.mode || 'calibrate' }} native Runtime ${{ matrix.target }}
     needs:
       - source-and-contract
       - prepare-final-calibration
@@ -415,7 +415,7 @@ jobs:
 
   aggregate-engineering-feed:
     name: Aggregate one final run into an engineering-only feed artifact
-    if: env.PRIMARY_RUNTIME_MODE == 'final'
+    if: inputs.mode == 'final'
     needs: build-target
     runs-on: ubuntu-24.04
     timeout-minutes: 40
