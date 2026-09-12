@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const sourceLockSchema = "dascowork-primary-runtime-sources.v2";
 export const supportedRuntimeTargets = Object.freeze([
@@ -134,8 +135,10 @@ export function assertApprovedSources(lock) {
 }
 
 export async function assertRepositoryPatchMatchesLock({
-  lockPath = new URL("../runtime-sources.lock.json", import.meta.url).pathname,
-  repositoryRoot = new URL("..", import.meta.url).pathname,
+  lockPath = fileURLToPath(
+    new URL("../runtime-sources.lock.json", import.meta.url),
+  ),
+  repositoryRoot = fileURLToPath(new URL("..", import.meta.url)),
 } = {}) {
   const lock = await readRuntimeSourcesLock(lockPath);
   const patchPath = resolve(repositoryRoot, lock.candidate.patch.path);

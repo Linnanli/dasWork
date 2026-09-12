@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   assertApprovedSources,
@@ -32,7 +33,9 @@ console.log(
 
 function parseArgs(argv) {
   if (argv.length === 0) {
-    return new URL("../runtime-sources.lock.json", import.meta.url).pathname;
+    return fileURLToPath(
+      new URL("../runtime-sources.lock.json", import.meta.url),
+    );
   }
   if (argv.length === 2 && argv[0] === "--lock" && argv[1]) {
     return resolve(argv[1]);

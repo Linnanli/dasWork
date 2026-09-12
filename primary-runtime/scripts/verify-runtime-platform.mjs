@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { sha256 } from "./source-lock.mjs";
@@ -42,7 +43,9 @@ try {
     requireEntry(entryMap, "provenance/runtime-inputs.manifest.json"),
   );
   const inputReceipt = join(directory, "input-validation.json");
-  const verifier = new URL("./verify-runtime-inputs.mjs", import.meta.url).pathname;
+  const verifier = fileURLToPath(
+    new URL("./verify-runtime-inputs.mjs", import.meta.url),
+  );
   await executeFile(process.execPath, [
     verifier,
     "--target",
@@ -117,7 +120,15 @@ function parseArgs(argv) {
     target: target ?? required("--target"),
     archivePath: required("--archive"),
     outputPath: required("--output"),
-    sourceLock: resolve(values.get("--source-lock") ?? new URL("../runtime-sources.lock.json", import.meta.url).pathname),
-    toolchainsLock: resolve(values.get("--toolchains-lock") ?? new URL("../runtime-toolchains.lock.json", import.meta.url).pathname),
+    sourceLock: resolve(
+      values.get("--source-lock") ??
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
+    ),
+    toolchainsLock: resolve(
+      values.get("--toolchains-lock") ??
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
+    ),
   };
 }

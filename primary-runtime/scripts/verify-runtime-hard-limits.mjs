@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { readRuntimeHardLimits } from "./runtime-hard-limits.mjs";
 
@@ -20,7 +21,9 @@ process.stdout.write(
 
 function parseArgs(argv) {
   if (argv.length === 0) {
-    return new URL("../runtime-hard-limits.json", import.meta.url).pathname;
+    return fileURLToPath(
+      new URL("../runtime-hard-limits.json", import.meta.url),
+    );
   }
   if (argv.length === 2 && argv[0] === "--hard-limits" && !argv[1].startsWith("--")) {
     return resolve(argv[1]);

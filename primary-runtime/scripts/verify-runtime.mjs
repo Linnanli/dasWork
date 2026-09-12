@@ -2,6 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { sha256 } from "./source-lock.mjs";
 import { readRuntimeHardLimits } from "./runtime-hard-limits.mjs";
@@ -217,21 +218,25 @@ function parseArgs(argv) {
     target,
     outputRoot: resolve(
       optionValue(argv, "--output-root") ??
-        new URL("../dist", import.meta.url).pathname,
+        fileURLToPath(new URL("../dist", import.meta.url)),
     ),
     archive: optionalResolvedValue(argv, "--archive"),
     provenance: optionalResolvedValue(argv, "--provenance"),
     lock: resolve(
       optionValue(argv, "--lock") ??
-        new URL("../runtime-sources.lock.json", import.meta.url).pathname,
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
     ),
     toolchainsLock: resolve(
       optionValue(argv, "--toolchains-lock") ??
-        new URL("../runtime-toolchains.lock.json", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
     ),
     hardLimitsPath: resolve(
       optionValue(argv, "--hard-limits") ??
-        new URL("../runtime-hard-limits.json", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../runtime-hard-limits.json", import.meta.url),
+        ),
     ),
     releaseBudgetPath: optionalResolvedValue(argv, "--release-budget"),
     performanceReportPath: optionalResolvedValue(argv, "--performance-report"),

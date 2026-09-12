@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   assertApprovedSources,
@@ -442,7 +443,7 @@ function parseArgs(argv) {
     target,
     lock: resolve(
       optionValue(argv, "--lock") ??
-        new URL("../runtime-sources.lock.json", import.meta.url).pathname,
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
     ),
     inputRoot: resolve(
       explicitInputRoot ??
@@ -452,16 +453,20 @@ function parseArgs(argv) {
     inputRootWasExplicit: Boolean(explicitInputRoot),
     outputRoot: resolve(
       optionValue(argv, "--output-root") ??
-        new URL("../dist", import.meta.url).pathname,
+        fileURLToPath(new URL("../dist", import.meta.url)),
     ),
     version: optionValue(argv, "--version"),
     toolchainsLock: resolve(
       optionValue(argv, "--toolchains-lock") ??
-        new URL("../runtime-toolchains.lock.json", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
     ),
     hardLimitsPath: resolve(
       optionValue(argv, "--hard-limits") ??
-        new URL("../runtime-hard-limits.json", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../runtime-hard-limits.json", import.meta.url),
+        ),
     ),
     inputValidationPath: resolve(
       optionValue(argv, "--input-validation") ??

@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
 import { readRuntimeSourcesLock, sha256 } from "./source-lock.mjs";
@@ -551,7 +552,15 @@ function parseArgs(argv) {
     target: target ?? required("--target"),
     inputRoot: required("--input-root"),
     receiptPath: values.has("--receipt") ? resolve(values.get("--receipt")) : undefined,
-    sourceLock: resolve(values.get("--source-lock") ?? new URL("../runtime-sources.lock.json", import.meta.url).pathname),
-    toolchainsLock: resolve(values.get("--toolchains-lock") ?? new URL("../runtime-toolchains.lock.json", import.meta.url).pathname),
+    sourceLock: resolve(
+      values.get("--source-lock") ??
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
+    ),
+    toolchainsLock: resolve(
+      values.get("--toolchains-lock") ??
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
+    ),
   };
 }

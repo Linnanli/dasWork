@@ -16,6 +16,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -142,6 +143,7 @@ try {
     cacheRoot: options.sourceCache,
     outputRoot: options.outputRoot,
     workRoot,
+    python: runtimePythonExecutable({ outputRoot: options.outputRoot, target }),
   });
   await materializeNativeRecipes({
     targetToolchain,
@@ -206,6 +208,8 @@ async function extractLockedArtifact({ artifact, output, cacheRoot }) {
     archive,
     output,
     stripComponents: artifact.stripComponents,
+    archiveFormat: artifact.archiveFormat,
+    python,
   });
 }
 
@@ -259,12 +263,7 @@ async function materializePythonPackages({
   workRoot,
   target,
 }) {
-  const python = join(
-    outputRoot,
-    target.startsWith("win32")
-      ? "dependencies/python/bin/python.exe"
-      : "dependencies/python/bin/python",
-  );
+  const python = runtimePythonExecutable({ outputRoot, target });
   await assertRegularFile(python, "Runtime-owned Python executable");
   const wheelhouse = join(workRoot, "python-wheelhouse");
   await mkdir(wheelhouse, { recursive: true });
@@ -450,12 +449,18 @@ async function materializeFonts({
   cacheRoot,
   outputRoot,
   workRoot,
+  python,
 }) {
   for (const component of sourceLock.components.fonts) {
     const artifact = artifactsByName.get(component.name);
     const destination = join(outputRoot, "fonts", component.name);
     const extracted = join(workRoot, "fonts", component.name);
-    await extractLockedArtifact({ artifact, output: extracted, cacheRoot });
+    await extractLockedArtifact({
+      artifact,
+      output: extracted,
+      cacheRoot,
+      python,
+    });
     await cp(extracted, destination, {
       recursive: true,
       force: false,
@@ -538,11 +543,72 @@ async function assertRecipeClosure({ recipe, outputRoot }) {
   }
 }
 
-async function extractArchive({ archive, output, stripComponents }) {
+async function extractArchive({
+  archive,
+  output,
+  stripComponents,
+  archiveFormat,
+  python,
+}) {
+  if (archiveFormat === "zip") {
+    if (!python) {
+      throw new Error(
+        "AT-RT-INPUT-01 blocked: ZIP extraction requires the locked Runtime Python executable.",
+      );
+    }
+    await extractZipArchive({ archive, output, stripComponents, python });
+    return;
+  }
   await mkdir(output, { recursive: true });
   const args = ["-xf", archive, "-C", output];
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
   await run("tar", args, { cwd: output });
+}
+
+async function extractZipArchive({ archive, output, stripComponents, python }) {
+  const extractor = [
+    "import pathlib, stat, sys, zipfile",
+    "archive, output, strip = sys.argv[1], pathlib.Path(sys.argv[2]), int(sys.argv[3])",
+    "with zipfile.ZipFile(archive) as payload:",
+    "    for member in payload.infolist():",
+    "        raw = member.filename.replace('\\\\', '/')",
+    "        if raw.startswith('/') or raw.startswith('\\\\'):",
+    "            raise RuntimeError(f'absolute ZIP entry: {member.filename}')",
+    "        parts = [part for part in raw.split('/') if part not in ('', '.')]",
+    "        if any(part == '..' for part in parts):",
+    "            raise RuntimeError(f'escaping ZIP entry: {member.filename}')",
+    "        if len(parts) <= strip:",
+    "            continue",
+    "        mode = member.external_attr >> 16",
+    "        if stat.S_ISLNK(mode):",
+    "            raise RuntimeError(f'symlink ZIP entry: {member.filename}')",
+    "        target = output.joinpath(*parts[strip:])",
+    "        if not target.is_relative_to(output):",
+    "            raise RuntimeError(f'escaping ZIP target: {member.filename}')",
+    "        if member.is_dir() or raw.endswith('/'):",
+    "            target.mkdir(parents=True, exist_ok=True)",
+    "            continue",
+    "        target.parent.mkdir(parents=True, exist_ok=True)",
+    "        with payload.open(member) as source, target.open('xb') as destination:",
+    "            destination.write(source.read())",
+  ].join("\n");
+  await mkdir(output, { recursive: true });
+  await run(python, ["-c", extractor, archive, output, String(stripComponents)], {
+    cwd: output,
+    env: {
+      ...process.env,
+      PYTHONNOUSERSITE: "1",
+    },
+  });
+}
+
+function runtimePythonExecutable({ outputRoot, target }) {
+  return join(
+    outputRoot,
+    target.startsWith("win32")
+      ? "dependencies/python/bin/python.exe"
+      : "dependencies/python/bin/python",
+  );
 }
 
 async function assertPluginPayload(root) {
@@ -750,11 +816,13 @@ function parseArgs(argv) {
     outputRoot: required("--output"),
     sourceLock: resolve(
       values.get("--source-lock") ??
-        new URL("../runtime-sources.lock.json", import.meta.url).pathname,
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
     ),
     toolchainsLock: resolve(
       values.get("--toolchains-lock") ??
-        new URL("../runtime-toolchains.lock.json", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
     ),
     allowSourceBuild: argv.includes("--allow-source-build"),
   };

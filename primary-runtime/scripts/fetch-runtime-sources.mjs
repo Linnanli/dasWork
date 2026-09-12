@@ -5,6 +5,7 @@ import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/pro
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { readRuntimeSourcesLock } from "./source-lock.mjs";
 import {
@@ -222,8 +223,20 @@ function parseArgs(argv) {
     target,
     cacheRoot: resolve(cache),
     receiptPath: option("--receipt") ? resolve(option("--receipt")) : undefined,
-    sourceLock: resolve(option("--source-lock", new URL("../runtime-sources.lock.json", import.meta.url).pathname)),
-    toolchainsLock: resolve(option("--toolchains-lock", new URL("../runtime-toolchains.lock.json", import.meta.url).pathname)),
+    sourceLock: resolve(
+      option(
+        "--source-lock",
+        fileURLToPath(new URL("../runtime-sources.lock.json", import.meta.url)),
+      ),
+    ),
+    toolchainsLock: resolve(
+      option(
+        "--toolchains-lock",
+        fileURLToPath(
+          new URL("../runtime-toolchains.lock.json", import.meta.url),
+        ),
+      ),
+    ),
     timeoutMs: readPositiveTimeout(option("--timeout-ms", "120000")),
   };
 }

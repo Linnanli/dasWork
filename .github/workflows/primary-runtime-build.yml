@@ -207,6 +207,13 @@ jobs:
             --cache "$RUNNER_TEMP/primary-runtime-source-cache" \
             --receipt "$RUNNER_TEMP/source-fetch.json"
 
+      - name: Install locked macOS builder prerequisites
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install autoconf automake
+          echo "$(brew --prefix automake)/bin" >> "$GITHUB_PATH"
+
       - name: Materialize target-native offline Runtime inputs
         shell: bash
         run: |
