@@ -41,6 +41,7 @@ const verifyPlatformScript = resolve(
   import.meta.dirname,
   "../scripts/verify-runtime-platform.mjs",
 );
+const repositoryAttributesPath = resolve(import.meta.dirname, "../../.gitattributes");
 
 test("input manifest binds the immutable source/toolchain lock and every payload file", async () => {
   const fixture = await createInputFixture();
@@ -192,6 +193,15 @@ test("Windows MSYS2 builder scripts are probed through the selected Bash runtime
   );
   assert.match(source, /\["-lc", 'exec "\$@"', "bash", command, \.\.\.versionArgs\]/u);
   assert.match(source, /command === "cl" \? \[\] : \["--version"\]/u);
+});
+
+test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {
+  const attributes = await readFile(repositoryAttributesPath, "utf8");
+  assert.match(
+    attributes,
+    /^primary-runtime\/patches\/\*\.patch -text$/mu,
+    "a Windows checkout must not rewrite the patch bytes bound by runtime-sources.lock.json",
+  );
 });
 
 test("the locked presentation-plugin archive strips only its GitHub tag wrapper", async () => {

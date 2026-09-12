@@ -218,7 +218,7 @@ jobs:
       - name: Install locked Linux builder prerequisites
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm
+        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev libx11-dev nasm
 
       - name: Provision locked Windows MSYS2 builder tools
         if: runner.os == 'Windows'

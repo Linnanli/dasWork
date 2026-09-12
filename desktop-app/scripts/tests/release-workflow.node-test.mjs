@@ -150,7 +150,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Install locked Linux builder prerequisites/u)
   assert.match(
     buildWorkflow,
-    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm/u
+    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev libx11-dev nasm/u
   )
   assert.match(buildWorkflow, /Provision locked Windows MSYS2 builder tools/u)
   assert.match(
