@@ -214,22 +214,14 @@ jobs:
         run: |
           brew install autoconf automake gperf make pkgconf
           builder_bin="$RUNNER_TEMP/primary-runtime-builder-bin"
-          homebrew_bin="$(dirname "$(command -v brew)")"
           mkdir -p "$builder_bin"
           ln -sf "$(brew --prefix make)/bin/gmake" "$builder_bin/make"
-          cat > "$builder_bin/pkgconf" <<EOF
-          #!/bin/sh
-          unset PKG_CONFIG_PATH
-          export PKG_CONFIG_LIBDIR=/nonexistent
-          exec "$homebrew_bin/pkgconf" "\$@"
-          EOF
-          chmod +x "$builder_bin/pkgconf"
           printf '%s\n' "$builder_bin" "$(brew --prefix automake)/bin" "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
 
       - name: Install locked Linux builder prerequisites
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev nasm
+        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm
 
       - name: Provision locked Windows MSYS2 builder tools
         if: runner.os == 'Windows'
@@ -245,6 +237,12 @@ jobs:
             automake
             gperf
             make
+
+      - name: Configure locked Windows MSVC builder environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
 
       - name: Expose provisioned Windows MSYS2 builder tools
         if: runner.os == 'Windows'

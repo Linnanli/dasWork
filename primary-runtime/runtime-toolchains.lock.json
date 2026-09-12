@@ -89,11 +89,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-bogus-pkg-config --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -216,11 +216,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-bogus-pkg-config --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [

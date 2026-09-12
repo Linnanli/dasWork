@@ -170,6 +170,15 @@ test("LibreOffice source recipes invoke its Perl autogen entrypoint explicitly",
       `${target} must not depend on the builder's CUPS development package`,
     );
     assert.match(recipe?.toolchain.flags ?? "", /--disable-cups/u);
+    if (target.startsWith("darwin")) {
+      assert.ok(recipe?.commands[0]?.includes("--enable-bogus-pkg-config"));
+      assert.match(
+        recipe?.toolchain.flags ?? "",
+        /--enable-bogus-pkg-config/u,
+      );
+    } else {
+      assert.ok(!recipe?.commands[0]?.includes("--enable-bogus-pkg-config"));
+    }
   }
 });
 

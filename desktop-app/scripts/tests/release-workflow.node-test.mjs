@@ -146,13 +146,11 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /brew install autoconf automake gperf make pkgconf/u)
   assert.match(buildWorkflow, /primary-runtime-builder-bin/u)
   assert.match(buildWorkflow, /gmake" "\$builder_bin\/make/u)
-  assert.match(buildWorkflow, /unset PKG_CONFIG_PATH/u)
-  assert.match(buildWorkflow, /PKG_CONFIG_LIBDIR=\/nonexistent/u)
   assert.match(buildWorkflow, /brew --prefix make/u)
   assert.match(buildWorkflow, /Install locked Linux builder prerequisites/u)
   assert.match(
     buildWorkflow,
-    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev nasm/u
+    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm/u
   )
   assert.match(buildWorkflow, /Provision locked Windows MSYS2 builder tools/u)
   assert.match(
@@ -164,6 +162,12 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /cache: false/u)
   assert.match(buildWorkflow, /location: C:\\msys64/u)
   assert.match(buildWorkflow, /install: >-\s+autoconf\s+automake\s+gperf\s+make/u)
+  assert.match(buildWorkflow, /Configure locked Windows MSVC builder environment/u)
+  assert.match(
+    buildWorkflow,
+    /ilammy\/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756/u
+  )
+  assert.match(buildWorkflow, /arch: x64/u)
   assert.match(buildWorkflow, /Expose provisioned Windows MSYS2 builder tools/u)
   assert.match(buildWorkflow, /C:\\msys64\\usr\\bin/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
