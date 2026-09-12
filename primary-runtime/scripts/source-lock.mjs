@@ -51,6 +51,7 @@ const rejectedCandidateKeys = new Set([
 ]);
 const componentKeys = new Set([
   "name",
+  "capability",
   "version",
   "source",
   "sha256",
@@ -123,10 +124,17 @@ export function validateRuntimeSourcesLock(value) {
 export function assertApprovedSources(lock) {
   const validated = validateRuntimeSourcesLock(lock);
   for (const group of componentGroups) {
+    const coverageByCapability = new Map();
     for (const component of validated.components[group]) {
-      if (component.platforms.length !== supportedRuntimeTargets.length) {
+      const capability = component.capability ?? component.name;
+      const coveredTargets = coverageByCapability.get(capability) ?? new Set();
+      for (const target of component.platforms) coveredTargets.add(target);
+      coverageByCapability.set(capability, coveredTargets);
+    }
+    for (const [capability, coveredTargets] of coverageByCapability) {
+      if (coveredTargets.size !== supportedRuntimeTargets.length) {
         throw new Error(
-          `AT-RT-PROVENANCE-01 blocked: ${group} component ${component.name} does not cover every release target.`,
+          `AT-RT-PROVENANCE-01 blocked: ${group} capability ${capability} does not cover every release target.`,
         );
       }
     }
@@ -239,6 +247,7 @@ function isComponent(component) {
     isPlainObject(component) &&
     !hasUnexpectedKeys(component, componentKeys) &&
     isResolvedValue(component.name) &&
+    (component.capability === undefined || isResolvedValue(component.capability)) &&
     isExactVersion(component.version) &&
     isHttpsUrl(component.source) &&
     isSha256(component.sha256) &&

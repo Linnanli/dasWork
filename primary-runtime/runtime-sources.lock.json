@@ -1,6 +1,6 @@
 {
   "schemaVersion": "dascowork-primary-runtime-sources.v2",
-  "builderVersion": "1.1.0",
+  "builderVersion": "1.2.0",
   "candidate": {
     "name": "siril9/presentation-skill",
     "repository": "https://github.com/siril9/presentation-skill",
@@ -104,7 +104,8 @@
       { "name": "typing_extensions", "version": "4.16.0", "source": "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", "sha256": "dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", "license": "PSF-2.0", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
     ],
     "native": [
-      { "name": "libreoffice", "version": "26.2.6.3", "source": "https://download.documentfoundation.org/libreoffice/src/26.2.6/libreoffice-26.2.6.3.tar.xz", "sha256": "3a2570aa7087bf8e0cbdf49ac5bd0e452c2025274af99e07882daa104c5685bd", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "libreoffice", "capability": "libreoffice", "version": "26.2.6.3", "source": "https://download.documentfoundation.org/libreoffice/src/26.2.6/libreoffice-26.2.6.3.tar.xz", "sha256": "3a2570aa7087bf8e0cbdf49ac5bd0e452c2025274af99e07882daa104c5685bd", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["darwin-x64", "darwin-arm64", "linux-x64"] },
+      { "name": "libreoffice-windows-x64", "capability": "libreoffice", "version": "26.2.6", "source": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi", "sha256": "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["win32-x64"] },
       { "name": "poppler", "version": "26.09.0", "source": "https://poppler.freedesktop.org/poppler-26.09.0.tar.xz", "sha256": "8059eadb6805340768f138c465b57f8164c92b4a0773c37ef031ea6c0d987b2e", "license": "GPL-2.0-or-later", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
     ],
     "fonts": [

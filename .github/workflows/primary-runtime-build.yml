@@ -220,35 +220,11 @@ jobs:
         shell: bash
         run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm
 
-      - name: Provision locked Windows MSYS2 builder tools
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2.30.0
-        with:
-          msystem: MSYS
-          release: false
-          update: false
-          cache: false
-          location: C:\msys64
-          install: >-
-            autoconf
-            automake
-            gperf
-            make
-            perl
-
       - name: Configure locked Windows MSVC builder environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         with:
           arch: x64
-
-      - name: Expose provisioned Windows MSYS2 builder tools
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          test -x /c/msys64/usr/bin/aclocal
-          test -x /c/msys64/usr/bin/perl
-          printf '%s\n' 'C:\msys64\usr\bin' >> "$GITHUB_PATH"
 
       - name: Materialize target-native offline Runtime inputs
         shell: bash
@@ -256,7 +232,6 @@ jobs:
           : "${ImageOS:?GitHub-hosted runner image operating-system label is required}"
           : "${ImageVersion:?GitHub-hosted runner image version is required}"
           export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${ImageOS}:${ImageVersion}"
-          export DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT='C:\msys64'
           npm --prefix primary-runtime run materialize:inputs -- \
             --target=${{ matrix.target }} \
             --source-cache "$RUNNER_TEMP/primary-runtime-source-cache" \

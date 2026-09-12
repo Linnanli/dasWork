@@ -35,6 +35,7 @@ const artifactKeys = new Set([
 ]);
 const recipeKeys = new Set([
   "name",
+  "materialization",
   "sourceComponent",
   "sourceArchiveFormat",
   "sourceDirectory",
@@ -46,7 +47,8 @@ const recipeKeys = new Set([
 ]);
 const recipeOutputKeys = new Set(["kind", "source", "destination", "mode"]);
 const recipeClosureKeys = new Set(["mode", "entrypoints"]);
-const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip"]);
+const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip", "msi"]);
+const nativeMaterializations = new Set(["source-build", "prebuilt"]);
 const executableModes = new Set(["0755", "100755"]);
 
 /**
@@ -363,6 +365,7 @@ export function archiveFormatForUrl(url) {
   if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) return "tar.gz";
   if (url.endsWith(".tar.xz")) return "tar.xz";
   if (url.endsWith(".zip")) return "zip";
+  if (url.endsWith(".msi")) return "msi";
   throw new Error(
     `Primary Runtime source has an unsupported archive format: ${url}`,
   );
@@ -432,14 +435,17 @@ function isNativeRecipe(value) {
     isPlainObject(value) &&
     !hasUnexpectedKeys(value, recipeKeys) &&
     isNonEmptyString(value.name) &&
+    nativeMaterializations.has(value.materialization) &&
     isNonEmptyString(value.sourceComponent) &&
     allowedArchiveFormats.has(value.sourceArchiveFormat) &&
     isRelativePath(value.sourceDirectory) &&
     isPlainObject(value.toolchain) &&
     Object.values(value.toolchain).every(isNonEmptyString) &&
-    isRecipeEnvironment(value.environment) &&
+    isRecipeEnvironment(value.environment, value.materialization) &&
     Array.isArray(value.commands) &&
-    value.commands.length > 0 &&
+    (value.materialization === "source-build"
+      ? value.commands.length > 0
+      : value.commands.length === 0) &&
     value.commands.every(
       (command) =>
         Array.isArray(command) &&
@@ -453,10 +459,10 @@ function isNativeRecipe(value) {
   );
 }
 
-function isRecipeEnvironment(value) {
+function isRecipeEnvironment(value, materialization) {
   return (
     isPlainObject(value) &&
-    Object.keys(value).length > 0 &&
+    (materialization === "source-build" || Object.keys(value).length === 0) &&
     Object.entries(value).every(
       ([key, environmentValue]) =>
         /^[A-Z_][A-Z0-9_]*$/u.test(key) && isNonEmptyString(environmentValue),

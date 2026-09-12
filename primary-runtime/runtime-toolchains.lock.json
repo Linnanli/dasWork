@@ -83,6 +83,7 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
+          "materialization": "source-build",
           "sourceComponent": "libreoffice",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libreoffice-26.2.6.3",
@@ -106,6 +107,7 @@
         },
         {
           "name": "poppler",
+          "materialization": "source-build",
           "sourceComponent": "poppler",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
@@ -210,6 +212,7 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
+          "materialization": "source-build",
           "sourceComponent": "libreoffice",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libreoffice-26.2.6.3",
@@ -233,6 +236,7 @@
         },
         {
           "name": "poppler",
+          "materialization": "source-build",
           "sourceComponent": "poppler",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
@@ -260,7 +264,7 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
-        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "cl"]
+        "tools": ["git", "tar", "msiexec", "cmake", "ninja", "cl"]
       },
       "node": {
         "name": "node-runtime",
@@ -337,19 +341,16 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
-          "sourceComponent": "libreoffice",
-          "sourceArchiveFormat": "tar.xz",
-          "sourceDirectory": "libreoffice-26.2.6.3",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-windows-x64",
+          "sourceArchiveFormat": "msi",
+          "sourceDirectory": "Program Files/LibreOffice",
           "toolchain": {
-            "compiler": "MSVC-17.14",
-            "buildSystem": "configure+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-option-checking=fatal"
+            "distribution": "TheDocumentFoundation-26.2.6-MSI",
+            "extraction": "msiexec-administrative"
           },
-          "environment": { "CC": "cl", "CXX": "cl" },
-          "commands": [
-            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
-            ["make", "-j2"]
-          ],
+          "environment": {},
+          "commands": [],
           "outputs": [
             { "kind": "directory", "source": "instdir", "destination": "dependencies/native/libreoffice" }
           ],
@@ -360,6 +361,7 @@
         },
         {
           "name": "poppler",
+          "materialization": "source-build",
           "sourceComponent": "poppler",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
@@ -464,6 +466,7 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
+          "materialization": "source-build",
           "sourceComponent": "libreoffice",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libreoffice-26.2.6.3",
@@ -487,6 +490,7 @@
         },
         {
           "name": "poppler",
+          "materialization": "source-build",
           "sourceComponent": "poppler",
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",

@@ -152,32 +152,17 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm/u
   )
-  assert.match(buildWorkflow, /Provision locked Windows MSYS2 builder tools/u)
-  assert.match(
-    buildWorkflow,
-    /msys2\/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda/u
-  )
-  assert.match(buildWorkflow, /release: false/u)
-  assert.match(buildWorkflow, /update: false/u)
-  assert.match(buildWorkflow, /cache: false/u)
-  assert.match(buildWorkflow, /location: C:\\msys64/u)
-  assert.match(
-    buildWorkflow,
-    /install: >-\s+autoconf\s+automake\s+gperf\s+make\s+perl/u,
-  )
+  // LibreOffice for Windows is a locked upstream MSI materialized into the
+  // staged Runtime; MSYS cannot build LibreOffice on Windows and must not be
+  // reintroduced as an unreviewed alternate path.
+  assert.doesNotMatch(buildWorkflow, /MSYS2|msys2\/setup-msys2|C:\\msys64/u)
   assert.match(buildWorkflow, /Configure locked Windows MSVC builder environment/u)
   assert.match(
     buildWorkflow,
     /ilammy\/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756/u
   )
   assert.match(buildWorkflow, /arch: x64/u)
-  assert.match(buildWorkflow, /Expose provisioned Windows MSYS2 builder tools/u)
-  assert.match(buildWorkflow, /test -x \/c\/msys64\/usr\/bin\/perl/u)
-  assert.match(buildWorkflow, /C:\\msys64\\usr\\bin/u)
-  assert.match(
-    buildWorkflow,
-    /export DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT='C:\\msys64'/u,
-  )
+  assert.doesNotMatch(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
   assert.match(buildWorkflow, /ImageOS/u)
   assert.match(buildWorkflow, /ImageVersion/u)

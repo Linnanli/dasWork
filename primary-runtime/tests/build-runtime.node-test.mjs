@@ -68,7 +68,7 @@ test("rejects missing candidate provenance and every floating or placeholder val
   );
 });
 
-test("requires every audited component to cover every release target", () => {
+test("requires every audited capability to cover every release target", () => {
   const lock = validApprovedLock();
   assert.throws(
     () =>
@@ -79,8 +79,24 @@ test("requires every audited component to cover every release target", () => {
           native: [{ ...lock.components.native[0], platforms: ["darwin-x64"] }],
         },
       }),
-    /native component poppler does not cover every release target/u,
+    /native capability poppler does not cover every release target/u,
   );
+});
+
+test("accepts platform-specific immutable binaries when their capability coverage is complete", () => {
+  const lock = validApprovedLock();
+  const poppler = lock.components.native.find(
+    (component) => component.name === "poppler",
+  );
+  assert.ok(poppler);
+  poppler.capability = "poppler";
+  poppler.platforms = ["darwin-x64", "darwin-arm64", "linux-x64"];
+  lock.components.native.push({
+    ...poppler,
+    name: "poppler-windows-x64",
+    platforms: ["win32-x64"],
+  });
+  assert.doesNotThrow(() => assertApprovedSources(lock));
 });
 
 test("provenance binds the exact approved source-lock bytes", async () => {

@@ -62,21 +62,16 @@ const run = promisify((file, args, options, callback) => {
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
 const resolveLockedBuilderCommand = (command) => {
-  if (target === "win32-x64" && command === "bash") {
-    const msysRoot = process.env.DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT;
-    if (!msysRoot) {
-      throw new Error(
-        "AT-RT-INPUT-01 blocked: Windows Runtime source builds require the locked MSYS root.",
-      );
-    }
-    return join(msysRoot, "usr", "bin", "bash.exe");
-  }
   // Use the Windows image's tar.exe so the selected archive reader and its
   // version receipt are stable; extraction below deliberately passes it only
   // relative paths because Windows tar variants treat drive prefixes specially.
   if (target === "win32-x64" && command === "tar") {
     const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
     return join(systemRoot, "System32", "tar.exe");
+  }
+  if (target === "win32-x64" && command === "msiexec") {
+    const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+    return join(systemRoot, "System32", "msiexec.exe");
   }
   return command;
 };
@@ -234,23 +229,13 @@ async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
 
 async function verifyLockedBuilderToolchain({ target, builder }) {
   const tools = [];
-  const msysScriptTools = new Set(["aclocal", "autoconf", "automake"]);
   for (const command of builder.tools) {
     let result;
     const executable = resolveLockedBuilderCommand(command);
-    const versionArgs = command === "cl" ? [] : ["--version"];
-    const useMsysShell =
-      target === "win32-x64" &&
-      process.env.MSYSTEM === "MSYS" &&
-      msysScriptTools.has(command);
+    const versionArgs =
+      command === "cl" ? [] : command === "msiexec" ? ["/?"] : ["--version"];
     try {
-      result = useMsysShell
-        ? await run(
-            "bash",
-            ["-lc", 'exec "$@"', "bash", command, ...versionArgs],
-            { env: process.env },
-          )
-        : await run(executable, versionArgs, { env: process.env });
+      result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
       throw new Error(
         `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,
@@ -534,15 +519,17 @@ async function materializeNativeRecipes({
       buildRoot,
       `${recipe.name} locked source directory`,
     );
-    for (const [file, ...args] of recipe.commands) {
-      await run(resolveLockedBuilderCommand(file), args, {
-        cwd: buildRoot,
-        env: {
-          ...process.env,
-          ...recipe.environment,
-          MAKEFLAGS: "-j2",
-        },
-      });
+    if (recipe.materialization === "source-build") {
+      for (const [file, ...args] of recipe.commands) {
+        await run(resolveLockedBuilderCommand(file), args, {
+          cwd: buildRoot,
+          env: {
+            ...process.env,
+            ...recipe.environment,
+            MAKEFLAGS: "-j2",
+          },
+        });
+      }
     }
     for (const output of recipe.outputs) {
       const source = await safeChild(buildRoot, output.source);
@@ -590,7 +577,31 @@ async function extractArchive({
     await extractZipArchive({ archive, output, stripComponents, python });
     return;
   }
+  if (archiveFormat === "msi") {
+    await extractWindowsMsi({ archive, output, stripComponents });
+    return;
+  }
   await extractWithLockedTar({ archive, output, stripComponents });
+}
+
+/**
+ * A locked Windows LibreOffice MSI is never installed into the runner.  The
+ * Windows Installer administrative-install mode expands it only beneath the
+ * temporary Runtime input root, from which the normal recipe closure copies
+ * the Runtime-owned program tree into the candidate archive.
+ */
+async function extractWindowsMsi({ archive, output, stripComponents }) {
+  if (target !== "win32-x64" || stripComponents !== 0) {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: MSI Runtime inputs are supported only as an unstripped Windows artifact.",
+    );
+  }
+  await mkdir(output, { recursive: true });
+  await run(
+    resolveLockedBuilderCommand("msiexec"),
+    ["/a", archive, "/qn", `TARGETDIR=${output}`],
+    { cwd: output, env: process.env },
+  );
 }
 
 /**

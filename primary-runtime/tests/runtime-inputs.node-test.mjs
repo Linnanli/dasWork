@@ -161,6 +161,16 @@ test("LibreOffice source recipes use the locked release's generated configure sc
     const recipe = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "libreoffice",
     );
+    if (target === "win32-x64") {
+      assert.equal(recipe?.materialization, "prebuilt");
+      assert.equal(recipe?.sourceComponent, "libreoffice-windows-x64");
+      assert.equal(recipe?.sourceArchiveFormat, "msi");
+      assert.deepEqual(recipe?.commands, []);
+      assert.deepEqual(recipe?.environment, {});
+      assert.ok(toolchain.builder.tools.includes("msiexec"));
+      continue;
+    }
+    assert.equal(recipe?.materialization, "source-build");
     assert.deepEqual(
       recipe?.commands[0]?.slice(0, 2),
       ["bash", "./configure"],
@@ -192,20 +202,19 @@ test("LibreOffice source recipes use the locked release's generated configure sc
   }
 });
 
-test("Windows MSYS2 builder scripts are probed through the selected Bash runtime", async () => {
+test("Windows MSI extraction is locked and does not restore the rejected MSYS source-build path", async () => {
   const source = await readFile(materializeScript, "utf8");
 
-  assert.match(source, /new Set\(\["aclocal", "autoconf", "automake"\]\)/u);
   assert.match(
     source,
-    /target === "win32-x64" &&\s+process\.env\.MSYSTEM === "MSYS" &&\s+msysScriptTools\.has\(command\)/u
+    /target === "win32-x64" && command === "msiexec"[\s\S]*?System32", "msiexec\.exe"/u,
   );
-  assert.match(source, /\["-lc", 'exec "\$@"', "bash", command, \.\.\.versionArgs\]/u);
-  assert.match(source, /command === "cl" \? \[\] : \["--version"\]/u);
   assert.match(
     source,
-    /command === "bash"[\s\S]*?DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT[\s\S]*?"usr", "bin", "bash\.exe"/u,
+    /if \(archiveFormat === "msi"\)[\s\S]*?extractWindowsMsi/u,
   );
+  assert.match(source, /\["\/a", archive, "\/qn", `TARGETDIR=\$\{output\}`\]/u);
+  assert.doesNotMatch(source, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT|MSYSTEM/u);
 });
 
 test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {
@@ -277,6 +286,23 @@ test("ZIP Runtime inputs without a strip rule extract from their source root", a
     materializerSource,
     /target === "win32-x64" && command === "tar"[\s\S]*?System32", "tar\.exe"/u,
   );
+});
+
+test("toolchain lock rejects a prebuilt native binary with build commands or environment", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const badCommands = structuredClone(lock);
+  const windowsRecipe = badCommands.targets["win32-x64"].nativeRecipes.find(
+    (recipe) => recipe.name === "libreoffice",
+  );
+  windowsRecipe.commands = [["cmd", "/c", "ver"]];
+  assert.throws(() => validateRuntimeToolchainsLock(badCommands), /invalid/u);
+
+  const badEnvironment = structuredClone(lock);
+  const prebuiltRecipe = badEnvironment.targets["win32-x64"].nativeRecipes.find(
+    (recipe) => recipe.name === "libreoffice",
+  );
+  prebuiltRecipe.environment = { PATH: "host" };
+  assert.throws(() => validateRuntimeToolchainsLock(badEnvironment), /invalid/u);
 });
 
 test("P1 command line tools accept the documented equals-form arguments", async () => {
