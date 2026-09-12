@@ -144,6 +144,8 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /npm --prefix primary-runtime run materialize:inputs/u)
   assert.match(buildWorkflow, /Install locked macOS builder prerequisites/u)
   assert.match(buildWorkflow, /brew install autoconf automake/u)
+  assert.match(buildWorkflow, /Expose preinstalled Windows MSYS2 builder tools/u)
+  assert.match(buildWorkflow, /C:\\msys64\\usr\\bin/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
   assert.match(buildWorkflow, /ImageOS/u)
   assert.match(buildWorkflow, /ImageVersion/u)

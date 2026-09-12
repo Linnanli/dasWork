@@ -215,6 +215,13 @@ jobs:
           brew install autoconf automake
           echo "$(brew --prefix automake)/bin" >> "$GITHUB_PATH"
 
+      - name: Expose preinstalled Windows MSYS2 builder tools
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          test -x /c/msys64/usr/bin/aclocal
+          printf '%s\n' 'C:\msys64\usr\bin' >> "$GITHUB_PATH"
+
       - name: Materialize target-native offline Runtime inputs
         shell: bash
         run: |
