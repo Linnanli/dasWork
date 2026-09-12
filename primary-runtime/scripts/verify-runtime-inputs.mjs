@@ -27,7 +27,7 @@ const python = target.startsWith("win32")
   ? join(options.inputRoot, "dependencies/python/python.exe")
   : join(options.inputRoot, "dependencies/python/bin/python");
 const libreofficeRuntimePath = target.startsWith("darwin")
-  ? "libreoffice/Resources/program/soffice"
+  ? "libreoffice/MacOS/soffice"
   : "libreoffice/program/soffice";
 const binaries = Object.fromEntries(
   [

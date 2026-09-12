@@ -186,7 +186,7 @@ test("LibreOffice recipes use locked target-native binary materialization where 
         },
       ]);
       assert.deepEqual(recipe?.closure.entrypoints, [
-        "dependencies/native/libreoffice/Resources/program/soffice",
+        "dependencies/native/libreoffice/MacOS/soffice",
       ]);
       continue;
     }

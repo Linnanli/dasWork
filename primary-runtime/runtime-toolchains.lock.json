@@ -98,7 +98,7 @@
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/Resources/program/soffice"]
+            "entrypoints": ["dependencies/native/libreoffice/MacOS/soffice"]
           }
         },
         {
@@ -223,7 +223,7 @@
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/Resources/program/soffice"]
+            "entrypoints": ["dependencies/native/libreoffice/MacOS/soffice"]
           }
         },
         {

@@ -360,7 +360,7 @@ function assertRequiredRuntimeInputs(entries, target) {
 
 function libreofficeBinaryPath(target, extension) {
   const relativePath = target.startsWith("darwin")
-    ? "libreoffice/Resources/program/soffice"
+    ? "libreoffice/MacOS/soffice"
     : "libreoffice/program/soffice";
   return `dependencies/native/${relativePath}${extension}`;
 }
