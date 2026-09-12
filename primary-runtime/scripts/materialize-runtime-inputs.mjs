@@ -546,7 +546,7 @@ async function assertRecipeClosure({ recipe, outputRoot }) {
 async function extractArchive({
   archive,
   output,
-  stripComponents,
+  stripComponents = 0,
   archiveFormat,
   python,
 }) {

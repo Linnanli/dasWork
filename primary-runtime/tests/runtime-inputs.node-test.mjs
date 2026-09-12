@@ -181,6 +181,27 @@ test("the locked presentation-plugin archive strips only its GitHub tag wrapper"
   assert.equal(source?.stripComponents, 1);
 });
 
+test("ZIP Runtime inputs without a strip rule extract from their source root", async () => {
+  const [sourceLock, toolchainsLock, materializerSource] = await Promise.all([
+    readRuntimeSourcesLock(sourceLockPath),
+    readRuntimeToolchainsLock(toolchainsLockPath),
+    readFile(materializeScript, "utf8"),
+  ]);
+  const rootZip = artifactsForTarget({
+    sourceLock,
+    toolchainsLock,
+    target: currentRuntimeTarget(),
+  }).find(
+    (artifact) =>
+      artifact.archiveFormat === "zip" && artifact.stripComponents === undefined,
+  );
+  assert.ok(rootZip, "the locked inputs must exercise a root ZIP extraction");
+  assert.match(
+    materializerSource,
+    /async function extractArchive\(\{[\s\S]*?stripComponents = 0,/u,
+  );
+});
+
 test("P1 command line tools accept the documented equals-form arguments", async () => {
   const root = await (
     await import("node:fs/promises")
