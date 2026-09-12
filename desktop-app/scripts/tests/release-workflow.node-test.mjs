@@ -161,7 +161,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /update: false/u)
   assert.match(buildWorkflow, /cache: false/u)
   assert.match(buildWorkflow, /location: C:\\msys64/u)
-  assert.match(buildWorkflow, /install: >-\s+autoconf\s+automake\s+gperf\s+make/u)
+  assert.match(
+    buildWorkflow,
+    /install: >-\s+autoconf\s+automake\s+gperf\s+make\s+perl/u,
+  )
   assert.match(buildWorkflow, /Configure locked Windows MSVC builder environment/u)
   assert.match(
     buildWorkflow,
@@ -169,6 +172,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.match(buildWorkflow, /arch: x64/u)
   assert.match(buildWorkflow, /Expose provisioned Windows MSYS2 builder tools/u)
+  assert.match(buildWorkflow, /test -x \/c\/msys64\/usr\/bin\/perl/u)
   assert.match(buildWorkflow, /C:\\msys64\\usr\\bin/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
   assert.match(buildWorkflow, /ImageOS/u)

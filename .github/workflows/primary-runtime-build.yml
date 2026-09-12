@@ -234,6 +234,7 @@ jobs:
             automake
             gperf
             make
+            perl
 
       - name: Configure locked Windows MSVC builder environment
         if: runner.os == 'Windows'
@@ -246,6 +247,7 @@ jobs:
         shell: bash
         run: |
           test -x /c/msys64/usr/bin/aclocal
+          test -x /c/msys64/usr/bin/perl
           printf '%s\n' 'C:\msys64\usr\bin' >> "$GITHUB_PATH"
 
       - name: Materialize target-native offline Runtime inputs
