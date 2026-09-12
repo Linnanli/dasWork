@@ -236,6 +236,18 @@ test("ZIP Runtime inputs without a strip rule extract from their source root", a
     materializerSource,
     /async function extractArchive\(\{[\s\S]*?stripComponents = 0,/u,
   );
+  assert.match(
+    materializerSource,
+    /async function extractZipWithLockedTar\(\{ archive, output, stripComponents \}\)/u,
+  );
+  assert.match(
+    materializerSource,
+    /if \(!python\) \{\s+await extractZipWithLockedTar\(\{ archive, output, stripComponents \}\);/u,
+  );
+  assert.match(
+    materializerSource,
+    /await run\("tar", args, \{ cwd: output \}\);/u,
+  );
 });
 
 test("P1 command line tools accept the documented equals-form arguments", async () => {

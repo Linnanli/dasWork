@@ -564,13 +564,25 @@ async function extractArchive({
 }) {
   if (archiveFormat === "zip") {
     if (!python) {
-      throw new Error(
-        "AT-RT-INPUT-01 blocked: ZIP extraction requires the locked Runtime Python executable.",
-      );
+      await extractZipWithLockedTar({ archive, output, stripComponents });
+      return;
     }
     await extractZipArchive({ archive, output, stripComponents, python });
     return;
   }
+  await mkdir(output, { recursive: true });
+  const args = ["-xf", archive, "-C", output];
+  if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
+  await run("tar", args, { cwd: output });
+}
+
+/**
+ * The Windows Node archive is a ZIP and is intentionally materialized before
+ * the locked Runtime Python executable exists. `tar` is already a required,
+ * version-recorded builder tool on every target, so use it only for this
+ * bootstrap extraction rather than falling back to a runner Python runtime.
+ */
+async function extractZipWithLockedTar({ archive, output, stripComponents }) {
   await mkdir(output, { recursive: true });
   const args = ["-xf", archive, "-C", output];
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
