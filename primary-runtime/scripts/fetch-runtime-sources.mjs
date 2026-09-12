@@ -259,8 +259,8 @@ function readOptions(argv, allowed) {
 
 function readPositiveTimeout(value) {
   const timeoutMs = Number(value);
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 10 * 60_000) {
-    throw new Error("--timeout-ms must be an integer from 1000 through 600000.");
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 15 * 60_000) {
+    throw new Error("--timeout-ms must be an integer from 1000 through 900000.");
   }
   return timeoutMs;
 }

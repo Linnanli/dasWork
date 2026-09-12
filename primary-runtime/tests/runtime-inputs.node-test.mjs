@@ -200,6 +200,16 @@ test("P1 command line tools accept the documented equals-form arguments", async 
     await assert.rejects(
       () =>
         executeFile(process.execPath, [
+          fetchScript,
+          `--target=${target}`,
+          `--cache=${join(root, "cache")}`,
+          "--timeout-ms=900001",
+        ]),
+      /timeout-ms must be an integer from 1000 through 900000/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
           materializeScript,
           `--target=${target}`,
           `--source-cache=${join(root, "cache")}`,
