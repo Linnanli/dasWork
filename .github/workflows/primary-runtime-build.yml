@@ -213,8 +213,15 @@ jobs:
         shell: bash
         run: |
           brew install autoconf automake make
-          echo "$(brew --prefix automake)/bin" >> "$GITHUB_PATH"
-          echo "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
+          builder_bin="$RUNNER_TEMP/primary-runtime-builder-bin"
+          mkdir -p "$builder_bin"
+          ln -sf "$(brew --prefix make)/bin/gmake" "$builder_bin/make"
+          printf '%s\n' "$builder_bin" "$(brew --prefix automake)/bin" "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
+
+      - name: Install locked Linux builder prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get install --yes --no-install-recommends libfontconfig1-dev
 
       - name: Provision locked Windows MSYS2 builder tools
         if: runner.os == 'Windows'
@@ -224,6 +231,7 @@ jobs:
           release: false
           update: false
           cache: false
+          location: C:\msys64
           install: >-
             autoconf
             automake
