@@ -62,9 +62,9 @@ const run = promisify((file, args, options, callback) => {
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
 const resolveLockedBuilderCommand = (command) => {
-  // MSYS tar treats a drive-qualified Windows path (for example D:\\a\\…)
-  // as a remote archive.  The Windows image's tar.exe accepts native paths,
-  // and is the exact executable whose version receipt we record below.
+  // Use the Windows image's tar.exe so the selected archive reader and its
+  // version receipt are stable; extraction below deliberately passes it only
+  // relative paths because Windows tar variants treat drive prefixes specially.
   if (target === "win32-x64" && command === "tar") {
     const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
     return join(systemRoot, "System32", "tar.exe");
@@ -581,10 +581,7 @@ async function extractArchive({
     await extractZipArchive({ archive, output, stripComponents, python });
     return;
   }
-  await mkdir(output, { recursive: true });
-  const args = ["-xf", archive, "-C", output];
-  if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
-  await run("tar", args, { cwd: output });
+  await extractWithLockedTar({ archive, output, stripComponents });
 }
 
 /**
@@ -594,8 +591,20 @@ async function extractArchive({
  * bootstrap extraction rather than falling back to a runner Python runtime.
  */
 async function extractZipWithLockedTar({ archive, output, stripComponents }) {
+  await extractWithLockedTar({ archive, output, stripComponents });
+}
+
+async function extractWithLockedTar({ archive, output, stripComponents }) {
   await mkdir(output, { recursive: true });
-  const args = ["-xf", archive, "-C", output];
+  // Both the MSYS and inbox Windows tar implementations treat an absolute
+  // drive-qualified path as a remote archive specifier.  Extract from the
+  // destination and address the locked cache object relatively instead.
+  const archiveArgument =
+    target === "win32-x64"
+      ? relative(output, archive).split(sep).join("/")
+      : archive;
+  const args = ["-xf", archiveArgument];
+  if (target !== "win32-x64") args.push("-C", output);
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
   await run(resolveLockedBuilderCommand("tar"), args, { cwd: output });
 }

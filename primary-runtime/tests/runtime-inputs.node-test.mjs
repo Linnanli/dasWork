@@ -251,6 +251,18 @@ test("ZIP Runtime inputs without a strip rule extract from their source root", a
   );
   assert.match(
     materializerSource,
+    /async function extractWithLockedTar\(\{ archive, output, stripComponents \}\)/u,
+  );
+  assert.match(
+    materializerSource,
+    /target === "win32-x64"\s+\? relative\(output, archive\)\.split\(sep\)\.join\("\/"\)\s+: archive/u,
+  );
+  assert.match(
+    materializerSource,
+    /if \(target !== "win32-x64"\) args\.push\("-C", output\);/u,
+  );
+  assert.match(
+    materializerSource,
     /await run\(resolveLockedBuilderCommand\("tar"\), args, \{ cwd: output \}\);/u,
   );
   assert.match(
