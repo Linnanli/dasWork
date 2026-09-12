@@ -61,6 +61,16 @@ const run = promisify((file, args, options, callback) => {
 
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
+const resolveLockedBuilderCommand = (command) => {
+  // MSYS tar treats a drive-qualified Windows path (for example D:\\a\\…)
+  // as a remote archive.  The Windows image's tar.exe accepts native paths,
+  // and is the exact executable whose version receipt we record below.
+  if (target === "win32-x64" && command === "tar") {
+    const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+    return join(systemRoot, "System32", "tar.exe");
+  }
+  return command;
+};
 const [sourceLock, toolchainsLock] = await Promise.all([
   readRuntimeSourcesLock(options.sourceLock),
   readRuntimeToolchainsLock(options.toolchainsLock),
@@ -218,6 +228,7 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
   const msysScriptTools = new Set(["aclocal", "autoconf", "automake"]);
   for (const command of builder.tools) {
     let result;
+    const executable = resolveLockedBuilderCommand(command);
     const versionArgs = command === "cl" ? [] : ["--version"];
     const useMsysShell =
       target === "win32-x64" &&
@@ -230,7 +241,7 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
             ["-lc", 'exec "$@"', "bash", command, ...versionArgs],
             { env: process.env },
           )
-        : await run(command, versionArgs, { env: process.env });
+        : await run(executable, versionArgs, { env: process.env });
     } catch (error) {
       throw new Error(
         `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,
@@ -586,7 +597,7 @@ async function extractZipWithLockedTar({ archive, output, stripComponents }) {
   await mkdir(output, { recursive: true });
   const args = ["-xf", archive, "-C", output];
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
-  await run("tar", args, { cwd: output });
+  await run(resolveLockedBuilderCommand("tar"), args, { cwd: output });
 }
 
 async function extractZipArchive({ archive, output, stripComponents, python }) {
