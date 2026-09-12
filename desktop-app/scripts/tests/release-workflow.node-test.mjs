@@ -223,6 +223,14 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
       buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer')
   )
   assert.ok(
+    buildWorkflow.indexOf('Verify final archive binds reviewed calibration evidence') <
+      buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates') <
+      buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer')
+  )
+  assert.ok(
     buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer') <
       buildWorkflow.indexOf(
         'P3b run ordinary app-server chat through the signed local calibration feed'

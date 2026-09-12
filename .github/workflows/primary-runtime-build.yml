@@ -189,9 +189,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install desktop dependencies for P3a/P3b installer gates
-        run: npm --prefix desktop-app ci --ignore-scripts
-
       - name: Download independently reviewed P3b calibration
         if: env.PRIMARY_RUNTIME_MODE == 'final'
         uses: actions/download-artifact@v8
@@ -327,6 +324,9 @@ jobs:
           npm --prefix desktop-app run test:primary-runtime:performance -- \
             --measurements "$RUNNER_TEMP/reviewed-calibration/performance-report.json" \
             --budget "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
+
+      - name: Install desktop dependencies for P3a/P3b installer gates
+        run: npm --prefix desktop-app ci --ignore-scripts
 
       - name: P3a install the generated archive through the real desktop installer
         shell: bash
