@@ -165,6 +165,11 @@ test("LibreOffice source recipes invoke its Perl autogen entrypoint explicitly",
       ["perl", "./autogen.sh"],
       `${target} must not rely on shell execution of a non-shebang script`,
     );
+    assert.ok(
+      recipe?.commands[0]?.includes("--disable-cups"),
+      `${target} must not depend on the builder's CUPS development package`,
+    );
+    assert.match(recipe?.toolchain.flags ?? "", /--disable-cups/u);
   }
 });
 

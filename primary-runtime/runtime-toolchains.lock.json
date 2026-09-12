@@ -89,11 +89,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -216,11 +216,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -343,11 +343,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -470,11 +470,11 @@
           "toolchain": {
             "compiler": "gcc-13",
             "buildSystem": "autoconf+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --enable-option-checking=fatal"
+            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --enable-option-checking=fatal"
           },
           "environment": { "CC": "gcc", "CXX": "g++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--enable-option-checking=fatal"],
+            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [

@@ -212,8 +212,9 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install autoconf automake
+          brew install autoconf automake make
           echo "$(brew --prefix automake)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
 
       - name: Expose preinstalled Windows MSYS2 builder tools
         if: runner.os == 'Windows'
