@@ -155,7 +155,7 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   );
 });
 
-test("LibreOffice source recipes invoke its Perl autogen entrypoint explicitly", async () => {
+test("LibreOffice source recipes use the locked release's generated configure script", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   for (const [target, toolchain] of Object.entries(lock.targets)) {
     const recipe = toolchain.nativeRecipes.find(
@@ -163,8 +163,12 @@ test("LibreOffice source recipes invoke its Perl autogen entrypoint explicitly",
     );
     assert.deepEqual(
       recipe?.commands[0]?.slice(0, 2),
-      ["perl", "./autogen.sh"],
-      `${target} must not rely on shell execution of a non-shebang script`,
+      ["bash", "./configure"],
+      `${target} must not regenerate configure with the mutable builder autotools`,
+    );
+    assert.ok(
+      toolchain.builder.tools.includes("bash"),
+      `${target} must record the shell that executes the locked configure script`,
     );
     assert.ok(
       recipe?.commands[0]?.includes("--disable-cups"),
@@ -198,6 +202,10 @@ test("Windows MSYS2 builder scripts are probed through the selected Bash runtime
   );
   assert.match(source, /\["-lc", 'exec "\$@"', "bash", command, \.\.\.versionArgs\]/u);
   assert.match(source, /command === "cl" \? \[\] : \["--version"\]/u);
+  assert.match(
+    source,
+    /command === "bash"[\s\S]*?DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT[\s\S]*?"usr", "bin", "bash\.exe"/u,
+  );
 });
 
 test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {

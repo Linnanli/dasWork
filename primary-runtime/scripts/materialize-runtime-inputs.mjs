@@ -62,6 +62,15 @@ const run = promisify((file, args, options, callback) => {
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
 const resolveLockedBuilderCommand = (command) => {
+  if (target === "win32-x64" && command === "bash") {
+    const msysRoot = process.env.DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT;
+    if (!msysRoot) {
+      throw new Error(
+        "AT-RT-INPUT-01 blocked: Windows Runtime source builds require the locked MSYS root.",
+      );
+    }
+    return join(msysRoot, "usr", "bin", "bash.exe");
+  }
   // Use the Windows image's tar.exe so the selected archive reader and its
   // version receipt are stable; extraction below deliberately passes it only
   // relative paths because Windows tar variants treat drive prefixes specially.
@@ -526,7 +535,7 @@ async function materializeNativeRecipes({
       `${recipe.name} locked source directory`,
     );
     for (const [file, ...args] of recipe.commands) {
-      await run(file, args, {
+      await run(resolveLockedBuilderCommand(file), args, {
         cwd: buildRoot,
         env: {
           ...process.env,

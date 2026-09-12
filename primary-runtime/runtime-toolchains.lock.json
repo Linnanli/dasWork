@@ -6,7 +6,7 @@
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -88,12 +88,12 @@
           "sourceDirectory": "libreoffice-26.2.6.3",
           "toolchain": {
             "compiler": "AppleClang-17",
-            "buildSystem": "autoconf+make",
+            "buildSystem": "configure+make",
             "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-bogus-pkg-config --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
+            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -133,7 +133,7 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -215,12 +215,12 @@
           "sourceDirectory": "libreoffice-26.2.6.3",
           "toolchain": {
             "compiler": "AppleClang-17",
-            "buildSystem": "autoconf+make",
+            "buildSystem": "configure+make",
             "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-bogus-pkg-config --enable-option-checking=fatal"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
+            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -260,7 +260,7 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "cl"]
+        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "cl"]
       },
       "node": {
         "name": "node-runtime",
@@ -342,12 +342,12 @@
           "sourceDirectory": "libreoffice-26.2.6.3",
           "toolchain": {
             "compiler": "MSVC-17.14",
-            "buildSystem": "autoconf+make",
+            "buildSystem": "configure+make",
             "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-option-checking=fatal"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
+            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
@@ -387,7 +387,7 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "tools": ["git", "tar", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "nasm", "ninja", "gcc"]
+        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "nasm", "ninja", "gcc"]
       },
       "node": {
         "name": "node-runtime",
@@ -469,12 +469,12 @@
           "sourceDirectory": "libreoffice-26.2.6.3",
           "toolchain": {
             "compiler": "gcc-13",
-            "buildSystem": "autoconf+make",
+            "buildSystem": "configure+make",
             "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-option-checking=fatal"
           },
           "environment": { "CC": "gcc", "CXX": "g++" },
           "commands": [
-            ["perl", "./autogen.sh", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
+            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
             ["make", "-j2"]
           ],
           "outputs": [
