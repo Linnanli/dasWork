@@ -189,6 +189,8 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /four-target-summary\.json/u)
   assert.match(buildWorkflow, /primary-runtime-darwin-x64-candidate-staging/u)
   assert.match(buildWorkflow, /primary-runtime-darwin-x64-staging/u)
+  assert.match(buildWorkflow, /cp "\$target_root\/THIRD_PARTY_NOTICES\.txt"/u)
+  assert.match(buildWorkflow, /cp "\$target_root\/SBOM\.json"/u)
   for (const target of ['darwin-x64', 'darwin-arm64', 'win32-x64', 'linux-x64']) {
     assert.match(buildWorkflow, new RegExp(`target: ${target}`, 'u'))
   }

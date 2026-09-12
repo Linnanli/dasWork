@@ -317,6 +317,13 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
     const provenance = JSON.parse(buildStdout);
     assert.equal(provenance.target, target);
     assert.equal(provenance.bundleVersion, "1.2.3-test");
+    const targetRoot = join(outputRoot, target);
+    const [notices, sbom] = await Promise.all([
+      readFile(join(targetRoot, "THIRD_PARTY_NOTICES.txt")),
+      readFile(join(targetRoot, "SBOM.json")),
+    ]);
+    assert.equal(sha256(notices), provenance.noticesSha256);
+    assert.equal(sha256(sbom), provenance.sbomSha256);
     const measurementPath = join(outputRoot, target, "build-unpack-measurement.json");
     const { stdout: measurementStdout } = await executeFile(process.execPath, [
       unpackMeasurementScript,

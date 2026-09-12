@@ -99,6 +99,8 @@ const runtimeManifest = buildRuntimeManifest({
   sourceLockBytes,
   toolchainsLockBytes,
 });
+const notices = thirdPartyNotices(lock, toolchains);
+const sbomDocument = sbom({ lock, toolchains, target, bundleVersion });
 const generatedEntries = [
   textEntry("runtime.json", runtimeManifest),
   binaryEntry("provenance/source-lock.json", sourceLockBytes),
@@ -106,11 +108,11 @@ const generatedEntries = [
   binaryEntry("provenance/runtime-inputs.manifest.json", inputManifestBytes),
   textEntry(
     "provenance/THIRD_PARTY_NOTICES.txt",
-    thirdPartyNotices(lock, toolchains),
+    notices,
   ),
   textEntry(
     "provenance/SBOM.json",
-    sbom({ lock, toolchains, target, bundleVersion }),
+    sbomDocument,
   ),
   binaryEntry("provenance/component-smoke.json", componentSmokeBytes),
 ];
@@ -139,8 +141,6 @@ if (
   );
 }
 const runtimeManifestText = JSON.stringify(runtimeManifest, null, 2);
-const notices = thirdPartyNotices(lock, toolchains);
-const sbomDocument = sbom({ lock, toolchains, target, bundleVersion });
 const provenance = {
   schemaVersion: "dascowork-primary-runtime-provenance.v1",
   builder: builderName,
@@ -185,6 +185,8 @@ await writeFile(
   join(outputRoot, "canonical-file-manifest.txt"),
   canonicalManifest,
 );
+await writeFile(join(outputRoot, "THIRD_PARTY_NOTICES.txt"), notices);
+await writeJson(join(outputRoot, "SBOM.json"), sbomDocument);
 await writeJson(join(outputRoot, "provenance.json"), provenance);
 await writeJson(join(outputRoot, "component-smoke.json"), componentSmoke);
 await writeJson(join(outputRoot, "build-unpack-measurement.json"), measurement);
