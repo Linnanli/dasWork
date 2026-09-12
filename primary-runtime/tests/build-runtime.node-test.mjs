@@ -415,8 +415,11 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   await writeExecutable(join(inputRoot, nodePath), "#!/bin/sh\nexit 0\n");
   await writeExecutable(join(inputRoot, pythonPath), "#!/bin/sh\nexit 0\n");
   const extension = platform === "win32" ? ".exe" : "";
+  const sofficePath = target.startsWith("darwin")
+    ? "dependencies/native/libreoffice/Resources/program/soffice"
+    : "dependencies/native/libreoffice/program/soffice";
   for (const [, path] of [
-    ["soffice", "dependencies/native/libreoffice/program/soffice"],
+    ["soffice", sofficePath],
     ["pdfinfo", "dependencies/native/poppler/bin/pdfinfo"],
     ["pdftoppm", "dependencies/native/poppler/bin/pdftoppm"],
   ]) {

@@ -233,7 +233,13 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
     let result;
     const executable = resolveLockedBuilderCommand(command);
     const versionArgs =
-      command === "cl" ? [] : command === "msiexec" ? ["/?"] : ["--version"];
+      command === "cl"
+        ? []
+        : command === "msiexec"
+          ? ["/?"]
+          : command === "hdiutil"
+            ? ["help"]
+            : ["--version"];
     try {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
@@ -390,6 +396,10 @@ async function copyRuntimePluginPayload({ source, destination, sourceLock }) {
       destination: "skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md",
     },
     ...requiredEntryPoints.map((path) => ({ source: path, destination: path })),
+    {
+      source: "skills/presentation-skill/scripts/design_tokens.py",
+      destination: "skills/presentation-skill/scripts/design_tokens.py",
+    },
     {
       source: "skills/presentation-skill/templates/pptxgenjs/presets.js",
       destination: "skills/presentation-skill/templates/pptxgenjs/presets.js",
@@ -581,6 +591,10 @@ async function extractArchive({
     await extractWindowsMsi({ archive, output, stripComponents });
     return;
   }
+  if (archiveFormat === "dmg") {
+    await extractMacosDmg({ archive, output, stripComponents });
+    return;
+  }
   await extractWithLockedTar({ archive, output, stripComponents });
 }
 
@@ -602,6 +616,46 @@ async function extractWindowsMsi({ archive, output, stripComponents }) {
     ["/a", archive, "/qn", `TARGETDIR=${output}`],
     { cwd: output, env: process.env },
   );
+}
+
+/**
+ * A locked macOS LibreOffice DMG is attached only beneath the temporary
+ * Runtime input root. Its application bundle is copied into the candidate
+ * payload and the disk image is detached before materialization continues.
+ */
+async function extractMacosDmg({ archive, output, stripComponents }) {
+  if (!target.startsWith("darwin") || stripComponents !== 0) {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: DMG Runtime inputs are supported only as unstripped macOS artifacts.",
+    );
+  }
+  const mountpoint = join(output, "mounted");
+  await mkdir(mountpoint, { recursive: true });
+  let attached = false;
+  try {
+    await run("hdiutil", ["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive], {
+      cwd: output,
+      env: process.env,
+    });
+    attached = true;
+    const application = await safeChild(mountpoint, "LibreOffice.app");
+    await assertRegularDirectory(application, "locked macOS LibreOffice application");
+    await assertInternalDirectorySymlinks({ root: application, directory: application });
+    await cp(application, join(output, "LibreOffice.app"), {
+      recursive: true,
+      dereference: true,
+      force: false,
+      errorOnExist: true,
+    });
+  } finally {
+    if (attached) {
+      await run("hdiutil", ["detach", mountpoint, "-force"], {
+        cwd: output,
+        env: process.env,
+      });
+    }
+    await rm(mountpoint, { recursive: true, force: true });
+  }
 }
 
 /**

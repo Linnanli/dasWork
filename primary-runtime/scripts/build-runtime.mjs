@@ -202,6 +202,7 @@ function buildRuntimeManifest({
 }) {
   const executableExtension = platform === "win32" ? ".exe" : "";
   const target = `${platform}-${arch}`;
+  const sofficePath = libreofficeBinaryPath(target, executableExtension);
   const bundledSkillPath =
     "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill/SKILL.md";
   const bundledSkill = inputEntries.find(
@@ -242,7 +243,7 @@ function buildRuntimeManifest({
     binaries: [
       {
         name: "soffice",
-        path: `dependencies/native/libreoffice/program/soffice${executableExtension}`,
+        path: sofficePath,
         required: true,
       },
       {
@@ -327,7 +328,7 @@ function assertRequiredRuntimeInputs(entries, target) {
   }
   const extension = target.startsWith("win32") ? ".exe" : "";
   for (const [binary, path] of [
-    ["soffice", `dependencies/native/libreoffice/program/soffice${extension}`],
+    ["soffice", libreofficeBinaryPath(target, extension)],
     ["pdfinfo", `dependencies/native/poppler/bin/pdfinfo${extension}`],
     ["pdftoppm", `dependencies/native/poppler/bin/pdftoppm${extension}`],
   ]) {
@@ -353,6 +354,13 @@ function assertRequiredRuntimeInputs(entries, target) {
       "AT-RT-BUILD-01 blocked: missing locked Chinese font input.",
     );
   }
+}
+
+function libreofficeBinaryPath(target, extension) {
+  const relativePath = target.startsWith("darwin")
+    ? "libreoffice/Resources/program/soffice"
+    : "libreoffice/program/soffice";
+  return `dependencies/native/${relativePath}${extension}`;
 }
 
 async function collectInputEntries(inputRoot) {

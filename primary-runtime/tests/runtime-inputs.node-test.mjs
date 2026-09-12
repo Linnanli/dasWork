@@ -155,7 +155,7 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   );
 });
 
-test("LibreOffice source recipes use the locked release's generated configure script", async () => {
+test("LibreOffice recipes use locked target-native binary materialization where source builds are unsupported", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   for (const [target, toolchain] of Object.entries(lock.targets)) {
     const recipe = toolchain.nativeRecipes.find(
@@ -168,6 +168,26 @@ test("LibreOffice source recipes use the locked release's generated configure sc
       assert.deepEqual(recipe?.commands, []);
       assert.deepEqual(recipe?.environment, {});
       assert.ok(toolchain.builder.tools.includes("msiexec"));
+      continue;
+    }
+    if (target.startsWith("darwin")) {
+      assert.equal(recipe?.materialization, "prebuilt");
+      assert.equal(recipe?.sourceComponent, `libreoffice-${target}`);
+      assert.equal(recipe?.sourceArchiveFormat, "dmg");
+      assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
+      assert.deepEqual(recipe?.commands, []);
+      assert.deepEqual(recipe?.environment, {});
+      assert.ok(toolchain.builder.tools.includes("hdiutil"));
+      assert.deepEqual(recipe?.outputs, [
+        {
+          kind: "directory",
+          source: "Contents",
+          destination: "dependencies/native/libreoffice",
+        },
+      ]);
+      assert.deepEqual(recipe?.closure.entrypoints, [
+        "dependencies/native/libreoffice/Resources/program/soffice",
+      ]);
       continue;
     }
     assert.equal(recipe?.materialization, "source-build");
@@ -215,6 +235,49 @@ test("Windows MSI extraction is locked and does not restore the rejected MSYS so
   );
   assert.match(source, /\["\/a", archive, "\/qn", `TARGETDIR=\$\{output\}`\]/u);
   assert.doesNotMatch(source, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT|MSYSTEM/u);
+});
+
+test("macOS DMG extraction is temporary and produces only the locked application payload", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(
+    source,
+    /if \(archiveFormat === "dmg"\)[\s\S]*?extractMacosDmg/u,
+  );
+  assert.match(
+    source,
+    /target\.startsWith\("darwin"\)[\s\S]*?DMG Runtime inputs/u,
+  );
+  assert.match(
+    source,
+    /\["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive\]/u,
+  );
+  assert.match(source, /safeChild\(mountpoint, "LibreOffice\.app"\)/u);
+  assert.match(source, /\["detach", mountpoint, "-force"\]/u);
+});
+
+test("P1 rendering uses only the Runtime-owned presentation plugin scripts", async () => {
+  const [materializerSource, verifierSource] = await Promise.all([
+    readFile(materializeScript, "utf8"),
+    readFile(verifyInputsScript, "utf8"),
+  ]);
+
+  assert.match(
+    materializerSource,
+    /scripts\/design_tokens\.py[\s\S]*?scripts\/design_tokens\.py/u,
+  );
+  assert.match(verifierSource, /build_deck_pptxgenjs\.js/u);
+  assert.match(verifierSource, /layout_lint\.py/u);
+  assert.match(verifierSource, /render_slides\.py/u);
+  assert.match(verifierSource, /presentation-plugin-create-chinese-deck/u);
+  assert.match(verifierSource, /presentation-plugin-layout-lint/u);
+  assert.match(verifierSource, /presentation-plugin-render-slides/u);
+  assert.match(verifierSource, /variant: "table"/u);
+  assert.match(verifierSource, /variant: "chart"/u);
+  assert.match(verifierSource, /variant: "image-sidebar"/u);
+  assert.match(verifierSource, /PPTX_RUNTIME_SOFFICE: soffice/u);
+  assert.match(verifierSource, /PPTX_RUNTIME_PDFTOPPM: pdftoppm/u);
+  assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
 });
 
 test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {

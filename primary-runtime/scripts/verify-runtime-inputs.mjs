@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
@@ -26,9 +26,12 @@ const node = join(options.inputRoot, "dependencies/node/bin", `node${extension}`
 const python = target.startsWith("win32")
   ? join(options.inputRoot, "dependencies/python/python.exe")
   : join(options.inputRoot, "dependencies/python/bin/python");
+const libreofficeRuntimePath = target.startsWith("darwin")
+  ? "libreoffice/Resources/program/soffice"
+  : "libreoffice/program/soffice";
 const binaries = Object.fromEntries(
   [
-    ["soffice", "libreoffice/program/soffice"],
+    ["soffice", libreofficeRuntimePath],
     ["pdfinfo", "poppler/bin/pdfinfo"],
     ["pdftoppm", "poppler/bin/pdftoppm"],
   ].map(([name, relativePath]) => [
@@ -77,8 +80,8 @@ commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["
 const render = await renderChineseDeck({
   target,
   node,
+  python,
   soffice: binaries.soffice,
-  pdfinfo: binaries.pdfinfo,
   pdftoppm: binaries.pdftoppm,
   inputRoot: options.inputRoot,
   font,
@@ -435,27 +438,35 @@ async function readFirstBytes(path, length) {
   }
 }
 
-async function renderChineseDeck({ target, node, soffice, pdfinfo, pdftoppm, inputRoot, font }) {
+async function renderChineseDeck({ target, node, python, soffice, pdftoppm, inputRoot, font }) {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-render-"));
   const pptx = join(directory, "runtime-input-smoke.pptx");
-  const pdf = join(directory, "runtime-input-smoke.pdf");
-  const png = join(directory, "runtime-input-smoke.png");
-  const script = join(directory, "create-smoke.cjs");
+  const outline = join(directory, "runtime-input-outline.json");
+  const image = join(directory, "runtime-input-image.png");
+  const layoutReceipt = join(directory, "runtime-input-layout.json");
+  const renderedSlides = join(directory, "rendered-slides");
   const fontConfig = join(directory, "fonts.conf");
+  const pluginRoot = join(
+    inputRoot,
+    "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill",
+  );
+  const buildDeck = join(pluginRoot, "scripts/build_deck_pptxgenjs.js");
+  const layoutLint = join(pluginRoot, "scripts/layout_lint.py");
+  const renderSlides = join(pluginRoot, "scripts/render_slides.py");
+  const nodeModules = join(inputRoot, "dependencies/node/node_modules");
+  const pythonPackages = join(inputRoot, "dependencies/python/packages");
   const commands = [];
   try {
     await writeFile(
-      script,
-      [
-        "const pptxgen = require('pptxgenjs');",
-        "(async () => {",
-        "  const pptx = new pptxgen(); pptx.layout = 'LAYOUT_WIDE';",
-        "  const cover = pptx.addSlide(); cover.addText('运行时中文封面', { x: 0.7, y: 0.6, w: 10.8, h: 0.6, fontFace: 'Noto Sans CJK SC', fontSize: 28 });",
-        "  const table = pptx.addSlide(); table.addText('数据表验证', { x: 0.7, y: 0.6, w: 10.8, h: 0.6, fontFace: 'Noto Sans CJK SC', fontSize: 28 }); table.addTable([[{text:'项目'},{text:'数值'}],[{text:'中文'},{text:'100'}]], { x: 0.7, y: 1.5, w: 6, h: 1 });",
-        "  const chart = pptx.addSlide(); chart.addText('图表与图片验证', { x: 0.7, y: 0.6, w: 10.8, h: 0.6, fontFace: 'Noto Sans CJK SC', fontSize: 28 }); chart.addChart(pptx.ChartType.bar, [{ name: '数据', labels: ['甲', '乙'], values: [10, 20] }], { x: 0.7, y: 1.5, w: 5, h: 3 }); chart.addImage({ data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', x: 7, y: 1.5, w: 1, h: 1, altText: 'runtime image' });",
-        "  await pptx.writeFile({ fileName: process.argv[2] });",
-        "})().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });",
-      ].join("\n"),
+      outline,
+      `${JSON.stringify(pluginSmokeOutline(), null, 2)}\n`,
+    );
+    await writeFile(
+      image,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+        "base64",
+      ),
     );
     await writeFile(
       fontConfig,
@@ -463,33 +474,105 @@ async function renderChineseDeck({ target, node, soffice, pdfinfo, pdftoppm, inp
     );
     commands.push(
       await runCommand(
-        "pptxgenjs-create-chinese-deck",
+        "presentation-plugin-create-chinese-deck",
         node,
-        [script, pptx],
-        { NODE_PATH: join(inputRoot, "dependencies/node/node_modules") },
+        [buildDeck, "--outline", outline, "--output", pptx, "--asset-root", directory],
+        { PPTX_NODE_MODULES: nodeModules, NODE_PATH: nodeModules },
       ),
     );
     commands.push(
       await runCommand(
-        "libreoffice-render-chinese-deck",
-        soffice,
-        ["--headless", "--convert-to", "pdf", "--outdir", directory, pptx],
-        fontEnvironment({ font, fontConfig }),
+        "presentation-plugin-layout-lint",
+        python,
+        [layoutLint, "--input", pptx, "--outline", outline, "--output", layoutReceipt, "--fail-on-error"],
+        {
+          PYTHONPATH: [join(pluginRoot, "scripts"), pythonPackages].join(delimiter),
+          PYTHONNOUSERSITE: "1",
+        },
       ),
     );
-    commands.push(await runCommand("pdfinfo-rendered-deck", pdfinfo, [pdf]));
-    commands.push(await runCommand("pdftoppm-rendered-deck", pdftoppm, ["-png", "-singlefile", pdf, join(directory, "runtime-input-smoke")]));
-    const [pptxBytes, pdfBytes, pngBytes] = await Promise.all([readFile(pptx), readFile(pdf), readFile(png)]);
+    commands.push(
+      await runCommand(
+        "presentation-plugin-render-slides",
+        python,
+        [renderSlides, "--input", pptx, "--outdir", renderedSlides, "--format", "png", "--dpi", "72"],
+        {
+          ...fontEnvironment({ font, fontConfig }),
+          PYTHONPATH: [join(pluginRoot, "scripts"), pythonPackages].join(delimiter),
+          PYTHONNOUSERSITE: "1",
+          PPTX_RUNTIME_SOFFICE: soffice,
+          PPTX_RUNTIME_PDFTOPPM: pdftoppm,
+          PATH: [dirname(soffice), dirname(pdftoppm)].join(delimiter),
+        },
+      ),
+    );
+    const [pptxBytes, layoutReceiptBytes, imageNames] = await Promise.all([
+      readFile(pptx),
+      readFile(layoutReceipt),
+      readdir(renderedSlides),
+    ]);
+    const layout = JSON.parse(layoutReceiptBytes.toString("utf8"));
+    const rendered = imageNames.filter((name) => /^slide-\d+\.png$/u.test(name)).sort();
+    if (layout?.summary?.slide_count < 3 || rendered.length < 3) {
+      throw new Error(
+        "AT-RT-INPUT-01 blocked: Runtime presentation plugin did not create and render at least three slides.",
+      );
+    }
+    const renderedPngBytes = await readFile(join(renderedSlides, rendered[0]));
     return {
       target,
       pptxSha256: sha256(pptxBytes),
-      pdfSha256: sha256(pdfBytes),
-      renderedPngSha256: sha256(pngBytes),
+      layoutReceiptSha256: sha256(layoutReceiptBytes),
+      renderedSlideCount: rendered.length,
+      renderedFirstPngSha256: sha256(renderedPngBytes),
       commands,
     };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+function pluginSmokeOutline() {
+  return {
+    title: "运行时演示文稿验证",
+    subtitle: "从非 PPTX 工作区输入创建并自动 QA",
+    slides: [
+      {
+        type: "title",
+        title: "运行时中文封面",
+        subtitle: "插件脚本创建的新演示文稿",
+      },
+      {
+        type: "content",
+        variant: "table",
+        title: "数据表验证",
+        subtitle: "来自 outline.json 的非 PPTX 数据",
+        headers: ["项目", "数值"],
+        rows: [["中文指标", "100"], ["验证状态", "通过"]],
+        interpretation: "表格由 Runtime 内 presentation-skill 生成。",
+      },
+      {
+        type: "content",
+        variant: "chart",
+        title: "图表验证",
+        subtitle: "来自 outline.json 的内联数据",
+        chart: {
+          type: "bar",
+          series: [{ name: "数据", labels: ["甲", "乙", "丙"], values: [10, 20, 30] }],
+          options: { catAxisTitle: "类别", valAxisTitle: "数值", showValue: true },
+        },
+        message: "图表由 Runtime 内 presentation-skill 生成。",
+      },
+      {
+        type: "content",
+        variant: "image-sidebar",
+        title: "工作区图片验证",
+        subtitle: "图片来自受控的非 PPTX 工作区文件",
+        assets: { image: "runtime-input-image.png" },
+        sidebar_sections: [{ title: "图片", body: "由插件从工作区图片输入创建。" }],
+      },
+    ],
+  };
 }
 
 function fontEnvironment({ font, fontConfig }) {

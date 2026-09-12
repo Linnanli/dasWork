@@ -47,7 +47,7 @@ const recipeKeys = new Set([
 ]);
 const recipeOutputKeys = new Set(["kind", "source", "destination", "mode"]);
 const recipeClosureKeys = new Set(["mode", "entrypoints"]);
-const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip", "msi"]);
+const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip", "dmg", "msi"]);
 const nativeMaterializations = new Set(["source-build", "prebuilt"]);
 const executableModes = new Set(["0755", "100755"]);
 
@@ -365,6 +365,7 @@ export function archiveFormatForUrl(url) {
   if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) return "tar.gz";
   if (url.endsWith(".tar.xz")) return "tar.xz";
   if (url.endsWith(".zip")) return "zip";
+  if (url.endsWith(".dmg")) return "dmg";
   if (url.endsWith(".msi")) return "msi";
   throw new Error(
     `Primary Runtime source has an unsupported archive format: ${url}`,

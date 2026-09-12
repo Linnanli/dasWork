@@ -6,7 +6,7 @@
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "hdiutil", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -83,26 +83,22 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
-          "materialization": "source-build",
-          "sourceComponent": "libreoffice",
-          "sourceArchiveFormat": "tar.xz",
-          "sourceDirectory": "libreoffice-26.2.6.3",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-darwin-x64",
+          "sourceArchiveFormat": "dmg",
+          "sourceDirectory": "LibreOffice.app",
           "toolchain": {
-            "compiler": "AppleClang-17",
-            "buildSystem": "configure+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-bogus-pkg-config --enable-option-checking=fatal"
+            "distribution": "TheDocumentFoundation-26.2.6-DMG",
+            "extraction": "hdiutil-readonly"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
-          "commands": [
-            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
-            ["make", "-j2"]
-          ],
+          "environment": {},
+          "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "instdir", "destination": "dependencies/native/libreoffice" }
+            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice" }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/program/soffice"]
+            "entrypoints": ["dependencies/native/libreoffice/Resources/program/soffice"]
           }
         },
         {
@@ -135,7 +131,7 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "tools": ["git", "tar", "hdiutil", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -212,26 +208,22 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
-          "materialization": "source-build",
-          "sourceComponent": "libreoffice",
-          "sourceArchiveFormat": "tar.xz",
-          "sourceDirectory": "libreoffice-26.2.6.3",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-darwin-arm64",
+          "sourceArchiveFormat": "dmg",
+          "sourceDirectory": "LibreOffice.app",
           "toolchain": {
-            "compiler": "AppleClang-17",
-            "buildSystem": "configure+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-bogus-pkg-config --enable-option-checking=fatal"
+            "distribution": "TheDocumentFoundation-26.2.6-DMG",
+            "extraction": "hdiutil-readonly"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
-          "commands": [
-            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-bogus-pkg-config", "--enable-option-checking=fatal"],
-            ["make", "-j2"]
-          ],
+          "environment": {},
+          "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "instdir", "destination": "dependencies/native/libreoffice" }
+            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice" }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/program/soffice"]
+            "entrypoints": ["dependencies/native/libreoffice/Resources/program/soffice"]
           }
         },
         {
