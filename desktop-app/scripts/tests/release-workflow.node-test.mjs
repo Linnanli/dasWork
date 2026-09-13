@@ -188,6 +188,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Install desktop dependencies for P3a\/P3b installer gates/u)
   assert.match(
     buildWorkflow,
+    /Install desktop dependencies for P3a\/P3b installer gates\n {8}run: npm --prefix desktop-app ci$/mu
+  )
+  assert.match(
+    buildWorkflow,
     /Build AI-free Codex app-server client for P3a\/P3b installer gates/u
   )
   assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)

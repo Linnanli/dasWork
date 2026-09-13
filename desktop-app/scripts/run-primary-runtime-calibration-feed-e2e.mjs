@@ -284,7 +284,10 @@ async function createLocalTls(root) {
     '-addext',
     'basicConstraints=critical,CA:TRUE',
     '-addext',
-    'keyUsage=critical,keyCertSign,cRLSign'
+    'keyUsage=critical,keyCertSign,cRLSign',
+    '-addext',
+    'subjectKeyIdentifier=hash',
+    '-sha256'
   ])
   await executeFile('openssl', [
     'req',
@@ -302,7 +305,7 @@ async function createLocalTls(root) {
   ])
   await writeFile(
     extensionsPath,
-    'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nsubjectAltName=IP:127.0.0.1\n',
+    'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nsubjectAltName=IP:127.0.0.1\n',
     { mode: 0o600 }
   )
   await executeFile('openssl', [
@@ -319,9 +322,13 @@ async function createLocalTls(root) {
     certPath,
     '-days',
     '1',
+    '-sha256',
     '-extfile',
     extensionsPath
   ])
+  await writeFile(certPath, Buffer.concat([await readFile(certPath), await readFile(caPath)]), {
+    mode: 0o600
+  })
   return { keyPath, certPath, caPath }
 }
 

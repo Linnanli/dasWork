@@ -325,7 +325,7 @@ jobs:
             --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
       - name: Install desktop dependencies for P3a/P3b installer gates
-        run: npm --prefix desktop-app ci --ignore-scripts
+        run: npm --prefix desktop-app ci
 
       - name: Build AI-free Codex app-server client for P3a/P3b installer gates
         run: npm --prefix desktop-app run build:codex-app-server-client
