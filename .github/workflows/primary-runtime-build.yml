@@ -306,8 +306,8 @@ jobs:
             --provenance "$target_root/provenance.json" \
             --platform-validation "$target_root/platform-validation.json" \
             --archive "$target_root/primary-runtime.zip" \
-            --source-lock primary-runtime/runtime-sources.lock.json \
-            --toolchains-lock primary-runtime/runtime-toolchains.lock.json \
+            --source-lock runtime-sources.lock.json \
+            --toolchains-lock runtime-toolchains.lock.json \
             --input-manifest "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" \
             --canonical-file-manifest "$target_root/canonical-file-manifest.txt" \
             --runtime-manifest "$target_root/runtime.json" \

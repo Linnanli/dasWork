@@ -363,6 +363,10 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
 
     const platformValidationPath = join(targetRoot, "platform-validation.json");
     const componentSmoke = await readFile(validationPath);
+    // The platform receipt binds the nested input-verification receipt, not
+    // the component-smoke document. Keep this distinct so provenance binding
+    // cannot accidentally substitute one receipt for the other.
+    const inputValidationReceipt = Buffer.from("fixture input verification receipt\n");
     await writeJson(platformValidationPath, {
       schemaVersion: "dascowork-primary-runtime-platform-validation.v1",
       status: "verified",
@@ -372,7 +376,7 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
       archiveSizeBytes: provenance.archiveSizeBytes,
       runtimeManifestSha256: provenance.runtimeManifestSha256,
       componentSmokeSha256: provenance.componentSmokeSha256,
-      inputValidationSha256: sha256(componentSmoke),
+      inputValidationSha256: sha256(inputValidationReceipt),
       commands: [{ name: "fixture", resultSha256: "f".repeat(64) }],
       render: { status: "verified" },
       productionTrust: false,

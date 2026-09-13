@@ -217,6 +217,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Bind target staging provenance to platform validation/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run bind:provenance/u)
   assert.match(buildWorkflow, /--platform-validation/u)
+  assert.match(buildWorkflow, /--source-lock runtime-sources\.lock\.json/u)
+  assert.match(buildWorkflow, /--toolchains-lock runtime-toolchains\.lock\.json/u)
+  assert.doesNotMatch(buildWorkflow, /--source-lock primary-runtime\/runtime-sources\.lock\.json/u)
+  assert.doesNotMatch(buildWorkflow, /--toolchains-lock primary-runtime\/runtime-toolchains\.lock\.json/u)
   assert.match(buildWorkflow, /--workflow-run-url/u)
   assert.ok(
     buildWorkflow.indexOf('Verify target-native Runtime archive execution and rendering') <
