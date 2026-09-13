@@ -217,9 +217,9 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
     assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
     assert.ok(toolchain.builder.tools.includes("hdiutil"));
     assert.ok(toolchain.builder.tools.includes("xattr"));
-    assert.ok(toolchain.builder.tools.includes("codesign"));
-    assert.ok(toolchain.builder.tools.includes("file"));
-    assert.equal(recipe?.toolchain.codeSigning, "ad-hoc-test-only");
+    assert.ok(!toolchain.builder.tools.includes("codesign"));
+    assert.ok(!toolchain.builder.tools.includes("file"));
+    assert.equal(recipe?.toolchain.codeSigning, undefined);
     assert.deepEqual(recipe?.outputs, [
       {
         kind: "directory",
@@ -374,25 +374,8 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /safeChild\(mountpoint, "LibreOffice\.app"\)/u);
   assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
   assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
-  assert.match(source, /applyMacosAdHocSignature\(\{ recipe, outputRoot \}\)/u);
-  assert.match(source, /await visit\(application, async \(path\) =>/u);
-  assert.match(source, /const inspected = await run\(file, \["-b", path\]/u);
-  assert.match(source, /\/\\bMach-O\\b\/u\.test\(inspected\.stdout\)/u);
-  assert.match(source, /const codeTarget = macosCodeSignatureTarget\(application, path\)/u);
-  assert.match(source, /if \(codeTarget\) codeTargets\.add\(codeTarget\)/u);
-  assert.match(source, /function macosCodeSignatureTarget\(application, path\)/u);
-  assert.match(source, /framework\|app\|appex\|xpc\|plugin\|bundle/u);
-  assert.match(source, /isStandardMacosNestedCodeBundle\(application, candidate\)/u);
-  assert.match(source, /isAmbiguousLibreOfficeResourceBundle\(candidate\)/u);
-  assert.match(source, /basename\(candidate\) === "LibreOfficePython\.framework"/u);
-  assert.match(source, /"Contents\/Frameworks"/u);
-  assert.match(source, /let hasNonStandardBundleAncestor = false/u);
-  assert.match(source, /hasNonStandardBundleAncestor = true/u);
-  assert.match(source, /hasNonStandardBundleAncestor \|\|/u);
-  assert.match(source, /\/\\\.framework\$\/iu\.test\(basename\(path\)\)/u);
-  assert.match(source, /\["--force", "--sign", "-", codeTarget\]/u);
-  assert.match(source, /\["--force", "--sign", "-", application\]/u);
-  assert.doesNotMatch(source, /\["--force", "--deep", "--sign", "-", application\]/u);
+  assert.doesNotMatch(source, /codesign/u);
+  assert.doesNotMatch(source, /ad-hoc-signature/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 
@@ -603,7 +586,7 @@ test("P1 scripts resolve default lock paths through file URLs safely on Windows"
   }
 });
 
-test("materialization keeps source-build intermediates outside the signed input root", async () => {
+test("materialization keeps source-build intermediates outside the immutable input root", async () => {
   const source = await readFile(materializeScript, "utf8");
 
   assert.match(

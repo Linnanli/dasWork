@@ -254,11 +254,7 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
             ? ["help"]
             : command === "xattr"
               ? ["-h"]
-              : command === "codesign"
-                ? ["--display", "--verbose=2", "/usr/bin/codesign"]
-                : command === "file"
-                  ? ["-v"]
-                : ["--version"];
+              : ["--version"];
     try {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
@@ -597,106 +593,9 @@ async function materializeNativeRecipes({
         if (output.mode === "0755") await chmod(destination, 0o755);
       }
     }
-    await applyMacosAdHocSignature({ recipe, outputRoot });
     await assertRecipeClosure({ recipe, outputRoot });
     completedRecipeNames.add(recipe.name);
   }
-}
-
-/**
- * The locked LibreOffice DMG is copied into an immutable Runtime input tree,
- * where internal symlinks are deliberately dereferenced.  That safety step
- * invalidates the vendor signature, so macOS candidates are re-signed without
- * a credential.  This is explicitly test-only evidence; it is never a
- * substitute for Developer ID signing, notarization, or production trust.
- */
-async function applyMacosAdHocSignature({ recipe, outputRoot }) {
-  if (!target.startsWith("darwin") || recipe.name !== "libreoffice") return;
-  if (recipe.toolchain.codeSigning !== "ad-hoc-test-only") {
-    throw new Error(
-      "AT-RT-INPUT-01 blocked: macOS LibreOffice must declare ad-hoc-test-only signing.",
-    );
-  }
-  const application = await safeChild(
-    outputRoot,
-    "dependencies/native/libreoffice/LibreOffice.app",
-  );
-  await assertRegularDirectory(application, "macOS LibreOffice application bundle");
-  const codesign = resolveLockedBuilderCommand("codesign");
-  const file = resolveLockedBuilderCommand("file");
-  // `cp(..., { dereference: true })` invalidates upstream nested signatures.
-  // Sign nested code bundles (for example, frameworks) or loose Mach-O leaves
-  // first, then the enclosing application.
-  // `--deep` cannot be used here: LibreOffice contains an embedded framework
-  // whose directory shape makes Apple's deep traversal ambiguous on ARM hosts.
-  const codeTargets = new Set();
-  await visit(application, async (path) => {
-    const inspected = await run(file, ["-b", path], { env: process.env });
-    if (!/\bMach-O\b/u.test(inspected.stdout)) return;
-    const codeTarget = macosCodeSignatureTarget(application, path);
-    if (codeTarget) codeTargets.add(codeTarget);
-  });
-  for (const codeTarget of [...codeTargets].sort(
-    (left, right) =>
-      right.split(sep).length - left.split(sep).length ||
-      left.localeCompare(right),
-  )) {
-    await run(codesign, ["--force", "--sign", "-", codeTarget], {
-      env: process.env,
-    });
-  }
-  await run(
-    codesign,
-    ["--force", "--sign", "-", application],
-    { env: process.env },
-  );
-}
-
-function macosCodeSignatureTarget(application, path) {
-  let candidate = dirname(path);
-  let hasNonStandardBundleAncestor = false;
-  while (candidate !== application) {
-    if (/\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate))) {
-      if (isAmbiguousLibreOfficeResourceBundle(candidate)) {
-        hasNonStandardBundleAncestor = true;
-      } else if (isStandardMacosNestedCodeBundle(application, candidate)) {
-        return candidate;
-      } else {
-        hasNonStandardBundleAncestor = true;
-      }
-    }
-    const parent = dirname(candidate);
-    if (parent === candidate) break;
-    candidate = parent;
-  }
-  // LibreOffice embeds a duplicate LibreOfficePython.framework under both
-  // urelibs and Frameworks. These directories are not valid code bundles
-  // after symlink-free materialization, so signing either their directory or
-  // one of their Mach-O leaves makes codesign infer an ambiguous bundle on ARM
-  // hosts. The enclosing application's resource envelope seals those files.
-  if (
-    hasNonStandardBundleAncestor ||
-    /\.framework$/iu.test(basename(path))
-  ) {
-    return undefined;
-  }
-  return path;
-}
-
-function isAmbiguousLibreOfficeResourceBundle(candidate) {
-  return basename(candidate) === "LibreOfficePython.framework";
-}
-
-function isStandardMacosNestedCodeBundle(application, candidate) {
-  const location = relative(application, candidate).split(sep).join("/");
-  return [
-    "Contents/Frameworks",
-    "Contents/Helpers",
-    "Contents/Library/LoginItems",
-    "Contents/Library/LaunchServices",
-    "Contents/PlugIns",
-    "Contents/XPCServices",
-  ].some((root) => location.startsWith(`${root}/`));
 }
 
 async function resolveNativeDependencyPrefixes({

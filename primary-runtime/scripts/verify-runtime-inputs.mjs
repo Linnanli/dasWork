@@ -84,19 +84,6 @@ commands.push(
     { PYTHONPATH: join(options.inputRoot, "dependencies/python/packages"), PYTHONNOUSERSITE: "1" },
   ),
 );
-if (target.startsWith("darwin")) {
-  commands.push(
-    await runCommand(
-      "libreoffice-ad-hoc-signature",
-      "codesign",
-      [
-        "--verify",
-        "--strict",
-        dirname(dirname(dirname(binaries.soffice))),
-      ],
-    ),
-  );
-}
 commands.push(await runCommand("libreoffice-version", binaries.soffice, ["--headless", "--version"]));
 commands.push(await runCommand("poppler-pdfinfo-version", binaries.pdfinfo, ["-v"]));
 commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["-v"]));
@@ -128,9 +115,6 @@ const receipt = {
   },
   render,
   commands,
-  macosCodeSigning: target.startsWith("darwin")
-    ? { mode: "ad-hoc/test-only", component: "libreoffice" }
-    : undefined,
   productionTrust: false,
 };
 if (options.receiptPath) {
