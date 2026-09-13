@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Node test fixtures are validated through their assertions. */
 import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { extname, relative, resolve } from 'node:path'
@@ -65,6 +66,9 @@ test('legacy Presentation identities are restricted to explicit migration compat
   )
 })
 
+/**
+ * @returns {Promise<string[]>}
+ */
 async function collectAuditedFiles() {
   const files = []
   for (const root of auditedRoots) {
@@ -73,6 +77,11 @@ async function collectAuditedFiles() {
   return files.sort((left, right) => left.localeCompare(right))
 }
 
+/**
+ * @param {string} directory
+ * @param {string[]} files
+ * @returns {Promise<void>}
+ */
 async function collect(directory, files) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'out') continue
