@@ -288,11 +288,14 @@ test("native source dependency prefixes are injected only into CMake configure c
   assert.doesNotMatch(source, /(?:apt-get|brew)\s+(?:install|update)/u);
 });
 
-test("native dependency closure allows only platform loader locations and skips short non-objects", async () => {
+test("native dependency closure validates executable entrypoints without accepting host dependencies", async () => {
   const source = await readFile(verifyInputsScript, "utf8");
 
   assert.match(source, /dependency\.startsWith\("\/lib\/"\) \|\|\s+dependency\.startsWith\("\/lib64\/"\)/u);
   assert.match(source, /if \(header\.length < 4\) return false;/u);
+  assert.match(source, /const nativeClosureEntrypoints = \[/u);
+  assert.match(source, /entrypoints: nativeClosureEntrypoints/u);
+  assert.match(source, /basename\(dependency\) === basename\(object\)/u);
 });
 
 test("Windows MSI extraction is locked and does not restore the rejected MSYS source-build path", async () => {

@@ -39,14 +39,25 @@ const binaries = Object.fromEntries(
     join(options.inputRoot, "dependencies/native", `${relativePath}${extension}`),
   ]),
 );
+const nativeClosureEntrypoints = [
+  target === "linux-x64"
+    ? join(options.inputRoot, "dependencies/native/libreoffice/program/soffice.bin")
+    : binaries.soffice,
+  binaries.pdfinfo,
+  binaries.pdftoppm,
+];
 
 for (const [label, path] of Object.entries({ node, python, ...binaries })) {
   await assertTargetExecutable(path, target, label);
+}
+for (const path of nativeClosureEntrypoints) {
+  await assertTargetExecutable(path, target, "native-closure-entrypoint");
 }
 commands.push(
   await assertNativeDependencyClosure({
     target,
     nativeRoot: join(options.inputRoot, "dependencies/native"),
+    entrypoints: nativeClosureEntrypoints,
   }),
 );
 await assertNodeClosure({ inputRoot: options.inputRoot, components: sourceLock.components.node });
@@ -135,22 +146,13 @@ async function assertTargetExecutable(path, target, label) {
  * PE imports are parsed directly so this check does not depend on a mutable
  * Visual Studio installation on the Windows runner.
  */
-async function assertNativeDependencyClosure({ target, nativeRoot }) {
+async function assertNativeDependencyClosure({ target, nativeRoot, entrypoints }) {
   if (target.startsWith("win32")) {
-    return inspectPeDependencyClosure(nativeRoot);
+    return inspectPeDependencyClosure({ nativeRoot, entrypoints });
   }
-  const objects = [];
-  await walk(nativeRoot, async (path) => {
-    const header = await readFirstBytes(path, 4);
-    if (hasExpectedExecutableHeader(header, target, "native-object")) {
-      objects.push(path);
-    }
-  });
-  if (objects.length === 0) {
-    throw new Error("AT-RT-INPUT-01 blocked: native dependency closure has no inspectable objects.");
-  }
+  const objects = [...new Set(entrypoints)].sort((left, right) => left.localeCompare(right));
   const inspected = [];
-  for (const object of objects.sort((left, right) => left.localeCompare(right))) {
+  for (const object of objects) {
     const result = target.startsWith("darwin")
       ? await inspectMachODependencies({ object, nativeRoot })
       : await inspectElfDependencies({ object, nativeRoot });
@@ -159,24 +161,24 @@ async function assertNativeDependencyClosure({ target, nativeRoot }) {
   return {
     name: "native-dependency-closure",
     executable: target.startsWith("darwin") ? "otool" : "ldd",
-    args: [String(objects.length), "native-objects"],
+    args: [String(objects.length), "native-entrypoints"],
     resultSha256: sha256(inspected.join("\n")),
   };
 }
 
-async function inspectPeDependencyClosure(nativeRoot) {
+async function inspectPeDependencyClosure({ nativeRoot, entrypoints }) {
   const nativeFiles = [];
   await walk(nativeRoot, async (path) => {
     if (/\.(?:exe|dll)$/iu.test(path)) nativeFiles.push(path);
   });
-  if (nativeFiles.length === 0) {
+  if (nativeFiles.length === 0 || entrypoints.length === 0) {
     throw new Error("AT-RT-INPUT-01 blocked: native PE dependency closure has no executable or DLL payload.");
   }
   const bundledLibraries = new Set(
     nativeFiles.map((path) => basename(path).toLowerCase()),
   );
   const inspected = [];
-  for (const path of nativeFiles.sort((left, right) => left.localeCompare(right))) {
+  for (const path of [...new Set(entrypoints)].sort((left, right) => left.localeCompare(right))) {
     const imports = readPeImports(await readFile(path));
     for (const imported of imports) {
       if (bundledLibraries.has(imported) || isWindowsSystemLibrary(imported)) {
@@ -191,7 +193,7 @@ async function inspectPeDependencyClosure(nativeRoot) {
   return {
     name: "native-dependency-closure",
     executable: "internal-pe-import-parser",
-    args: [String(nativeFiles.length), "native-pe-objects"],
+    args: [String(entrypoints.length), "native-pe-entrypoints"],
     resultSha256: sha256(inspected.join("\n")),
   };
 }
@@ -301,6 +303,7 @@ async function inspectMachODependencies({ object, nativeRoot }) {
     const match = line.trim().match(/^(.+?)\s+\(/u);
     if (!match) continue;
     const dependency = match[1];
+    if (basename(dependency) === basename(object)) continue;
     if (
       dependency.startsWith("@") ||
       dependency.startsWith("/usr/lib/") ||
