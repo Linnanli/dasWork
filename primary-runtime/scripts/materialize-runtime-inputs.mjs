@@ -655,7 +655,10 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
 function macosCodeSignatureTarget(application, path) {
   let candidate = dirname(path);
   while (candidate !== application) {
-    if (/\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate))) {
+    if (
+      /\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate)) &&
+      isStandardMacosNestedCodeBundle(application, candidate)
+    ) {
       return candidate;
     }
     const parent = dirname(candidate);
@@ -667,6 +670,18 @@ function macosCodeSignatureTarget(application, path) {
   // a file; the enclosing app's resource envelope seals it instead.
   if (/\.framework$/iu.test(basename(path))) return undefined;
   return path;
+}
+
+function isStandardMacosNestedCodeBundle(application, candidate) {
+  const location = relative(application, candidate).split(sep).join("/");
+  return [
+    "Contents/Frameworks",
+    "Contents/Helpers",
+    "Contents/Library/LoginItems",
+    "Contents/Library/LaunchServices",
+    "Contents/PlugIns",
+    "Contents/XPCServices",
+  ].some((root) => location.startsWith(`${root}/`));
 }
 
 async function resolveNativeDependencyPrefixes({

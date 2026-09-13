@@ -382,6 +382,8 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /if \(codeTarget\) codeTargets\.add\(codeTarget\)/u);
   assert.match(source, /function macosCodeSignatureTarget\(application, path\)/u);
   assert.match(source, /framework\|app\|appex\|xpc\|plugin\|bundle/u);
+  assert.match(source, /isStandardMacosNestedCodeBundle\(application, candidate\)/u);
+  assert.match(source, /"Contents\/Frameworks"/u);
   assert.match(source, /if \(\/\\\.framework\$\/iu\.test\(basename\(path\)\)\) return undefined/u);
   assert.match(source, /\["--force", "--sign", "-", codeTarget\]/u);
   assert.match(source, /\["--force", "--sign", "-", application\]/u);
