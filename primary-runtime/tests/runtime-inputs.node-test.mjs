@@ -222,6 +222,18 @@ test("LibreOffice recipes use locked target-native binary materialization where 
   }
 });
 
+test("Poppler source recipes disable unavailable optional NSS3 rather than discovering a runner dependency", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  for (const [target, toolchain] of Object.entries(lock.targets)) {
+    const recipe = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "poppler",
+    );
+    assert.equal(recipe?.materialization, "source-build", target);
+    assert.match(recipe?.toolchain.flags ?? "", /-DENABLE_NSS3=OFF/u, target);
+    assert.ok(recipe?.commands[0]?.includes("-DENABLE_NSS3=OFF"), target);
+  }
+});
+
 test("Windows MSI extraction is locked and does not restore the rejected MSYS source-build path", async () => {
   const source = await readFile(materializeScript, "utf8");
 

@@ -110,11 +110,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -235,11 +235,11 @@
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -360,11 +360,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -489,11 +489,11 @@
           "toolchain": {
             "compiler": "gcc-13",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
           },
           "environment": { "CC": "gcc", "CXX": "g++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
