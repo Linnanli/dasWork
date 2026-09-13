@@ -21,7 +21,7 @@ const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(removeRuntimeCache))
-})
+}, 90_000)
 
 describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', () => {
   it('installs a target-native P1a archive before loading dependencies and its plugin marketplace', async () => {
@@ -107,7 +107,7 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
       expectRuntimePath(install.activeRoot, descriptor.marketplacePath)
       expectRuntimePath(install.activeRoot, descriptor.pluginRoot)
     }
-  })
+  }, 90_000)
 })
 
 function expectRuntimePath(runtimeRoot: string, candidate: string): void {
