@@ -228,7 +228,7 @@ test.describe('real-model smoke gate', () => {
     })
   })
 
-  test('R07/PRESENTATION-SKILL Primary Runtime creates a six-page PPTX from workspace HTML', async ({
+  test('R07/PRESENTATION-SKILL-RUNTIME Primary Runtime creates a six-page PPTX from workspace HTML', async ({
     browserName
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')

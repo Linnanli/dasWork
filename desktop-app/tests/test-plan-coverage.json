@@ -3692,7 +3692,7 @@
       "priority": "P2",
       "requiredLayer": ["release-e2e"],
       "requiredAssertions": [
-        "签名 Runtime feed",
+        "engineering test-signed Runtime feed",
         "native loader 调用",
         "HTML 数据事实",
         "六类独立页面、PPTX 结构、关系图和页面边界",
@@ -3703,10 +3703,10 @@
       "evidence": [
         {
           "file": "tests/e2e/release-llm.e2e.ts",
-          "testName": "R07/PRESENTATION-SKILL Primary Runtime creates a six-page PPTX from workspace HTML",
+          "testName": "R07/PRESENTATION-SKILL-RUNTIME Primary Runtime creates a six-page PPTX from workspace HTML",
           "layer": "release-e2e",
           "assertions": [
-            "签名 Runtime feed",
+            "engineering test-signed Runtime feed",
             "native loader 调用",
             "HTML 数据事实",
             "六类独立页面、PPTX 结构、关系图和页面边界",
@@ -4339,10 +4339,10 @@
       "evidence": [
         {
           "file": "tests/e2e/release-llm.e2e.ts",
-          "testName": "R07/PRESENTATION-SKILL Primary Runtime creates a six-page PPTX from workspace HTML",
+          "testName": "R07/PRESENTATION-SKILL-RUNTIME Primary Runtime creates a six-page PPTX from workspace HTML",
           "layer": "release-e2e",
           "assertions": [
-            "签名 Runtime feed",
+            "engineering test-signed Runtime feed",
             "native loader 调用",
             "HTML 数据事实",
             "六类独立页面、PPTX 结构、关系图和页面边界",
@@ -4352,7 +4352,7 @@
         }
       ],
       "requiredAssertions": [
-        "签名 Runtime feed",
+        "engineering test-signed Runtime feed",
         "native loader 调用",
         "HTML 数据事实",
         "六类独立页面、PPTX 结构、关系图和页面边界",
