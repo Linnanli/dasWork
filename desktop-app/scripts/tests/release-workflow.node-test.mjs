@@ -238,7 +238,11 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.ok(
     buildWorkflow.indexOf('Bind target staging provenance to platform validation') <
-      buildWorkflow.indexOf('Stage declared P1a calibration evidence')
+      buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Verify P1a candidate archive and component smoke') <
+      buildWorkflow.indexOf('Verify target-native Runtime archive execution and rendering')
   )
   assert.doesNotMatch(buildWorkflow, /verify:platform-trust/u)
   assert.doesNotMatch(buildWorkflow, /build:matrix|verify:matrix/u)

@@ -287,6 +287,39 @@ jobs:
             --measurements "$RUNNER_TEMP/reviewed-calibration/performance-report.json" \
             --budget "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
 
+      - name: Verify target-native Runtime archive execution and rendering
+        shell: bash
+        env:
+          RUNNER_IMAGE: ${{ matrix.runner }}
+        run: |
+          npm --prefix primary-runtime run verify:platform -- \
+            --target=${{ matrix.target }} \
+            --archive "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/primary-runtime.zip" \
+            --output "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/platform-validation.json"
+
+      - name: Bind target staging provenance to platform validation
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          npm --prefix primary-runtime run bind:provenance -- \
+            --target=${{ matrix.target }} \
+            --provenance "$target_root/provenance.json" \
+            --platform-validation "$target_root/platform-validation.json" \
+            --archive "$target_root/primary-runtime.zip" \
+            --source-lock primary-runtime/runtime-sources.lock.json \
+            --toolchains-lock primary-runtime/runtime-toolchains.lock.json \
+            --input-manifest "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" \
+            --canonical-file-manifest "$target_root/canonical-file-manifest.txt" \
+            --runtime-manifest "$target_root/runtime.json" \
+            --sbom "$target_root/SBOM.json" \
+            --notices "$target_root/THIRD_PARTY_NOTICES.txt" \
+            --component-smoke "$target_root/component-smoke.json" \
+            --desktop-commit "$GITHUB_SHA" \
+            --runtime-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-repository "$GITHUB_REPOSITORY" \
+            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
       - name: Install desktop dependencies for P3a/P3b installer gates
         run: npm --prefix desktop-app ci --ignore-scripts
 
@@ -356,39 +389,6 @@ jobs:
             --installer-commit "${GITHUB_SHA}" \
             --runner "${{ matrix.runner }}" \
             --output "$target_root/performance-target-report.json"
-
-      - name: Verify target-native Runtime archive execution and rendering
-        shell: bash
-        env:
-          RUNNER_IMAGE: ${{ matrix.runner }}
-        run: |
-          npm --prefix primary-runtime run verify:platform -- \
-            --target=${{ matrix.target }} \
-            --archive "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/primary-runtime.zip" \
-            --output "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/platform-validation.json"
-
-      - name: Bind target staging provenance to platform validation
-        shell: bash
-        run: |
-          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
-          npm --prefix primary-runtime run bind:provenance -- \
-            --target=${{ matrix.target }} \
-            --provenance "$target_root/provenance.json" \
-            --platform-validation "$target_root/platform-validation.json" \
-            --archive "$target_root/primary-runtime.zip" \
-            --source-lock primary-runtime/runtime-sources.lock.json \
-            --toolchains-lock primary-runtime/runtime-toolchains.lock.json \
-            --input-manifest "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" \
-            --canonical-file-manifest "$target_root/canonical-file-manifest.txt" \
-            --runtime-manifest "$target_root/runtime.json" \
-            --sbom "$target_root/SBOM.json" \
-            --notices "$target_root/THIRD_PARTY_NOTICES.txt" \
-            --component-smoke "$target_root/component-smoke.json" \
-            --desktop-commit "$GITHUB_SHA" \
-            --runtime-commit "$GITHUB_SHA" \
-            --workflow-run-id "$GITHUB_RUN_ID" \
-            --workflow-repository "$GITHUB_REPOSITORY" \
-            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
       - name: Stage declared P1a calibration evidence
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
