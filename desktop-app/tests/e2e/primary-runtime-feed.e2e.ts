@@ -26,6 +26,11 @@ type WorkspaceDependencies = {
 test('AT-E2E-01 installs a signed Feed Runtime and creates a presentation through a normal command', async ({
   browserName
 }, testInfo) => {
+  // The target-native calibration archive is intentionally large enough that
+  // download, staging, activation, and plugin sync can exceed Playwright's
+  // generic 60-second default. P3b separately measures the numeric cold-install
+  // budget; this timeout only keeps the real end-to-end acceptance path intact.
+  test.setTimeout(180_000)
   expect(browserName).toBe('chromium')
 
   const backend = await startMockBackend({

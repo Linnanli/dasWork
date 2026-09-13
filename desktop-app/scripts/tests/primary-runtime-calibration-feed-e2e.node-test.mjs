@@ -41,6 +41,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
   assert.match(e2eSource, /ordinary app-server chat stayed responsive/u)
+  assert.match(e2eSource, /test\.setTimeout\(180_000\)/u)
   assert.match(e2eSource, /await expectPrimaryRuntimeReady\(page\)/u)
   assert.match(tlsPolicySource, /ca: input\.ca/u)
   assert.match(tlsPolicySource, /rejectUnauthorized: true/u)
