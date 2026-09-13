@@ -640,6 +640,7 @@ function addLockedNativeDependencyPrefixes({ file, args, dependencyPrefixes }) {
     ...args,
     `-DCMAKE_PREFIX_PATH=${dependencyPrefixes.join(";")}`,
     "-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE",
+    ...(target.startsWith("darwin") ? ["-DCMAKE_FIND_FRAMEWORK=NEVER"] : []),
   ];
 }
 
