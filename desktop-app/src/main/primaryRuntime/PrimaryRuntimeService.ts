@@ -132,6 +132,9 @@ export class PrimaryRuntimeService {
     pluginReady?: boolean
   } | null = null
   private lastFailure: PrimaryRuntimeFailure | null = null
+  // Update checks run in the background, but their renderer-safe outcome must
+  // not be mistaken for an unconfigured or merely missing Runtime.
+  private lastUpdateCheckFailure: PrimaryRuntimeFailure | null = null
   private lastReleaseDescriptor: PrimaryRuntimeReleaseDescriptor | undefined
   private nextUpdateCheckAt: string | undefined
   private checkingForUpdate = false
@@ -303,23 +306,24 @@ export class PrimaryRuntimeService {
     const currentVersion =
       diagnostic.status === 'ready' ? diagnostic.manifest?.bundleVersion : undefined
     const targetVersion = this.lastReleaseDescriptor?.version
-    if (this.lastFailure) {
-      const { error, ...failure } = this.lastFailure
+    const failure = this.lastFailure ?? this.lastUpdateCheckFailure
+    if (failure) {
+      const { error, ...safeFailure } = failure
       const failureKind = classifyUserFailure(error)
       return {
         state: 'failed',
-        ...(failure.callId ? { callId: failure.callId } : {}),
-        ...(failure.operationId ? { operationId: failure.operationId } : {}),
+        ...(safeFailure.callId ? { callId: safeFailure.callId } : {}),
+        ...(safeFailure.operationId ? { operationId: safeFailure.operationId } : {}),
         ...(currentVersion ? { currentVersion } : {}),
         ...(targetVersion ? { targetVersion } : {}),
         failureKind,
-        failureCategory: failure.category,
-        failureStage: failure.stage,
-        failureDomain: failure.domain,
-        errorCode: failure.errorCode,
-        retryable: failure.retryable,
-        runtimeActive: failure.runtimeActive,
-        pluginReady: failure.pluginReady,
+        failureCategory: safeFailure.category,
+        failureStage: safeFailure.stage,
+        failureDomain: safeFailure.domain,
+        errorCode: safeFailure.errorCode,
+        retryable: safeFailure.retryable,
+        runtimeActive: safeFailure.runtimeActive,
+        pluginReady: safeFailure.pluginReady,
         message: userFailureMessage(failureKind),
         recovery: userFailureRecovery(failureKind),
         canInstallOrRepair: true,
@@ -391,10 +395,11 @@ export class PrimaryRuntimeService {
 
     const cleanedStagingCount = this.installer ? await this.installer.cleanupStaging() : 0
     const activeVersion = await this.activeVersion()
-    if (this.lastFailure) {
+    const failure = this.lastFailure ?? this.lastUpdateCheckFailure
+    if (failure) {
       return {
         status: 'failed',
-        message: userFailureMessage(classifyUserFailure(this.lastFailure.error)),
+        message: userFailureMessage(classifyUserFailure(failure.error)),
         ...(activeVersion ? { activeVersion } : {}),
         cleanedStagingCount
       }
@@ -524,6 +529,7 @@ export class PrimaryRuntimeService {
       })
       .then((result) => {
         this.lastFailure = null
+        this.lastUpdateCheckFailure = null
         this.updateAvailable = false
         return result
       })
@@ -664,11 +670,15 @@ export class PrimaryRuntimeService {
           (diagnostic.manifest?.legacyV2 === true || activeVersion !== descriptor.version)
         this.checkedActiveVersion = activeVersion
         this.updateAvailable = available
+        this.lastUpdateCheckFailure = null
         return {
           available,
           version: descriptor.version,
           ...(activeVersion ? { activeVersion } : {})
         }
+      } catch (error) {
+        this.lastUpdateCheckFailure = classifyUpdateCheckFailure(normalizeError(error))
+        throw error
       } finally {
         this.checkingForUpdate = false
         this.notifyStatusListeners()
@@ -733,7 +743,7 @@ function classifyUserFailure(error: Error): NonNullable<PrimaryRuntimeUserStatus
 
 type PrimaryRuntimeFailure = {
   error: Error
-  callId: string
+  callId?: string
   operationId?: string
   category: NonNullable<PrimaryRuntimeUserStatus['failureCategory']>
   stage: NonNullable<PrimaryRuntimeUserStatus['failureStage']>
@@ -769,6 +779,41 @@ function classifyRuntimeFailure(
     runtimeActive: inFlight.runtimeActive === true,
     pluginReady: inFlight.pluginReady === true
   }
+}
+
+/** Converts background metadata failures into a stable status without retaining raw details. */
+function classifyUpdateCheckFailure(error: Error): PrimaryRuntimeFailure {
+  const message = error.message.toLowerCase()
+  const category = classifyFailureCategory(error, message, 'resolving')
+  const stage = failureStageFor(category, 'resolving')
+  return {
+    error,
+    category,
+    stage,
+    domain: failureDomainFor(category, stage),
+    errorCode: updateCheckErrorCode(error, message, category),
+    retryable: isRetryableFailure(category, message),
+    runtimeActive: false,
+    pluginReady: false
+  }
+}
+
+function updateCheckErrorCode(
+  error: Error,
+  message: string,
+  category: NonNullable<PrimaryRuntimeUserStatus['failureCategory']>
+): string {
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : ''
+  if (/tls|ssl|certificate|unable to verify/u.test(`${message} ${code}`)) {
+    return 'primary_runtime_tls_validation_failed'
+  }
+  if (/config.*(signature|key|valid)|product config/u.test(message)) {
+    return 'primary_runtime_config_validation_failed'
+  }
+  if (/manifest.*(signature|key|valid)|sequence/u.test(message)) {
+    return 'primary_runtime_manifest_validation_failed'
+  }
+  return `primary_runtime_${category}`
 }
 
 function classifyFailureCategory(
@@ -807,9 +852,15 @@ function classifyFailureCategory(
   ) {
     return 'invalid_manifest'
   }
-  if (/fetch|network|offline|connect|dns|econn|socket/u.test(message)) return 'network_fetch_failed'
+  if (/fetch|network|offline|connect|dns|econn|socket|tls|ssl|certificate/u.test(message)) {
+    return 'network_fetch_failed'
+  }
   if (/enoent|eio|erofs|filesystem|file system/u.test(message)) return 'filesystem_error'
   return 'unknown'
+}
+
+function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 function failureStageFor(

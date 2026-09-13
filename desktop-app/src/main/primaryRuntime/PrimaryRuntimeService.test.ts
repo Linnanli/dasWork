@@ -285,6 +285,36 @@ describe('PrimaryRuntimeService', () => {
     expect(downloadArchive).not.toHaveBeenCalled()
   })
 
+  it('surfaces a renderer-safe update-check failure without retaining its raw detail', async () => {
+    const service = new PrimaryRuntimeService({
+      locator: { locate: async () => null },
+      cacheRoot: await fixtureDirectory(),
+      diagnostics: new PrimaryRuntimeDiagnostics(),
+      releaseProvider: {
+        getRelease: async () => {
+          throw new Error('TLS certificate rejected for https://private.example.test/feed?token=hidden')
+        },
+        downloadArchive: vi.fn()
+      }
+    })
+
+    await expect(service.updateIfAvailable()).rejects.toThrow('TLS certificate rejected')
+    const status = await service.getUserStatus()
+    expect(status).toMatchObject({
+      state: 'failed',
+      failureKind: 'network',
+      failureCategory: 'network_fetch_failed',
+      failureStage: 'resolve_manifest',
+      failureDomain: 'network',
+      errorCode: 'primary_runtime_tls_validation_failed',
+      retryable: true,
+      runtimeActive: false,
+      pluginReady: false
+    })
+    expect(JSON.stringify(status)).not.toContain('private.example.test')
+    expect(JSON.stringify(status)).not.toContain('token=hidden')
+  })
+
   it('loads stable workspace dependency text from a healthy local fixture runtime', async () => {
     const root = await fixtureRuntime()
     const service = new PrimaryRuntimeService({
