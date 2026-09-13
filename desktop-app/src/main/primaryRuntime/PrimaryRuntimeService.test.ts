@@ -304,6 +304,39 @@ describe('PrimaryRuntimeService', () => {
     expect(result.text).not.toContain('Primary Runtime root:')
   })
 
+  it('accepts a locked type-only Node package in the Runtime dependency closure', async () => {
+    const root = await fixtureRuntime()
+    const packageRoot = join(root, 'node_modules', '@types', 'node')
+    await mkdir(packageRoot, { recursive: true })
+    await writeFile(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@types/node', version: '22.19.17', types: 'index.d.ts' })
+    )
+    await writeFile(join(packageRoot, 'index.d.ts'), 'export {}\n')
+    await writeFile(
+      join(root, 'runtime.json'),
+      JSON.stringify(
+        manifest({
+          nodePackages: [
+            { name: 'pptxgenjs', version: '4.0.1', path: 'node_modules/pptxgenjs' },
+            { name: '@types/node', version: '22.19.17', path: 'node_modules/@types/node' }
+          ]
+        }),
+        null,
+        2
+      )
+    )
+
+    await expect(new PrimaryRuntimeDiagnostics().diagnose(root)).resolves.toMatchObject({
+      status: 'ready',
+      dependencies: {
+        nodePackages: expect.arrayContaining([
+          expect.objectContaining({ name: '@types/node', path: packageRoot })
+        ])
+      }
+    })
+  })
+
   it('validates each generic v2 plugin descriptor and source receipt before publishing paths', async () => {
     const root = await fixtureRuntime()
     const receipt = 'reference Runtime receipt\n'

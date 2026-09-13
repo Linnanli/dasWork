@@ -240,7 +240,7 @@ function packageEntryCandidates(manifest: Record<string, unknown>): string[] {
       if (typeof value === 'string') candidates.push(value)
     }
   }
-  for (const field of ['main', 'module']) {
+  for (const field of ['main', 'module', 'types', 'typings']) {
     const value = manifest[field]
     if (typeof value === 'string') candidates.push(value)
   }
