@@ -76,6 +76,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(e2eSource, /render_slides\.py/u)
   assert.match(e2eSource, /verifyR07Presentation/u)
   assert.match(e2eSource, /openR07PresentationInWorkspace/u)
+  assert.match(e2eSource, /launchTimeoutMs: 90_000/u)
   assert.match(e2eSource, /contactSheetFile/u)
   assert.match(e2eSource, /runtimePresentationCommandResponse/u)
   assert.match(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)

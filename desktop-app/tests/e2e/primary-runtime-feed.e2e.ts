@@ -44,7 +44,7 @@ type WorkspaceDependencies = {
   font: string
 }
 
-test('AT-E2E-01 installs a signed Feed Runtime and creates an R07 presentation through a normal command', async ({
+test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command', async ({
   browserName
 }, testInfo) => {
   // The target-native calibration archive is intentionally large enough that
@@ -83,6 +83,11 @@ test('AT-E2E-01 installs a signed Feed Runtime and creates an R07 presentation t
     try {
       app = await launchApp(backend, logs, {
         cwd: workspace.root,
+        // The P3b job boots a fresh Electron process beside a target-native
+        // Runtime archive. Hosted macOS/Linux runners can need longer than
+        // Playwright's generic 30-second debugger-connect default, while the
+        // test's own 180-second end-to-end bound still limits the full path.
+        launchTimeoutMs: 90_000,
         ...(packagedExecutable ? { executablePath: packagedExecutable, args: [] } : {}),
         environment: {
           // The runner supplies only signed engineering-feed inputs and removes

@@ -22,6 +22,7 @@ export type LaunchAppOptions = {
   executablePath?: string
   args?: string[]
   cwd?: string
+  launchTimeoutMs?: number
   /** Extra environment values for an E2E launch. Undefined values remove inherited variables. */
   environment?: NodeJS.ProcessEnv
 }
@@ -74,7 +75,7 @@ export async function launchApp(
         ELECTRON_ENABLE_LOGGING: '1',
         ...options.environment
       },
-      timeout: 30_000
+      timeout: options.launchTimeoutMs ?? 30_000
     })
     appTempDirs.set(app, options.preserveDataDirectories ? [] : dataDirectories)
     app.process().stdout?.on('data', (chunk) => logs.push(`[main:stdout] ${String(chunk)}`))

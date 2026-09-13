@@ -3702,8 +3702,8 @@
       "status": "partial",
       "evidence": [
         {
-          "file": "tests/e2e/release-llm.e2e.ts",
-          "testName": "R07/PRESENTATION-SKILL-RUNTIME Primary Runtime creates a six-page PPTX from workspace HTML",
+          "file": "tests/e2e/primary-runtime-feed.e2e.ts",
+          "testName": "AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command",
           "layer": "release-e2e",
           "assertions": [
             "engineering test-signed Runtime feed",
@@ -4338,8 +4338,8 @@
       "status": "partial",
       "evidence": [
         {
-          "file": "tests/e2e/release-llm.e2e.ts",
-          "testName": "R07/PRESENTATION-SKILL-RUNTIME Primary Runtime creates a six-page PPTX from workspace HTML",
+          "file": "tests/e2e/primary-runtime-feed.e2e.ts",
+          "testName": "AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command",
           "layer": "release-e2e",
           "assertions": [
             "engineering test-signed Runtime feed",
