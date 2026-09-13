@@ -222,15 +222,32 @@ test("LibreOffice recipes use locked target-native binary materialization where 
   }
 });
 
-test("Poppler source recipes disable unavailable optional NSS3 rather than discovering a runner dependency", async () => {
+test("Poppler source recipes disable non-QA optional backends rather than discovering runner dependencies", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const disabledOptions = [
+    "-DENABLE_NSS3=OFF",
+    "-DENABLE_GPGME=OFF",
+    "-DENABLE_LIBTIFF=OFF",
+    "-DENABLE_BOOST=OFF",
+    "-DENABLE_GLIB=OFF",
+    "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+    "-DENABLE_QT5=OFF",
+    "-DENABLE_QT6=OFF",
+    "-DENABLE_LIBOPENJPEG=OFF",
+    "-DENABLE_LIBJPEG=OFF",
+    "-DENABLE_LCMS=OFF",
+    "-DENABLE_LIBCURL=OFF",
+    "-DENABLE_HARFBUZZ=OFF",
+  ];
   for (const [target, toolchain] of Object.entries(lock.targets)) {
     const recipe = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "poppler",
     );
     assert.equal(recipe?.materialization, "source-build", target);
-    assert.match(recipe?.toolchain.flags ?? "", /-DENABLE_NSS3=OFF/u, target);
-    assert.ok(recipe?.commands[0]?.includes("-DENABLE_NSS3=OFF"), target);
+    for (const option of disabledOptions) {
+      assert.ok(recipe?.toolchain.flags?.includes(option), `${target}: ${option}`);
+      assert.ok(recipe?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
   }
 });
 
