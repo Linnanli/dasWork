@@ -169,6 +169,14 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
     () => validateRuntimeToolchainsLock(incompleteClosure),
     /invalid/u,
   );
+
+  const unresolvedNativeDependency = structuredClone(lock);
+  unresolvedNativeDependency.targets[target].nativeRecipes.find(
+    (recipe) => recipe.name === "poppler",
+  ).nativeDependencies = ["not-in-the-lock"];
+  assert.throws(
+    () => validateRuntimeToolchainsLock(unresolvedNativeDependency), /invalid/u,
+  );
 });
 
 test("LibreOffice recipes use locked target-native binary materialization", async () => {
@@ -211,7 +219,7 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
   }
 });
 
-test("Poppler source recipes disable non-QA optional backends rather than discovering runner dependencies", async () => {
+test("Poppler source recipes use only locked zlib and Freetype prefixes", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   const disabledOptions = [
     "-DENABLE_NSS3=OFF",
@@ -229,15 +237,54 @@ test("Poppler source recipes disable non-QA optional backends rather than discov
     "-DENABLE_HARFBUZZ=OFF",
   ];
   for (const [target, toolchain] of Object.entries(lock.targets)) {
+    const zlib = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "zlib",
+    );
+    const freetype = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "freetype",
+    );
     const recipe = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "poppler",
     );
+    assert.equal(zlib?.materialization, "source-build", target);
+    assert.equal(zlib?.sourceComponent, "zlib", target);
+    assert.ok(
+      zlib?.commands[0]?.includes("-DZLIB_BUILD_EXAMPLES=OFF"),
+      `${target}: zlib examples must remain disabled`,
+    );
+    assert.equal(freetype?.materialization, "source-build", target);
+    assert.equal(freetype?.sourceComponent, "freetype", target);
+    for (const option of [
+      "-DBUILD_SHARED_LIBS=OFF",
+      "-DFT_DISABLE_ZLIB=TRUE",
+      "-DFT_DISABLE_BZIP2=TRUE",
+      "-DFT_DISABLE_PNG=TRUE",
+      "-DFT_DISABLE_HARFBUZZ=TRUE",
+    ]) {
+      assert.ok(freetype?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
     assert.equal(recipe?.materialization, "source-build", target);
+    assert.deepEqual(recipe?.nativeDependencies, ["zlib", "freetype"], target);
+    assert.ok(
+      recipe?.commands[0]?.includes("-DZLIB_USE_STATIC_LIBS=TRUE"),
+      `${target}: zlib must be linked from the locked static prefix`,
+    );
     for (const option of disabledOptions) {
       assert.ok(recipe?.toolchain.flags?.includes(option), `${target}: ${option}`);
       assert.ok(recipe?.commands[0]?.includes(option), `${target}: ${option}`);
     }
   }
+});
+
+test("native source dependency prefixes are injected only into CMake configure commands", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(source, /resolveNativeDependencyPrefixes/u);
+  assert.match(source, /addLockedNativeDependencyPrefixes/u);
+  assert.match(source, /-DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=FALSE/u);
+  assert.match(source, /-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE/u);
+  assert.match(source, /run\(resolveLockedBuilderCommand\(file\), commandArgs/u);
+  assert.doesNotMatch(source, /(?:apt-get|brew)\s+(?:install|update)/u);
 });
 
 test("Windows MSI extraction is locked and does not restore the rejected MSYS source-build path", async () => {

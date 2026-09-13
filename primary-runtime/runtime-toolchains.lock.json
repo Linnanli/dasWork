@@ -1,6 +1,6 @@
 {
   "schemaVersion": "dascowork-primary-runtime-toolchains.v1",
-  "materializerVersion": "1.0.0",
+  "materializerVersion": "1.1.0",
   "targets": {
     "darwin-x64": {
       "runner": "macos-15-intel",
@@ -108,19 +108,68 @@
           }
         },
         {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype"],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -239,19 +288,68 @@
           }
         },
         {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype"],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
             "compiler": "AppleClang-17",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
           "environment": { "CC": "clang", "CXX": "clang++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -370,19 +468,68 @@
           }
         },
         {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype"],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -501,19 +648,68 @@
           }
         },
         {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype"],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
             "compiler": "gcc-13",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
           },
           "environment": { "CC": "gcc", "CXX": "g++" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [

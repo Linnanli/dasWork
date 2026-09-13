@@ -43,6 +43,7 @@ const recipeKeys = new Set([
   "name",
   "materialization",
   "sourceComponent",
+  "nativeDependencies",
   "sourceArchiveFormat",
   "sourceDirectory",
   "toolchain",
@@ -405,7 +406,17 @@ function isTargetToolchain(value) {
     value.nativeRecipes.length >= 2 &&
     value.nativeRecipes.every(isNativeRecipe) &&
     new Set(value.nativeRecipes.map((recipe) => recipe.name)).size ===
-      value.nativeRecipes.length
+      value.nativeRecipes.length &&
+    hasResolvedNativeRecipeDependencies(value.nativeRecipes)
+  );
+}
+
+function hasResolvedNativeRecipeDependencies(recipes) {
+  const recipeNames = new Set(recipes.map((recipe) => recipe.name));
+  return recipes.every((recipe) =>
+    (recipe.nativeDependencies ?? []).every(
+      (dependency) => dependency !== recipe.name && recipeNames.has(dependency),
+    ),
   );
 }
 
@@ -471,6 +482,7 @@ function isNativeRecipe(value) {
     isNonEmptyString(value.name) &&
     nativeMaterializations.has(value.materialization) &&
     isNonEmptyString(value.sourceComponent) &&
+    isNativeDependencies(value.nativeDependencies) &&
     allowedArchiveFormats.has(value.sourceArchiveFormat) &&
     isRelativePath(value.sourceDirectory) &&
     isPlainObject(value.toolchain) &&
@@ -490,6 +502,15 @@ function isNativeRecipe(value) {
     value.outputs.length > 0 &&
     value.outputs.every(isRecipeOutput) &&
     isRecipeClosure(value.closure, value.outputs)
+  );
+}
+
+function isNativeDependencies(value) {
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(isNonEmptyString) &&
+      new Set(value).size === value.length)
   );
 }
 

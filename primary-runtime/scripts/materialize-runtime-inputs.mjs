@@ -523,6 +523,10 @@ async function materializeNativeRecipes({
       "AT-RT-INPUT-01 blocked: native source build requires explicit --allow-source-build on the target-native runner.",
     );
   }
+  const recipesByName = new Map(
+    targetToolchain.nativeRecipes.map((recipe) => [recipe.name, recipe]),
+  );
+  const completedRecipeNames = new Set();
   for (const recipe of targetToolchain.nativeRecipes) {
     const component = componentsByName.get(recipe.sourceComponent);
     const artifact = artifactsByName.get(recipe.sourceComponent);
@@ -543,8 +547,19 @@ async function materializeNativeRecipes({
       `${recipe.name} locked source directory`,
     );
     if (recipe.materialization === "source-build") {
+      const dependencyPrefixes = await resolveNativeDependencyPrefixes({
+        recipe,
+        recipesByName,
+        completedRecipeNames,
+        outputRoot,
+      });
       for (const [file, ...args] of recipe.commands) {
-        await run(resolveLockedBuilderCommand(file), args, {
+        const commandArgs = addLockedNativeDependencyPrefixes({
+          file,
+          args,
+          dependencyPrefixes,
+        });
+        await run(resolveLockedBuilderCommand(file), commandArgs, {
           cwd: buildRoot,
           env: {
             ...process.env,
@@ -577,7 +592,54 @@ async function materializeNativeRecipes({
       }
     }
     await assertRecipeClosure({ recipe, outputRoot });
+    completedRecipeNames.add(recipe.name);
   }
+}
+
+async function resolveNativeDependencyPrefixes({
+  recipe,
+  recipesByName,
+  completedRecipeNames,
+  outputRoot,
+}) {
+  const prefixes = [];
+  for (const dependencyName of recipe.nativeDependencies ?? []) {
+    const dependency = recipesByName.get(dependencyName);
+    if (!dependency || dependencyName === recipe.name) {
+      throw new Error(
+        `AT-RT-INPUT-01 blocked: native recipe ${recipe.name} declares an invalid dependency ${dependencyName}.`,
+      );
+    }
+    if (!completedRecipeNames.has(dependencyName)) {
+      throw new Error(
+        `AT-RT-INPUT-01 blocked: native recipe ${recipe.name} must materialize locked dependency ${dependencyName} first.`,
+      );
+    }
+    const directories = dependency.outputs.filter(
+      (output) => output.kind === "directory",
+    );
+    if (directories.length !== 1) {
+      throw new Error(
+        `AT-RT-INPUT-01 blocked: native dependency ${dependencyName} must expose exactly one locked directory prefix.`,
+      );
+    }
+    const prefix = await safeChild(outputRoot, directories[0].destination);
+    await assertRegularDirectory(prefix, `${dependencyName} locked prefix`);
+    prefixes.push(prefix);
+  }
+  return prefixes;
+}
+
+function addLockedNativeDependencyPrefixes({ file, args, dependencyPrefixes }) {
+  if (dependencyPrefixes.length === 0 || file !== "cmake" || !args.includes("-S")) {
+    return args;
+  }
+  return [
+    ...args,
+    `-DCMAKE_PREFIX_PATH=${dependencyPrefixes.join(";")}`,
+    "-DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=FALSE",
+    "-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE",
+  ];
 }
 
 async function materializePrebuiltNativeRecipe({ recipe, buildRoot }) {
