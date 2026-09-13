@@ -18,6 +18,10 @@ const archive = await readFile(options.archivePath);
 const entries = readStoredZipArchive(archive);
 const entryMap = new Map(entries.map((entry) => [entry.path, entry.data]));
 const runtimeManifest = JSON.parse(requireEntry(entryMap, "runtime.json").toString("utf8"));
+const inputManifest = JSON.parse(
+  requireEntry(entryMap, "provenance/runtime-inputs.manifest.json").toString("utf8"),
+);
+const inputFileModes = inputFileModesFromManifest(inputManifest);
 const [platform, arch] = target.split("-");
 if (
   runtimeManifest.bundleFormatVersion !== 2 ||
@@ -33,9 +37,18 @@ try {
   for (const entry of entries) {
     if (!/^(?:dependencies|plugins|fonts)\//u.test(entry.path)) continue;
     const path = join(inputRoot, ...entry.path.split("/"));
+    const mode = inputFileModes.get(entry.path);
+    if (mode === undefined) {
+      throw new Error(
+        `AT-RT-PLATFORM-01 blocked: archive input ${entry.path} is not bound by its input manifest.`,
+      );
+    }
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, entry.data, { mode: isExecutableEntry(entry.path) ? 0o755 : 0o644 });
-    if (isExecutableEntry(entry.path)) await chmod(path, 0o755);
+    await writeFile(path, entry.data, { mode });
+    // ZIP entries deliberately do not carry host permissions. The input
+    // manifest does, so restore the exact audited mode instead of guessing
+    // from a narrow executable-path allowlist.
+    await chmod(path, mode);
   }
   await mkdir(inputRoot, { recursive: true });
   await writeFile(
@@ -87,12 +100,34 @@ function requireEntry(entryMap, path) {
   return entry;
 }
 
-function isExecutableEntry(path) {
-  return (
-    /^(?:dependencies\/(?:node|python)\/bin\/)/u.test(path) ||
-    /^dependencies\/native\/libreoffice\/(?:program\/soffice|LibreOffice\.app\/Contents\/MacOS\/soffice)(?:\.exe)?$/u.test(path) ||
-    /^dependencies\/native\/poppler\/bin\/(?:pdfinfo|pdftoppm)(?:\.exe)?$/u.test(path)
-  );
+function inputFileModesFromManifest(manifest) {
+  if (!Array.isArray(manifest?.files)) {
+    throw new Error(
+      "AT-RT-PLATFORM-01 blocked: archive input manifest does not contain files.",
+    );
+  }
+  const modes = new Map();
+  for (const file of manifest.files) {
+    if (
+      !file ||
+      typeof file.path !== "string" ||
+      !/^(?:dependencies|plugins|fonts)\//u.test(file.path) ||
+      typeof file.mode !== "string" ||
+      !/^10[067][0-7]{3}$/u.test(file.mode)
+    ) {
+      throw new Error(
+        "AT-RT-PLATFORM-01 blocked: archive input manifest contains an invalid file mode.",
+      );
+    }
+    const mode = Number.parseInt(file.mode, 8) & 0o777;
+    if (modes.has(file.path)) {
+      throw new Error(
+        "AT-RT-PLATFORM-01 blocked: archive input manifest has duplicate paths.",
+      );
+    }
+    modes.set(file.path, mode);
+  }
+  return modes;
 }
 
 function parseArgs(argv) {

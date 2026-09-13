@@ -407,6 +407,16 @@ test("P1 rendering uses only the Runtime-owned presentation plugin scripts", asy
   assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
 });
 
+test("platform validation restores each archived input mode from its manifest", async () => {
+  const source = await readFile(verifyPlatformScript, "utf8");
+
+  assert.match(source, /const inputFileModes = inputFileModesFromManifest\(inputManifest\)/u);
+  assert.match(source, /const mode = inputFileModes\.get\(entry\.path\)/u);
+  assert.match(source, /await chmod\(path, mode\)/u);
+  assert.match(source, /archive input \$\{entry\.path\} is not bound/u);
+  assert.doesNotMatch(source, /function isExecutableEntry/u);
+});
+
 test("locked-source fetch streams Web response chunks without buffering an archive", async () => {
   const source = await readFile(fetchScript, "utf8");
 
