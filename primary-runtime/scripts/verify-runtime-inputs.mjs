@@ -91,7 +91,6 @@ if (target.startsWith("darwin")) {
       "codesign",
       [
         "--verify",
-        "--deep",
         "--strict",
         dirname(dirname(dirname(binaries.soffice))),
       ],
@@ -630,7 +629,12 @@ async function runCommand(name, file, args, environment = undefined) {
 async function runRawCommand(file, args, environment = undefined) {
   return new Promise((resolveCommand, rejectCommand) => {
     const child = spawn(file, args, {
-      env: { ...process.env, ...environment, NO_PROXY: "*" },
+      env: {
+        ...process.env,
+        PYTHONDONTWRITEBYTECODE: "1",
+        ...environment,
+        NO_PROXY: "*",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     const output = [];

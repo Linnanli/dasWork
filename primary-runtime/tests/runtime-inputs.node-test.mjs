@@ -374,7 +374,7 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
   assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
   assert.match(source, /applyMacosAdHocSignature\(\{ recipe, outputRoot \}\)/u);
-  assert.match(source, /\["--force", "--deep", "--sign", "-", application\]/u);
+  assert.match(source, /\["--force", "--sign", "-", application\]/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 
@@ -401,7 +401,18 @@ test("P1 rendering uses only the Runtime-owned presentation plugin scripts", asy
   assert.match(verifierSource, /PPTX_RUNTIME_PDFTOPPM: pdftoppm/u);
   assert.match(verifierSource, /runtimeUtilityPaths\(target\)/u);
   assert.match(verifierSource, /\["\/usr\/bin", "\/bin"\]/u);
+  assert.match(verifierSource, /PYTHONDONTWRITEBYTECODE: "1"/u);
   assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
+});
+
+test("locked-source fetch streams Web response chunks without buffering an archive", async () => {
+  const source = await readFile(fetchScript, "utf8");
+
+  assert.match(source, /async function writeResponseBody/u);
+  assert.match(source, /for await \(const chunk of body\)/u);
+  assert.match(source, /await once\(output, "drain"\)/u);
+  assert.doesNotMatch(source, /^import .*Readable.*from "node:stream"/mu);
+  assert.doesNotMatch(source, /response\.arrayBuffer\(\)|await pipeline\(/u);
 });
 
 test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {

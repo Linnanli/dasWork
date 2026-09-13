@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 import { createWriteStream } from "node:fs";
+import { once } from "node:events";
 import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -123,10 +122,11 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
       url: responseUrl,
       ...(responseTotalBytes ? { totalBytes: responseTotalBytes } : {}),
     });
-    await pipeline(
-      Readable.fromWeb(response.body),
-      createWriteStream(temporaryPath, { flags: resumes ? "a" : "w", mode: 0o600 }),
-    );
+    await writeResponseBody({
+      body: response.body,
+      path: temporaryPath,
+      append: resumes,
+    });
     const completed = await stat(temporaryPath);
     if (
       !completed.isFile() ||
@@ -141,6 +141,29 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
     throw new Error(
       `AT-RT-INPUT-01 blocked: unable to fetch locked ${artifact.name}: ${String(error.message ?? error)}`,
     );
+  }
+}
+
+/**
+ * Keep the locked-object fetch streaming end-to-end.  Bridging the Web stream
+ * through Readable.fromWeb caused an Undici paused-stream assertion on the
+ * Intel macOS runner.  Iterating the response body directly preserves
+ * back-pressure without buffering an archive in memory.
+ */
+async function writeResponseBody({ body, path, append }) {
+  const output = createWriteStream(path, {
+    flags: append ? "a" : "w",
+    mode: 0o600,
+  });
+  try {
+    for await (const chunk of body) {
+      if (!output.write(chunk)) await once(output, "drain");
+    }
+    output.end();
+    await once(output, "finish");
+  } catch (error) {
+    output.destroy(error);
+    throw error;
   }
 }
 

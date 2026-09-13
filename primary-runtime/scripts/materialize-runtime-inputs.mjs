@@ -622,7 +622,7 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
   await assertRegularDirectory(application, "macOS LibreOffice application bundle");
   await run(
     resolveLockedBuilderCommand("codesign"),
-    ["--force", "--deep", "--sign", "-", application],
+    ["--force", "--sign", "-", application],
     { env: process.env },
   );
 }
