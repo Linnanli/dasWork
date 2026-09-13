@@ -330,6 +330,7 @@ async function inspectElfDependencies({ object, nativeRoot }) {
     const dependency = match[1];
     if (
       dependency.startsWith("/lib/") ||
+      dependency.startsWith("/lib64/") ||
       dependency.startsWith("/usr/lib/") ||
       isPathInside(nativeRoot, dependency)
     ) {
@@ -349,6 +350,7 @@ function isPathInside(root, candidate) {
 
 function hasExpectedExecutableHeader(header, target, label) {
   if (label === "soffice" && header.subarray(0, 2).toString("ascii") === "#!") return true;
+  if (header.length < 4) return false;
   if (target.startsWith("win32")) return header.subarray(0, 2).toString("ascii") === "MZ";
   if (target.startsWith("linux")) return header[0] === 0x7f && header.subarray(1, 4).toString("ascii") === "ELF";
   const magic = header.readUInt32BE(0);
