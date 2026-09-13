@@ -657,19 +657,23 @@ function macosCodeSignatureTarget(application, path) {
   let hasNonStandardBundleAncestor = false;
   while (candidate !== application) {
     if (/\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate))) {
-      if (isStandardMacosNestedCodeBundle(application, candidate)) {
+      if (isAmbiguousLibreOfficeResourceBundle(candidate)) {
+        hasNonStandardBundleAncestor = true;
+      } else if (isStandardMacosNestedCodeBundle(application, candidate)) {
         return candidate;
+      } else {
+        hasNonStandardBundleAncestor = true;
       }
-      hasNonStandardBundleAncestor = true;
     }
     const parent = dirname(candidate);
     if (parent === candidate) break;
     candidate = parent;
   }
-  // LibreOffice embeds bundle-shaped directories under urelibs, outside macOS'
-  // standard nested-code locations. Signing either that directory or one of
-  // its Mach-O leaves makes codesign infer an ambiguous bundle on ARM hosts;
-  // the enclosing application's resource envelope seals those files instead.
+  // LibreOffice embeds a duplicate LibreOfficePython.framework under both
+  // urelibs and Frameworks. These directories are not valid code bundles
+  // after symlink-free materialization, so signing either their directory or
+  // one of their Mach-O leaves makes codesign infer an ambiguous bundle on ARM
+  // hosts. The enclosing application's resource envelope seals those files.
   if (
     hasNonStandardBundleAncestor ||
     /\.framework$/iu.test(basename(path))
@@ -677,6 +681,10 @@ function macosCodeSignatureTarget(application, path) {
     return undefined;
   }
   return path;
+}
+
+function isAmbiguousLibreOfficeResourceBundle(candidate) {
+  return basename(candidate) === "LibreOfficePython.framework";
 }
 
 function isStandardMacosNestedCodeBundle(application, candidate) {

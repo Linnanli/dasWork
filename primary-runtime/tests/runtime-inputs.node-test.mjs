@@ -383,6 +383,8 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /function macosCodeSignatureTarget\(application, path\)/u);
   assert.match(source, /framework\|app\|appex\|xpc\|plugin\|bundle/u);
   assert.match(source, /isStandardMacosNestedCodeBundle\(application, candidate\)/u);
+  assert.match(source, /isAmbiguousLibreOfficeResourceBundle\(candidate\)/u);
+  assert.match(source, /basename\(candidate\) === "LibreOfficePython\.framework"/u);
   assert.match(source, /"Contents\/Frameworks"/u);
   assert.match(source, /let hasNonStandardBundleAncestor = false/u);
   assert.match(source, /hasNonStandardBundleAncestor = true/u);
