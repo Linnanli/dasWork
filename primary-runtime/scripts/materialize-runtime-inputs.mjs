@@ -654,21 +654,28 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
 
 function macosCodeSignatureTarget(application, path) {
   let candidate = dirname(path);
+  let hasNonStandardBundleAncestor = false;
   while (candidate !== application) {
-    if (
-      /\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate)) &&
-      isStandardMacosNestedCodeBundle(application, candidate)
-    ) {
-      return candidate;
+    if (/\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate))) {
+      if (isStandardMacosNestedCodeBundle(application, candidate)) {
+        return candidate;
+      }
+      hasNonStandardBundleAncestor = true;
     }
     const parent = dirname(candidate);
     if (parent === candidate) break;
     candidate = parent;
   }
-  // LibreOffice embeds a regular Mach-O named `*.framework` under urelibs.
-  // codesign interprets that basename as an ambiguous bundle even though it is
-  // a file; the enclosing app's resource envelope seals it instead.
-  if (/\.framework$/iu.test(basename(path))) return undefined;
+  // LibreOffice embeds bundle-shaped directories under urelibs, outside macOS'
+  // standard nested-code locations. Signing either that directory or one of
+  // its Mach-O leaves makes codesign infer an ambiguous bundle on ARM hosts;
+  // the enclosing application's resource envelope seals those files instead.
+  if (
+    hasNonStandardBundleAncestor ||
+    /\.framework$/iu.test(basename(path))
+  ) {
+    return undefined;
+  }
   return path;
 }
 
