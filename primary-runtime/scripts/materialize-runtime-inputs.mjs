@@ -105,7 +105,15 @@ await assertRepositoryPatchMatchesLock({
 
 await rm(options.outputRoot, { recursive: true, force: true });
 await mkdir(options.outputRoot, { recursive: true });
-const workRoot = join(options.outputRoot, ".materialize-work");
+// The input manifest must bind only shipped Runtime files.  Keep source-build
+// intermediates beside, rather than inside, the input root so temporary build
+// symlinks cannot invalidate (or leak into) the immutable manifest.
+const workRoot = resolve(
+  options.outputRoot,
+  "..",
+  `${basename(options.outputRoot)}.materialize-work`,
+);
+await rm(workRoot, { recursive: true, force: true });
 await mkdir(workRoot, { recursive: true });
 
 try {

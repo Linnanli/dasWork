@@ -478,6 +478,19 @@ test("P1 scripts resolve default lock paths through file URLs safely on Windows"
   }
 });
 
+test("materialization keeps source-build intermediates outside the signed input root", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(
+    source,
+    /const workRoot = resolve\(\s*options\.outputRoot,\s*"\.\.",\s*`\$\{basename\(options\.outputRoot\)\}\.materialize-work`,/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /join\(options\.outputRoot, "\.materialize-work"\)/u,
+  );
+});
+
 async function createInputFixture() {
   const root = await (
     await import("node:fs/promises")
