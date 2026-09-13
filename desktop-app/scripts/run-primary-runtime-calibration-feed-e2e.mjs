@@ -6,7 +6,6 @@ import { createHash, generateKeyPairSync } from 'node:crypto'
 import { once } from 'node:events'
 import { createReadStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { request as httpsRequest } from 'node:https'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -43,7 +42,6 @@ try {
     DASCOWORK_PRIMARY_RUNTIME_FEED_PORT: String(fixture.port)
   })
   server = await startPrimaryRuntimeFeed(configuration, { allowCalibrationCandidate: true })
-  await assertFeedReachable(configuration, await readFile(fixture.tls.caPath, 'utf8'))
   const environment = primaryRuntimeFeedChildEnvironment(configuration, {
     ...process.env,
     DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1',
@@ -233,40 +231,14 @@ function generateFeedKey() {
   }
 }
 
-async function assertFeedReachable(configuration, ca) {
-  const url = `https://${configuration.host}:${configuration.port}/v1/runtime/config.json`
-  const body = await new Promise((resolveBody, reject) => {
-    const request = httpsRequest(url, { ca, rejectUnauthorized: true }, (response) => {
-      const chunks = []
-      response.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-      response.once('error', reject)
-      response.once('end', () => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`P3b normal-chat feed probe returned HTTP ${response.statusCode ?? 0}.`))
-          return
-        }
-        resolveBody(Buffer.concat(chunks).toString('utf8'))
-      })
-    })
-    request.setTimeout(5_000, () =>
-      request.destroy(new Error('P3b normal-chat feed probe timed out.'))
-    )
-    request.once('error', reject)
-    request.end()
-  })
-  if (JSON.parse(body).channel !== channel)
-    throw new Error('P3b normal-chat feed returned the wrong channel.')
-}
-
 async function createLocalTls(root) {
   const directory = join(root, 'tls')
   const keyPath = join(directory, 'server-key.pem')
   const certPath = join(directory, 'server-cert.pem')
   await mkdir(directory, { recursive: true })
-  // Keep this local-only test surface to one ephemeral trust anchor. Node on the
-  // native macOS ARM runner rejects the generated two-certificate chain even
-  // when its root CA is supplied explicitly, while the same strict verifier
-  // accepts this explicitly trusted self-signed loopback certificate.
+  // Keep this local-only test surface to one ephemeral loopback trust anchor.
+  // P3b verifies it through Electron Main's dedicated TLS policy, rather than
+  // changing any process-wide or production trust configuration.
   await executeFile('openssl', [
     'req',
     '-x509',

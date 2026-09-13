@@ -10,12 +10,14 @@ const appRoot = resolve(import.meta.dirname, '../..')
 const packageJsonPath = resolve(appRoot, 'package.json')
 const runnerPath = resolve(appRoot, 'scripts/run-primary-runtime-calibration-feed-e2e.mjs')
 const e2ePath = resolve(appRoot, 'tests/e2e/primary-runtime-feed.e2e.ts')
+const tlsPolicyPath = resolve(appRoot, 'src/main/primaryRuntime/PrimaryRuntimeTlsPolicy.ts')
 
 test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a test app-server', async () => {
-  const [packageJsonSource, runnerSource, e2eSource] = await Promise.all([
+  const [packageJsonSource, runnerSource, e2eSource, tlsPolicySource] = await Promise.all([
     readFile(packageJsonPath, 'utf8'),
     readFile(runnerPath, 'utf8'),
-    readFile(e2ePath, 'utf8')
+    readFile(e2ePath, 'utf8'),
+    readFile(tlsPolicyPath, 'utf8')
   ])
   const packageJson = JSON.parse(packageJsonSource)
 
@@ -32,7 +34,6 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(runnerSource, /P3b normal-chat feed target .*native runner/u)
   assert.match(runnerSource, /tests\/e2e\/primary-runtime-feed\.e2e\.ts/u)
   assert.match(runnerSource, /delete env\.CODEX_APP_SERVER_BIN/u)
-  assert.match(runnerSource, /rejectUnauthorized: true/u)
   assert.match(runnerSource, /extendedKeyUsage=serverAuth/u)
   assert.match(runnerSource, /basicConstraints=critical,CA:TRUE/u)
   assert.match(runnerSource, /subjectAltName=IP:127\.0\.0\.1/u)
@@ -41,4 +42,8 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
   assert.match(e2eSource, /ordinary app-server chat stayed responsive/u)
   assert.match(e2eSource, /await expectPrimaryRuntimeReady\(page\)/u)
+  assert.match(tlsPolicySource, /ca: input\.ca/u)
+  assert.match(tlsPolicySource, /rejectUnauthorized: true/u)
+  assert.match(tlsPolicySource, /local test CA may only contact its configured loopback feed/u)
+  assert.doesNotMatch(tlsPolicySource, /NODE_TLS_REJECT_UNAUTHORIZED/u)
 })
