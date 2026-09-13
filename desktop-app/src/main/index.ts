@@ -459,14 +459,12 @@ async function createCodexRuntime(
       })
     : undefined
   primaryRuntimeUpdateCoordinator = primaryRuntimeUpdates
-  void (async () => {
-    // Startup synchronization finishes before the updater begins its first
-    // check, so both paths use the same app-server catalog sequence.
-    await bundledPluginReconciler.run('startup')
-    if (primaryRuntimeReleaseProvider) {
-      await primaryRuntimeUpdates?.start()
-    }
-  })()
+  // Initial app-plugin reconciliation and the first Runtime update are
+  // independent, Main-owned background work. Do not make a cold Runtime
+  // install wait for marketplace synchronization: post-activation still uses
+  // the same serial reconciler, so plugin/skill ordering remains intact.
+  void bundledPluginReconciler.run('startup')
+  if (primaryRuntimeReleaseProvider) void primaryRuntimeUpdates?.start()
 
   return new CodexChatRuntimeService({
     launch,

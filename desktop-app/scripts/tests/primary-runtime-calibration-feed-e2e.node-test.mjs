@@ -43,6 +43,15 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /ordinary app-server chat stayed responsive/u)
   assert.match(e2eSource, /test\.setTimeout\(180_000\)/u)
   assert.match(e2eSource, /await expectPrimaryRuntimeReady\(page\)/u)
+  assert.match(e2eSource, /Primary Runtime did not become ready/u)
+  assert.match(
+    e2eSource,
+    /window\.desktopApp\.plugins\.getPrimaryRuntimeStatus\(\{ version: 1 \}\)/u
+  )
+  assert.match(
+    await readFile(resolve(appRoot, 'src/main/index.ts'), 'utf8'),
+    /void bundledPluginReconciler\.run\('startup'\)[\s\S]*void primaryRuntimeUpdates\?\.start\(\)/u
+  )
   assert.match(tlsPolicySource, /ca: input\.ca/u)
   assert.match(tlsPolicySource, /rejectUnauthorized: true/u)
   assert.match(tlsPolicySource, /local test CA may only contact its configured loopback feed/u)

@@ -116,16 +116,26 @@ test('AT-E2E-01 installs a signed Feed Runtime and creates a presentation throug
 })
 
 async function expectPrimaryRuntimeReady(page: Page): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(async () => {
-          const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
-          return result.runtime.state
-        }),
-      { timeout: 120_000 }
+  let latestStatus: unknown
+  try {
+    await expect
+      .poll(
+        async () => {
+          latestStatus = await page.evaluate(async () => {
+            const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
+            return result.runtime
+          })
+          return (latestStatus as { state?: unknown }).state
+        },
+        { timeout: 120_000 }
+      )
+      .toBe('ready')
+  } catch (error) {
+    throw new Error(
+      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}`,
+      { cause: error }
     )
-    .toBe('ready')
+  }
 }
 
 async function expectRuntimePresentationSkill(page: Page): Promise<void> {
