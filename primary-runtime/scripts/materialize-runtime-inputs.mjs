@@ -633,7 +633,8 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
   await visit(application, async (path) => {
     const inspected = await run(file, ["-b", path], { env: process.env });
     if (!/\bMach-O\b/u.test(inspected.stdout)) return;
-    codeTargets.add(macosCodeSignatureTarget(application, path));
+    const codeTarget = macosCodeSignatureTarget(application, path);
+    if (codeTarget) codeTargets.add(codeTarget);
   });
   for (const codeTarget of [...codeTargets].sort(
     (left, right) =>
@@ -661,6 +662,10 @@ function macosCodeSignatureTarget(application, path) {
     if (parent === candidate) break;
     candidate = parent;
   }
+  // LibreOffice embeds a regular Mach-O named `*.framework` under urelibs.
+  // codesign interprets that basename as an ambiguous bundle even though it is
+  // a file; the enclosing app's resource envelope seals it instead.
+  if (/\.framework$/iu.test(basename(path))) return undefined;
   return path;
 }
 
