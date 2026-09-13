@@ -44,7 +44,9 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /test\.setTimeout\(180_000\)/u)
   assert.match(e2eSource, /await expectPrimaryRuntimeReady\(page(?:, logs)?\)/u)
   assert.match(e2eSource, /Primary Runtime did not become ready/u)
+  assert.match(e2eSource, /Diagnostic retry status/u)
   assert.match(e2eSource, /safePrimaryRuntimeDiagnosticLogs/u)
+  assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)
   assert.match(
     e2eSource,

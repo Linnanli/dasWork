@@ -137,9 +137,20 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
       )
       .toBe('ready')
   } catch (error) {
+    // The startup check may fail before Playwright can subscribe to Electron's
+    // Main-process streams. Re-run the same Main-owned check only after the
+    // timeout so its redacted diagnostic is observable; this is diagnostic
+    // only and never turns a failed automatic install into a passing test.
+    const retryStatus = await page
+      .evaluate(async () => {
+        const result = await window.desktopApp.plugins.runPrimaryRuntimeUpdate({ version: 1 })
+        return result.runtime
+      })
+      .catch(() => undefined)
     const diagnosticLogs = safePrimaryRuntimeDiagnosticLogs(logs)
     throw new Error(
-      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}\n${diagnosticLogs}`,
+      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}\n` +
+        `Diagnostic retry status: ${JSON.stringify(retryStatus)}\n${diagnosticLogs}`,
       { cause: error }
     )
   }
@@ -147,9 +158,10 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
 
 function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
   try {
-    // Main output is only included after the shared diagnostic serializer has
-    // redacted credentials. Keep the failure surface bounded and relevant.
-    return serializeDiagnosticData({ primaryRuntimeLogs: logs.slice(-32) }).slice(-8_000)
+    // Keep the failure surface to Main's Primary Runtime diagnostics, then
+    // apply the shared serializer before exposing any test attachment output.
+    const primaryRuntimeLogs = logs.filter((log) => log.includes('[primary-runtime]')).slice(-8)
+    return serializeDiagnosticData({ primaryRuntimeLogs }).slice(-8_000)
   } catch {
     return 'Primary Runtime diagnostic logs were unavailable after redaction.'
   }
