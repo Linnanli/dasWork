@@ -34,6 +34,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: primary-runtime-engineering-build-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PRIMARY_RUNTIME_MODE: ${{ inputs.mode || 'calibrate' }}
 

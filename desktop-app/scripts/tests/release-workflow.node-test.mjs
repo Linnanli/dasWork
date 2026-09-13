@@ -121,6 +121,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(testPlanWorkflow, /- "\.github\/workflows\/primary-runtime-build\.yml"/u)
   assert.match(testPlanWorkflow, /- "\.github\/workflows\/primary-runtime-publish\.yml"/u)
   assert.match(buildWorkflow, /^permissions:\n {2}contents: read\n {2}actions: read$/mu)
+  assert.match(
+    buildWorkflow,
+    /^concurrency:\n {2}group: primary-runtime-engineering-build-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: true$/mu
+  )
   assert.doesNotMatch(buildWorkflow, /continue-on-error:\s*true/u)
   assert.doesNotMatch(buildWorkflow, /NODE_TLS_REJECT_UNAUTHORIZED/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime test/u)
