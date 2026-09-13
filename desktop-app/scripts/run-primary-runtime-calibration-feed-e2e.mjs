@@ -260,13 +260,13 @@ async function assertFeedReachable(configuration, ca) {
 
 async function createLocalTls(root) {
   const directory = join(root, 'tls')
-  const caKeyPath = join(directory, 'test-ca-key.pem')
-  const caPath = join(directory, 'test-ca-cert.pem')
   const keyPath = join(directory, 'server-key.pem')
-  const requestPath = join(directory, 'server.csr')
   const certPath = join(directory, 'server-cert.pem')
-  const extensionsPath = join(directory, 'server-extensions.cnf')
   await mkdir(directory, { recursive: true })
+  // Keep this local-only test surface to one ephemeral trust anchor. Node on the
+  // native macOS ARM runner rejects the generated two-certificate chain even
+  // when its root CA is supplied explicitly, while the same strict verifier
+  // accepts this explicitly trusted self-signed loopback certificate.
   await executeFile('openssl', [
     'req',
     '-x509',
@@ -274,62 +274,26 @@ async function createLocalTls(root) {
     'rsa:2048',
     '-nodes',
     '-keyout',
-    caKeyPath,
-    '-out',
-    caPath,
-    '-days',
-    '1',
-    '-subj',
-    '/CN=dascowork-p3b-feed-test-ca',
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-addext',
-    'keyUsage=critical,keyCertSign,cRLSign',
-    '-addext',
-    'subjectKeyIdentifier=hash',
-    '-sha256'
-  ])
-  await executeFile('openssl', [
-    'req',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-keyout',
     keyPath,
-    '-out',
-    requestPath,
-    '-subj',
-    '/CN=127.0.0.1',
-    '-addext',
-    'subjectAltName=IP:127.0.0.1'
-  ])
-  await writeFile(
-    extensionsPath,
-    'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\nsubjectAltName=IP:127.0.0.1\n',
-    { mode: 0o600 }
-  )
-  await executeFile('openssl', [
-    'x509',
-    '-req',
-    '-in',
-    requestPath,
-    '-CA',
-    caPath,
-    '-CAkey',
-    caKeyPath,
-    '-CAcreateserial',
     '-out',
     certPath,
     '-days',
     '1',
-    '-sha256',
-    '-extfile',
-    extensionsPath
+    '-subj',
+    '/CN=127.0.0.1',
+    '-addext',
+    'basicConstraints=critical,CA:TRUE',
+    '-addext',
+    'keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign',
+    '-addext',
+    'subjectKeyIdentifier=hash',
+    '-addext',
+    'extendedKeyUsage=serverAuth',
+    '-addext',
+    'subjectAltName=IP:127.0.0.1',
+    '-sha256'
   ])
-  await writeFile(certPath, Buffer.concat([await readFile(certPath), await readFile(caPath)]), {
-    mode: 0o600
-  })
-  return { keyPath, certPath, caPath }
+  return { keyPath, certPath, caPath: certPath }
 }
 
 async function reserveLoopbackPort(host) {
