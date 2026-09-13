@@ -625,21 +625,43 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
   const codesign = resolveLockedBuilderCommand("codesign");
   const file = resolveLockedBuilderCommand("file");
   // `cp(..., { dereference: true })` invalidates upstream nested signatures.
-  // Sign every regular Mach-O leaf first, then the enclosing application.
+  // Sign nested code bundles (for example, frameworks) or loose Mach-O leaves
+  // first, then the enclosing application.
   // `--deep` cannot be used here: LibreOffice contains an embedded framework
   // whose directory shape makes Apple's deep traversal ambiguous on ARM hosts.
+  const codeTargets = new Set();
   await visit(application, async (path) => {
     const inspected = await run(file, ["-b", path], { env: process.env });
     if (!/\bMach-O\b/u.test(inspected.stdout)) return;
-    await run(codesign, ["--force", "--sign", "-", path], {
+    codeTargets.add(macosCodeSignatureTarget(application, path));
+  });
+  for (const codeTarget of [...codeTargets].sort(
+    (left, right) =>
+      right.split(sep).length - left.split(sep).length ||
+      left.localeCompare(right),
+  )) {
+    await run(codesign, ["--force", "--sign", "-", codeTarget], {
       env: process.env,
     });
-  });
+  }
   await run(
     codesign,
     ["--force", "--sign", "-", application],
     { env: process.env },
   );
+}
+
+function macosCodeSignatureTarget(application, path) {
+  let candidate = dirname(path);
+  while (candidate !== application) {
+    if (/\.(?:framework|app|appex|xpc|plugin|bundle)$/iu.test(basename(candidate))) {
+      return candidate;
+    }
+    const parent = dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+  return path;
 }
 
 async function resolveNativeDependencyPrefixes({

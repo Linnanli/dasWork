@@ -378,7 +378,10 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /await visit\(application, async \(path\) =>/u);
   assert.match(source, /const inspected = await run\(file, \["-b", path\]/u);
   assert.match(source, /\/\\bMach-O\\b\/u\.test\(inspected\.stdout\)/u);
-  assert.match(source, /\["--force", "--sign", "-", path\]/u);
+  assert.match(source, /codeTargets\.add\(macosCodeSignatureTarget\(application, path\)\)/u);
+  assert.match(source, /function macosCodeSignatureTarget\(application, path\)/u);
+  assert.match(source, /framework\|app\|appex\|xpc\|plugin\|bundle/u);
+  assert.match(source, /\["--force", "--sign", "-", codeTarget\]/u);
   assert.match(source, /\["--force", "--sign", "-", application\]/u);
   assert.doesNotMatch(source, /\["--force", "--deep", "--sign", "-", application\]/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
