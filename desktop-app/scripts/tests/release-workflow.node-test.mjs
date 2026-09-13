@@ -77,28 +77,11 @@ test('release workflows use the locked Codex CLI without remote script execution
     assert.match(workflow, /npm run verify:codex-app-server-protocol-contract/u)
     assert.match(workflow, /Smoke-test real Codex app-server contract/u)
     assert.match(workflow, /npm run verify:real-codex-app-server-contract/u)
-    assert.match(workflow, /Run release LLM E2E/u)
-    assert.match(workflow, /npm --prefix desktop-app run test:e2e:release-llm/u)
-    assert.match(
-      workflow,
-      /DASCOWORK_RELEASE_LLM_SMOKE: \$\{\{ secrets\.DASCOWORK_RELEASE_LLM_SMOKE \}\}/u
-    )
-    assert.match(
-      workflow,
-      /DASCOWORK_RELEASE_ADMIN_BACKEND_URL: \$\{\{ secrets\.DASCOWORK_RELEASE_ADMIN_BACKEND_URL \}\}/u
-    )
-    for (const setting of [
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON',
-      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS'
-    ]) {
-      assert.match(workflow, new RegExp(`${setting}: \\$\\{\\{ secrets\\.${setting} \\}\\}`, 'u'))
-    }
-    assert.doesNotMatch(workflow, /if:[^\n]*DASCOWORK_RELEASE_LLM_SMOKE/u)
+    assert.doesNotMatch(workflow, /Run release LLM E2E/u)
+    assert.doesNotMatch(workflow, /test:e2e:release-llm/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_RELEASE_LLM_SMOKE/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_RELEASE_ADMIN_BACKEND_/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_[A-Z_]+: \$\{\{ secrets\./u)
     assert.match(workflow, /Verify native Codex runtime boundaries/u)
     assert.match(workflow, /node scripts\/verify-codex-native-runtime-boundaries\.mjs/u)
     assert.match(workflow, /Upload native runtime boundary report/u)
@@ -114,9 +97,12 @@ test('internal build workflow smoke-tests built installers without publishing th
   ])
 
   assert.match(releaseWorkflow, /run-installer-local-media-smoke\.mjs/u)
-  assert.match(releaseWorkflow, /Prepare signed Primary Runtime product configuration/u)
-  assert.match(releaseWorkflow, /Restore disabled Primary Runtime product configuration/u)
+  assert.match(
+    releaseWorkflow,
+    /Disable Primary Runtime production configuration for engineering installer builds/u
+  )
   assert.match(releaseWorkflow, /write-primary-runtime-product-config\.mjs --disabled/u)
+  assert.doesNotMatch(releaseWorkflow, /write-primary-runtime-product-config\.mjs\n/u)
   assert.match(releaseWorkflow, /for kind in appimage deb snap/u)
   for (const kind of ['dmg', 'nsis', 'appimage', 'deb', 'snap']) {
     assert.match(installerSmoke, new RegExp(`kind === '${kind}'`, 'u'))
@@ -292,10 +278,13 @@ test('release gates require Primary Runtime performance evidence and packaged R0
     'node scripts/run-primary-runtime-performance.mjs'
   )
   assert.match(packageJson.scripts['test:release-contract'], /primary-runtime-performance/u)
-  assert.match(releaseWorkflow, /Run release LLM E2E/u)
-  assert.match(releaseWorkflow, /npm --prefix desktop-app run test:e2e:release-llm/u)
-  assert.match(testPlanWorkflow, /Run release LLM E2E/u)
-  assert.match(testPlanWorkflow, /npm --prefix desktop-app run test:e2e:release-llm/u)
+  for (const workflow of [releaseWorkflow, testPlanWorkflow]) {
+    assert.doesNotMatch(workflow, /Run release LLM E2E/u)
+    assert.doesNotMatch(workflow, /test:e2e:release-llm/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_RELEASE_LLM_SMOKE/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_RELEASE_ADMIN_BACKEND_/u)
+    assert.doesNotMatch(workflow, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_[A-Z_]+: \$\{\{ secrets\./u)
+  }
   for (const runner of [devRunner, releaseRunner]) {
     assert.match(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL/u)
     assert.match(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON/u)

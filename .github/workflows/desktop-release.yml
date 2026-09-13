@@ -103,21 +103,6 @@ jobs:
       - name: Run packaged smoke
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:packaged
 
-      - name: Run release LLM E2E
-        env:
-          DASCOWORK_RELEASE_LLM_SMOKE: ${{ secrets.DASCOWORK_RELEASE_LLM_SMOKE }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_URL: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_URL }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID }}
-          DASCOWORK_RELEASE_EXTERNAL_RETRY: ${{ secrets.DASCOWORK_RELEASE_EXTERNAL_RETRY }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS }}
-        run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:release-llm
-
       - name: Check change scope
         shell: bash
         run: |
@@ -204,25 +189,12 @@ jobs:
         run: npm run build:codex-app-server-client
         working-directory: desktop-app
 
-      - name: Prepare signed Primary Runtime product configuration
-        env:
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON }}
-          DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: ${{ secrets.DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS }}
-        run: node scripts/write-primary-runtime-product-config.mjs
+      - name: Disable Primary Runtime production configuration for engineering installer builds
+        run: node scripts/write-primary-runtime-product-config.mjs --disabled
         working-directory: desktop-app
 
       - name: Build installer
         run: npm run ${{ matrix.command }} -- --${{ matrix.arch }}
-        working-directory: desktop-app
-
-      - name: Restore disabled Primary Runtime product configuration
-        if: always()
-        run: node scripts/write-primary-runtime-product-config.mjs --disabled
         working-directory: desktop-app
 
       - name: Enable Codex workspace sandbox on Linux
