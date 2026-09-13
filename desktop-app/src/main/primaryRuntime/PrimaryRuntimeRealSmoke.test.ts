@@ -11,7 +11,6 @@ import { DesktopHostCapabilityRuntime } from '../appTools/DesktopHostCapabilityR
 import { readPrimaryRuntimeBundledPluginDescriptors } from '../bundledPlugins'
 import { PrimaryRuntimeLocator } from './PrimaryRuntimeLocator'
 import { PrimaryRuntimeService } from './PrimaryRuntimeService'
-import type { WorkspaceDependencyLoadResult } from './primaryRuntimeTypes'
 
 const candidateArchive = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_ARCHIVE?.trim()
 const candidateVersion = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_VERSION?.trim()
@@ -89,7 +88,8 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
 
     const text = result.contentItems.find((item) => item.type === 'inputText')?.text
     expect(text).toBeTruthy()
-    const dependencies = JSON.parse(text!) as WorkspaceDependencyLoadResult
+    const dependencies = await service.loadDependencies()
+    expect(text).toBe(dependencies.text)
     expect(dependencies.bundleVersion).toBe(diagnostic.manifest?.bundleVersion)
     expect(dependencies).not.toHaveProperty('root')
     expect(dependencies).not.toHaveProperty('nodePackages')
