@@ -30,7 +30,7 @@
 1. 不承诺读取、修改或回写任何既有 PPTX；文本替换、图片替换、形状/图表/备注/元数据修改、页面增删或重排、主题/母版变更以及 round-trip 保真都不在本轮验收中。
 2. 即使选定 plugin 自身具备部分编辑能力，本轮也不发布对应产品承诺、不为其增加 UI/API，并且不能用编辑既有 PPTX 的测试替代“从非 PPTX 工作区输入新建 PPTX”的证据。
 3. “PPTX 可被 PowerPoint/LibreOffice 打开”是文件有效性 QA，不等同于本产品承诺编辑能力。若以后需要编辑既有 PPTX，另立 capability/parity 计划和独立 acceptance criteria。
-4. Apple Developer ID 签名/notarization、Windows Authenticode、证书信誉和操作系统发布者信任不在本轮范围；macOS 如因本机加载需要可使用 ad-hoc 签名，但 receipt 必须标为 `ad-hoc/test-only`。
+4. Apple Developer ID 签名/notarization、Windows Authenticode、证书信誉和操作系统发布者信任不在本轮范围；本轮不引入 macOS 或 Windows 的输入签名步骤，原生执行/渲染验证是唯一所需的运行证据，所有 receipt 必须保留 `productionTrust=false`。
 5. 生产 config/manifest 私钥托管、密钥轮换、受保护环境审批、正式 attestation 和第三方信任回执不在本轮范围。CI 临时测试密钥只用于证明协议代码有效。
 6. 写入公开 origin/CDN、canonical production config 提升、生产缓存策略、公开后 forward-recovery 和真实用户流量验证不在本轮范围；GitHub artifact 不是公开 CDN，也不能作为已上线声明。
 7. 如果未来要求最低 Windows 客户端版本、macOS Gatekeeper、SmartScreen 或真实 CDN SLA 证据，应另立 Production Readiness 计划并接入 self-hosted/专用 runner 与生产凭据，不能反向修改本计划的工程完成证据。
@@ -156,7 +156,7 @@ Runtime 安装成功后，参考项目先同步 runtime manifest 声明的 bundl
 ### 2.8 生产门禁关闭后的语义
 
 1. `verify:platform` 只证明“该 target archive 在对应 GitHub runner 上能执行、加载 native dependency、调用 LibreOffice/Poppler 并正确使用锁定字体”；它输出 `platform-validation.json`，不得输出或命名为 `trust-receipt`。
-2. macOS/Windows 生产身份签名步骤从 build matrix 删除；不得因为缺 Apple/Windows 凭据而让工程 workflow 红灯。若某个测试二进制必须 ad-hoc 签名才能在 runner 上加载，receipt 必须明确记录 `identity=adhoc`、`notarized=false`、`productionTrust=false`。
+2. macOS/Windows 生产身份签名步骤从 build matrix 删除；不得因为缺 Apple/Windows 凭据而让工程 workflow 红灯。本轮不为测试二进制引入 ad-hoc 或其他签名步骤，receipt 只记录 `productionTrust=false`。
 3. `primary-runtime-build.yml` 的协调 job 是 engineering feed 的唯一自动生产者；它直接消费同一 run 的四个固定命名 staging，拒绝调用者自由指定 artifact 名称、混用 commit/lock SHA 或缺少 target。
 4. `primary-runtime-publish.yml` 在本轮只允许“验证并重新组装为 GitHub artifact”，不得持有生产私钥、云写权限或公开部署步骤。不存在 `.github/workflows/primary-runtime-deploy.yml` 的本轮交付要求。
 5. 客户端签名/sequence/origin 校验代码仍必须有单测和本地 feed E2E：CI 临时密钥证明正向路径，篡改 metadata、错误公钥、sequence 回退和非法 origin 证明 fail-closed。这是协议正确性证据，不是生产信任证明。
@@ -312,7 +312,7 @@ PPTX → render / QA / workspace preview
 4. 物化阶段生成 `runtime-inputs.manifest.json`：记录 target、source/toolchain lock SHA、builder/version、每个输入组件、每个文件的 path/mode/SHA、patch SHA、许可证和构建 receipt。`verify-runtime-inputs.mjs` 拒绝缺文件、额外未绑定文件、符号链接逃逸、错误目标、错误可执行格式/版本以及目录外依赖；四目标分别执行 Node/Python import、native module load、LibreOffice/Poppler 和中文字体 render smoke。
 5. 每个目标 input root 只包含该目标需要的 `dependencies/node`、`dependencies/python`、`dependencies/native`、字体和 Runtime-owned Codex plugin marketplace。Runtime 预置并核验 PptxGenJS、JSZip、`sharp`、所需 Python packages、LibreOffice/Poppler 和字体；具体 required set 以 plugin 实际调用图为准，不复制旧 `@oai/artifact-tool` 清单。
 6. 修改 `build-runtime.mjs`：工程/发布候选模式强制显式 `--target` 与 `--input-root`，并核对 input manifest；仓库默认 `resources/runtime-inputs/<target>` 只能作为单测 fixture，不能进入 GitHub Actions artifact workflow。`.github/workflows/primary-runtime-build.yml` 的固定顺序是 `fetch → materialize → verify:inputs → build → verify archive/component smoke → verify:platform → upload target staging`，不能 checkout 后直接 build。当前只传 `--matrix` 实际仍落到本机 target 的 `build:matrix`/`verify:matrix` 必须删除，或改成只汇总四个 native-runner receipt 的 coordinator，不能继续给出“本机已构建四目标”的假象。
-7. `verify-runtime-platform.mjs` 在 archive 完成后于对应原生 runner 解压并验证：目标/可执行格式与版本、Node/Python 执行、native module load、动态库闭包、LibreOffice/Poppler、锁定中文字体解析与 render。输出固定 schema 的 `platform-validation.json`，包含 target、runner image、archive SHA、各项 command/result SHA 和 `productionTrust=false`。删除 `verify:platform-trust` 与无条件抛错的生产占位；不新增 `sign:inputs`，不读取 Apple/Windows 证书。若 macOS 测试必须 ad-hoc codesign，只能作为加载准备步骤并显式记录非生产身份。
+7. `verify-runtime-platform.mjs` 在 archive 完成后于对应原生 runner 解压并验证：目标/可执行格式与版本、Node/Python 执行、native module load、动态库闭包、LibreOffice/Poppler、锁定中文字体解析与 render。输出固定 schema 的 `platform-validation.json`，包含 target、runner image、archive SHA、各项 command/result SHA 和 `productionTrust=false`。删除 `verify:platform-trust` 与无条件抛错的生产占位；不新增 `sign:inputs`、不读取 Apple/Windows 证书，也不把任何签名步骤作为加载或验收前置。
 8. 输出通用 format v2 `runtime.json`、target ZIP、file manifest、SBOM、THIRD_PARTY_NOTICES、source/provenance receipt、component smoke、platform validation 和 target compatibility。`provenance.json` 至少绑定 desktop/runtime commit、target、source/toolchain/input/file manifest SHA、runtime manifest SHA、archive SHA/size、SBOM/notices SHA、patch SHA、component smoke SHA、platform-validation SHA、builder identity 和 workflow run；上传 artifact 只包含已声明 staging 文件，禁止临时 cache、测试私钥或未登记内容。
 9. 新增并人工审查 `runtime-hard-limits.json`，固定四目标 archive、unpacked 和 minimum-free-disk 的候选防滥用上限；构建脚本只能读取，不能自动生成或放宽。新增 `verify-runtime-hard-limits.mjs`、单测和 `verify:hard-limits` package script，拒绝缺目标、非正整数、schema 漂移或构建修改。它不是 release budget，不能单独满足 engineering artifact 汇总门禁，也不能包含依赖尚未实现的 cold-install/event-loop 最终阈值。
 10. 首个候选禁止冒充生产发布；每个 target clean runner 至少执行 5 次独立 build/解压，输出绑定 source/toolchain/input/file manifest、archive SHA 和 runner identity 的 P1a measurement receipt。真实空缓存安装、并发聊天和 event-loop 测量明确推迟到 P3b，在 P3a installer 完成后执行。
