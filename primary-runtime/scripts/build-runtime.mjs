@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
   mkdir,
   readFile,
@@ -31,7 +33,7 @@ import {
   assertNativeRuntimeTarget,
   parseRuntimeTargetOption,
 } from "./runtime-target.mjs";
-import { writeStoredZipArchive } from "./zip-writer.mjs";
+import { writeDeflatedZipArchive } from "./zip-writer.mjs";
 
 const builderName = "@dascowork/primary-runtime-builder";
 const outputArchiveName = "primary-runtime.zip";
@@ -86,7 +88,7 @@ await mkdir(outputRoot, { recursive: true });
 
 const bundleVersion =
   argumentsValue.version ?? `${lock.builderVersion}+${target}`;
-const inputEntries = await collectInputEntries(inputRoot);
+const inputEntries = await withEntryDigests(await collectInputEntries(inputRoot));
 assertRequiredRuntimeInputs(inputEntries, target);
 
 const runtimeManifest = buildRuntimeManifest({
@@ -116,24 +118,25 @@ const generatedEntries = [
   ),
   binaryEntry("provenance/component-smoke.json", componentSmokeBytes),
 ];
-const entries = [...inputEntries, ...generatedEntries];
+const entries = await withEntryDigests([...inputEntries, ...generatedEntries]);
 const canonicalManifest = canonicalFileManifest(
   entries.map((entry) => ({
     path: entry.path,
     mode: (entry.mode ?? 0o100644).toString(8).padStart(6, "0"),
-    sha256: sha256(entry.data),
+    sha256: entry.sha256,
   })),
 );
 const archivePath = join(outputRoot, outputArchiveName);
-await writeStoredZipArchive(archivePath, entries);
-const archiveBytes = await readFile(archivePath);
+await writeDeflatedZipArchive(archivePath, entries);
+const archiveDetails = await stat(archivePath);
+const archiveSha256 = await sha256File(archivePath);
 const unpackedBytes = entries.reduce(
-  (total, entry) => total + Buffer.byteLength(entry.data ?? ""),
+  (total, entry) => total + entry.sizeBytes,
   0,
 );
 const hardLimit = hardLimits.targets[target];
 if (
-  archiveBytes.byteLength > hardLimit.maxArchiveBytes ||
+  archiveDetails.size > hardLimit.maxArchiveBytes ||
   unpackedBytes > hardLimit.maxUnpackedBytes
 ) {
   throw new Error(
@@ -147,8 +150,8 @@ const provenance = {
   builderVersion: lock.builderVersion,
   target,
   bundleVersion,
-  archiveSha256: sha256(archiveBytes),
-  archiveSizeBytes: archiveBytes.byteLength,
+  archiveSha256,
+  archiveSizeBytes: archiveDetails.size,
   sourceLockSha256: sha256(sourceLockBytes),
   toolchainsLockSha256: sha256(toolchainsLockBytes),
   inputManifestSha256: sha256(inputManifestBytes),
@@ -169,7 +172,7 @@ const measurement = {
   schemaVersion: "dascowork-primary-runtime-p1a-build-unpack-measurement.v1",
   target,
   archiveSha256: provenance.archiveSha256,
-  archiveBytes: archiveBytes.byteLength,
+  archiveBytes: archiveDetails.size,
   unpackedBytes,
   sourceLockSha256: provenance.sourceLockSha256,
   toolchainsLockSha256: provenance.toolchainsLockSha256,
@@ -268,7 +271,7 @@ function buildRuntimeManifest({
     bundledSkills: [
       {
         path: bundledSkillPath,
-        sha256: sha256(bundledSkill.data),
+        sha256: bundledSkill.sha256,
       },
     ],
     // New Runtime generations do not retire any skill by default. A future
@@ -387,7 +390,8 @@ async function collectDirectory({ root, directory, entries }) {
       entries.push({
         path: archivePath,
         mode: details.mode & 0o111 ? 0o100755 : 0o100644,
-        data: await readFile(absolute),
+        sourcePath: absolute,
+        sizeBytes: details.size,
       });
     } else {
       throw new Error(
@@ -395,6 +399,31 @@ async function collectDirectory({ root, directory, entries }) {
       );
     }
   }
+}
+
+async function withEntryDigests(entries) {
+  const output = [];
+  for (const entry of entries) {
+    const sizeBytes =
+      entry.sizeBytes ?? Buffer.byteLength(Buffer.from(entry.data ?? ""));
+    output.push({
+      ...entry,
+      sizeBytes,
+      sha256:
+        entry.sha256 ??
+        (entry.sourcePath
+          ? await sha256File(entry.sourcePath)
+          : sha256(entry.data ?? "")),
+    });
+  }
+  return output;
+}
+
+async function sha256File(path) {
+  const digest = createHash("sha256");
+  const input = createReadStream(path);
+  for await (const chunk of input) digest.update(chunk);
+  return digest.digest("hex");
 }
 
 function thirdPartyNotices(lock, toolchains = undefined) {

@@ -256,7 +256,9 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
               ? ["-h"]
               : command === "codesign"
                 ? ["--display", "--verbose=2", "/usr/bin/codesign"]
-              : ["--version"];
+                : command === "file"
+                  ? ["-v"]
+                : ["--version"];
     try {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
@@ -620,8 +622,21 @@ async function applyMacosAdHocSignature({ recipe, outputRoot }) {
     "dependencies/native/libreoffice/LibreOffice.app",
   );
   await assertRegularDirectory(application, "macOS LibreOffice application bundle");
+  const codesign = resolveLockedBuilderCommand("codesign");
+  const file = resolveLockedBuilderCommand("file");
+  // `cp(..., { dereference: true })` invalidates upstream nested signatures.
+  // Sign every regular Mach-O leaf first, then the enclosing application.
+  // `--deep` cannot be used here: LibreOffice contains an embedded framework
+  // whose directory shape makes Apple's deep traversal ambiguous on ARM hosts.
+  await visit(application, async (path) => {
+    const inspected = await run(file, ["-b", path], { env: process.env });
+    if (!/\bMach-O\b/u.test(inspected.stdout)) return;
+    await run(codesign, ["--force", "--sign", "-", path], {
+      env: process.env,
+    });
+  });
   await run(
-    resolveLockedBuilderCommand("codesign"),
+    codesign,
     ["--force", "--sign", "-", application],
     { env: process.env },
   );

@@ -218,6 +218,7 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
     assert.ok(toolchain.builder.tools.includes("hdiutil"));
     assert.ok(toolchain.builder.tools.includes("xattr"));
     assert.ok(toolchain.builder.tools.includes("codesign"));
+    assert.ok(toolchain.builder.tools.includes("file"));
     assert.equal(recipe?.toolchain.codeSigning, "ad-hoc-test-only");
     assert.deepEqual(recipe?.outputs, [
       {
@@ -374,7 +375,12 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
   assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
   assert.match(source, /applyMacosAdHocSignature\(\{ recipe, outputRoot \}\)/u);
+  assert.match(source, /await visit\(application, async \(path\) =>/u);
+  assert.match(source, /const inspected = await run\(file, \["-b", path\]/u);
+  assert.match(source, /\/\\bMach-O\\b\/u\.test\(inspected\.stdout\)/u);
+  assert.match(source, /\["--force", "--sign", "-", path\]/u);
   assert.match(source, /\["--force", "--sign", "-", application\]/u);
+  assert.doesNotMatch(source, /\["--force", "--deep", "--sign", "-", application\]/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 
