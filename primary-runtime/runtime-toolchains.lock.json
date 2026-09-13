@@ -6,7 +6,13 @@
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "tools": ["git", "tar", "hdiutil", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "image": {
+          "version": "20260824.0482.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15%2F20260824.0482",
+          "sourceCommit": "f10516542b8f2fef89b652a8d5f5de63aa543b77",
+          "imageDigestSha256": "a876bf325c645f85a3184e0ef2414c972de2e7b601f834cc60ea5ad1f0e9a16a"
+        },
+        "tools": ["tar", "hdiutil", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -131,7 +137,13 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "tools": ["git", "tar", "hdiutil", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "ninja", "clang"]
+        "image": {
+          "version": "20260907.0337.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20260907.0337",
+          "sourceCommit": "9312c564c4df0b842ce00a6c202dccb519b8dfdd",
+          "imageDigestSha256": "a56806e89d54145f181c278f55fdb80f08e959b6161070bdd608bfcd907700b2"
+        },
+        "tools": ["tar", "hdiutil", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -256,6 +268,12 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
+        "image": {
+          "version": "20260907.229.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260907.229",
+          "sourceCommit": "c240f76fa0dd523af7376dbe8480964a3cb0af47",
+          "imageDigestSha256": "40a6ee9a9d9abcb58105c6fd3ed117f3ece7ae4c6ff80ccd8eb607006f056b15"
+        },
         "tools": ["git", "tar", "msiexec", "cmake", "ninja", "cl"]
       },
       "node": {
@@ -381,7 +399,13 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "tools": ["git", "tar", "bash", "perl", "aclocal", "autoconf", "automake", "gperf", "make", "cmake", "nasm", "ninja", "gcc"]
+        "image": {
+          "version": "20260907.300.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300",
+          "sourceCommit": "fc63e1b4dbfacf7e2449bf0706226f9f6eea583e",
+          "imageDigestSha256": "f204fd2ffb287b4612bdfabe9f5f0e42ad3ef17c674878b4bba2283b018cda7c"
+        },
+        "tools": ["tar", "dpkg-deb", "cmake", "ninja", "gcc", "g++"]
       },
       "node": {
         "name": "node-runtime",
@@ -458,22 +482,18 @@
       "nativeRecipes": [
         {
           "name": "libreoffice",
-          "materialization": "source-build",
-          "sourceComponent": "libreoffice",
-          "sourceArchiveFormat": "tar.xz",
-          "sourceDirectory": "libreoffice-26.2.6.3",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-linux-x64",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "LibreOffice_26.2.6.3_Linux_x86-64_deb/DEBS",
           "toolchain": {
-            "compiler": "gcc-13",
-            "buildSystem": "configure+make",
-            "flags": "--without-java --without-help --without-myspell-dicts --disable-cups --disable-gui --enable-option-checking=fatal"
+            "distribution": "TheDocumentFoundation-26.2.6-DEB",
+            "extraction": "dpkg-deb-readonly"
           },
-          "environment": { "CC": "gcc", "CXX": "g++" },
-          "commands": [
-            ["bash", "./configure", "--without-java", "--without-help", "--without-myspell-dicts", "--disable-cups", "--disable-gui", "--enable-option-checking=fatal"],
-            ["make", "-j2"]
-          ],
+          "environment": {},
+          "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "instdir", "destination": "dependencies/native/libreoffice" }
+            { "kind": "directory", "source": "runtime-root/opt/libreoffice26.2", "destination": "dependencies/native/libreoffice" }
           ],
           "closure": {
             "mode": "directory",

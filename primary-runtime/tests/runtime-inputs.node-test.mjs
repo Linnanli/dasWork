@@ -9,6 +9,7 @@ import test from "node:test";
 import {
   artifactsForTarget,
   assertRuntimeInputsManifest,
+  expectedBuilderImageIdentity,
   readRuntimeToolchainsLock,
   validateRuntimeToolchainsLock,
   writeRuntimeInputsManifest,
@@ -136,6 +137,21 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   delete missingBuilder.targets[target].builder;
   assert.throws(() => validateRuntimeToolchainsLock(missingBuilder), /invalid/u);
 
+  const mutableBuilderImage = structuredClone(lock);
+  mutableBuilderImage.targets[target].builder.image.version = "latest";
+  assert.throws(
+    () => validateRuntimeToolchainsLock(mutableBuilderImage),
+    /invalid/u,
+  );
+
+  const mismatchedBuilderDigest = structuredClone(lock);
+  mismatchedBuilderDigest.targets[target].builder.image.imageDigestSha256 =
+    "0".repeat(64);
+  assert.throws(
+    () => validateRuntimeToolchainsLock(mismatchedBuilderDigest),
+    /invalid/u,
+  );
+
   const missingClosure = structuredClone(lock);
   delete missingClosure.targets[target].nativeRecipes[0].closure;
   assert.throws(() => validateRuntimeToolchainsLock(missingClosure), /invalid/u);
@@ -155,70 +171,43 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   );
 });
 
-test("LibreOffice recipes use locked target-native binary materialization where source builds are unsupported", async () => {
+test("LibreOffice recipes use locked target-native binary materialization", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   for (const [target, toolchain] of Object.entries(lock.targets)) {
     const recipe = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "libreoffice",
     );
-    if (target === "win32-x64") {
-      assert.equal(recipe?.materialization, "prebuilt");
-      assert.equal(recipe?.sourceComponent, "libreoffice-windows-x64");
-      assert.equal(recipe?.sourceArchiveFormat, "msi");
-      assert.deepEqual(recipe?.commands, []);
-      assert.deepEqual(recipe?.environment, {});
-      assert.ok(toolchain.builder.tools.includes("msiexec"));
-      continue;
-    }
-    if (target.startsWith("darwin")) {
-      assert.equal(recipe?.materialization, "prebuilt");
-      assert.equal(recipe?.sourceComponent, `libreoffice-${target}`);
-      assert.equal(recipe?.sourceArchiveFormat, "dmg");
-      assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
-      assert.deepEqual(recipe?.commands, []);
-      assert.deepEqual(recipe?.environment, {});
-      assert.ok(toolchain.builder.tools.includes("hdiutil"));
+    assert.equal(recipe?.materialization, "prebuilt", target);
+    assert.deepEqual(recipe?.commands, []);
+    assert.deepEqual(recipe?.environment, {});
+    if (target === "linux-x64") {
+      assert.equal(recipe?.sourceComponent, "libreoffice-linux-x64");
+      assert.equal(recipe?.sourceArchiveFormat, "tar.gz");
+      assert.equal(
+        recipe?.sourceDirectory,
+        "LibreOffice_26.2.6.3_Linux_x86-64_deb/DEBS",
+      );
+      assert.equal(recipe?.toolchain.extraction, "dpkg-deb-readonly");
+      assert.ok(toolchain.builder.tools.includes("dpkg-deb"));
       assert.deepEqual(recipe?.outputs, [
         {
           kind: "directory",
-          source: "Contents",
+          source: "runtime-root/opt/libreoffice26.2",
           destination: "dependencies/native/libreoffice",
         },
       ]);
-      assert.deepEqual(recipe?.closure.entrypoints, [
-        "dependencies/native/libreoffice/MacOS/soffice",
-      ]);
       continue;
     }
-    assert.equal(recipe?.materialization, "source-build");
-    assert.deepEqual(
-      recipe?.commands[0]?.slice(0, 2),
-      ["bash", "./configure"],
-      `${target} must not regenerate configure with the mutable builder autotools`,
-    );
-    assert.ok(
-      toolchain.builder.tools.includes("bash"),
-      `${target} must record the shell that executes the locked configure script`,
-    );
-    assert.ok(
-      recipe?.commands[0]?.includes("--disable-cups"),
-      `${target} must not depend on the builder's CUPS development package`,
-    );
-    assert.match(recipe?.toolchain.flags ?? "", /--disable-cups/u);
-    assert.ok(
-      recipe?.commands[0]?.includes("--disable-gui"),
-      `${target} must use the Runtime's headless LibreOffice build recipe`,
-    );
-    assert.match(recipe?.toolchain.flags ?? "", /--disable-gui/u);
-    if (target.startsWith("darwin")) {
-      assert.ok(recipe?.commands[0]?.includes("--enable-bogus-pkg-config"));
-      assert.match(
-        recipe?.toolchain.flags ?? "",
-        /--enable-bogus-pkg-config/u,
-      );
-    } else {
-      assert.ok(!recipe?.commands[0]?.includes("--enable-bogus-pkg-config"));
+    if (target === "win32-x64") {
+      assert.equal(recipe?.sourceComponent, "libreoffice-windows-x64");
+      assert.equal(recipe?.sourceArchiveFormat, "msi");
+      assert.ok(toolchain.builder.tools.includes("msiexec"));
+      continue;
     }
+    assert.equal(recipe?.sourceComponent, `libreoffice-${target}`);
+    assert.equal(recipe?.sourceArchiveFormat, "dmg");
+    assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
+    assert.ok(toolchain.builder.tools.includes("hdiutil"));
   }
 });
 
@@ -264,6 +253,17 @@ test("Windows MSI extraction is locked and does not restore the rejected MSYS so
   );
   assert.match(source, /\["\/a", archive, "\/qn", `TARGETDIR=\$\{output\}`\]/u);
   assert.doesNotMatch(source, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT|MSYSTEM/u);
+});
+
+test("Linux LibreOffice DEB extraction is offline and never installs into the runner", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(source, /recipe\.toolchain\.extraction !== "dpkg-deb-readonly"/u);
+  assert.match(
+    source,
+    /resolveLockedBuilderCommand\("dpkg-deb"\),\s*\["--extract", join\(buildRoot, packageName\), runtimeRoot\]/u,
+  );
+  assert.doesNotMatch(source, /dpkg\s+--install|dpkg\s+-i/u);
 });
 
 test("macOS DMG extraction is temporary and produces only the locked application payload", async () => {
@@ -431,7 +431,7 @@ test("P1 command line tools accept the documented equals-form arguments", async 
           `--source-cache=${join(root, "cache")}`,
           `--output=${join(root, "inputs")}`,
         ]),
-      /requires locked builder tool|cache is missing locked/u,
+      /must use locked builder image|requires locked builder tool|cache is missing locked/u,
     );
     await assert.rejects(
       () =>
@@ -527,7 +527,9 @@ async function createFixtureManifest(fixture) {
     readRuntimeSourcesLock(sourceLockPath),
     readRuntimeToolchainsLock(toolchainsLockPath),
   ]);
-  const observedImage = `fixture:${fixture.target}:runner-image-v1`;
+  const observedImage = expectedBuilderImageIdentity(
+    toolchainsLock.targets[fixture.target].builder,
+  );
   await writeRuntimeInputsManifest({
     inputRoot: fixture.inputRoot,
     target: fixture.target,

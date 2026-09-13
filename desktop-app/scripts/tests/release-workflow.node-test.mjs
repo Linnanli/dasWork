@@ -142,16 +142,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /npm --prefix primary-runtime run fetch:sources/u)
   assert.match(buildWorkflow, /--timeout-ms 900000/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run materialize:inputs/u)
-  assert.match(buildWorkflow, /Install locked macOS builder prerequisites/u)
-  assert.match(buildWorkflow, /brew install autoconf automake gperf make pkgconf/u)
-  assert.match(buildWorkflow, /primary-runtime-builder-bin/u)
-  assert.match(buildWorkflow, /gmake" "\$builder_bin\/make/u)
-  assert.match(buildWorkflow, /brew --prefix make/u)
-  assert.match(buildWorkflow, /Install locked Linux builder prerequisites/u)
-  assert.match(
-    buildWorkflow,
-    /apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm/u
-  )
+  assert.doesNotMatch(buildWorkflow, /brew install|apt-get install/u)
   // LibreOffice for Windows is a locked upstream MSI materialized into the
   // staged Runtime; MSYS cannot build LibreOffice on Windows and must not be
   // reintroduced as an unreviewed alternate path.
@@ -164,7 +155,6 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /arch: x64/u)
   assert.doesNotMatch(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
-  assert.match(buildWorkflow, /ImageOS/u)
   assert.match(buildWorkflow, /ImageVersion/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run verify:inputs/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run measure:unpack/u)

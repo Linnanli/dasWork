@@ -205,21 +205,6 @@ jobs:
             --receipt "$RUNNER_TEMP/source-fetch.json" \
             --timeout-ms 900000
 
-      - name: Install locked macOS builder prerequisites
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          brew install autoconf automake gperf make pkgconf
-          builder_bin="$RUNNER_TEMP/primary-runtime-builder-bin"
-          mkdir -p "$builder_bin"
-          ln -sf "$(brew --prefix make)/bin/gmake" "$builder_bin/make"
-          printf '%s\n' "$builder_bin" "$(brew --prefix automake)/bin" "$(brew --prefix make)/bin" >> "$GITHUB_PATH"
-
-      - name: Install locked Linux builder prerequisites
-        if: runner.os == 'Linux'
-        shell: bash
-        run: sudo apt-get install --yes --no-install-recommends gperf libfontconfig1-dev libkrb5-dev libnss3-dev nasm
-
       - name: Configure locked Windows MSVC builder environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -229,9 +214,8 @@ jobs:
       - name: Materialize target-native offline Runtime inputs
         shell: bash
         run: |
-          : "${ImageOS:?GitHub-hosted runner image operating-system label is required}"
           : "${ImageVersion:?GitHub-hosted runner image version is required}"
-          export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${ImageOS}:${ImageVersion}"
+          export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${{ matrix.runner }}:${ImageVersion}"
           npm --prefix primary-runtime run materialize:inputs -- \
             --target=${{ matrix.target }} \
             --source-cache "$RUNNER_TEMP/primary-runtime-source-cache" \

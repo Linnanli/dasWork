@@ -22,7 +22,13 @@ const targetKeys = new Set([
   "pythonWheels",
   "nativeRecipes",
 ]);
-const builderKeys = new Set(["identity", "tools"]);
+const builderKeys = new Set(["identity", "image", "tools"]);
+const builderImageKeys = new Set([
+  "version",
+  "releaseUrl",
+  "sourceCommit",
+  "imageDigestSha256",
+]);
 const artifactKeys = new Set([
   "name",
   "version",
@@ -324,6 +330,12 @@ export async function assertRuntimeInputsManifest({
     JSON.stringify(manifest.artifacts) !== JSON.stringify(expectedArtifacts) ||
     manifest.builder.runner !== toolchainsLock.targets[target].runner ||
     manifest.builder.identity !== toolchainsLock.targets[target].builder.identity ||
+    manifest.builder.observedImage !==
+      expectedBuilderImageIdentity(toolchainsLock.targets[target].builder) ||
+    manifest.builder.observedImageSha256 !==
+      sha256FileContents(
+        expectedBuilderImageIdentity(toolchainsLock.targets[target].builder),
+      ) ||
     JSON.stringify(manifest.builder.tools.map((tool) => tool.command)) !==
       JSON.stringify(toolchainsLock.targets[target].builder.tools) ||
     manifest.patches.length !== 1 ||
@@ -402,6 +414,7 @@ function isBuilder(value) {
     isPlainObject(value) &&
     !hasUnexpectedKeys(value, builderKeys) &&
     isNonEmptyString(value.identity) &&
+    isBuilderImage(value.image) &&
     Array.isArray(value.tools) &&
     value.tools.length > 0 &&
     value.tools.every(isBuilderTool) &&
@@ -409,8 +422,28 @@ function isBuilder(value) {
   );
 }
 
+function isBuilderImage(value) {
+  return (
+    isPlainObject(value) &&
+    !hasUnexpectedKeys(value, builderImageKeys) &&
+    isExactVersion(value.version) &&
+    !/^(?:latest|stable|current)$/iu.test(value.version) &&
+    isHttpsUrl(value.releaseUrl) &&
+    /^[a-f0-9]{40}$/u.test(value.sourceCommit) &&
+    isSha256(value.imageDigestSha256) &&
+    value.imageDigestSha256 ===
+      sha256FileContents(
+        `${value.releaseUrl}\n${value.version}\n${value.sourceCommit}\n`,
+      )
+  );
+}
+
+export function expectedBuilderImageIdentity(builder) {
+  return `${builder.identity}:${builder.image.version}`;
+}
+
 function isBuilderTool(value) {
-  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value);
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._+-]*$/u.test(value);
 }
 
 function isArtifact(value) {

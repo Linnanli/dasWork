@@ -24,7 +24,10 @@ import {
   currentRuntimeTarget,
   parseRuntimeTargetOption,
 } from "../scripts/runtime-target.mjs";
-import { writeRuntimeInputsManifest } from "../scripts/runtime-inputs.mjs";
+import {
+  expectedBuilderImageIdentity,
+  writeRuntimeInputsManifest,
+} from "../scripts/runtime-inputs.mjs";
 
 const executeFile = promisify(execFile);
 const provenanceScript = resolve(
@@ -516,7 +519,7 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   await writeFileEnsured(join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"), "OTTOfixture\n");
   const toolchainsLock = JSON.parse(await readFile(toolchainsLockPath, "utf8"));
   const targetToolchain = toolchainsLock.targets[target];
-  const observedImage = `fixture:${target}:runner-image-v1`;
+  const observedImage = expectedBuilderImageIdentity(targetToolchain.builder);
   await writeRuntimeInputsManifest({
     inputRoot,
     target,

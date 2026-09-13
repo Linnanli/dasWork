@@ -29,6 +29,7 @@ import {
   artifactsForTarget,
   assertCachedArtifact,
   contentAddressedCachePath,
+  expectedBuilderImageIdentity,
   readRuntimeToolchainsLock,
   writeRuntimeInputsManifest,
 } from "./runtime-inputs.mjs";
@@ -90,6 +91,15 @@ const componentsByName = new Map(
     .flat()
     .map((component) => [component.name, component]),
 );
+
+const observedBuilderImage = expectedBuilderImageIdentity(
+  targetToolchain.builder,
+);
+if (process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE !== observedBuilderImage) {
+  throw new Error(
+    `AT-RT-INPUT-01 blocked: ${target} must use locked builder image ${observedBuilderImage}.`,
+  );
+}
 
 const builderTools = await verifyLockedBuilderToolchain({
   target,
@@ -194,13 +204,8 @@ try {
       version: toolchainsLock.materializerVersion,
       runner: targetToolchain.runner,
       identity: targetToolchain.builder.identity,
-      observedImage:
-        process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE ??
-        targetToolchain.builder.identity,
-      observedImageSha256: sha256(
-        process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE ??
-          targetToolchain.builder.identity,
-      ),
+      observedImage: observedBuilderImage,
+      observedImageSha256: sha256(observedBuilderImage),
       tools: builderTools,
     },
   });
@@ -548,6 +553,8 @@ async function materializeNativeRecipes({
           },
         });
       }
+    } else {
+      await materializePrebuiltNativeRecipe({ recipe, buildRoot });
     }
     for (const output of recipe.outputs) {
       const source = await safeChild(buildRoot, output.source);
@@ -570,6 +577,33 @@ async function materializeNativeRecipes({
       }
     }
     await assertRecipeClosure({ recipe, outputRoot });
+  }
+}
+
+async function materializePrebuiltNativeRecipe({ recipe, buildRoot }) {
+  if (recipe.toolchain.extraction !== "dpkg-deb-readonly") return;
+  if (target !== "linux-x64") {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: dpkg Runtime extraction is only valid on linux-x64.",
+    );
+  }
+  const packages = (await readdir(buildRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".deb"))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  if (packages.length === 0) {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: locked LibreOffice DEB payload is empty.",
+    );
+  }
+  const runtimeRoot = join(buildRoot, "runtime-root");
+  await mkdir(runtimeRoot, { recursive: true });
+  for (const packageName of packages) {
+    await run(
+      resolveLockedBuilderCommand("dpkg-deb"),
+      ["--extract", join(buildRoot, packageName), runtimeRoot],
+      { cwd: buildRoot, env: process.env },
+    );
   }
 }
 
