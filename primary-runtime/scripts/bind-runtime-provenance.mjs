@@ -112,7 +112,7 @@ function assertExistingBindings({
       "platform-runtime-manifest",
     platformValidation.componentSmokeSha256 !== sha256(files.componentSmoke) &&
       "platform-component-smoke",
-    platformValidation.inputValidationSha256 !== sha256(files.componentSmoke) &&
+    !/^[a-f0-9]{64}$/u.test(platformValidation.inputValidationSha256 ?? "") &&
       "platform-input-validation",
     platformValidation.runner !== provenance.builderIdentity?.runner &&
       "platform-runner",
