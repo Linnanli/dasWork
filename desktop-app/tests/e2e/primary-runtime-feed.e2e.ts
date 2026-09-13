@@ -1,7 +1,13 @@
 import { expect, test } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
 
-import { attachDiagnostics, closeApp, collectRendererLogs, launchApp } from './support/app'
+import {
+  attachDiagnostics,
+  closeApp,
+  collectRendererLogs,
+  launchApp,
+  serializeDiagnosticData
+} from './support/app'
 import { sendMessage } from './support/chatActions'
 import {
   assistantMessageResponse,
@@ -79,7 +85,7 @@ test('AT-E2E-01 installs a signed Feed Runtime and creates a presentation throug
     await expect(page.locator('[data-role="assistant"]')).toContainText(
       'The ordinary app-server chat stayed responsive while the Runtime installation ran.'
     )
-    await expectPrimaryRuntimeReady(page)
+    await expectPrimaryRuntimeReady(page, logs)
     await expectRuntimePresentationSkill(page)
     await sendMessage(page, 'Load the verified workspace Runtime and create a new presentation.')
 
@@ -115,7 +121,7 @@ test('AT-E2E-01 installs a signed Feed Runtime and creates a presentation throug
   }
 })
 
-async function expectPrimaryRuntimeReady(page: Page): Promise<void> {
+async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): Promise<void> {
   let latestStatus: unknown
   try {
     await expect
@@ -131,10 +137,21 @@ async function expectPrimaryRuntimeReady(page: Page): Promise<void> {
       )
       .toBe('ready')
   } catch (error) {
+    const diagnosticLogs = safePrimaryRuntimeDiagnosticLogs(logs)
     throw new Error(
-      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}`,
+      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}\n${diagnosticLogs}`,
       { cause: error }
     )
+  }
+}
+
+function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
+  try {
+    // Main output is only included after the shared diagnostic serializer has
+    // redacted credentials. Keep the failure surface bounded and relevant.
+    return serializeDiagnosticData({ primaryRuntimeLogs: logs.slice(-32) }).slice(-8_000)
+  } catch {
+    return 'Primary Runtime diagnostic logs were unavailable after redaction.'
   }
 }
 
