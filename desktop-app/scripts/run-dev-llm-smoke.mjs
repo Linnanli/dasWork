@@ -17,28 +17,6 @@ function requireDevelopmentEnvironment() {
   if (!process.env.DASCOWORK_DEV_ADMIN_BACKEND_URL?.trim()) {
     throw new Error('DASCOWORK_DEV_ADMIN_BACKEND_URL is required.')
   }
-  requirePrimaryRuntimeProductConfig()
-  if (!process.env.DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH?.trim()) {
-    throw new Error('DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH is required for dev R07.')
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function requirePrimaryRuntimeProductConfig() {
-  const required = [
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON'
-  ]
-  const missing = required.filter((name) => !process.env[name]?.trim())
-  if (missing.length > 0) {
-    throw new Error(
-      `Signed Primary Runtime product config is required for dev R07: ${missing.join(', ')}`
-    )
-  }
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type

@@ -16,11 +16,14 @@ const candidateArchive = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_ARCHIVE
 const candidateVersion = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_VERSION?.trim()
 const candidateSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_SHA256?.trim().toLowerCase()
 const realRuntimeSmokeEnabled = process.env.DASCOWORK_REAL_PRIMARY_RUNTIME_SMOKE === '1'
+// P3a proves native installer correctness. P3b owns the cold-install timing
+// budget, so this gate must accommodate the slower fixed Intel Mac runner.
+const realRuntimeSmokeTimeoutMs = 4 * 60 * 1000
 const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(removeRuntimeCache))
-}, 90_000)
+}, realRuntimeSmokeTimeoutMs)
 
 describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', () => {
   it('installs a target-native P1a archive before loading dependencies and its plugin marketplace', async () => {
@@ -96,8 +99,14 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
     expectRuntimePath(install.activeRoot, dependencies.node)
     expectRuntimePath(install.activeRoot, dependencies.nodeModules)
     if (dependencies.python) expectRuntimePath(install.activeRoot, dependencies.python)
+    for (const pythonPackages of dependencies.pythonPackages ?? []) {
+      expectRuntimePath(install.activeRoot, pythonPackages)
+    }
     for (const binary of Object.values(dependencies.binaries)) {
       expectRuntimePath(install.activeRoot, binary)
+    }
+    for (const font of Object.values(dependencies.fonts)) {
+      expectRuntimePath(install.activeRoot, font)
     }
 
     const descriptors = await readPrimaryRuntimeBundledPluginDescriptors(diagnostic)
@@ -107,7 +116,7 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
       expectRuntimePath(install.activeRoot, descriptor.marketplacePath)
       expectRuntimePath(install.activeRoot, descriptor.pluginRoot)
     }
-  }, 90_000)
+  }, realRuntimeSmokeTimeoutMs)
 })
 
 function expectRuntimePath(runtimeRoot: string, candidate: string): void {

@@ -435,7 +435,7 @@ async function createCodexRuntime(
   })
 
   primaryRuntime.setPostActivationHook(async () => {
-    await reconcileBundledPluginCatalog()
+    await bundledPluginReconciler.run('primary-runtime-install', { propagateFailure: true })
   })
 
   const primaryRuntimeUpdates = primaryRuntimeReleaseProvider
@@ -540,14 +540,15 @@ async function createPrimaryRuntimeProductReleaseProvider(
   cacheRoot: string
 ): Promise<PrimaryRuntimeProductReleaseProvider> {
   const trustState = new FilePrimaryRuntimeTrustStateStore(join(cacheRoot, 'trust-state.json'))
+  const engineeringTestOnly = config.engineeringTestOnly === true
   const tlsPolicy = await PrimaryRuntimeTlsPolicy.create({
-    production: app.isPackaged,
+    production: app.isPackaged && !engineeringTestOnly,
     localTestCaPath: config.localTestCaPath,
     allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins]
   })
   const httpClient = new PrimaryRuntimeHttpClient({
     allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins],
-    production: app.isPackaged,
+    production: app.isPackaged && !engineeringTestOnly,
     ...(tlsPolicy ? { fetchImpl: tlsPolicy.fetchImpl } : {})
   })
   return new PrimaryRuntimeProductReleaseProvider({

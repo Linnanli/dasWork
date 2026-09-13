@@ -34,8 +34,14 @@ const provenanceScript = resolve(
   import.meta.dirname,
   "../scripts/create-provenance.mjs",
 );
-const buildScript = resolve(import.meta.dirname, "../scripts/build-runtime.mjs");
-const verifyScript = resolve(import.meta.dirname, "../scripts/verify-runtime.mjs");
+const buildScript = resolve(
+  import.meta.dirname,
+  "../scripts/build-runtime.mjs",
+);
+const verifyScript = resolve(
+  import.meta.dirname,
+  "../scripts/verify-runtime.mjs",
+);
 const bindProvenanceScript = resolve(
   import.meta.dirname,
   "../scripts/bind-runtime-provenance.mjs",
@@ -44,8 +50,14 @@ const unpackMeasurementScript = resolve(
   import.meta.dirname,
   "../scripts/measure-runtime-unpack.mjs",
 );
-const sourceLockPath = resolve(import.meta.dirname, "../runtime-sources.lock.json");
-const toolchainsLockPath = resolve(import.meta.dirname, "../runtime-toolchains.lock.json");
+const sourceLockPath = resolve(
+  import.meta.dirname,
+  "../runtime-sources.lock.json",
+);
+const toolchainsLockPath = resolve(
+  import.meta.dirname,
+  "../runtime-toolchains.lock.json",
+);
 const releaseTargets = ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"];
 
 test("accepts only a complete, immutable approved Runtime source record", () => {
@@ -58,10 +70,39 @@ test("rejects missing candidate provenance and every floating or placeholder val
   for (const invalid of [
     { ...lock, candidate: { ...lock.candidate, commit: "a".repeat(39) } },
     { ...lock, candidate: { ...lock.candidate, tag: "main" } },
-    { ...lock, candidate: { ...lock.candidate, patch: { ...lock.candidate.patch, sha256: "TBD" } } },
-    { ...lock, components: { ...lock.components, node: [{ ...lock.components.node[0], version: "^4.0.1" }] } },
-    { ...lock, components: { ...lock.components, node: [{ ...lock.components.node[0], entryRequired: "false" }] } },
-    { ...lock, components: { ...lock.components, python: [{ ...lock.components.python[0], source: "https://token@example.test/wheel" }] } },
+    {
+      ...lock,
+      candidate: {
+        ...lock.candidate,
+        patch: { ...lock.candidate.patch, sha256: "TBD" },
+      },
+    },
+    {
+      ...lock,
+      components: {
+        ...lock.components,
+        node: [{ ...lock.components.node[0], version: "^4.0.1" }],
+      },
+    },
+    {
+      ...lock,
+      components: {
+        ...lock.components,
+        node: [{ ...lock.components.node[0], entryRequired: "false" }],
+      },
+    },
+    {
+      ...lock,
+      components: {
+        ...lock.components,
+        python: [
+          {
+            ...lock.components.python[0],
+            source: "https://token@example.test/wheel",
+          },
+        ],
+      },
+    },
     { ...lock, components: { ...lock.components, fonts: [] } },
     { ...lock, candidate: { ...lock.candidate, unexpected: "mutable-claim" } },
   ]) {
@@ -71,7 +112,8 @@ test("rejects missing candidate provenance and every floating or placeholder val
     );
   }
   assert.throws(
-    () => validateRuntimeSourcesLock({ ...lock, accessToken: "must-not-persist" }),
+    () =>
+      validateRuntimeSourcesLock({ ...lock, accessToken: "must-not-persist" }),
     /invalid schema/u,
   );
 });
@@ -108,9 +150,14 @@ test("accepts platform-specific immutable binaries when their capability coverag
 });
 
 test("provenance binds the exact approved source-lock bytes", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-source-lock-"));
+  const directory = await mkdtemp(
+    join(tmpdir(), "primary-runtime-source-lock-"),
+  );
   const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(directory, "patches/presentation-skill-runtime-v0.8.0.patch");
+  const patchPath = join(
+    directory,
+    "patches/presentation-skill-runtime-v0.8.0.patch",
+  );
   const patch = validRuntimePatch();
   const lock = validApprovedLock({
     patchSha256: createHash("sha256").update(patch).digest("hex"),
@@ -139,9 +186,14 @@ test("provenance binds the exact approved source-lock bytes", async () => {
 });
 
 test("binds the project patch file to the source lock", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-patch-lock-"));
+  const directory = await mkdtemp(
+    join(tmpdir(), "primary-runtime-patch-lock-"),
+  );
   const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(directory, "patches/presentation-skill-runtime-v0.8.0.patch");
+  const patchPath = join(
+    directory,
+    "patches/presentation-skill-runtime-v0.8.0.patch",
+  );
   const patch = validRuntimePatch();
   try {
     await mkdir(join(directory, "patches"), { recursive: true });
@@ -149,7 +201,9 @@ test("binds the project patch file to the source lock", async () => {
     await writeFile(
       sourceLockPath,
       `${JSON.stringify(
-        validApprovedLock({ patchSha256: createHash("sha256").update(patch).digest("hex") }),
+        validApprovedLock({
+          patchSha256: createHash("sha256").update(patch).digest("hex"),
+        }),
         null,
         2,
       )}\n`,
@@ -179,9 +233,14 @@ test("binds the project patch file to the source lock", async () => {
 });
 
 test("rejects Runtime patch additions that restore host or icon-renderer fallbacks", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-patch-boundary-"));
+  const directory = await mkdtemp(
+    join(tmpdir(), "primary-runtime-patch-boundary-"),
+  );
   const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(directory, "patches/presentation-skill-runtime-v0.8.0.patch");
+  const patchPath = join(
+    directory,
+    "patches/presentation-skill-runtime-v0.8.0.patch",
+  );
   const patch = `${validRuntimePatch()}+const sharp = require('sharp');\n`;
   try {
     await mkdir(join(directory, "patches"), { recursive: true });
@@ -189,7 +248,9 @@ test("rejects Runtime patch additions that restore host or icon-renderer fallbac
     await writeFile(
       sourceLockPath,
       `${JSON.stringify(
-        validApprovedLock({ patchSha256: createHash("sha256").update(patch).digest("hex") }),
+        validApprovedLock({
+          patchSha256: createHash("sha256").update(patch).digest("hex"),
+        }),
         null,
         2,
       )}\n`,
@@ -225,33 +286,57 @@ test("binds a claimed build target to the native runner", () => {
     "darwin-arm64",
   );
   assert.equal(parseRuntimeTargetOption(["--target=linux-x64"]), "linux-x64");
-  assert.equal(parseRuntimeTargetOption(["--target", "win32-x64"]), "win32-x64");
   assert.equal(
-    assertNativeRuntimeTarget("linux-x64", { platform: "linux", architecture: "x64" }),
+    parseRuntimeTargetOption(["--target", "win32-x64"]),
+    "win32-x64",
+  );
+  assert.equal(
+    assertNativeRuntimeTarget("linux-x64", {
+      platform: "linux",
+      architecture: "x64",
+    }),
     "linux-x64",
   );
   assert.throws(
-    () => assertNativeRuntimeTarget("darwin-arm64", { platform: "linux", architecture: "x64" }),
+    () =>
+      assertNativeRuntimeTarget("darwin-arm64", {
+        platform: "linux",
+        architecture: "x64",
+      }),
     /cannot claim native verification/u,
   );
   assert.throws(
     () => currentRuntimeTarget({ platform: "freebsd", architecture: "x64" }),
     /not a supported native Runtime build target/u,
   );
-  assert.throws(() => parseRuntimeTargetOption(["--target"]), /required after --target/u);
+  assert.throws(
+    () => parseRuntimeTargetOption(["--target"]),
+    /required after --target/u,
+  );
 });
 
 test("builds four explicit synthetic test-only Runtime archives", async () => {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-synthetic-"));
   try {
     const metadata = await buildSyntheticRuntime({ outputRoot: directory });
-    assert.equal(metadata.schemaVersion, "dascowork-primary-runtime-synthetic-build.v1");
+    assert.equal(
+      metadata.schemaVersion,
+      "dascowork-primary-runtime-synthetic-build.v1",
+    );
     assert.equal(metadata.syntheticTestOnly, true);
     assert.equal(metadata.packageName, "@dascowork/test-artifact-tool");
-    assert.equal(metadata.launcherEnvName, "DASCOWORK_SYNTHETIC_RUNTIME_HOST_NODE");
-    assert.deepEqual(metadata.targets.map((entry) => entry.target).sort(), [...syntheticRuntimeTargets].sort());
+    assert.equal(
+      metadata.launcherEnvName,
+      "DASCOWORK_SYNTHETIC_RUNTIME_HOST_NODE",
+    );
+    assert.deepEqual(
+      metadata.targets.map((entry) => entry.target).sort(),
+      [...syntheticRuntimeTargets].sort(),
+    );
 
-    const metadataFile = JSON.parse(await readFile(join(directory, "synthetic-build-metadata.json"), "utf8"));
+    const metadataFile = JSON.parse(
+      await readFile(join(directory, "synthetic-build-metadata.json"), "utf8"),
+    );
     assert.equal(metadataFile.sourceLockSha256, metadata.sourceLockSha256);
 
     for (const target of metadata.targets) {
@@ -265,19 +350,40 @@ test("builds four explicit synthetic test-only Runtime archives", async () => {
       assert.doesNotMatch(archiveText, /reference-projects/u);
       assert.doesNotMatch(archiveText, /\/Users\/nallylin/u);
       const entries = listStoredZipEntries(archive);
-      assert.deepEqual(entries, [...entries].sort((left, right) => left.localeCompare(right)));
+      assert.deepEqual(
+        entries,
+        [...entries].sort((left, right) => left.localeCompare(right)),
+      );
       assert.ok(entries.includes("runtime.json"));
       assert.ok(entries.includes("dependencies/node/bin/node"));
-      assert.ok(entries.includes("dependencies/node/node_modules/@dascowork/test-artifact-tool/package.json"));
-      assert.ok(entries.includes("plugins/primary-runtime-test-plugin-bundle/.agents/plugins/marketplace.json"));
-      assert.match(archiveText, /"path": "\.\/plugins\/dascowork-synthetic-presentations-plugin"/u);
+      assert.ok(
+        entries.includes(
+          "dependencies/node/node_modules/@dascowork/test-artifact-tool/package.json",
+        ),
+      );
+      assert.ok(
+        entries.includes(
+          "plugins/primary-runtime-test-plugin-bundle/.agents/plugins/marketplace.json",
+        ),
+      );
+      assert.match(
+        archiveText,
+        /"path": "\.\/plugins\/dascowork-synthetic-presentations-plugin"/u,
+      );
 
-      const runtimeManifest = JSON.parse(await readFile(target.runtimeManifestPath, "utf8"));
-      assert.equal(runtimeManifest.syntheticTestOnly.requiredNodePackage, metadata.packageName);
+      const runtimeManifest = JSON.parse(
+        await readFile(target.runtimeManifestPath, "utf8"),
+      );
+      assert.equal(
+        runtimeManifest.syntheticTestOnly.requiredNodePackage,
+        metadata.packageName,
+      );
       assert.equal(runtimeManifest.node.path, "dependencies/node/bin/node");
       assert.equal(runtimeManifest.nodePackages[0].name, metadata.packageName);
 
-      const provenance = JSON.parse(await readFile(target.provenancePath, "utf8"));
+      const provenance = JSON.parse(
+        await readFile(target.provenancePath, "utf8"),
+      );
       assert.equal(provenance.syntheticTestOnly, true);
       assert.equal(provenance.archiveSha256, target.archiveSha256);
       assert.equal(provenance.sourceLockSha256, metadata.sourceLockSha256);
@@ -293,7 +399,9 @@ test("rejects unsafe synthetic ZIP entry paths", async () => {
   try {
     await assert.rejects(
       import("../scripts/zip-writer.mjs").then(({ writeStoredZipArchive }) =>
-        writeStoredZipArchive(join(directory, "bad.zip"), [{ path: "../escape", data: "bad" }]),
+        writeStoredZipArchive(join(directory, "bad.zip"), [
+          { path: "../escape", data: "bad" },
+        ]),
       ),
       /Invalid ZIP entry path/u,
     );
@@ -308,7 +416,10 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
   const inputRoot = join(directory, "input");
   const outputRoot = join(directory, "dist");
   try {
-    const validationPath = await createOfflineRuntimeInputs({ inputRoot, target });
+    const validationPath = await createOfflineRuntimeInputs({
+      inputRoot,
+      target,
+    });
     const { stdout: buildStdout } = await executeFile(process.execPath, [
       buildScript,
       "--target",
@@ -326,13 +437,26 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
     assert.equal(provenance.target, target);
     assert.equal(provenance.bundleVersion, "1.2.3-test");
     const targetRoot = join(outputRoot, target);
+    const runtimeManifest = JSON.parse(
+      await readFile(join(targetRoot, "runtime.json"), "utf8"),
+    );
+    assert.deepEqual(runtimeManifest.fonts, [
+      {
+        name: "noto-sans-cjk-sc",
+        path: "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      },
+    ]);
     const [notices, sbom] = await Promise.all([
       readFile(join(targetRoot, "THIRD_PARTY_NOTICES.txt")),
       readFile(join(targetRoot, "SBOM.json")),
     ]);
     assert.equal(sha256(notices), provenance.noticesSha256);
     assert.equal(sha256(sbom), provenance.sbomSha256);
-    const measurementPath = join(outputRoot, target, "build-unpack-measurement.json");
+    const measurementPath = join(
+      outputRoot,
+      target,
+      "build-unpack-measurement.json",
+    );
     const { stdout: measurementStdout } = await executeFile(process.execPath, [
       unpackMeasurementScript,
       "--target",
@@ -367,7 +491,9 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
     // The platform receipt binds the nested input-verification receipt, not
     // the component-smoke document. Keep this distinct so provenance binding
     // cannot accidentally substitute one receipt for the other.
-    const inputValidationReceipt = Buffer.from("fixture input verification receipt\n");
+    const inputValidationReceipt = Buffer.from(
+      "fixture input verification receipt\n",
+    );
     await writeJson(platformValidationPath, {
       schemaVersion: "dascowork-primary-runtime-platform-validation.v1",
       status: "verified",
@@ -446,13 +572,35 @@ function validApprovedLock({ patchSha256 = "e".repeat(64) } = {}) {
       publisher: { githubAccount: "siril9", commitAuthor: "Siril Sengolraj" },
       tag: "v0.8.0",
       commit: "a".repeat(40),
-      sourceArchive: { url: "https://github.com/siril9/presentation-skill/archive/refs/tags/v0.8.0.tar.gz", sha256: "b".repeat(64) },
-      pluginDirectory: { path: "plugins/presentation-skill", fileCount: 1, treeSha256: "c".repeat(64) },
+      sourceArchive: {
+        url: "https://github.com/siril9/presentation-skill/archive/refs/tags/v0.8.0.tar.gz",
+        sha256: "b".repeat(64),
+      },
+      pluginDirectory: {
+        path: "plugins/presentation-skill",
+        fileCount: 1,
+        treeSha256: "c".repeat(64),
+      },
       license: { spdx: "MIT", path: "LICENSE", sha256: "d".repeat(64) },
-      patch: { path: "patches/presentation-skill-runtime-v0.8.0.patch", sha256: patchSha256 },
-      runtimeScope: { entryPoints: ["scripts/build_deck_pptxgenjs.js"], nodeDependencyClosure: ["pptxgenjs@4.0.1"], excludedCapabilities: ["existing-pptx-editing"] },
+      patch: {
+        path: "patches/presentation-skill-runtime-v0.8.0.patch",
+        sha256: patchSha256,
+      },
+      runtimeScope: {
+        entryPoints: ["scripts/build_deck_pptxgenjs.js"],
+        nodeDependencyClosure: ["pptxgenjs@4.0.1"],
+        excludedCapabilities: ["existing-pptx-editing"],
+      },
     },
-    rejectedCandidates: [{ tag: "v0.11.0", commit: "f".repeat(40), sourceArchiveSha256: "0".repeat(64), status: "candidate_rejected", reason: "Pinned dependency is not published." }],
+    rejectedCandidates: [
+      {
+        tag: "v0.11.0",
+        commit: "f".repeat(40),
+        sourceArchiveSha256: "0".repeat(64),
+        status: "candidate_rejected",
+        reason: "Pinned dependency is not published.",
+      },
+    ],
     components: {
       node: [component("pptxgenjs", "4.0.1")],
       python: [component("python-pptx", "1.0.2")],
@@ -515,23 +663,44 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   }
 
   const lock = JSON.parse(
-    await readFile(resolve(import.meta.dirname, "../runtime-sources.lock.json"), "utf8"),
+    await readFile(
+      resolve(import.meta.dirname, "../runtime-sources.lock.json"),
+      "utf8",
+    ),
   );
   for (const component of lock.components.node) {
-    await writeJson(join(inputRoot, "dependencies/node/node_modules", component.name, "package.json"), {
-      name: component.name,
-      version: component.version,
-      type: "module",
-      main: "index.js",
-    });
+    await writeJson(
+      join(
+        inputRoot,
+        "dependencies/node/node_modules",
+        component.name,
+        "package.json",
+      ),
+      {
+        name: component.name,
+        version: component.version,
+        type: "module",
+        main: "index.js",
+      },
+    );
     await writeFileEnsured(
-      join(inputRoot, "dependencies/node/node_modules", component.name, "index.js"),
+      join(
+        inputRoot,
+        "dependencies/node/node_modules",
+        component.name,
+        "index.js",
+      ),
       "export {};\n",
     );
   }
   for (const component of lock.components.python) {
     await writeFileEnsured(
-      join(inputRoot, "dependencies/python/packages", component.name, "METADATA"),
+      join(
+        inputRoot,
+        "dependencies/python/packages",
+        component.name,
+        "METADATA",
+      ),
       `Name: ${component.name}\nVersion: ${component.version}\n`,
     );
   }
@@ -566,7 +735,8 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
         internal: true,
         provenance: {
           kind: "repo-owned",
-          sourcePath: "desktop-app/resources/bundled-plugins/presentation-skill",
+          sourcePath:
+            "desktop-app/resources/bundled-plugins/presentation-skill",
           licensePath: "LICENSE",
           reviewStatus: "approved",
         },
@@ -588,10 +758,16 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
     },
   );
   await writeFileEnsured(
-    join(pluginRoot, "plugins/presentation-skill/skills/presentation-skill/SKILL.md"),
+    join(
+      pluginRoot,
+      "plugins/presentation-skill/skills/presentation-skill/SKILL.md",
+    ),
     skill,
   );
-  await writeFileEnsured(join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"), "OTTOfixture\n");
+  await writeFileEnsured(
+    join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"),
+    "OTTOfixture\n",
+  );
   const toolchainsLock = JSON.parse(await readFile(toolchainsLockPath, "utf8"));
   const targetToolchain = toolchainsLock.targets[target];
   const observedImage = expectedBuilderImageIdentity(targetToolchain.builder);
@@ -600,12 +776,16 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
     target,
     sourceLockPath,
     toolchainsLockPath,
-    artifacts: (await import("../scripts/runtime-inputs.mjs")).artifactsForTarget({
+    artifacts: (
+      await import("../scripts/runtime-inputs.mjs")
+    ).artifactsForTarget({
       sourceLock: lock,
       toolchainsLock,
       target,
     }),
-    patches: [{ path: lock.candidate.patch.path, sha256: lock.candidate.patch.sha256 }],
+    patches: [
+      { path: lock.candidate.patch.path, sha256: lock.candidate.patch.sha256 },
+    ],
     builder: {
       name: "@dascowork/primary-runtime-materializer",
       version: "1.0.0",
@@ -627,7 +807,9 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
         schemaVersion: "dascowork-primary-runtime-input-validation.v1",
         status: "verified",
         target,
-        inputManifestSha256: sha256(await readFile(join(inputRoot, "runtime-inputs.manifest.json"))),
+        inputManifestSha256: sha256(
+          await readFile(join(inputRoot, "runtime-inputs.manifest.json")),
+        ),
         commands: [{ name: "fixture", resultSha256: "f".repeat(64) }],
         productionTrust: false,
       },

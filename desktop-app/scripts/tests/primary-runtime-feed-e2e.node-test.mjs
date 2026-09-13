@@ -10,6 +10,7 @@ const packageJsonPath = resolve(appRoot, 'package.json')
 const playwrightConfigPath = resolve(appRoot, 'playwright.config.ts')
 const e2ePath = resolve(appRoot, 'tests/e2e/primary-runtime-feed.e2e.ts')
 const runnerPath = resolve(appRoot, 'scripts/run-primary-runtime-feed-e2e.mjs')
+const packagedRunnerPath = resolve(appRoot, 'scripts/run-primary-runtime-packaged-feed-e2e.mjs')
 const presentationSmokePath = resolve(appRoot, 'scripts/run-presentations-runtime-smoke.mjs')
 
 test('signed Feed E2E requires an explicit real-Runtime opt-in', () => {
@@ -23,12 +24,19 @@ test('signed Feed E2E requires an explicit real-Runtime opt-in', () => {
 })
 
 test('signed Feed E2E stays outside fixture tests and runs only through its dedicated runner', async () => {
-  const [packageJsonSource, playwrightConfig, e2eSource, runnerSource, presentationSmokeSource] =
-    await Promise.all([
+  const [
+    packageJsonSource,
+    playwrightConfig,
+    e2eSource,
+    runnerSource,
+    packagedRunnerSource,
+    presentationSmokeSource
+  ] = await Promise.all([
     readFile(packageJsonPath, 'utf8'),
     readFile(playwrightConfigPath, 'utf8'),
     readFile(e2ePath, 'utf8'),
     readFile(runnerPath, 'utf8'),
+    readFile(packagedRunnerPath, 'utf8'),
     readFile(presentationSmokePath, 'utf8')
   ])
   const packageJson = JSON.parse(packageJsonSource)
@@ -36,6 +44,10 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.equal(
     packageJson.scripts['test:e2e:primary-runtime-feed'],
     'node scripts/run-primary-runtime-feed-e2e.mjs'
+  )
+  assert.equal(
+    packageJson.scripts['test:e2e:primary-runtime-feed:packaged'],
+    'node scripts/run-primary-runtime-packaged-feed-e2e.mjs'
   )
   assert.equal(
     packageJson.scripts['smoke:presentation-skill-runtime'],
@@ -47,14 +59,28 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(runnerSource, /primaryRuntimeFeedChildEnvironment/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
+  assert.match(packagedRunnerSource, /engineeringTestPackagedProductConfigFromEnvironment/u)
+  assert.match(packagedRunnerSource, /build:unpack/u)
+  assert.match(packagedRunnerSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)
+  assert.doesNotMatch(packagedRunnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
+  assert.doesNotMatch(packagedRunnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
   assert.doesNotMatch(e2eSource, /createRuntimeFixture/u)
   assert.doesNotMatch(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(e2eSource, /test\.skip/u)
   assert.match(e2eSource, /AT-E2E-01/u)
   assert.match(e2eSource, /load_workspace_dependencies/u)
   assert.doesNotMatch(e2eSource, /@oai\/artifact-tool/u)
-  assert.match(e2eSource, /pptxgenjs/u)
+  assert.doesNotMatch(e2eSource, /import pptxgen/u)
+  assert.match(e2eSource, /build_deck_pptxgenjs\.js/u)
+  assert.match(e2eSource, /layout_lint\.py/u)
+  assert.match(e2eSource, /render_slides\.py/u)
+  assert.match(e2eSource, /verifyR07Presentation/u)
+  assert.match(e2eSource, /openR07PresentationInWorkspace/u)
+  assert.match(e2eSource, /contactSheetFile/u)
   assert.match(e2eSource, /runtimePresentationCommandResponse/u)
+  assert.match(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)
+  assert.match(e2eSource, /Buffer\.from\(source, 'utf8'\)\.toString\('base64'\)/u)
+  assert.match(e2eSource, /process\.platform === 'win32'/u)
   assert.match(presentationSmokeSource, /run-primary-runtime-feed-e2e\.mjs/u)
   assert.doesNotMatch(presentationSmokeSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(presentationSmokeSource, /spawnSync/u)

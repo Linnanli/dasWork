@@ -26,6 +26,11 @@ const binaryManifestSchema = z.object({
   required: z.boolean().optional()
 })
 
+const fontManifestSchema = z.object({
+  name: z.string().min(1),
+  path: relativePathSchema
+})
+
 const bundledPluginManifestSchema = z.object({
   marketplace: z.string().min(1),
   path: relativePathSchema
@@ -70,6 +75,7 @@ const genericManifestFields = {
     })
     .optional(),
   binaries: z.array(binaryManifestSchema).optional(),
+  fonts: z.array(fontManifestSchema).optional(),
   bundledPlugins: z.array(bundledPluginManifestSchema).optional(),
   bundledSkills: z.array(bundledSkillManifestSchema).optional(),
   skillsToRemove: z.array(relativePathSchema).optional(),

@@ -31,6 +31,11 @@ export type DesktopRuntimeConfig = {
     pollIntervalMs?: number
     /** Main-only development input; packaged builds reject it before network use. */
     localTestCaPath?: string
+    /**
+     * Present only when a packaged engineering test resource binds a loopback
+     * feed to an ephemeral local CA. It is never sourced from the environment.
+     */
+    engineeringTestOnly?: true
   }
 }
 

@@ -2,12 +2,6 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-import {
-  disabledPackagedProductConfig,
-  packagedProductConfigFromEnvironment,
-  writePackagedProductConfig
-} from './write-primary-runtime-product-config.mjs'
-
 const appRoot = resolve(import.meta.dirname, '..')
 const playwrightArgs = process.argv.slice(2)
 
@@ -17,40 +11,32 @@ process.exitCode = await main()
 async function main() {
   requireReleaseEnvironment()
   if (playwrightArgs.length > 0) {
-    throw new Error('The release LLM gate always runs the complete R01-R07 suite without filters.')
+    throw new Error('The release LLM gate always runs the complete R01-R06 suite without filters.')
   }
 
-  // The public endpoint/keyrings become a signed packaged resource before the
-  // Electron build. They are reset even after a failed test, so a later normal
-  // local package cannot accidentally inherit release feed configuration.
-  await writePackagedProductConfig(packagedProductConfigFromEnvironment())
-  try {
-    const buildStatus = run('npm', ['run', 'build:unpack'])
-    if (buildStatus !== 0) return buildStatus
+  const buildStatus = run('npm', ['run', 'build:unpack'])
+  if (buildStatus !== 0) return buildStatus
 
-    const executable = packagedExecutable(join(appRoot, 'dist'))
-    if (!executable || !existsSync(executable)) {
-      throw new Error(`Could not find packaged executable for ${process.platform}/${process.arch}`)
-    }
-
-    const releaseEnvironment = {
-      DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE: executable
-    }
-    const firstAttemptStatus = runReleaseSuite(1, releaseEnvironment)
-    if (firstAttemptStatus === 0) return 0
-
-    // An operator may classify the first failure as an external-service outage.
-    // The retry is deliberately whole-suite and capped at one, so R01-R06 cannot
-    // become green through per-test retries or an unbounded retry loop.
-    if (process.env.DASCOWORK_RELEASE_EXTERNAL_RETRY !== '1') return firstAttemptStatus
-
-    console.error(
-      'Release LLM suite failed after an externally classified outage; rerunning the complete R01-R07 suite once.'
-    )
-    return runReleaseSuite(2, releaseEnvironment)
-  } finally {
-    await writePackagedProductConfig(disabledPackagedProductConfig())
+  const executable = packagedExecutable(join(appRoot, 'dist'))
+  if (!executable || !existsSync(executable)) {
+    throw new Error(`Could not find packaged executable for ${process.platform}/${process.arch}`)
   }
+
+  const releaseEnvironment = {
+    DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE: executable
+  }
+  const firstAttemptStatus = runReleaseSuite(1, releaseEnvironment)
+  if (firstAttemptStatus === 0) return 0
+
+  // An operator may classify the first failure as an external-service outage.
+  // The retry is deliberately whole-suite and capped at one, so R01-R06 cannot
+  // become green through per-test retries or an unbounded retry loop.
+  if (process.env.DASCOWORK_RELEASE_EXTERNAL_RETRY !== '1') return firstAttemptStatus
+
+  console.error(
+    'Release LLM suite failed after an externally classified outage; rerunning the complete R01-R06 suite once.'
+  )
+  return runReleaseSuite(2, releaseEnvironment)
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -60,25 +46,6 @@ function requireReleaseEnvironment() {
   }
   if (!process.env.DASCOWORK_RELEASE_ADMIN_BACKEND_URL?.trim()) {
     throw new Error('DASCOWORK_RELEASE_ADMIN_BACKEND_URL is required.')
-  }
-  if (process.env.DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH?.trim()) {
-    throw new Error(
-      'Packaged R07 must not use DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH.'
-    )
-  }
-  const required = [
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON',
-    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON'
-  ]
-  const missing = required.filter((name) => !process.env[name]?.trim())
-  if (missing.length > 0) {
-    throw new Error(
-      `Signed Primary Runtime product config is required for packaged R07: ${missing.join(', ')}`
-    )
   }
 }
 

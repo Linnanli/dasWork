@@ -88,7 +88,9 @@ await mkdir(outputRoot, { recursive: true });
 
 const bundleVersion =
   argumentsValue.version ?? `${lock.builderVersion}+${target}`;
-const inputEntries = await withEntryDigests(await collectInputEntries(inputRoot));
+const inputEntries = await withEntryDigests(
+  await collectInputEntries(inputRoot),
+);
 assertRequiredRuntimeInputs(inputEntries, target);
 
 const runtimeManifest = buildRuntimeManifest({
@@ -108,14 +110,8 @@ const generatedEntries = [
   binaryEntry("provenance/source-lock.json", sourceLockBytes),
   binaryEntry("provenance/toolchains-lock.json", toolchainsLockBytes),
   binaryEntry("provenance/runtime-inputs.manifest.json", inputManifestBytes),
-  textEntry(
-    "provenance/THIRD_PARTY_NOTICES.txt",
-    notices,
-  ),
-  textEntry(
-    "provenance/SBOM.json",
-    sbomDocument,
-  ),
+  textEntry("provenance/THIRD_PARTY_NOTICES.txt", notices),
+  textEntry("provenance/SBOM.json", sbomDocument),
   binaryEntry("provenance/component-smoke.json", componentSmokeBytes),
 ];
 const entries = await withEntryDigests([...inputEntries, ...generatedEntries]);
@@ -218,6 +214,21 @@ function buildRuntimeManifest({
       "AT-RT-BUILD-01 blocked: missing Runtime-owned presentation SKILL.md.",
     );
   }
+  const fonts = lock.components.fonts.map((component) => {
+    const prefix = `fonts/${component.name}/`;
+    const font = inputEntries
+      .filter(
+        (entry) =>
+          entry.path.startsWith(prefix) && /\.(?:ttf|otf)$/iu.test(entry.path),
+      )
+      .sort((left, right) => left.path.localeCompare(right.path))[0];
+    if (!font) {
+      throw new Error(
+        `AT-RT-BUILD-01 blocked: missing locked Runtime font for ${component.name}.`,
+      );
+    }
+    return { name: component.name, path: font.path };
+  });
   return {
     bundleFormatVersion: 2,
     bundleVersion,
@@ -263,6 +274,7 @@ function buildRuntimeManifest({
         required: true,
       },
     ],
+    fonts,
     bundledPlugins: [
       {
         marketplace: "presentation-skill",
@@ -504,9 +516,7 @@ function parseArgs(argv) {
     ),
     hardLimitsPath: resolve(
       optionValue(argv, "--hard-limits") ??
-        fileURLToPath(
-          new URL("../runtime-hard-limits.json", import.meta.url),
-        ),
+        fileURLToPath(new URL("../runtime-hard-limits.json", import.meta.url)),
     ),
     inputValidationPath: resolve(
       optionValue(argv, "--input-validation") ??

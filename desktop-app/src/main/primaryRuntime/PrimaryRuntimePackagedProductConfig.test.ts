@@ -75,6 +75,43 @@ describe('packaged Primary Runtime product config', () => {
     })
   })
 
+  it('permits an ephemeral local CA only in a loopback engineering test resource', async () => {
+    const resourcesPath = await fixtureDirectory()
+    await writeConfig(resourcesPath, {
+      schemaVersion: PRIMARY_RUNTIME_PACKAGED_PRODUCT_CONFIG_SCHEMA,
+      enabled: true,
+      configUrl: 'https://127.0.0.1:9443/v1/runtime/config.json',
+      allowedConfigOrigins: ['https://127.0.0.1:9443'],
+      allowedManifestOrigins: ['https://127.0.0.1:9443'],
+      channel: 'engineering-test',
+      configPublicKeys,
+      manifestPublicKeys,
+      engineeringTestLocalCaPath: '/private/tmp/engineering-test-ca.pem'
+    })
+
+    await expect(readPackagedPrimaryRuntimeProductConfig(resourcesPath)).resolves.toMatchObject({
+      primaryRuntimeProductConfig: {
+        localTestCaPath: '/private/tmp/engineering-test-ca.pem',
+        engineeringTestOnly: true
+      }
+    })
+
+    await writeConfig(resourcesPath, {
+      schemaVersion: PRIMARY_RUNTIME_PACKAGED_PRODUCT_CONFIG_SCHEMA,
+      enabled: true,
+      configUrl: 'https://feed.example.test/v1/runtime/config.json',
+      allowedConfigOrigins: ['https://feed.example.test'],
+      allowedManifestOrigins: ['https://feed.example.test'],
+      channel: 'engineering-test',
+      configPublicKeys,
+      manifestPublicKeys,
+      engineeringTestLocalCaPath: '/private/tmp/engineering-test-ca.pem'
+    })
+    await expect(readPackagedPrimaryRuntimeProductConfig(resourcesPath)).rejects.toThrow(
+      'incomplete or invalid'
+    )
+  })
+
   it('rejects incomplete, malformed, and symlinked package configuration', async () => {
     const resourcesPath = await fixtureDirectory()
     await writeConfig(resourcesPath, {

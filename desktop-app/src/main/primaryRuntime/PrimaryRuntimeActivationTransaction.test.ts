@@ -230,7 +230,8 @@ function candidate(root: string): PreparedPrimaryRuntimeInstall {
         bundleVersion: 'v2',
         node: { path: '/runtime/node' },
         nodePackages: [],
-        binaries: []
+        binaries: [],
+        fonts: []
       },
       issues: []
     }

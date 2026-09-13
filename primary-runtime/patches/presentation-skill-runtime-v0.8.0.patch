@@ -215,6 +215,16 @@ index ffb73d9..bc931bc 100755
    );
    process.exit(2);
  }
+@@ -637,5 +622,9 @@ const FONT_PAIRS = {
+   clean_modern_v1: {
+     font_heading: 'Helvetica Neue',
+     font_body: 'Helvetica Neue',
+   },
++  dascowork_cjk_v1: {
++    font_heading: 'Noto Sans CJK SC',
++    font_body: 'Noto Sans CJK SC',
++  },
+ };
 @@ -1269,69 +1269,3 @@ function renderSlide(pptx, pSlide, slide, preset) {
  }
  
@@ -305,6 +315,20 @@ index ffb73d9..bc931bc 100755
          );
        } else {
          // Plain filename — resolve against outline dir.
+diff --git a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
+index 8e39458..aefbce7 100644
+--- a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
++++ b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
+@@ -4349,7 +4349,8 @@ function renderImageSidebar(pptx, slide, slideData, preset) {
+       line: { color: preset.line, width: 0.75 },
+     }));
+     const sized = imageSizingContainLocal(imagePath, imageX + 0.06, contentY + 0.06, imageW - 0.12, contentH - 0.12);
+-    slide.addImage(Object.assign({ path: imagePath }, sized));
++    const imageAltText = safeText(slideData.image_alt_text || slideData.image_alt);
++    slide.addImage(Object.assign({ path: imagePath, altText: imageAltText }, sized));
+   }
+
+   const sectionGap = 0.10;
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 index f26dc65..3459f08 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py

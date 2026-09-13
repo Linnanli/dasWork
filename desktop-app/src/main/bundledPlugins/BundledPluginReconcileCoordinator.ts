@@ -10,7 +10,7 @@ export class BundledPluginReconcileCoordinator {
 
   constructor(private readonly input: BundledPluginReconcileCoordinatorInput) {}
 
-  run(reason: string): Promise<void> {
+  run(reason: string, { propagateFailure = false }: { propagateFailure?: boolean } = {}): Promise<void> {
     const task = this.tail
       .catch(() => undefined)
       .then(async () => {
@@ -19,6 +19,7 @@ export class BundledPluginReconcileCoordinator {
         } catch (error) {
           this.input.onFailure(error)
           this.input.warn(`[bundled-plugins] reconcile failed after ${reason}`, error)
+          if (propagateFailure) throw error
         } finally {
           this.input.refreshCapabilities()
         }

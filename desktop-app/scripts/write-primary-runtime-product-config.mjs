@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- This Node release script intentionally has no TypeScript annotation surface. */
 
 import { mkdir, rename, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export const PACKAGED_PRODUCT_CONFIG_FILE = resolve(
@@ -64,6 +64,37 @@ export function disabledPackagedProductConfig() {
   return { schemaVersion: PACKAGED_PRODUCT_CONFIG_SCHEMA, enabled: false }
 }
 
+/**
+ * Produces a disposable package resource for the deterministic packaged E2E
+ * gate. It can trust only one public, ephemeral CA at a loopback engineering
+ * feed; ordinary package and release paths keep rejecting this input.
+ */
+export function engineeringTestPackagedProductConfigFromEnvironment(env = process.env) {
+  const localCaPath = requiredEnvironmentValue(
+    env,
+    'DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH'
+  )
+  if (!isAbsolute(localCaPath)) {
+    throw new Error('A packaged engineering test CA path must be absolute.')
+  }
+  const productConfig = packagedProductConfigFromEnvironment({
+    ...env,
+    DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: undefined
+  })
+  const engineeringOrigins = [
+    productConfig.configUrl,
+    ...productConfig.allowedConfigOrigins,
+    ...productConfig.allowedManifestOrigins
+  ]
+  if (!engineeringOrigins.every(isLoopbackHttpsUrl)) {
+    throw new Error('A packaged engineering test config may only contact a loopback HTTPS feed.')
+  }
+  return {
+    ...productConfig,
+    engineeringTestLocalCaPath: localCaPath
+  }
+}
+
 export async function writePackagedProductConfig(
   config,
   destination = PACKAGED_PRODUCT_CONFIG_FILE
@@ -109,6 +140,17 @@ function httpsUrl(value, name) {
     throw new Error(`${name} must be an HTTPS URL without credentials or a fragment.`)
   }
   return url.toString()
+}
+
+function isLoopbackHttpsUrl(value) {
+  const url = new URL(value)
+  const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase()
+  return (
+    url.protocol === 'https:' &&
+    !url.username &&
+    !url.password &&
+    (hostname === '127.0.0.1' || hostname === '::1' || hostname === 'localhost')
+  )
 }
 
 function positivePollInterval(value) {

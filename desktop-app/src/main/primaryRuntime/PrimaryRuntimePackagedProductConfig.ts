@@ -24,6 +24,8 @@ type PackagedPrimaryRuntimeProductConfig = {
   manifestPublicKeys?: Record<string, string>
   pollIntervalMs?: number
   workspaceDependenciesEnabled?: boolean
+  /** Ephemeral loopback CA path used only by the packaged engineering E2E gate. */
+  engineeringTestLocalCaPath?: string
 }
 
 /**
@@ -83,7 +85,15 @@ export async function readPackagedPrimaryRuntimeProductConfig(
         }),
     ...(productConfig.pollIntervalMs === undefined
       ? {}
-      : { DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: String(productConfig.pollIntervalMs) })
+      : {
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: String(productConfig.pollIntervalMs)
+        }),
+    ...(productConfig.engineeringTestLocalCaPath === undefined
+      ? {}
+      : {
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH:
+            productConfig.engineeringTestLocalCaPath
+        })
   })
   if (!runtimeConfig.primaryRuntimeProductConfig) {
     throw new Error(
@@ -91,7 +101,12 @@ export async function readPackagedPrimaryRuntimeProductConfig(
     )
   }
   return {
-    primaryRuntimeProductConfig: runtimeConfig.primaryRuntimeProductConfig,
+    primaryRuntimeProductConfig: {
+      ...runtimeConfig.primaryRuntimeProductConfig,
+      ...(productConfig.engineeringTestLocalCaPath === undefined
+        ? {}
+        : { engineeringTestOnly: true })
+    },
     ...(runtimeConfig.workspaceDependenciesFeatureEnabled === undefined
       ? {}
       : { workspaceDependenciesFeatureEnabled: runtimeConfig.workspaceDependenciesFeatureEnabled })
@@ -109,6 +124,7 @@ function parsePackagedProductConfig(value: unknown): PackagedPrimaryRuntimeProdu
     return { schemaVersion: PRIMARY_RUNTIME_PACKAGED_PRODUCT_CONFIG_SCHEMA, enabled: false }
   }
   const pollIntervalMs = value.pollIntervalMs
+  const engineeringTestLocalCaPath = value.engineeringTestLocalCaPath
   if (
     value.enabled !== true ||
     typeof value.configUrl !== 'string' ||
@@ -122,7 +138,11 @@ function parsePackagedProductConfig(value: unknown): PackagedPrimaryRuntimeProdu
         !Number.isSafeInteger(pollIntervalMs) ||
         pollIntervalMs <= 0)) ||
     (value.workspaceDependenciesEnabled !== undefined &&
-      typeof value.workspaceDependenciesEnabled !== 'boolean')
+      typeof value.workspaceDependenciesEnabled !== 'boolean') ||
+    (engineeringTestLocalCaPath !== undefined &&
+      (typeof engineeringTestLocalCaPath !== 'string' ||
+        !isAbsolute(engineeringTestLocalCaPath) ||
+        !isLoopbackEngineeringConfig(value)))
   ) {
     throw new Error('Packaged Primary Runtime config is incomplete or invalid.')
   }
@@ -138,7 +158,33 @@ function parsePackagedProductConfig(value: unknown): PackagedPrimaryRuntimeProdu
     ...(value.workspaceDependenciesEnabled === undefined
       ? {}
       : { workspaceDependenciesEnabled: value.workspaceDependenciesEnabled }),
-    ...(pollIntervalMs === undefined ? {} : { pollIntervalMs })
+    ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
+    ...(engineeringTestLocalCaPath === undefined ? {} : { engineeringTestLocalCaPath })
+  }
+}
+
+function isLoopbackEngineeringConfig(value: Record<string, unknown>): boolean {
+  if (typeof value.configUrl !== 'string') return false
+  const origins = [
+    value.configUrl,
+    ...(isStringArray(value.allowedConfigOrigins) ? value.allowedConfigOrigins : []),
+    ...(isStringArray(value.allowedManifestOrigins) ? value.allowedManifestOrigins : [])
+  ]
+  return origins.length > 0 && origins.every(isLoopbackHttpsUrl)
+}
+
+function isLoopbackHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase()
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      (hostname === '127.0.0.1' || hostname === '::1' || hostname === 'localhost')
+    )
+  } catch {
+    return false
   }
 }
 

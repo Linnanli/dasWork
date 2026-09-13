@@ -19,6 +19,7 @@
     "test:plan-coverage:validator": "node --test scripts/tests/verify-test-plan-coverage.node-test.mjs",
     "test:e2e": "npm run build && playwright test",
     "test:e2e:primary-runtime-feed": "node scripts/run-primary-runtime-feed-e2e.mjs",
+    "test:e2e:primary-runtime-feed:packaged": "node scripts/run-primary-runtime-packaged-feed-e2e.mjs",
     "test:e2e:primary-runtime-calibration-feed": "node scripts/run-primary-runtime-calibration-feed-e2e.mjs",
     "test:e2e:primary-runtime-synthetic-feed": "node scripts/run-primary-runtime-synthetic-feed-e2e.mjs",
     "test:e2e:conversation-performance": "npm run build && playwright test tests/e2e/conversation-stream-performance.e2e.ts --workers=1",

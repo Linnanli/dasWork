@@ -16,6 +16,12 @@ export type PrimaryRuntimeBinaryManifest = {
   required?: boolean
 }
 
+/** A locked font file that a workspace command may use for deterministic rendering. */
+export type PrimaryRuntimeFontManifest = {
+  name: string
+  path: PrimaryRuntimeRelativePath
+}
+
 export type PrimaryRuntimeSourceDigest = {
   path: PrimaryRuntimeRelativePath
   sha256: string
@@ -39,6 +45,7 @@ export type PrimaryRuntimeManifest = {
     packages?: PrimaryRuntimePackageManifest[]
   }
   binaries?: PrimaryRuntimeBinaryManifest[]
+  fonts?: PrimaryRuntimeFontManifest[]
   bundledPlugins?: Array<{
     marketplace: string
     path: PrimaryRuntimeRelativePath
@@ -80,6 +87,11 @@ export type PrimaryRuntimeResolvedBinary = {
   path: string
 }
 
+export type PrimaryRuntimeResolvedFont = {
+  name: string
+  path: string
+}
+
 export type PrimaryRuntimeDependencies = {
   root: string
   bundleVersion: string
@@ -94,6 +106,7 @@ export type PrimaryRuntimeDependencies = {
     packages: PrimaryRuntimeResolvedPackage[]
   }
   binaries: PrimaryRuntimeResolvedBinary[]
+  fonts: PrimaryRuntimeResolvedFont[]
 }
 
 export type WorkspaceDependencyLoadResult = {
@@ -101,7 +114,9 @@ export type WorkspaceDependencyLoadResult = {
   node: string
   nodeModules: string
   python?: string
+  pythonPackages?: string[]
   binaries: Record<string, string>
+  fonts: Record<string, string>
   text: string
 }
 

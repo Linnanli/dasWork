@@ -1087,6 +1087,9 @@ function workspaceDependencyResultFrom(
   const binaries = Object.fromEntries(
     dependencies.binaries.map((entry) => [entry.name, entry.path] as const)
   )
+  const fonts = Object.fromEntries(
+    dependencies.fonts.map((entry) => [entry.name, entry.path] as const)
+  )
   const nodeModules =
     nodeModulesRootFrom(dependencies.nodePackages[0]?.path) ??
     join(dependencies.root, 'node_modules')
@@ -1096,7 +1099,11 @@ function workspaceDependencyResultFrom(
     node: dependencies.node.path,
     nodeModules,
     ...(dependencies.python ? { python: dependencies.python.path } : {}),
+    ...(dependencies.python
+      ? { pythonPackages: [...new Set(dependencies.python.packages.map((entry) => entry.path))] }
+      : {}),
     binaries,
+    fonts,
     text: formatWorkspaceDependencies(dependencies)
   }
 }

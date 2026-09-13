@@ -12,6 +12,7 @@ import type {
   PrimaryRuntimeDependencies,
   PrimaryRuntimeDiagnostic,
   PrimaryRuntimeDiagnosticIssue,
+  PrimaryRuntimeFontManifest,
   PrimaryRuntimeManifest,
   PrimaryRuntimePackageManifest,
   PrimaryRuntimeResolvedPackage
@@ -104,6 +105,7 @@ export class PrimaryRuntimeDiagnostics {
       ? await resolveDirectories(runtimeRoot, manifest.python.packages, issues)
       : []
     const binaries = await resolveBinaries(runtimeRoot, manifest.binaries ?? [], issues)
+    const fonts = await resolveFonts(runtimeRoot, manifest.fonts ?? [], issues)
     await resolveBundledPlugins(runtimeRoot, manifest.bundledPlugins ?? [], issues)
     await resolveBundledSkills(runtimeRoot, manifest.bundledSkills ?? [], issues)
     await verifySourceDigests(runtimeRoot, manifest.sourceDigests ?? [], issues)
@@ -129,7 +131,8 @@ export class PrimaryRuntimeDiagnostics {
             }
           }
         : {}),
-      binaries
+      binaries,
+      fonts
     }
 
     return { status: 'ready', root: runtimeRoot, manifest, dependencies, issues: [] }
@@ -269,6 +272,19 @@ async function resolveBinaries(
   const resolved: Array<{ name: string; path: string }> = []
   for (const entry of binaries) {
     const path = await resolveRuntimeFile(root, entry.path, issues, { executable: true })
+    if (path) resolved.push({ name: entry.name, path })
+  }
+  return resolved
+}
+
+async function resolveFonts(
+  root: string,
+  fonts: readonly PrimaryRuntimeFontManifest[],
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): Promise<Array<{ name: string; path: string }>> {
+  const resolved: Array<{ name: string; path: string }> = []
+  for (const entry of fonts) {
+    const path = await resolveRuntimeFile(root, entry.path, issues, { executable: false })
     if (path) resolved.push({ name: entry.name, path })
   }
   return resolved

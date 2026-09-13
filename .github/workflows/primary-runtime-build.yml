@@ -6,13 +6,21 @@ on:
       - "primary-runtime/**"
       - "services/primary-runtime-feed/**"
       - "desktop-app/src/main/primaryRuntime/**"
+      - "desktop-app/src/main/index.ts"
+      - "desktop-app/src/main/runtimeConfig.ts"
       - "desktop-app/scripts/run-primary-runtime-performance.mjs"
       - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
       - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
       - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
       - ".github/workflows/primary-runtime-publish.yml"
   workflow_dispatch:
@@ -461,7 +469,7 @@ jobs:
     if: inputs.mode == 'final'
     needs: build-target
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 80
 
     steps:
       - uses: actions/checkout@v6
@@ -513,6 +521,12 @@ jobs:
         shell: bash
         run: npm --prefix services/primary-runtime-feed run generate:engineering-key -- --output "$RUNNER_TEMP/engineering-key"
 
+      - name: Reserve one loopback origin for this engineering-only feed test
+        shell: bash
+        run: |
+          port="$(node -e "const {createServer}=require('node:net'); const server=createServer(); server.listen(0, '127.0.0.1', () => { const {port}=server.address(); server.close(() => process.stdout.write(String(port))); });")"
+          echo "ENGINEERING_FEED_ORIGIN=https://127.0.0.1:${port}" >> "$GITHUB_ENV"
+
       - name: Create and sign only engineering feed metadata
         shell: bash
         run: |
@@ -520,6 +534,7 @@ jobs:
           key="$RUNNER_TEMP/engineering-key/private-key.pem"
           npm --prefix services/primary-runtime-feed run create:metadata -- \
             --release-class engineering \
+            --origin "$ENGINEERING_FEED_ORIGIN" \
             --output "$metadata" \
             --target "darwin-x64=$RUNNER_TEMP/targets/darwin-x64" \
             --target "darwin-arm64=$RUNNER_TEMP/targets/darwin-arm64" \
@@ -550,6 +565,54 @@ jobs:
             --repository-root "$RUNNER_TEMP/feed-repository" \
             --staged-root "$RUNNER_TEMP/feed-repository/staged"
           node -e "const fs=require('node:fs'); const path=process.argv[1]; const targets=['darwin-x64','darwin-arm64','win32-x64','linux-x64']; fs.writeFileSync(path, JSON.stringify({schemaVersion:'dascowork-primary-runtime-four-target-summary.v1', engineeringOnly:true, productionTrust:false, publiclyDeployable:false, sourceRunId:process.env.GITHUB_RUN_ID, sourceCommit:process.env.GITHUB_SHA, targets}, null, 2)+'\\n')" "$RUNNER_TEMP/feed-repository/four-target-summary.json"
+
+      - name: Install deterministic packaged R07 gate dependencies
+        run: npm --prefix desktop-app ci
+
+      - name: Build the AI-free client for deterministic packaged R07
+        run: npm --prefix desktop-app run build:codex-app-server-client
+
+      - name: Create an ephemeral loopback CA for the packaged engineering feed
+        shell: bash
+        run: |
+          tls="$RUNNER_TEMP/packaged-r07-tls"
+          mkdir -p "$tls"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$tls/ca-key.pem" \
+            -out "$tls/ca-cert.pem" \
+            -subj '/CN=DasCowork packaged R07 engineering test CA' \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign'
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$tls/server-key.pem" \
+            -out "$tls/server.csr" \
+            -subj '/CN=127.0.0.1'
+          openssl x509 -req -days 1 \
+            -in "$tls/server.csr" \
+            -CA "$tls/ca-cert.pem" \
+            -CAkey "$tls/ca-key.pem" \
+            -CAcreateserial \
+            -out "$tls/server-cert.pem" \
+            -extfile <(printf 'subjectAltName=IP:127.0.0.1\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth\\n')
+          rm -f "$tls/ca-key.pem" "$tls/server.csr" "$tls/ca-cert.srl"
+
+      - name: Run packaged R07 from the same-run engineering feed and an empty cache
+        shell: bash
+        run: |
+          tls="$RUNNER_TEMP/packaged-r07-tls"
+          keyring="$(cat "$RUNNER_TEMP/engineering-key/public-keyring.json")"
+          DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_REPOSITORY_ROOT="$RUNNER_TEMP/feed-repository" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_STAGED_ROOT="$RUNNER_TEMP/feed-repository/staged" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_KEY="$tls/server-key.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CERT="$tls/server-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CA="$tls/ca-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_HOST=127.0.0.1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_PORT="${ENGINEERING_FEED_ORIGIN##*:}" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
+          npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
 
       - name: Verify no private key entered the artifact
         shell: bash

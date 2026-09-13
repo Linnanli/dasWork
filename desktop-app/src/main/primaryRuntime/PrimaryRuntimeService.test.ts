@@ -230,7 +230,8 @@ describe('PrimaryRuntimeService', () => {
         bundleVersion: '2026.9.6-fixture',
         node: { path: join(root, 'bin', 'node') },
         nodePackages: [{ name: 'pptxgenjs', path: join(root, 'node_modules', 'pptxgenjs') }],
-        binaries: []
+        binaries: [],
+        fonts: []
       },
       issues: []
     } satisfies PrimaryRuntimeDiagnostic
@@ -327,10 +328,16 @@ describe('PrimaryRuntimeService', () => {
     expect(result.node).toBe(join(root, 'bin', 'node'))
     expect(result.nodeModules).toBe(join(root, 'node_modules'))
     expect(result.python).toBe(join(root, 'bin', 'python'))
+    expect(result.pythonPackages).toEqual([join(root, 'python-packages', 'pptx-tools')])
     expect(result.binaries).toMatchObject({ libreoffice: join(root, 'bin', 'libreoffice') })
+    expect(result.fonts).toMatchObject({
+      'noto-sans-cjk-sc': join(root, 'fonts', 'NotoSansCJKsc-Regular.otf')
+    })
     expect(result).not.toHaveProperty('root')
     expect(result).not.toHaveProperty('nodePackages')
     expect(result.text).toContain('Use only the following verified Primary Runtime paths.')
+    expect(result.text).toContain('Runtime Python packages:')
+    expect(result.text).toContain('Runtime fonts:')
     expect(result.text).not.toContain('Primary Runtime root:')
   })
 
@@ -1060,6 +1067,7 @@ async function fixtureRuntime(
   await mkdir(join(root, 'bin'), { recursive: true })
   await mkdir(join(root, 'node_modules', 'pptxgenjs'), { recursive: true })
   await mkdir(join(root, 'python-packages', 'pptx-tools'), { recursive: true })
+  await mkdir(join(root, 'fonts'), { recursive: true })
   await writeFile(join(root, 'bin', 'node'), '#!/bin/sh\n')
   await writeFile(join(root, 'bin', 'python'), '#!/bin/sh\n')
   await writeFile(join(root, 'bin', 'libreoffice'), '#!/bin/sh\n')
@@ -1068,6 +1076,7 @@ async function fixtureRuntime(
     JSON.stringify({ name: 'pptxgenjs', version: '4.0.1', main: './index.js' })
   )
   await writeFile(join(root, 'node_modules', 'pptxgenjs', 'index.js'), 'export {}\n')
+  await writeFile(join(root, 'fonts', 'NotoSansCJKsc-Regular.otf'), 'font-fixture\n')
   await chmod(join(root, 'bin', 'node'), 0o755)
   await chmod(join(root, 'bin', 'python'), 0o755)
   await chmod(join(root, 'bin', 'libreoffice'), 0o755)
@@ -1088,6 +1097,7 @@ function manifest(overrides: Partial<PrimaryRuntimeManifest> = {}): PrimaryRunti
       packages: [{ name: 'pptx-tools', path: 'python-packages/pptx-tools' }]
     },
     binaries: [{ name: 'libreoffice', path: 'bin/libreoffice' }],
+    fonts: [{ name: 'noto-sans-cjk-sc', path: 'fonts/NotoSansCJKsc-Regular.otf' }],
     ...overrides
   }
 }
@@ -1160,6 +1170,7 @@ async function releaseArchive({
   )
   zip.file('node_modules/pptxgenjs/index.js', 'export {}\n')
   zip.file('python-packages/pptx-tools/package.json', '{}\n')
+  zip.file('fonts/NotoSansCJKsc-Regular.otf', 'font-fixture\n')
   for (const extraFile of extraFiles) {
     zip.file(extraFile.path, extraFile.content, { unixPermissions: extraFile.mode })
   }

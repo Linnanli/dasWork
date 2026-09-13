@@ -138,10 +138,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   // reintroduced as an unreviewed alternate path.
   assert.doesNotMatch(buildWorkflow, /MSYS2|msys2\/setup-msys2|C:\\msys64/u)
   assert.match(buildWorkflow, /Configure locked Windows MSVC builder environment/u)
-  assert.match(
-    buildWorkflow,
-    /ilammy\/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756/u
-  )
+  assert.match(buildWorkflow, /ilammy\/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756/u)
   assert.match(buildWorkflow, /arch: x64/u)
   assert.doesNotMatch(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT/u)
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE/u)
@@ -167,6 +164,16 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /aggregate-engineering-feed/u)
   assert.match(buildWorkflow, /primary-runtime-engineering-feed/u)
   assert.match(buildWorkflow, /four-target-summary\.json/u)
+  assert.match(
+    buildWorkflow,
+    /Run packaged R07 from the same-run engineering feed and an empty cache/u
+  )
+  assert.match(buildWorkflow, /test:e2e:primary-runtime-feed:packaged/u)
+  assert.match(buildWorkflow, /desktop-app\/scripts\/run-primary-runtime-packaged-feed-e2e\.mjs/u)
+  assert.match(buildWorkflow, /desktop-app\/tests\/e2e\/primary-runtime-feed\.e2e\.ts/u)
+  assert.match(buildWorkflow, /desktop-app\/tests\/e2e\/support\/r07Presentation\.ts/u)
+  assert.match(buildWorkflow, /Create an ephemeral loopback CA for the packaged engineering feed/u)
+  assert.match(buildWorkflow, /ENGINEERING_FEED_ORIGIN/u)
   assert.match(buildWorkflow, /primary-runtime-darwin-x64-candidate-staging/u)
   assert.match(buildWorkflow, /primary-runtime-darwin-x64-staging/u)
   assert.match(buildWorkflow, /cp "\$target_root\/THIRD_PARTY_NOTICES\.txt"/u)
@@ -190,10 +197,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /Install desktop dependencies for P3a\/P3b installer gates\n {8}run: npm --prefix desktop-app ci$/mu
   )
-  assert.match(
-    buildWorkflow,
-    /Build AI-free Codex app-server client for P3a\/P3b installer gates/u
-  )
+  assert.match(buildWorkflow, /Build AI-free Codex app-server client for P3a\/P3b installer gates/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)
   assert.match(
     buildWorkflow,
@@ -237,7 +241,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /--source-lock runtime-sources\.lock\.json/u)
   assert.match(buildWorkflow, /--toolchains-lock runtime-toolchains\.lock\.json/u)
   assert.doesNotMatch(buildWorkflow, /--source-lock primary-runtime\/runtime-sources\.lock\.json/u)
-  assert.doesNotMatch(buildWorkflow, /--toolchains-lock primary-runtime\/runtime-toolchains\.lock\.json/u)
+  assert.doesNotMatch(
+    buildWorkflow,
+    /--toolchains-lock primary-runtime\/runtime-toolchains\.lock\.json/u
+  )
   assert.match(buildWorkflow, /--workflow-run-url/u)
   assert.ok(
     buildWorkflow.indexOf('Verify target-native Runtime archive execution and rendering') <
@@ -283,7 +290,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.doesNotMatch(publishWorkflow, /secrets\.|production_ready|deploy|cdn|contents: write/u)
 })
 
-test('release gates require Primary Runtime performance evidence and packaged R07', async () => {
+test('optional real-model smoke stays independent from deterministic Runtime presentation gates', async () => {
   const [releaseWorkflow, testPlanWorkflow, packageJsonSource, devRunner, releaseRunner] =
     await Promise.all([
       readFile(releaseWorkflowPath, 'utf8'),
@@ -307,18 +314,12 @@ test('release gates require Primary Runtime performance evidence and packaged R0
     assert.doesNotMatch(workflow, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_[A-Z_]+: \$\{\{ secrets\./u)
   }
   for (const runner of [devRunner, releaseRunner]) {
-    assert.match(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL/u)
-    assert.match(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON/u)
-    assert.match(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON/u)
     assert.match(runner, /delete env\.CODEX_APP_SERVER_BIN/u)
+    assert.doesNotMatch(runner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_/u)
+    assert.doesNotMatch(runner, /writePackagedProductConfig/u)
   }
   assert.match(devRunner, /DASCOWORK_REAL_LLM_RUNTIME: 'development'/u)
-  assert.match(devRunner, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH/u)
   assert.match(releaseRunner, /DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE/u)
   assert.match(releaseRunner, /tests\/e2e\/release-llm\.e2e\.ts/u)
-  assert.match(releaseRunner, /The release LLM gate always runs the complete R01-R07 suite/u)
-  assert.match(
-    releaseRunner,
-    /Packaged R07 must not use DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH/u
-  )
+  assert.match(releaseRunner, /The release LLM gate always runs the complete R01-R06 suite/u)
 })
