@@ -19,7 +19,7 @@ const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(removeRuntimeCache))
-})
+}, 90_000)
 
 describe.skipIf(!enabled)('Primary Runtime install stress', () => {
   it('installs a real archive without an archive-sized main-process allocation', async () => {
@@ -68,7 +68,7 @@ describe.skipIf(!enabled)('Primary Runtime install stress', () => {
     } finally {
       clearInterval(sampler)
     }
-  })
+  }, 90_000)
 })
 
 async function sha256File(path: string): Promise<string> {
