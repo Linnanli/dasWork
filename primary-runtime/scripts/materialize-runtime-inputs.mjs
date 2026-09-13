@@ -250,8 +250,10 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
         ? []
         : command === "msiexec"
           ? ["/?"]
-          : command === "hdiutil"
+        : command === "hdiutil"
             ? ["help"]
+            : command === "xattr"
+              ? ["-h"]
             : ["--version"];
     try {
       result = await run(executable, versionArgs, { env: process.env });
@@ -750,6 +752,7 @@ async function extractMacosDmg({ archive, output, stripComponents }) {
       force: false,
       errorOnExist: true,
     });
+    await clearMacosQuarantine(join(output, "LibreOffice.app"));
   } finally {
     if (attached) {
       await run("hdiutil", ["detach", mountpoint, "-force"], {
@@ -759,6 +762,16 @@ async function extractMacosDmg({ archive, output, stripComponents }) {
     }
     await rm(mountpoint, { recursive: true, force: true });
   }
+}
+
+async function clearMacosQuarantine(application) {
+  const attributes = await run("xattr", ["-lr", application], {
+    env: process.env,
+  });
+  if (!attributes.stdout.includes("com.apple.quarantine")) return;
+  await run("xattr", ["-dr", "com.apple.quarantine", application], {
+    env: process.env,
+  });
 }
 
 /**

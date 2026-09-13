@@ -216,6 +216,7 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
     assert.equal(recipe?.sourceArchiveFormat, "dmg");
     assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
     assert.ok(toolchain.builder.tools.includes("hdiutil"));
+    assert.ok(toolchain.builder.tools.includes("xattr"));
   }
 });
 
@@ -340,6 +341,8 @@ test("macOS DMG extraction is temporary and produces only the locked application
     /\["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive\]/u,
   );
   assert.match(source, /safeChild\(mountpoint, "LibreOffice\.app"\)/u);
+  assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
+  assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 
@@ -364,6 +367,8 @@ test("P1 rendering uses only the Runtime-owned presentation plugin scripts", asy
   assert.match(verifierSource, /variant: "image-sidebar"/u);
   assert.match(verifierSource, /PPTX_RUNTIME_SOFFICE: soffice/u);
   assert.match(verifierSource, /PPTX_RUNTIME_PDFTOPPM: pdftoppm/u);
+  assert.match(verifierSource, /runtimeUtilityPaths\(target\)/u);
+  assert.match(verifierSource, /\["\/usr\/bin", "\/bin"\]/u);
   assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
 });
 

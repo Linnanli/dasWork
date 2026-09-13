@@ -1,6 +1,6 @@
 {
   "schemaVersion": "dascowork-primary-runtime-toolchains.v1",
-  "materializerVersion": "1.1.0",
+  "materializerVersion": "1.2.0",
   "targets": {
     "darwin-x64": {
       "runner": "macos-15-intel",
@@ -12,7 +12,7 @@
           "sourceCommit": "f10516542b8f2fef89b652a8d5f5de63aa543b77",
           "imageDigestSha256": "a876bf325c645f85a3184e0ef2414c972de2e7b601f834cc60ea5ad1f0e9a16a"
         },
-        "tools": ["tar", "hdiutil", "cmake", "ninja", "clang"]
+        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",
@@ -192,7 +192,7 @@
           "sourceCommit": "9312c564c4df0b842ce00a6c202dccb519b8dfdd",
           "imageDigestSha256": "a56806e89d54145f181c278f55fdb80f08e959b6161070bdd608bfcd907700b2"
         },
-        "tools": ["tar", "hdiutil", "cmake", "ninja", "clang"]
+        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
       },
       "node": {
         "name": "node-runtime",

@@ -507,7 +507,11 @@ async function renderChineseDeck({ target, node, python, soffice, pdftoppm, inpu
           PYTHONNOUSERSITE: "1",
           PPTX_RUNTIME_SOFFICE: soffice,
           PPTX_RUNTIME_PDFTOPPM: pdftoppm,
-          PATH: [dirname(soffice), dirname(pdftoppm)].join(delimiter),
+          PATH: [
+            dirname(soffice),
+            dirname(pdftoppm),
+            ...runtimeUtilityPaths(target),
+          ].join(delimiter),
         },
       ),
     );
@@ -585,6 +589,16 @@ function fontEnvironment({ font, fontConfig }) {
     FONTCONFIG_FILE: fontConfig,
     FONTCONFIG_PATH: resolve(font.path, ".."),
   };
+}
+
+function runtimeUtilityPaths(target) {
+  if (target.startsWith("win32")) {
+    const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+    return [`${systemRoot}\\System32`, systemRoot];
+  }
+  return target.startsWith("darwin")
+    ? ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    : ["/usr/bin", "/bin"];
 }
 
 function escapeXml(value) {
