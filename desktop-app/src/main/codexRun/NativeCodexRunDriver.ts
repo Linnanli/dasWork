@@ -395,12 +395,17 @@ export class NativeCodexRunDriver {
       }
     })
     for (const method of SERVER_REQUEST_METHODS) {
-      client.onRequest(method, async (params, request) =>
-        this.routeServerRequest(
-          { method, id: request.id, params } as ServerRequest,
-          input,
-          fileChangeBatches
-        )
+      client.onRequest(
+        method,
+        async (params, request) =>
+          this.routeServerRequest(
+            { method, id: request.id, params } as ServerRequest,
+            input,
+            fileChangeBatches
+          ),
+        method === 'item/fileChange/requestApproval'
+          ? { waitForQueuedNotifications: true }
+          : undefined
       )
     }
   }
