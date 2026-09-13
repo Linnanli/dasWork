@@ -545,6 +545,16 @@ test("P1 command line tools accept the documented equals-form arguments", async 
     await assert.rejects(
       () =>
         executeFile(process.execPath, [
+          fetchScript,
+          `--target=${target}`,
+          `--cache=${join(root, "cache")}`,
+          "--attempts=0",
+        ]),
+      /attempts must be an integer from 1 through 5/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
           materializeScript,
           `--target=${target}`,
           `--source-cache=${join(root, "cache")}`,
@@ -574,6 +584,15 @@ test("P1 command line tools accept the documented equals-form arguments", async 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("locked source fetching retries only transient transport failures", async () => {
+  const source = await readFile(fetchScript, "utf8");
+  assert.match(source, /--attempts/u);
+  assert.match(source, /ECONNRESET/u);
+  assert.match(source, /HTTP \(\?:408\|429\|5\\d\\d\)/u);
+  assert.match(source, /if \(!isRetryableFetchError\(error\) \|\| attempt === options\.attempts\) break;/u);
+  assert.match(source, /reusablePartial/u);
 });
 
 test("P1 scripts resolve default lock paths through file URLs safely on Windows", async () => {

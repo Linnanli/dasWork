@@ -64,6 +64,23 @@ process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
 
 async function downloadLockedArtifact({ cachePath, artifact }) {
   await mkdir(resolve(cachePath, ".."), { recursive: true });
+  let lastError;
+  for (let attempt = 1; attempt <= options.attempts; attempt += 1) {
+    try {
+      await downloadLockedArtifactAttempt({ cachePath, artifact });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableFetchError(error) || attempt === options.attempts) break;
+      await waitBeforeRetry(attempt);
+    }
+  }
+  throw new Error(
+    `AT-RT-INPUT-01 blocked: unable to fetch locked ${artifact.name}: ${String(lastError?.message ?? lastError)}`,
+  );
+}
+
+async function downloadLockedArtifactAttempt({ cachePath, artifact }) {
   const temporaryPath = `${cachePath}.partial`;
   const partialMetadataPath = `${temporaryPath}.json`;
   const partial = await reusablePartial({
@@ -72,78 +89,105 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
     artifact,
   });
   const existingBytes = partial.bytes;
-  try {
-    const headers = { "User-Agent": "dasCowork-primary-runtime-fetch/1.0" };
-    if (existingBytes > 0) headers.Range = `bytes=${existingBytes}-`;
-    const response = await requestLockedObject({
-      url: partial.url ?? artifact.url,
-      headers,
-      timeoutMs: options.timeoutMs,
-    });
-    if (response.status < 200 || response.status >= 300 || !response.body) {
-      response.body?.resume();
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const responseUrl = response.url;
-    const resumes = existingBytes > 0 && response.status === 206;
-    if (existingBytes > 0 && !resumes && response.status !== 200) {
-      throw new Error("server rejected the locked object range request");
-    }
-    const declaredSize = responseHeader(response.headers, "content-length");
-    const hasLockedSize = Number.isSafeInteger(artifact.sizeBytes);
-    const expectedBytes = hasLockedSize
-      ? (resumes ? artifact.sizeBytes - existingBytes : artifact.sizeBytes)
-      : undefined;
+  const headers = { "User-Agent": "dasCowork-primary-runtime-fetch/1.0" };
+  if (existingBytes > 0) headers.Range = `bytes=${existingBytes}-`;
+  const response = await requestLockedObject({
+    url: partial.url ?? artifact.url,
+    headers,
+    timeoutMs: options.timeoutMs,
+  });
+  if (response.status < 200 || response.status >= 300 || !response.body) {
+    response.body?.resume();
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const responseUrl = response.url;
+  const resumes = existingBytes > 0 && response.status === 206;
+  if (existingBytes > 0 && !resumes && response.status !== 200) {
+    throw new Error("server rejected the locked object range request");
+  }
+  const declaredSize = responseHeader(response.headers, "content-length");
+  const hasLockedSize = Number.isSafeInteger(artifact.sizeBytes);
+  const expectedBytes = hasLockedSize
+    ? (resumes ? artifact.sizeBytes - existingBytes : artifact.sizeBytes)
+    : undefined;
+  if (
+    hasLockedSize &&
+    declaredSize !== null &&
+    Number(declaredSize) !== expectedBytes
+  ) {
+    throw new Error("content-length differs from the immutable toolchain lock");
+  }
+  let responseTotalBytes = hasLockedSize ? artifact.sizeBytes : undefined;
+  if (resumes) {
+    const contentRange = responseHeader(response.headers, "content-range");
+    const range = /^bytes (\d+)-(\d+)\/(\d+)$/u.exec(contentRange ?? "");
     if (
-      hasLockedSize &&
-      declaredSize !== null &&
-      Number(declaredSize) !== expectedBytes
+      !range ||
+      Number(range[1]) !== existingBytes ||
+      (hasLockedSize &&
+        (Number(range[2]) !== artifact.sizeBytes - 1 || Number(range[3]) !== artifact.sizeBytes))
     ) {
-      throw new Error("content-length differs from the immutable toolchain lock");
+      throw new Error("content-range differs from the immutable toolchain lock");
     }
-    let responseTotalBytes = hasLockedSize ? artifact.sizeBytes : undefined;
-    if (resumes) {
-      const contentRange = responseHeader(response.headers, "content-range");
-      const range = /^bytes (\d+)-(\d+)\/(\d+)$/u.exec(contentRange ?? "");
-      if (
-        !range ||
-        Number(range[1]) !== existingBytes ||
-        (hasLockedSize &&
-          (Number(range[2]) !== artifact.sizeBytes - 1 || Number(range[3]) !== artifact.sizeBytes))
-      ) {
-        throw new Error("content-range differs from the immutable toolchain lock");
-      }
-      responseTotalBytes ??= Number(range[3]);
-    }
-    if (!resumes && declaredSize !== null && /^\d+$/u.test(declaredSize)) {
-      responseTotalBytes ??= Number(declaredSize);
-    }
-    await writePartialMetadata({
-      path: partialMetadataPath,
-      artifact,
-      url: responseUrl,
-      ...(responseTotalBytes ? { totalBytes: responseTotalBytes } : {}),
-    });
-    await writeResponseBody({
-      body: response.body,
-      path: temporaryPath,
-      append: resumes,
-    });
-    const completed = await stat(temporaryPath);
-    if (
-      !completed.isFile() ||
-      (hasLockedSize && completed.size !== artifact.sizeBytes) ||
-      (!hasLockedSize && responseTotalBytes !== undefined && completed.size !== responseTotalBytes)
-    ) {
-      throw new Error("downloaded object size differs from the immutable toolchain lock");
-    }
-    await rename(temporaryPath, cachePath);
-    await rm(partialMetadataPath, { force: true });
-  } catch (error) {
+    responseTotalBytes ??= Number(range[3]);
+  }
+  if (!resumes && declaredSize !== null && /^\d+$/u.test(declaredSize)) {
+    responseTotalBytes ??= Number(declaredSize);
+  }
+  await writePartialMetadata({
+    path: partialMetadataPath,
+    artifact,
+    url: responseUrl,
+    ...(responseTotalBytes ? { totalBytes: responseTotalBytes } : {}),
+  });
+  await writeResponseBody({
+    body: response.body,
+    path: temporaryPath,
+    append: resumes,
+  });
+  const completed = await stat(temporaryPath);
+  if (
+    !completed.isFile() ||
+    (hasLockedSize && completed.size !== artifact.sizeBytes) ||
+    (!hasLockedSize && responseTotalBytes !== undefined && completed.size !== responseTotalBytes)
+  ) {
     throw new Error(
-      `AT-RT-INPUT-01 blocked: unable to fetch locked ${artifact.name}: ${String(error.message ?? error)}`,
+      "downloaded object size differs from the immutable toolchain lock",
     );
   }
+  await rename(temporaryPath, cachePath);
+  await rm(partialMetadataPath, { force: true });
+}
+
+function isRetryableFetchError(error) {
+  const code = typeof error?.code === "string" ? error.code : "";
+  if (
+    [
+      "ECONNABORTED",
+      "ECONNREFUSED",
+      "ECONNRESET",
+      "EAI_AGAIN",
+      "ENETUNREACH",
+      "ETIMEDOUT",
+    ].includes(code)
+  ) {
+    return true;
+  }
+  const message = String(error?.message ?? error);
+  return (
+    /\b(?:ECONNABORTED|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENETUNREACH|ETIMEDOUT)\b/u.test(
+      message,
+    ) ||
+    /^(?:HTTP (?:408|429|5\d\d)|locked source request timed out|socket hang up)$/u.test(
+      message,
+    )
+  );
+}
+
+function waitBeforeRetry(attempt) {
+  return new Promise((resolveWait) => {
+    setTimeout(resolveWait, Math.min(attempt * 1_000, 3_000));
+  });
 }
 
 /**
@@ -165,6 +209,7 @@ async function writeResponseBody({ body, path, append }) {
     await once(output, "finish");
   } catch (error) {
     output.destroy(error);
+    if (!output.closed) await once(output, "close");
     throw error;
   }
 }
@@ -296,7 +341,18 @@ function assertHttpsDownloadUrl(value) {
 
 function parseArgs(argv) {
   const target = parseRuntimeTargetOption(argv);
-  const values = readOptions(argv, new Set(["--target", "--cache", "--receipt", "--source-lock", "--toolchains-lock", "--timeout-ms"]));
+  const values = readOptions(
+    argv,
+    new Set([
+      "--target",
+      "--cache",
+      "--receipt",
+      "--source-lock",
+      "--toolchains-lock",
+      "--timeout-ms",
+      "--attempts",
+    ]),
+  );
   const option = (name, fallback = undefined) => values.get(name) ?? fallback;
   const cache = option("--cache");
   if (!cache) throw new Error("Expected --cache <content-addressed-cache>.");
@@ -319,6 +375,7 @@ function parseArgs(argv) {
       ),
     ),
     timeoutMs: readPositiveTimeout(option("--timeout-ms", "120000")),
+    attempts: readFetchAttempts(option("--attempts", "3")),
   };
 }
 
@@ -344,4 +401,12 @@ function readPositiveTimeout(value) {
     throw new Error("--timeout-ms must be an integer from 1000 through 900000.");
   }
   return timeoutMs;
+}
+
+function readFetchAttempts(value) {
+  const attempts = Number(value);
+  if (!Number.isSafeInteger(attempts) || attempts < 1 || attempts > 5) {
+    throw new Error("--attempts must be an integer from 1 through 5.");
+  }
+  return attempts;
 }
