@@ -233,12 +233,17 @@ function generateFeedKey() {
 
 async function createLocalTls(root) {
   const directory = join(root, 'tls')
+  const caKeyPath = join(directory, 'ca-key.pem')
+  const caCertPath = join(directory, 'ca-cert.pem')
   const keyPath = join(directory, 'server-key.pem')
+  const certificateRequestPath = join(directory, 'server.csr')
   const certPath = join(directory, 'server-cert.pem')
+  const extensionPath = join(directory, 'server-extensions.cnf')
   await mkdir(directory, { recursive: true })
-  // Keep this local-only test surface to one ephemeral loopback trust anchor.
-  // P3b verifies it through Electron Main's dedicated TLS policy, rather than
-  // changing any process-wide or production trust configuration.
+  // Keep this local-only test surface to one ephemeral trust anchor and one
+  // loopback-only leaf. P3b verifies it through Electron Main's dedicated TLS
+  // policy, rather than changing any process-wide or production trust
+  // configuration.
   await executeFile('openssl', [
     'req',
     '-x509',
@@ -246,26 +251,65 @@ async function createLocalTls(root) {
     'rsa:2048',
     '-nodes',
     '-keyout',
+    caKeyPath,
+    '-out',
+    caCertPath,
+    '-days',
+    '1',
+    '-subj',
+    '/CN=DasCowork Primary Runtime P3b Test CA',
+    '-addext',
+    'basicConstraints=critical,CA:TRUE',
+    '-addext',
+    'keyUsage=critical,keyCertSign,cRLSign',
+    '-addext',
+    'subjectKeyIdentifier=hash',
+    '-sha256'
+  ])
+  await executeFile('openssl', [
+    'req',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-keyout',
     keyPath,
+    '-out',
+    certificateRequestPath,
+    '-subj',
+    '/CN=127.0.0.1'
+  ])
+  await writeFile(
+    extensionPath,
+    [
+      'basicConstraints=critical,CA:FALSE',
+      'keyUsage=critical,digitalSignature,keyEncipherment',
+      'extendedKeyUsage=serverAuth',
+      'subjectAltName=IP:127.0.0.1',
+      'subjectKeyIdentifier=hash',
+      'authorityKeyIdentifier=keyid,issuer'
+    ].join('\n') + '\n',
+    { mode: 0o600 }
+  )
+  await executeFile('openssl', [
+    'x509',
+    '-req',
+    '-in',
+    certificateRequestPath,
+    '-CA',
+    caCertPath,
+    '-CAkey',
+    caKeyPath,
+    '-CAcreateserial',
     '-out',
     certPath,
     '-days',
     '1',
-    '-subj',
-    '/CN=127.0.0.1',
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-addext',
-    'keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign',
-    '-addext',
-    'subjectKeyIdentifier=hash',
-    '-addext',
-    'extendedKeyUsage=serverAuth',
-    '-addext',
-    'subjectAltName=IP:127.0.0.1',
-    '-sha256'
+    '-sha256',
+    '-extfile',
+    extensionPath
   ])
-  return { keyPath, certPath, caPath: certPath }
+  await executeFile('openssl', ['verify', '-CAfile', caCertPath, certPath])
+  return { keyPath, certPath, caPath: caCertPath }
 }
 
 async function reserveLoopbackPort(host) {

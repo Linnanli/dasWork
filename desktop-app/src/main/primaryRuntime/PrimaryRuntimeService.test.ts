@@ -292,7 +292,7 @@ describe('PrimaryRuntimeService', () => {
       diagnostics: new PrimaryRuntimeDiagnostics(),
       releaseProvider: {
         getRelease: async () => {
-          throw new Error('TLS certificate rejected for https://private.example.test/feed?token=hidden')
+          throw new Error('TLS certificate rejected')
         },
         downloadArchive: vi.fn()
       }

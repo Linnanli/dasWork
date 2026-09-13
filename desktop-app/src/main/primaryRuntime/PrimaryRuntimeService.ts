@@ -737,7 +737,9 @@ function classifyUserFailure(error: Error): NonNullable<PrimaryRuntimeUserStatus
   if (/disk|space|storage/i.test(message)) return 'storage'
   if (/unsupported|platform|architecture/i.test(message)) return 'unsupported'
   if (/provenance|authorization|authorized source|supply.?chain/i.test(message)) return 'provenance'
-  if (/network|fetch|http|https|timeout|offline|connect/i.test(message)) return 'network'
+  if (/network|fetch|http|https|timeout|offline|connect|tls|ssl|certificate/i.test(message)) {
+    return 'network'
+  }
   return 'unavailable'
 }
 
