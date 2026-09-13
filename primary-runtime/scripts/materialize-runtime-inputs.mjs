@@ -637,7 +637,6 @@ function addLockedNativeDependencyPrefixes({ file, args, dependencyPrefixes }) {
   return [
     ...args,
     `-DCMAKE_PREFIX_PATH=${dependencyPrefixes.join(";")}`,
-    "-DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=FALSE",
     "-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE",
   ];
 }

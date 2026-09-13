@@ -281,7 +281,6 @@ test("native source dependency prefixes are injected only into CMake configure c
 
   assert.match(source, /resolveNativeDependencyPrefixes/u);
   assert.match(source, /addLockedNativeDependencyPrefixes/u);
-  assert.match(source, /-DCMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH=FALSE/u);
   assert.match(source, /-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE/u);
   assert.match(source, /run\(resolveLockedBuilderCommand\(file\), commandArgs/u);
   assert.doesNotMatch(source, /(?:apt-get|brew)\s+(?:install|update)/u);
