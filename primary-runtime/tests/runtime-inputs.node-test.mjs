@@ -217,10 +217,22 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
     assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
     assert.ok(toolchain.builder.tools.includes("hdiutil"));
     assert.ok(toolchain.builder.tools.includes("xattr"));
+    assert.ok(toolchain.builder.tools.includes("codesign"));
+    assert.equal(recipe?.toolchain.codeSigning, "ad-hoc-test-only");
+    assert.deepEqual(recipe?.outputs, [
+      {
+        kind: "directory",
+        source: "Contents",
+        destination: "dependencies/native/libreoffice/LibreOffice.app/Contents",
+      },
+    ]);
+    assert.deepEqual(recipe?.closure.entrypoints, [
+      "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice",
+    ]);
   }
 });
 
-test("Poppler source recipes use only locked zlib and Freetype prefixes", async () => {
+test("Poppler source recipes use only locked zlib, Freetype, and libpng prefixes", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   const disabledOptions = [
     "-DENABLE_NSS3=OFF",
@@ -245,6 +257,9 @@ test("Poppler source recipes use only locked zlib and Freetype prefixes", async 
     const freetype = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "freetype",
     );
+    const libpng = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "libpng",
+    );
     const recipe = toolchain.nativeRecipes.find(
       (candidate) => candidate.name === "poppler",
     );
@@ -266,11 +281,26 @@ test("Poppler source recipes use only locked zlib and Freetype prefixes", async 
     ]) {
       assert.ok(freetype?.commands[0]?.includes(option), `${target}: ${option}`);
     }
+    assert.equal(libpng?.materialization, "source-build", target);
+    assert.equal(libpng?.sourceComponent, "libpng", target);
+    assert.deepEqual(libpng?.nativeDependencies, ["zlib"], target);
+    for (const option of [
+      "-DPNG_SHARED=OFF",
+      "-DPNG_STATIC=ON",
+      "-DPNG_TESTS=OFF",
+      "-DPNG_TOOLS=OFF",
+    ]) {
+      assert.ok(libpng?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
     assert.equal(recipe?.materialization, "source-build", target);
-    assert.deepEqual(recipe?.nativeDependencies, ["zlib", "freetype"], target);
+    assert.deepEqual(recipe?.nativeDependencies, ["zlib", "freetype", "libpng"], target);
     assert.ok(
       recipe?.commands[0]?.includes("-DZLIB_USE_STATIC_LIBS=TRUE"),
       `${target}: zlib must be linked from the locked static prefix`,
+    );
+    assert.ok(
+      recipe?.commands[0]?.includes("-DENABLE_LIBPNG=ON"),
+      `${target}: PNG output must be backed by the locked libpng prefix`,
     );
     for (const option of disabledOptions) {
       assert.ok(recipe?.toolchain.flags?.includes(option), `${target}: ${option}`);
@@ -343,6 +373,8 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /safeChild\(mountpoint, "LibreOffice\.app"\)/u);
   assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
   assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
+  assert.match(source, /applyMacosAdHocSignature\(\{ recipe, outputRoot \}\)/u);
+  assert.match(source, /\["--force", "--deep", "--sign", "-", application\]/u);
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 

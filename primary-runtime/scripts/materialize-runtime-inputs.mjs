@@ -254,7 +254,9 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
             ? ["help"]
             : command === "xattr"
               ? ["-h"]
-            : ["--version"];
+              : command === "codesign"
+                ? ["--display", "--verbose=2", "/usr/bin/codesign"]
+              : ["--version"];
     try {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
@@ -593,9 +595,36 @@ async function materializeNativeRecipes({
         if (output.mode === "0755") await chmod(destination, 0o755);
       }
     }
+    await applyMacosAdHocSignature({ recipe, outputRoot });
     await assertRecipeClosure({ recipe, outputRoot });
     completedRecipeNames.add(recipe.name);
   }
+}
+
+/**
+ * The locked LibreOffice DMG is copied into an immutable Runtime input tree,
+ * where internal symlinks are deliberately dereferenced.  That safety step
+ * invalidates the vendor signature, so macOS candidates are re-signed without
+ * a credential.  This is explicitly test-only evidence; it is never a
+ * substitute for Developer ID signing, notarization, or production trust.
+ */
+async function applyMacosAdHocSignature({ recipe, outputRoot }) {
+  if (!target.startsWith("darwin") || recipe.name !== "libreoffice") return;
+  if (recipe.toolchain.codeSigning !== "ad-hoc-test-only") {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: macOS LibreOffice must declare ad-hoc-test-only signing.",
+    );
+  }
+  const application = await safeChild(
+    outputRoot,
+    "dependencies/native/libreoffice/LibreOffice.app",
+  );
+  await assertRegularDirectory(application, "macOS LibreOffice application bundle");
+  await run(
+    resolveLockedBuilderCommand("codesign"),
+    ["--force", "--deep", "--sign", "-", application],
+    { env: process.env },
+  );
 }
 
 async function resolveNativeDependencyPrefixes({

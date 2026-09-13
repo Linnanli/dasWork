@@ -90,7 +90,7 @@ function requireEntry(entryMap, path) {
 function isExecutableEntry(path) {
   return (
     /^(?:dependencies\/(?:node|python)\/bin\/)/u.test(path) ||
-    /^dependencies\/native\/libreoffice\/(?:program|MacOS)\/soffice(?:\.exe)?$/u.test(path) ||
+    /^dependencies\/native\/libreoffice\/(?:program\/soffice|LibreOffice\.app\/Contents\/MacOS\/soffice)(?:\.exe)?$/u.test(path) ||
     /^dependencies\/native\/poppler\/bin\/(?:pdfinfo|pdftoppm)(?:\.exe)?$/u.test(path)
   );
 }
