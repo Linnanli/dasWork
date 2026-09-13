@@ -57,6 +57,7 @@ const componentKeys = new Set([
   "sha256",
   "license",
   "platforms",
+  "entryRequired",
 ]);
 const componentGroups = Object.freeze(["node", "python", "native", "fonts"]);
 const componentGroupKeys = new Set(componentGroups);
@@ -252,6 +253,7 @@ function isComponent(component) {
     isHttpsUrl(component.source) &&
     isSha256(component.sha256) &&
     isResolvedValue(component.license) &&
+    (component.entryRequired === undefined || typeof component.entryRequired === "boolean") &&
     Array.isArray(component.platforms) &&
     component.platforms.length > 0 &&
     component.platforms.every((target) => supportedTargets.has(target)) &&

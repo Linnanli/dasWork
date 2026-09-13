@@ -208,6 +208,8 @@ async function validateNodePackage(
     return false
   }
 
+  if (entry.entryRequired === false) return true
+
   const entryPath = await resolveNodePackageEntry(packageRoot, manifest, issues)
   return Boolean(entryPath)
 }

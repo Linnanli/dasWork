@@ -16,7 +16,8 @@ const relativePathSchema = z
 const packageManifestSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1).optional(),
-  path: relativePathSchema
+  path: relativePathSchema,
+  entryRequired: z.boolean().optional()
 })
 
 const binaryManifestSchema = z.object({

@@ -7,6 +7,7 @@ export type PrimaryRuntimePackageManifest = {
   name: string
   version?: string
   path: PrimaryRuntimeRelativePath
+  entryRequired?: boolean
 }
 
 export type PrimaryRuntimeBinaryManifest = {

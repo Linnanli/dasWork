@@ -233,6 +233,7 @@ function buildRuntimeManifest({
       name: component.name,
       version: component.version,
       path: `dependencies/node/node_modules/${component.name}`,
+      ...(component.entryRequired === false ? { entryRequired: false } : {}),
     })),
     python: {
       path:

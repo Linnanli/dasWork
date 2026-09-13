@@ -304,22 +304,29 @@ describe('PrimaryRuntimeService', () => {
     expect(result.text).not.toContain('Primary Runtime root:')
   })
 
-  it('accepts a locked type-only Node package in the Runtime dependency closure', async () => {
+  it('accepts locked non-executable Node packages in the Runtime dependency closure', async () => {
     const root = await fixtureRuntime()
-    const packageRoot = join(root, 'node_modules', '@types', 'node')
-    await mkdir(packageRoot, { recursive: true })
+    const typePackageRoot = join(root, 'node_modules', '@types', 'node')
+    const metadataPackageRoot = join(root, 'node_modules', 'https')
+    await mkdir(typePackageRoot, { recursive: true })
+    await mkdir(metadataPackageRoot, { recursive: true })
     await writeFile(
-      join(packageRoot, 'package.json'),
+      join(typePackageRoot, 'package.json'),
       JSON.stringify({ name: '@types/node', version: '22.19.17', types: 'index.d.ts' })
     )
-    await writeFile(join(packageRoot, 'index.d.ts'), 'export {}\n')
+    await writeFile(join(typePackageRoot, 'index.d.ts'), 'export {}\n')
+    await writeFile(
+      join(metadataPackageRoot, 'package.json'),
+      JSON.stringify({ name: 'https', version: '1.0.0', main: 'index.js' })
+    )
     await writeFile(
       join(root, 'runtime.json'),
       JSON.stringify(
         manifest({
           nodePackages: [
             { name: 'pptxgenjs', version: '4.0.1', path: 'node_modules/pptxgenjs' },
-            { name: '@types/node', version: '22.19.17', path: 'node_modules/@types/node' }
+            { name: '@types/node', version: '22.19.17', path: 'node_modules/@types/node' },
+            { name: 'https', version: '1.0.0', path: 'node_modules/https', entryRequired: false }
           ]
         }),
         null,
@@ -331,7 +338,8 @@ describe('PrimaryRuntimeService', () => {
       status: 'ready',
       dependencies: {
         nodePackages: expect.arrayContaining([
-          expect.objectContaining({ name: '@types/node', path: packageRoot })
+          expect.objectContaining({ name: '@types/node', path: typePackageRoot }),
+          expect.objectContaining({ name: 'https', path: metadataPackageRoot })
         ])
       }
     })

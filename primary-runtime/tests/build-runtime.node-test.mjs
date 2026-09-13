@@ -60,6 +60,7 @@ test("rejects missing candidate provenance and every floating or placeholder val
     { ...lock, candidate: { ...lock.candidate, tag: "main" } },
     { ...lock, candidate: { ...lock.candidate, patch: { ...lock.candidate.patch, sha256: "TBD" } } },
     { ...lock, components: { ...lock.components, node: [{ ...lock.components.node[0], version: "^4.0.1" }] } },
+    { ...lock, components: { ...lock.components, node: [{ ...lock.components.node[0], entryRequired: "false" }] } },
     { ...lock, components: { ...lock.components, python: [{ ...lock.components.python[0], source: "https://token@example.test/wheel" }] } },
     { ...lock, components: { ...lock.components, fonts: [] } },
     { ...lock, candidate: { ...lock.candidate, unexpected: "mutable-claim" } },
