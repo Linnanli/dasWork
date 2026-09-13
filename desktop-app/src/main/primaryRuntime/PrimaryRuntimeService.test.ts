@@ -534,6 +534,34 @@ describe('PrimaryRuntimeService', () => {
     })
   })
 
+  it('restores an audited executable mode outside a bin directory', async () => {
+    const cacheRoot = await fixtureDirectory()
+    const archive = await releaseArchive({
+      bundleVersion: 'macos-bundle-executable',
+      manifestOverrides: {
+        binaries: [
+          {
+            name: 'soffice',
+            path: 'dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice'
+          }
+        ]
+      },
+      extraFiles: [
+        {
+          path: 'dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice',
+          content: '#!/bin/sh\n',
+          mode: 0o755
+        }
+      ]
+    })
+    const service = runtimeServiceWithRelease(cacheRoot, archive)
+
+    await expect(service.install()).resolves.toMatchObject({
+      status: 'installed',
+      version: 'macos-bundle-executable'
+    })
+  })
+
   it('keeps the existing pointer when a download is truncated or tampered', async () => {
     const cacheRoot = await fixtureDirectory()
     await publishFixtureRuntime(cacheRoot, 'old-healthy')
@@ -1088,22 +1116,24 @@ async function releaseArchive({
 }: {
   bundleVersion: string
   manifestOverrides?: Partial<PrimaryRuntimeManifest>
-  extraFiles?: Array<{ path: string; content: string }>
+  extraFiles?: Array<{ path: string; content: string; mode?: number }>
 }): Promise<{ descriptor: PrimaryRuntimeReleaseDescriptor; bytes: Uint8Array }> {
   const zip = new JSZip()
   const runtimeManifest = manifest({ bundleVersion, ...manifestOverrides })
   zip.file('runtime.json', JSON.stringify(runtimeManifest))
-  zip.file('bin/node', '#!/bin/sh\n')
-  zip.file('bin/python', '#!/bin/sh\n')
-  zip.file('bin/libreoffice', '#!/bin/sh\n')
+  zip.file('bin/node', '#!/bin/sh\n', { unixPermissions: 0o755 })
+  zip.file('bin/python', '#!/bin/sh\n', { unixPermissions: 0o755 })
+  zip.file('bin/libreoffice', '#!/bin/sh\n', { unixPermissions: 0o755 })
   zip.file(
     'node_modules/pptxgenjs/package.json',
     JSON.stringify({ name: 'pptxgenjs', version: '4.0.1', main: './index.js' })
   )
   zip.file('node_modules/pptxgenjs/index.js', 'export {}\n')
   zip.file('python-packages/pptx-tools/package.json', '{}\n')
-  for (const extraFile of extraFiles) zip.file(extraFile.path, extraFile.content)
-  const bytes = await zip.generateAsync({ type: 'uint8array' })
+  for (const extraFile of extraFiles) {
+    zip.file(extraFile.path, extraFile.content, { unixPermissions: extraFile.mode })
+  }
+  const bytes = await zip.generateAsync({ type: 'uint8array', platform: 'UNIX' })
   return {
     bytes,
     descriptor: {

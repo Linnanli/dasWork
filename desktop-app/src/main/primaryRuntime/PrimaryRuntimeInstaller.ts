@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { chmod, mkdir, readdir, rename, rm, stat, statfs } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import * as yauzl from 'yauzl'
 
@@ -395,7 +395,8 @@ async function extractRuntimeZip(
             await pipeline(stream, createWriteStream(targetPath, { flags: 'wx', mode: 0o600 }), {
               signal
             })
-            if (isExecutableArchivePath(relativePath)) await chmod(targetPath, 0o755)
+            const mode = unixFileMode(entry)
+            if (mode !== null) await chmod(targetPath, mode)
             next()
           } catch (error) {
             fail(error)
@@ -567,8 +568,14 @@ function normalizedArchivePath(path: string): string {
   return normalized
 }
 
-function isExecutableArchivePath(path: string): boolean {
-  return basename(dirname(path)) === 'bin' || path.startsWith('bin/')
+function unixFileMode(entry: yauzl.Entry): number | null {
+  // Primary Runtime archives are written on Unix with the file mode in the
+  // central-directory attributes. Restore that audited mode instead of
+  // guessing from an executable path: macOS application bundles keep their
+  // entry points below `.app/Contents/MacOS`, not a `bin/` directory.
+  const hostSystem = entry.versionMadeBy >>> 8
+  if (hostSystem !== 3) return null
+  return (entry.externalFileAttributes >>> 16) & 0o777
 }
 
 function isPathInside(root: string, path: string): boolean {
