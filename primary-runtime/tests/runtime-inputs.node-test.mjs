@@ -235,6 +235,7 @@ test("Poppler source recipes use only locked zlib and Freetype prefixes", async 
     "-DENABLE_LCMS=OFF",
     "-DENABLE_LIBCURL=OFF",
     "-DENABLE_HARFBUZZ=OFF",
+    "-DFONT_CONFIGURATION=generic",
   ];
   for (const [target, toolchain] of Object.entries(lock.targets)) {
     const zlib = toolchain.nativeRecipes.find(
@@ -260,6 +261,7 @@ test("Poppler source recipes use only locked zlib and Freetype prefixes", async 
       "-DFT_DISABLE_BZIP2=TRUE",
       "-DFT_DISABLE_PNG=TRUE",
       "-DFT_DISABLE_HARFBUZZ=TRUE",
+      "-DFT_DISABLE_BROTLI=TRUE",
     ]) {
       assert.ok(freetype?.commands[0]?.includes(option), `${target}: ${option}`);
     }
