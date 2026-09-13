@@ -411,8 +411,9 @@ test("locked-source fetch streams Web response chunks without buffering an archi
   assert.match(source, /async function writeResponseBody/u);
   assert.match(source, /for await \(const chunk of body\)/u);
   assert.match(source, /await once\(output, "drain"\)/u);
-  assert.doesNotMatch(source, /^import .*Readable.*from "node:stream"/mu);
-  assert.doesNotMatch(source, /response\.arrayBuffer\(\)|await pipeline\(/u);
+  assert.match(source, /request as requestHttps/u);
+  assert.match(source, /function requestLockedObject/u);
+  assert.doesNotMatch(source, /\bfetch\(|Readable\.fromWeb|response\.arrayBuffer\(\)|await pipeline\(/u);
 });
 
 test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {

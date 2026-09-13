@@ -36,6 +36,10 @@ const provenanceScript = resolve(
 );
 const buildScript = resolve(import.meta.dirname, "../scripts/build-runtime.mjs");
 const verifyScript = resolve(import.meta.dirname, "../scripts/verify-runtime.mjs");
+const bindProvenanceScript = resolve(
+  import.meta.dirname,
+  "../scripts/bind-runtime-provenance.mjs",
+);
 const unpackMeasurementScript = resolve(
   import.meta.dirname,
   "../scripts/measure-runtime-unpack.mjs",
@@ -356,6 +360,72 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
     const verified = JSON.parse(verifyStdout);
     assert.equal(verified.status, "verified");
     assert.equal(verified.archiveSha256, provenance.archiveSha256);
+
+    const platformValidationPath = join(targetRoot, "platform-validation.json");
+    const componentSmoke = await readFile(validationPath);
+    await writeJson(platformValidationPath, {
+      schemaVersion: "dascowork-primary-runtime-platform-validation.v1",
+      status: "verified",
+      target,
+      runner: provenance.builderIdentity.runner,
+      archiveSha256: provenance.archiveSha256,
+      archiveSizeBytes: provenance.archiveSizeBytes,
+      runtimeManifestSha256: provenance.runtimeManifestSha256,
+      componentSmokeSha256: provenance.componentSmokeSha256,
+      inputValidationSha256: sha256(componentSmoke),
+      commands: [{ name: "fixture", resultSha256: "f".repeat(64) }],
+      render: { status: "verified" },
+      productionTrust: false,
+    });
+    const { stdout: boundStdout } = await executeFile(process.execPath, [
+      bindProvenanceScript,
+      "--target",
+      target,
+      "--provenance",
+      join(targetRoot, "provenance.json"),
+      "--platform-validation",
+      platformValidationPath,
+      "--archive",
+      join(targetRoot, "primary-runtime.zip"),
+      "--source-lock",
+      sourceLockPath,
+      "--toolchains-lock",
+      toolchainsLockPath,
+      "--input-manifest",
+      join(inputRoot, "runtime-inputs.manifest.json"),
+      "--canonical-file-manifest",
+      join(targetRoot, "canonical-file-manifest.txt"),
+      "--runtime-manifest",
+      join(targetRoot, "runtime.json"),
+      "--sbom",
+      join(targetRoot, "SBOM.json"),
+      "--notices",
+      join(targetRoot, "THIRD_PARTY_NOTICES.txt"),
+      "--component-smoke",
+      validationPath,
+      "--desktop-commit",
+      "a".repeat(40),
+      "--runtime-commit",
+      "b".repeat(40),
+      "--workflow-run-id",
+      "123",
+      "--workflow-repository",
+      "dascowork/test",
+      "--workflow-run-url",
+      "https://github.com/dascowork/test/actions/runs/123",
+    ]);
+    const bound = JSON.parse(boundStdout);
+    assert.equal(bound.desktopCommit, "a".repeat(40));
+    assert.equal(bound.runtimeCommit, "b".repeat(40));
+    assert.deepEqual(bound.workflowRun, {
+      id: "123",
+      repository: "dascowork/test",
+      url: "https://github.com/dascowork/test/actions/runs/123",
+    });
+    assert.equal(
+      bound.platformValidationSha256,
+      sha256(await readFile(platformValidationPath)),
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

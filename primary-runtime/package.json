@@ -15,6 +15,7 @@
     "verify:inputs": "node scripts/verify-runtime-inputs.mjs",
     "measure:unpack": "node scripts/measure-runtime-unpack.mjs",
     "verify:platform": "node scripts/verify-runtime-platform.mjs",
+    "bind:provenance": "node scripts/bind-runtime-provenance.mjs",
     "verify:hard-limits": "node scripts/verify-runtime-hard-limits.mjs",
     "verify:budgets": "node scripts/verify-runtime-budgets.mjs",
     "calibrate:budgets": "node scripts/calibrate-runtime-budgets.mjs",

@@ -228,6 +228,18 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.doesNotMatch(buildWorkflow, /DASCOWORK_REAL_PRIMARY_RUNTIME_ROOT/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run verify:platform/u)
+  assert.match(buildWorkflow, /Bind target staging provenance to platform validation/u)
+  assert.match(buildWorkflow, /npm --prefix primary-runtime run bind:provenance/u)
+  assert.match(buildWorkflow, /--platform-validation/u)
+  assert.match(buildWorkflow, /--workflow-run-url/u)
+  assert.ok(
+    buildWorkflow.indexOf('Verify target-native Runtime archive execution and rendering') <
+      buildWorkflow.indexOf('Bind target staging provenance to platform validation')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Bind target staging provenance to platform validation') <
+      buildWorkflow.indexOf('Stage declared P1a calibration evidence')
+  )
   assert.doesNotMatch(buildWorkflow, /verify:platform-trust/u)
   assert.doesNotMatch(buildWorkflow, /build:matrix|verify:matrix/u)
   assert.doesNotMatch(

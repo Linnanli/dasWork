@@ -3,6 +3,7 @@
 import { createWriteStream } from "node:fs";
 import { once } from "node:events";
 import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { request as requestHttps } from "node:https";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,20 +75,21 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
   try {
     const headers = { "User-Agent": "dasCowork-primary-runtime-fetch/1.0" };
     if (existingBytes > 0) headers.Range = `bytes=${existingBytes}-`;
-    const response = await fetch(partial.url ?? artifact.url, {
-      redirect: "follow",
+    const response = await requestLockedObject({
+      url: partial.url ?? artifact.url,
       headers,
-      signal: AbortSignal.timeout(options.timeoutMs),
+      timeoutMs: options.timeoutMs,
     });
-    if (!response.ok || !response.body) {
+    if (response.status < 200 || response.status >= 300 || !response.body) {
+      response.body?.resume();
       throw new Error(`HTTP ${response.status}`);
     }
-    const responseUrl = assertHttpsDownloadUrl(response.url);
+    const responseUrl = response.url;
     const resumes = existingBytes > 0 && response.status === 206;
     if (existingBytes > 0 && !resumes && response.status !== 200) {
       throw new Error("server rejected the locked object range request");
     }
-    const declaredSize = response.headers.get("content-length");
+    const declaredSize = responseHeader(response.headers, "content-length");
     const hasLockedSize = Number.isSafeInteger(artifact.sizeBytes);
     const expectedBytes = hasLockedSize
       ? (resumes ? artifact.sizeBytes - existingBytes : artifact.sizeBytes)
@@ -101,7 +103,7 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
     }
     let responseTotalBytes = hasLockedSize ? artifact.sizeBytes : undefined;
     if (resumes) {
-      const contentRange = response.headers.get("content-range");
+      const contentRange = responseHeader(response.headers, "content-range");
       const range = /^bytes (\d+)-(\d+)\/(\d+)$/u.exec(contentRange ?? "");
       if (
         !range ||
@@ -145,10 +147,10 @@ async function downloadLockedArtifact({ cachePath, artifact }) {
 }
 
 /**
- * Keep the locked-object fetch streaming end-to-end.  Bridging the Web stream
- * through Readable.fromWeb caused an Undici paused-stream assertion on the
- * Intel macOS runner.  Iterating the response body directly preserves
- * back-pressure without buffering an archive in memory.
+ * Keep the locked-object fetch streaming end-to-end through Node's built-in
+ * HTTPS client. GitHub-hosted macOS Node 22 exposed an Undici parser assertion
+ * before a Web response could be iterated. The IncomingMessage stream avoids
+ * that client path while retaining back-pressure and bounded memory.
  */
 async function writeResponseBody({ body, path, append }) {
   const output = createWriteStream(path, {
@@ -165,6 +167,62 @@ async function writeResponseBody({ body, path, append }) {
     output.destroy(error);
     throw error;
   }
+}
+
+function requestLockedObject({ url, headers, timeoutMs, redirects = 0 }) {
+  const resolvedUrl = assertHttpsDownloadUrl(url);
+  return new Promise((resolveResponse, rejectResponse) => {
+    const request = requestHttps(
+      resolvedUrl,
+      {
+        headers,
+        timeout: timeoutMs,
+      },
+      (body) => {
+        const status = body.statusCode ?? 0;
+        if ([301, 302, 303, 307, 308].includes(status)) {
+          body.resume();
+          if (redirects >= 5) {
+            rejectResponse(new Error("locked source exceeded the redirect limit"));
+            return;
+          }
+          const location = responseHeader(body.headers, "location");
+          if (!location) {
+            rejectResponse(new Error("locked source redirect has no location"));
+            return;
+          }
+          let nextUrl;
+          try {
+            nextUrl = assertHttpsDownloadUrl(new URL(location, resolvedUrl).toString());
+          } catch (error) {
+            rejectResponse(error);
+            return;
+          }
+          resolveResponse(
+            requestLockedObject({
+              url: nextUrl,
+              headers,
+              timeoutMs,
+              redirects: redirects + 1,
+            }),
+          );
+          return;
+        }
+        resolveResponse({ status, headers: body.headers, url: resolvedUrl, body });
+      },
+    );
+    request.once("timeout", () => {
+      request.destroy(new Error("locked source request timed out"));
+    });
+    request.once("error", rejectResponse);
+    request.end();
+  });
+}
+
+function responseHeader(headers, name) {
+  const value = headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 async function reusablePartial({ path, metadataPath, artifact }) {
