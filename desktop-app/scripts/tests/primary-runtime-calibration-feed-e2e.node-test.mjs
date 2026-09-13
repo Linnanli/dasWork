@@ -39,6 +39,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(runnerSource, /basicConstraints=critical,CA:FALSE/u)
   assert.match(runnerSource, /subjectAltName=IP:127\.0\.0\.1/u)
   assert.match(runnerSource, /'-CAcreateserial'/u)
+  assert.match(runnerSource, /'-extensions',\s*'v3_leaf'/u)
   assert.match(runnerSource, /'verify', '-CAfile'/u)
   assert.doesNotMatch(runnerSource, /NODE_TLS_REJECT_UNAUTHORIZED/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)

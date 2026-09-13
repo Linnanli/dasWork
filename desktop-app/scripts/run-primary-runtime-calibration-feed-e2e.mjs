@@ -235,15 +235,32 @@ async function createLocalTls(root) {
   const directory = join(root, 'tls')
   const caKeyPath = join(directory, 'ca-key.pem')
   const caCertPath = join(directory, 'ca-cert.pem')
+  const caConfigurationPath = join(directory, 'ca.cnf')
   const keyPath = join(directory, 'server-key.pem')
   const certificateRequestPath = join(directory, 'server.csr')
   const certPath = join(directory, 'server-cert.pem')
-  const extensionPath = join(directory, 'server-extensions.cnf')
+  const leafConfigurationPath = join(directory, 'server.cnf')
   await mkdir(directory, { recursive: true })
   // Keep this local-only test surface to one ephemeral trust anchor and one
   // loopback-only leaf. P3b verifies it through Electron Main's dedicated TLS
   // policy, rather than changing any process-wide or production trust
   // configuration.
+  await writeFile(
+    caConfigurationPath,
+    [
+      '[req]',
+      'prompt=no',
+      'distinguished_name=subject',
+      'x509_extensions=v3_ca',
+      '[subject]',
+      'CN=DasCowork Primary Runtime P3b Test CA',
+      '[v3_ca]',
+      'basicConstraints=critical,CA:TRUE',
+      'keyUsage=critical,keyCertSign,cRLSign',
+      'subjectKeyIdentifier=hash'
+    ].join('\n') + '\n',
+    { mode: 0o600 }
+  )
   await executeFile('openssl', [
     'req',
     '-x509',
@@ -256,14 +273,8 @@ async function createLocalTls(root) {
     caCertPath,
     '-days',
     '1',
-    '-subj',
-    '/CN=DasCowork Primary Runtime P3b Test CA',
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-addext',
-    'keyUsage=critical,keyCertSign,cRLSign',
-    '-addext',
-    'subjectKeyIdentifier=hash',
+    '-config',
+    caConfigurationPath,
     '-sha256'
   ])
   await executeFile('openssl', [
@@ -279,14 +290,15 @@ async function createLocalTls(root) {
     '/CN=127.0.0.1'
   ])
   await writeFile(
-    extensionPath,
+    leafConfigurationPath,
     [
+      '[v3_leaf]',
       'basicConstraints=critical,CA:FALSE',
       'keyUsage=critical,digitalSignature,keyEncipherment',
       'extendedKeyUsage=serverAuth',
       'subjectAltName=IP:127.0.0.1',
       'subjectKeyIdentifier=hash',
-      'authorityKeyIdentifier=keyid,issuer'
+      'authorityKeyIdentifier=keyid:always,issuer:always'
     ].join('\n') + '\n',
     { mode: 0o600 }
   )
@@ -306,7 +318,9 @@ async function createLocalTls(root) {
     '1',
     '-sha256',
     '-extfile',
-    extensionPath
+    leafConfigurationPath,
+    '-extensions',
+    'v3_leaf'
   ])
   await executeFile('openssl', ['verify', '-CAfile', caCertPath, certPath])
   return { keyPath, certPath, caPath: caCertPath }
