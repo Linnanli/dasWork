@@ -184,6 +184,11 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Install desktop dependencies for P3a\/P3b installer gates/u)
   assert.match(
     buildWorkflow,
+    /Build AI-free Codex app-server client for P3a\/P3b installer gates/u
+  )
+  assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)
+  assert.match(
+    buildWorkflow,
     /P3a install the generated archive through the real desktop installer/u
   )
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime-real/u)
@@ -199,6 +204,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.ok(
     buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates') <
+      buildWorkflow.indexOf('Build AI-free Codex app-server client for P3a/P3b installer gates')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Build AI-free Codex app-server client for P3a/P3b installer gates') <
       buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer')
   )
   assert.ok(
