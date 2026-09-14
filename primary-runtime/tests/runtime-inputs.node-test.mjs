@@ -681,10 +681,17 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(verifier, /primary-runtime:verify-inputs\] start/u);
   assert.match(verifier, /libreoffice-profile/u);
   assert.match(verifier, /primary-runtime-lo-version-/u);
+  assert.match(verifier, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
   assert.match(verifier, /APPDATA/u);
   assert.match(verifier, /LOCALAPPDATA/u);
   assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);
   assert.doesNotMatch(verifier, /runRawCommand\("(?:ldd|otool)"/u);
+  const patch = await readFile(
+    resolve(import.meta.dirname, "../patches/presentation-skill-runtime-v0.8.0.patch"),
+    "utf8",
+  );
+  assert.match(patch, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
+  assert.match(patch, /-env:UserInstallation=file:/u);
 });
 
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {

@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
 import { readRuntimeSourcesLock, sha256 } from "./source-lock.mjs";
@@ -96,14 +96,21 @@ const libreOfficeVersionDirectory = target.startsWith("win32")
   ? await mkdtemp(join(tmpdir(), "primary-runtime-lo-version-"))
   : undefined;
 try {
+  const libreOfficeVersionEnvironment = libreOfficeVersionDirectory
+    ? libreOfficeProfileEnvironment({ target, directory: libreOfficeVersionDirectory })
+    : undefined;
   commands.push(
     await runCommand(
       "libreoffice-version",
       binaries.soffice,
-      ["--headless", "--version"],
-      libreOfficeVersionDirectory
-        ? libreOfficeProfileEnvironment({ target, directory: libreOfficeVersionDirectory })
-        : undefined,
+      [
+        ...(libreOfficeVersionEnvironment
+          ? [libreOfficeVersionEnvironment.PPTX_RUNTIME_SOFFICE_USER_INSTALLATION]
+          : []),
+        "--headless",
+        "--version",
+      ],
+      libreOfficeVersionEnvironment,
     ),
   );
 } finally {
@@ -634,6 +641,7 @@ function libreOfficeProfileEnvironment({ target, directory }) {
   return {
     APPDATA: join(profile, "AppData", "Roaming"),
     LOCALAPPDATA: join(profile, "AppData", "Local"),
+    PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=${pathToFileURL(profile).href}`,
     USERPROFILE: profile,
   };
 }

@@ -26,7 +26,7 @@
     },
     "patch": {
       "path": "patches/presentation-skill-runtime-v0.8.0.patch",
-      "sha256": "9b815334423fb908bcc4c8ddb787b1d11dcec7cc243b615b7319a3ec5b4e650f"
+      "sha256": "2591e2ab9fb096ad1fd6ae2a96fface02d5beda99073cb5031b052506b0e9c76"
     },
     "runtimeScope": {
       "entryPoints": [
