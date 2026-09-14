@@ -526,11 +526,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -550,11 +550,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -575,11 +575,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [
@@ -600,11 +600,11 @@
           "toolchain": {
             "compiler": "MSVC-17.14",
             "buildSystem": "cmake+ninja",
-            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install"
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
           "environment": { "CC": "cl", "CXX": "cl" },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
             ["cmake", "--build", "build", "--target", "install"]
           ],
           "outputs": [

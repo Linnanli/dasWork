@@ -318,6 +318,25 @@ test("Poppler source recipes use only locked zlib, Freetype, and libpng prefixes
   }
 });
 
+test("Windows native source recipes explicitly produce release binaries", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const recipes = lock.targets["win32-x64"].nativeRecipes.filter(
+    (recipe) => recipe.materialization === "source-build",
+  );
+
+  assert.equal(recipes.length, 4);
+  for (const recipe of recipes) {
+    assert.ok(
+      recipe.toolchain.flags.includes("-DCMAKE_BUILD_TYPE=Release"),
+      `${recipe.name}: toolchain receipt must bind release mode`,
+    );
+    assert.ok(
+      recipe.commands[0].includes("-DCMAKE_BUILD_TYPE=Release"),
+      `${recipe.name}: CMake configure command must not select debug CRT`,
+    );
+  }
+});
+
 test("native source dependency prefixes are injected only into CMake configure commands", async () => {
   const source = await readFile(materializeScript, "utf8");
 
