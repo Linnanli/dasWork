@@ -299,18 +299,31 @@ async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
 async function verifyLockedBuilderToolchain({ target, builder }) {
   const tools = [];
   for (const command of builder.tools) {
-    let result;
     const executable = resolveLockedBuilderCommand(command);
+    if (command === "msiexec") {
+      try {
+        const metadata = await lstat(executable);
+        if (!metadata.isFile()) {
+          throw new Error("must be a regular file");
+        }
+        const contents = await readFile(executable);
+        tools.push({ command, versionSha256: sha256(contents) });
+      } catch (error) {
+        throw new Error(
+          `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,
+        );
+      }
+      continue;
+    }
     const versionArgs =
       command === "cl"
         ? []
-        : command === "msiexec"
-          ? ["/?"]
         : command === "hdiutil"
             ? ["help"]
             : command === "xattr"
               ? ["-h"]
               : ["--version"];
+    let result;
     try {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
