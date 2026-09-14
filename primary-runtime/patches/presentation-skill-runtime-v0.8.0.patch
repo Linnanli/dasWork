@@ -333,7 +333,7 @@ diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render
 index f26dc65..3459f08 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,51 +45,36 @@ def _run(command: list[str]) -> None:
+@@ -45,51 +45,38 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -349,14 +349,16 @@ index f26dc65..3459f08 100755
 +        )
 +    return str(candidate)
  
-+def _runtime_user_installation() -> str:
++def _runtime_user_installation() -> list[str]:
 +    value = os.environ.get("PPTX_RUNTIME_SOFFICE_USER_INSTALLATION", "").strip()
++    if not value:
++        return []
 +    if not value.startswith("-env:UserInstallation=file:"):
 +        raise RuntimeError(
 +            "PPTX_RUNTIME_SOFFICE_USER_INSTALLATION must name an isolated "
 +            "Runtime LibreOffice profile."
 +        )
-+    return value
++    return [value]
 +
 -    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
 -    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
@@ -406,7 +408,7 @@ index f26dc65..3459f08 100755
          [
 -            "soffice",
 +            soffice,
-+            user_installation,
++            *user_installation,
              "--headless",
              "--convert-to",
 @@ -100,18 +74,7 @@ def _render_with_daemon_or_fallback(pptx_path: Path, out_dir: Path) -> Path:
