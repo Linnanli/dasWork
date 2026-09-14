@@ -680,6 +680,7 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(verifier, /DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS/u);
   assert.match(verifier, /primary-runtime:verify-inputs\] start/u);
   assert.match(verifier, /libreoffice-profile/u);
+  assert.match(verifier, /primary-runtime-lo-version-/u);
   assert.match(verifier, /APPDATA/u);
   assert.match(verifier, /LOCALAPPDATA/u);
   assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);

@@ -92,7 +92,25 @@ commands.push(
     { PYTHONPATH: join(options.inputRoot, "dependencies/python/packages"), PYTHONNOUSERSITE: "1" },
   ),
 );
-commands.push(await runCommand("libreoffice-version", binaries.soffice, ["--headless", "--version"]));
+const libreOfficeVersionDirectory = target.startsWith("win32")
+  ? await mkdtemp(join(tmpdir(), "primary-runtime-lo-version-"))
+  : undefined;
+try {
+  commands.push(
+    await runCommand(
+      "libreoffice-version",
+      binaries.soffice,
+      ["--headless", "--version"],
+      libreOfficeVersionDirectory
+        ? libreOfficeProfileEnvironment({ target, directory: libreOfficeVersionDirectory })
+        : undefined,
+    ),
+  );
+} finally {
+  if (libreOfficeVersionDirectory) {
+    await rm(libreOfficeVersionDirectory, { recursive: true, force: true });
+  }
+}
 commands.push(await runCommand("poppler-pdfinfo-version", binaries.pdfinfo, ["-v"]));
 commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["-v"]));
 
