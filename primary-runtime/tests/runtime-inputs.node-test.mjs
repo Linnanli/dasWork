@@ -351,6 +351,7 @@ test("Windows MSI extraction is locked and does not restore the rejected MSYS so
   assert.match(source, /LibreOffice MSI administrative extraction/u);
   assert.match(source, /DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_MSI_TIMEOUT_MS/u);
   assert.match(source, /timeoutMs: msiExtractionTimeoutMs/u);
+  assert.match(source, /Windows MSI extraction root entries/u);
   assert.match(
     source,
     /if \(command === "msiexec"\)[\s\S]*?await lstat\(executable\)[\s\S]*?metadata\.isFile\(\)[\s\S]*?await readFile\(executable\)[\s\S]*?versionSha256: sha256\(contents\)/u,

@@ -803,6 +803,12 @@ async function extractWindowsMsi({ archive, output, stripComponents }) {
       timeoutMs: msiExtractionTimeoutMs,
     },
   );
+  const entries = (await readdir(output, { withFileTypes: true }))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+  process.stderr.write(
+    `[primary-runtime:materialize] Windows MSI extraction root entries: ${entries.join(", ") || "(empty)"}\n`,
+  );
 }
 
 /**
