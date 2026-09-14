@@ -143,6 +143,10 @@ Runtime 安装成功后，参考项目先同步 runtime manifest 声明的 bundl
   → Electron Main 按第 2.5/2.6 节消费、安装和同步
 ```
 
+为避免普通 PR/branch push 每次都消耗四目标原生 runner，`.github/workflows/primary-runtime-build.yml` 必须分成三层执行：自动 `pull_request`/`push` 只跑 `fast` source/contract lane；scheduled nightly 和人工 `calibrate` 才跑四目标 P1a/P3a/P3b 校准；人工 `final` 必须绑定已审查的 `calibration_run_id` 后重建四目标 final staging 并汇总 engineering feed。缓存只可覆盖 npm 依赖、按 SHA 内容寻址的 Runtime source objects，以及 Windows 上已通过 `verify:inputs` 的 `runtime-inputs/win32-x64`；后者的 key 必须同时绑定 source/toolchain lock、物化/输入校验脚本、patch、`windows-2025` runner image `ImageVersion`，且不能使用 restore prefix。每次命中仍必须重新执行 `fetch:sources`、`verify:inputs` 和后续 archive/provenance 校验，不能把 cache hit 当作信任证据。
+
+四目标 `build-target` job 必须在 build/platform/provenance 完成后上传 `primary-runtime-<target>-build-artifacts`；独立的同目标原生 `validate-target` job 只能下载本次 run 的固定名 artifact 后执行 P3a/P3b、重新计算 archive SHA，并产生 candidate/final staging。该 artifact 因而可复用耗时编译，但不能替代真实 installer、压力安装、普通聊天、P3b 性能或最终 staging 证据，也不能作为跨 run 的 release 输入。校准 job 预先构建一次桌面测试宿主，P3b runner 只在显式标记且验证 main/preload/renderer 输出均存在时跳过自身的重复 build。Windows 物化必须给每个 `msiexec`、`cmake`/native recipe、tar/zip extraction 输出 start/ok/failed、耗时和命令级 timeout；长时间无输出或单 recipe 卡住时要 fail-fast，并保留足够日志判断是 MSI extraction、native build 还是 closure copy。
+
 工程生产链必须区分五类产物，禁止互相冒充：
 
 1. `source cache`：按 SHA 内容寻址的下载缓存，只是可复用输入，不是 release artifact。
@@ -492,7 +496,7 @@ PPTX → render / QA / workspace preview
 2. 验证 PPTX ZIP/relationships、slide count ≥ 6、六类标题 token、输入事实、表格行列、chart relationship、image relationship/alt text、中文字体、render、contact sheet、overflow/overlap、LibreOffice open 和右侧工作区预览。contact sheet 是 QA 输出，不算第七类页面。
 3. dev 与 packaged deterministic R07 使用相同断言；packaged 测试从空 cache 经本次 run 生成的 engineering feed 安装，不使用用户 plugin cache、系统依赖或预生成文件。真实模型 live smoke 在凭据存在时运行并记录结果，但缺凭据、配额或外部服务不阻塞 `engineering_complete`，也不能替代 deterministic gate。
 4. 四目标 Runtime archive 分别附 input/file manifest、provenance、SBOM/license、component smoke、platform validation 和 budget measurement。四个 staging 必须来自同一 commit、source/toolchain lock 和 builder contract，target 集合不多不少；任何 target 缺失都阻止 engineering feed 汇总。
-5. 将 `.github/workflows/primary-runtime-build.yml` 实现为 `calibrate` 与 `final` 两种显式模式。两种模式共享 `source-and-contract` 和四目标原生 matrix；matrix 固定为 `macos-15-intel`/`darwin-x64`、`macos-15`/`darwin-arm64`、`windows-2025`/`win32-x64`、`ubuntu-24.04`/`linux-x64`，且 `fail-fast: false`。`calibrate` 模式执行 P1a build/unpack 与 P3b cold-install/event-loop 测量，只上传固定名 candidate/measurement artifacts，不生成 feed；审查者据此以独立 commit 更新 budget。`final` 模式要求已提交且绑定对应 measurement SHA 的 budget，重新从 clean checkout 执行 fetch/materialize/build/verify/performance-budget-check，并上传固定名 `primary-runtime-<target>-staging`。随后 `aggregate-engineering-feed` 只消费这个 final run 的四个固定 staging 并生成 `four-target-summary.json`。因此校准与 final 通常是两个 GitHub run；“同一 run”只约束四个 final staging 与其 feed 汇总，不能绕过独立 budget diff。
+5. 将 `.github/workflows/primary-runtime-build.yml` 实现为 `fast`、`calibrate` 与 `final` 三种模式。自动 `pull_request`/`push` 只执行 `fast` source/contract lane；scheduled nightly 默认执行 `calibrate`；人工 `workflow_dispatch` 可选择三种模式。`calibrate` 与 `final` 共享四目标原生 matrix；matrix 固定为 `macos-15-intel`/`darwin-x64`、`macos-15`/`darwin-arm64`、`windows-2025`/`win32-x64`、`ubuntu-24.04`/`linux-x64`，且 `fail-fast: false`。每个 target 先在 `build-target` 运行 fetch/materialize/verify/P1a 或 final build/platform/provenance，并上传固定名 `primary-runtime-<target>-build-artifacts`；随后独立同目标 `validate-target` 从本次 run 下载该 artifact，重新计算 archive SHA 后运行 P3a/P3b，生成 candidate 或 final staging。`calibrate` 保留 5 次 P1a build/unpack 和 10 次 P3b cold install/Main event-loop 证据，只上传固定名 candidate/measurement artifacts，不生成 feed；审查者据此以独立 commit 更新 budget。校准前先构建一次桌面测试宿主，P3b 仅可在检查过 main/preload/renderer 产物的显式开关下复用该 build。Windows 可缓存已验证输入目录，但 key 必须绑定 lock、脚本、patch 和精确 runner image，命中仍重跑 `verify:inputs`。`final` 模式要求已提交且绑定对应 measurement SHA 的 budget，重新从 clean checkout 执行 fetch/materialize/build/verify/performance-budget-check，并上传固定名 `primary-runtime-<target>-staging`。随后 `aggregate-engineering-feed` 只消费这个 final run 的四个固定 staging 并生成 `four-target-summary.json`。因此校准与 final 通常是两个 GitHub run；“同一 run”只约束四个 final staging 与其 feed 汇总，不能绕过独立 budget diff。
 6. 协调 job 在 `$RUNNER_TEMP` 生成临时测试密钥，创建 `releaseClass=engineering` 的 config/manifest，执行正向验签及错误 key、payload 篡改、sequence 回退、非法 origin、target 缺失和 digest 不一致的负向测试；随后组装 `primary-runtime-engineering-feed`。上传内容只含公钥、签名 metadata、四目标不可变 archive/provenance/evidence 和汇总 receipt；私钥在 job 结束前删除且永不进入 cache/artifact/log。
 7. 将 `.github/workflows/primary-runtime-publish.yml` 改为可选的 artifact revalidation/assembly 入口：只接收 `source_run_id`，按固定名称下载四目标 staging，验证 source commit/workflow identity/digests 后重新输出 GitHub artifact。删除自由填写 `metadata_artifact`/四目标名称的输入，删除生产 secret、origin 写权限、public deploy、canonical config 切换和 forward-recovery 要求。本轮不新增 `.github/workflows/primary-runtime-sign-metadata.yml` 或 `.github/workflows/primary-runtime-deploy.yml`。
 8. engineering evidence 将 desktop commit/artifact SHA、source/toolchain/input/file manifest SHA、Runtime archive SHA、plugin source/patch SHA、platform-validation SHA、target budget 文件 SHA、实测 performance report SHA、engineering metadata/public-key SHA、GitHub run/artifact ID 和 PPT/QA/report SHA 串起来，并明确记录 `productionTrust=false`、`publiclyDeployable=false`。
@@ -549,10 +553,10 @@ npm --prefix desktop-app run verify:app-tools-release-gates
 ```bash
 npm --prefix primary-runtime test
 npm --prefix primary-runtime run fetch:sources -- --target=<native-target> --cache=<content-addressed-cache>
-npm --prefix primary-runtime run materialize:inputs -- --target=<native-target> --source-cache=<content-addressed-cache> --output=<generated-input-root>
+npm --prefix primary-runtime run materialize:inputs -- --target=<native-target> --source-cache=<content-addressed-cache> --output=<generated-input-root> --allow-source-build
 npm --prefix primary-runtime run verify:inputs -- --target=<native-target> --input-root=<generated-input-root>
 npm --prefix primary-runtime run verify:hard-limits
-npm --prefix primary-runtime run build -- --target=<native-target> --input-root=<generated-input-root>
+npm --prefix primary-runtime run build -- --target=<native-target> --input-root=<generated-input-root> --compression-level=6
 npm --prefix primary-runtime run verify -- --target=<native-target>
 npm --prefix primary-runtime run verify:platform -- --target=<native-target> --archive=<target-archive> --output=<platform-validation-receipt>
 npm --prefix desktop-app run test:primary-runtime-real
@@ -560,7 +564,7 @@ npm --prefix desktop-app run test:primary-runtime:stress
 npm --prefix desktop-app run test:primary-runtime:performance -- --candidate=<p1a-candidate-set> --output=<four-target-performance-measurements>
 npm --prefix primary-runtime run calibrate:budgets -- --measurements=<four-target-measurements>
 npm --prefix primary-runtime run verify:budgets
-npm --prefix primary-runtime run build -- --target=<native-target> --input-root=<generated-input-root> --release-budget=<reviewed-budget-file>
+npm --prefix primary-runtime run build -- --target=<native-target> --input-root=<generated-input-root> --release-budget=<reviewed-budget-file> --compression-level=6
 npm --prefix primary-runtime run verify -- --target=<native-target> --release-budget=<reviewed-budget-file> --performance-report=<reviewed-performance-report>
 npm --prefix services/primary-runtime-feed run generate:engineering-key -- --output=<runner-temp-key-dir>
 npm --prefix services/primary-runtime-feed run create:metadata -- --release-class=engineering --targets=<four-verified-targets> --output=<unsigned-metadata>
@@ -573,7 +577,7 @@ npm --prefix desktop-app run smoke:presentation-skill-runtime
 npm --prefix desktop-app run test:e2e:primary-runtime-feed
 ```
 
-上述 `<native-target>` 命令由 `.github/workflows/primary-runtime-build.yml` 的四个对应 clean runner 分别执行；协调 job 只汇总四份 receipt，不把 `build:matrix` 当成本机一次性跨平台构建。第一次 build 只产生 P1a 禁发候选；performance report 和独立 budget diff 完成后，必须执行第二次 final build。交叉编译或当前机器的 `--matrix` 循环不能替代目标系统上的 native load/render 和冷安装证据。工程 metadata negative tests 必须证明少一个 target、混用 commit/source lock、预算超限、sequence 回退/溢出、非法 origin、错误 key 或 artifact digest 不一致时都不能产生 engineering feed；它们不检查生产证书、trust receipt、recovery target 或真实 CDN。
+上述 `<native-target>` 命令由 `.github/workflows/primary-runtime-build.yml` 的四个对应 clean runner 分别执行；协调 job 只汇总四份 receipt，不把 `build:matrix` 当成本机一次性跨平台构建。第一次 build 只产生 P1a 禁发候选；performance report 和独立 budget diff 完成后，必须执行第二次 final build。`build-target` 与 `validate-target` 使用同一 target runner 类型：前者只产出经 platform/provenance 绑定的 build artifact，后者只消费本次 run 的该 artifact，并重新做 archive SHA、P3a/P3b 和 staging。交叉编译或当前机器的 `--matrix` 循环不能替代目标系统上的 native load/render 和冷安装证据。CI 可用 npm cache、内容寻址 source cache、精确 Windows runner image 绑定的 verified-input cache、压缩级别 6 和分段 build artifact 提速，但任何 cache/artifact 复用都必须重新走适用的 SHA/manifest/provenance/installer 校验。工程 metadata negative tests 必须证明少一个 target、混用 commit/source lock、预算超限、sequence 回退/溢出、非法 origin、错误 key 或 artifact digest 不一致时都不能产生 engineering feed；它们不检查生产证书、trust receipt、recovery target 或真实 CDN。
 
 ### 7.3 Desktop 全链
 

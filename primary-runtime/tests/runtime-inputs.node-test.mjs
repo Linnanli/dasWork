@@ -313,6 +313,10 @@ test("Poppler source recipes use only locked zlib, Freetype, and libpng prefixes
 test("native source dependency prefixes are injected only into CMake configure commands", async () => {
   const source = await readFile(materializeScript, "utf8");
 
+  assert.match(source, /DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_COMMAND_TIMEOUT_MS/u);
+  assert.match(source, /\[primary-runtime:materialize\] start \$\{label\}/u);
+  assert.match(source, /if \(code === 0 && !timedOut\)/u);
+  assert.match(source, /timed out after \$\{timeoutMs\}ms/u);
   assert.match(source, /resolveNativeDependencyPrefixes/u);
   assert.match(source, /addLockedNativeDependencyPrefixes/u);
   assert.match(source, /-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE/u);
@@ -343,6 +347,9 @@ test("Windows MSI extraction is locked and does not restore the rejected MSYS so
     /if \(archiveFormat === "msi"\)[\s\S]*?extractWindowsMsi/u,
   );
   assert.match(source, /\["\/a", archive, "\/qn", `TARGETDIR=\$\{output\}`\]/u);
+  assert.match(source, /LibreOffice MSI administrative extraction/u);
+  assert.match(source, /DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_MSI_TIMEOUT_MS/u);
+  assert.match(source, /timeoutMs: msiExtractionTimeoutMs/u);
   assert.doesNotMatch(source, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT|MSYSTEM/u);
 });
 
@@ -491,7 +498,7 @@ test("ZIP Runtime inputs without a strip rule extract from their source root", a
   );
   assert.match(
     materializerSource,
-    /await run\(resolveLockedBuilderCommand\("tar"\), args, \{ cwd: output \}\);/u,
+    /await run\(resolveLockedBuilderCommand\("tar"\), args, \{\s+label: `extract \$\{basename\(archive\)\} with locked tar`,\s+cwd: output,\s+\}\);/u,
   );
   assert.match(
     materializerSource,

@@ -23,14 +23,39 @@ on:
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
       - ".github/workflows/primary-runtime-publish.yml"
+  push:
+    paths:
+      - "primary-runtime/**"
+      - "services/primary-runtime-feed/**"
+      - "desktop-app/src/main/primaryRuntime/**"
+      - "desktop-app/src/main/index.ts"
+      - "desktop-app/src/main/runtimeConfig.ts"
+      - "desktop-app/scripts/run-primary-runtime-performance.mjs"
+      - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
+      - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/support/r07Presentation.ts"
+      - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-publish.yml"
+  schedule:
+    - cron: "17 18 * * *"
   workflow_dispatch:
     inputs:
       mode:
-        description: Run P1a/P3b calibration or a budget-bound final rebuild.
+        description: Run fast contracts, P1a/P3b calibration, or a budget-bound final rebuild.
         required: true
         default: calibrate
         type: choice
         options:
+          - fast
           - calibrate
           - final
       calibration_run_id:
@@ -43,11 +68,14 @@ permissions:
   actions: read
 
 concurrency:
-  group: primary-runtime-engineering-build-${{ github.ref }}
-  cancel-in-progress: true
+  # PR/push fast lanes may supersede an earlier fast lane. Scheduled and
+  # manually requested four-target calibrations stay queued instead, so a
+  # new commit cannot discard hours of target-native evidence.
+  group: primary-runtime-engineering-build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'push' && github.ref || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 env:
-  PRIMARY_RUNTIME_MODE: ${{ inputs.mode || 'calibrate' }}
+  PRIMARY_RUNTIME_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }}
 
 jobs:
   source-and-contract:
@@ -63,6 +91,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Install desktop contract test dependencies
         run: npm --prefix desktop-app ci --ignore-scripts
@@ -90,6 +120,7 @@ jobs:
 
   prepare-final-calibration:
     name: Verify independently reviewed P3b evidence before final rebuild
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
     needs: source-and-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -102,6 +133,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Skip reviewed-calibration download outside final mode
         if: env.PRIMARY_RUNTIME_MODE != 'final'
@@ -173,12 +206,15 @@ jobs:
           path: ${{ runner.temp }}/reviewed-calibration
 
   build-target:
-    name: ${{ inputs.mode || 'calibrate' }} native Runtime ${{ matrix.target }}
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }} native Runtime ${{ matrix.target }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
     needs:
       - source-and-contract
       - prepare-final-calibration
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
+    env:
+      PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL: "6"
     strategy:
       fail-fast: false
       matrix:
@@ -200,6 +236,15 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Capture immutable GitHub-hosted builder image identity
+        id: builder-image
+        shell: bash
+        run: |
+          : "${ImageVersion:?GitHub-hosted runner image version is required}"
+          printf 'image_version=%s\n' "$ImageVersion" >> "$GITHUB_OUTPUT"
 
       - name: Download independently reviewed P3b calibration
         if: env.PRIMARY_RUNTIME_MODE == 'final'
@@ -207,6 +252,12 @@ jobs:
         with:
           name: primary-runtime-reviewed-calibration
           path: ${{ runner.temp }}/reviewed-calibration
+
+      - name: Restore immutable Runtime source object cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/primary-runtime-source-cache
+          key: primary-runtime-source-cache-${{ matrix.target }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json') }}
 
       - name: Fetch only immutable Runtime source objects
         shell: bash
@@ -223,10 +274,18 @@ jobs:
         with:
           arch: x64
 
+      - name: Restore verified Windows Runtime inputs
+        if: matrix.target == 'win32-x64'
+        id: windows-runtime-inputs-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/runtime-inputs/win32-x64
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
+
       - name: Materialize target-native offline Runtime inputs
+        if: matrix.target != 'win32-x64' || steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          : "${ImageVersion:?GitHub-hosted runner image version is required}"
           export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${{ matrix.runner }}:${ImageVersion}"
           npm --prefix primary-runtime run materialize:inputs -- \
             --target=${{ matrix.target }} \
@@ -243,6 +302,13 @@ jobs:
             --target=${{ matrix.target }} \
             --input-root "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
             --receipt "$RUNNER_TEMP/component-smoke.json"
+
+      - name: Save verified Windows Runtime inputs
+        if: success() && matrix.target == 'win32-x64' && steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/runtime-inputs/win32-x64
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
 
       - name: Produce five P1a build and unpack measurements
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
@@ -332,13 +398,90 @@ jobs:
             --workflow-repository "$GITHUB_REPOSITORY" \
             --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
+      - name: Stage restartable target-native build artifacts
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          staging_root="$RUNNER_TEMP/primary-runtime-${{ matrix.target }}-build-artifacts"
+          mkdir -p "$staging_root"
+          cp "$target_root/primary-runtime.zip" "$staging_root/"
+          cp "$target_root/runtime.json" "$staging_root/"
+          cp "$target_root/provenance.json" "$staging_root/"
+          cp "$target_root/canonical-file-manifest.txt" "$staging_root/"
+          cp "$target_root/THIRD_PARTY_NOTICES.txt" "$staging_root/"
+          cp "$target_root/SBOM.json" "$staging_root/"
+          cp "$target_root/component-smoke.json" "$staging_root/"
+          cp "$target_root/build-unpack-measurement.json" "$staging_root/"
+          cp "$target_root/platform-validation.json" "$staging_root/"
+          cp "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$RUNNER_TEMP/source-fetch.json" "$staging_root/"
+          if [ -d "$RUNNER_TEMP/p1a-measurements" ]; then
+            mkdir -p "$staging_root/measurements"
+            cp "$RUNNER_TEMP/p1a-measurements/"*.json "$staging_root/measurements/"
+          fi
+
+      - name: Upload restartable target-native build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-${{ matrix.target }}-build-artifacts
+          if-no-files-found: error
+          path: ${{ runner.temp }}/primary-runtime-${{ matrix.target }}-build-artifacts
+
+  validate-target:
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }} P3 validation ${{ matrix.target }}
+    if: ${{ !cancelled() && needs.build-target.result != 'skipped' && (github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule') }}
+    needs: build-target
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: win32-x64
+            runner: windows-2025
+          - target: linux-x64
+            runner: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Download the same-run target-native build artifact for P3 validation
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-${{ matrix.target }}-build-artifacts
+          path: ${{ runner.temp }}/runtime-dist/${{ matrix.target }}
+
+      - name: Download independently reviewed calibration for final staging
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-reviewed-calibration
+          path: ${{ runner.temp }}/reviewed-calibration
+
       - name: Install desktop dependencies for P3a/P3b installer gates
         run: npm --prefix desktop-app ci
 
-      - name: Build AI-free Codex app-server client for P3a/P3b installer gates
+      - name: Build desktop test host once for P3b
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        run: npm --prefix desktop-app run build
+
+      - name: Build AI-free Codex app-server client for final P3a installer gates
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
         run: npm --prefix desktop-app run build:codex-app-server-client
 
-      - name: P3a install the generated archive through the real desktop installer
+      - name: P3a install the downloaded archive through the real desktop installer
         shell: bash
         run: |
           target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
@@ -351,7 +494,7 @@ jobs:
             --version "$version" \
             --sha256 "$sha256"
 
-      - name: P3a stress-install the generated archive without archive-sized heap allocation
+      - name: P3a stress-install the downloaded archive without archive-sized heap allocation
         shell: bash
         run: |
           target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
@@ -373,13 +516,14 @@ jobs:
           runtime_json="$target_root/runtime.json"
           version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
           sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
+          DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1 \
           npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
             --target "${{ matrix.target }}" \
             --archive "$archive" \
             --version "$version" \
             --sha256 "$sha256" \
             --provenance "$target_root/provenance.json" \
-            --p1a-receipt "$RUNNER_TEMP/p1a-measurements/build-unpack-5.json" \
+            --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
             --output "$target_root/normal-chat-smoke.json"
 
       - name: P3b measure ten cold installs and Main event-loop delay
@@ -396,8 +540,8 @@ jobs:
             --archive "$archive" \
             --version "$version" \
             --sha256 "$sha256" \
-            --p1a-receipt "$RUNNER_TEMP/p1a-measurements/build-unpack-5.json" \
-            --p1a-measurement-directory "$RUNNER_TEMP/p1a-measurements" \
+            --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+            --p1a-measurement-directory "$target_root/measurements" \
             --normal-chat-receipt "$target_root/normal-chat-smoke.json" \
             --source-run-id "${GITHUB_RUN_ID}" \
             --source-commit "${GITHUB_SHA}" \
@@ -423,9 +567,9 @@ jobs:
           cp "$target_root/normal-chat-smoke.json" "$staging_root/"
           cp "$target_root/performance-target-report.json" "$staging_root/"
           cp "$target_root/platform-validation.json" "$staging_root/"
-          cp "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" "$staging_root/"
-          cp "$RUNNER_TEMP/source-fetch.json" "$staging_root/"
-          cp "$RUNNER_TEMP/p1a-measurements/"*.json "$staging_root/measurements/"
+          cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$target_root/source-fetch.json" "$staging_root/"
+          cp "$target_root/measurements/"*.json "$staging_root/measurements/"
 
       - name: Stage declared final engineering evidence
         if: env.PRIMARY_RUNTIME_MODE == 'final'
@@ -443,8 +587,8 @@ jobs:
           cp "$target_root/component-smoke.json" "$staging_root/"
           cp "$target_root/build-unpack-measurement.json" "$staging_root/"
           cp "$target_root/platform-validation.json" "$staging_root/"
-          cp "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" "$staging_root/"
-          cp "$RUNNER_TEMP/source-fetch.json" "$staging_root/"
+          cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$target_root/source-fetch.json" "$staging_root/"
           cp "$RUNNER_TEMP/reviewed-calibration/performance-report.json" "$staging_root/"
           cp "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json" "$staging_root/"
 
@@ -466,8 +610,8 @@ jobs:
 
   aggregate-engineering-feed:
     name: Aggregate one final run into an engineering-only feed artifact
-    if: inputs.mode == 'final'
-    needs: build-target
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'final' }}
+    needs: validate-target
     runs-on: ubuntu-24.04
     timeout-minutes: 80
 
@@ -479,6 +623,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
 
       - name: Download fixed darwin-x64 final staging from this run
         uses: actions/download-artifact@v8

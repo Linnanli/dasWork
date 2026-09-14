@@ -6,6 +6,7 @@ import type { ElectronApplication, Page } from '@playwright/test'
 
 import {
   attachDiagnostics,
+  appRoot,
   closeApp,
   collectRendererLogs,
   launchApp,
@@ -88,7 +89,11 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         // Playwright's generic 30-second debugger-connect default, while the
         // test's own 180-second end-to-end bound still limits the full path.
         launchTimeoutMs: 90_000,
-        ...(packagedExecutable ? { executablePath: packagedExecutable, args: [] } : {}),
+        // Electron resolves the development entrypoint from its first argument,
+        // independently of the workspace used for app-server commands.
+        ...(packagedExecutable
+          ? { executablePath: packagedExecutable, args: [] }
+          : { args: [appRoot] }),
         environment: {
           // The runner supplies only signed engineering-feed inputs and removes
           // all direct root/archive overrides before this process is started.

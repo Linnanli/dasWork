@@ -123,7 +123,9 @@ const canonicalManifest = canonicalFileManifest(
   })),
 );
 const archivePath = join(outputRoot, outputArchiveName);
-await writeDeflatedZipArchive(archivePath, entries);
+await writeDeflatedZipArchive(archivePath, entries, {
+  compressionLevel: argumentsValue.zipCompressionLevel,
+});
 const archiveDetails = await stat(archivePath);
 const archiveSha256 = await sha256File(archivePath);
 const unpackedBytes = entries.reduce(
@@ -162,6 +164,7 @@ const provenance = {
   builderIdentity: inputManifest.builder,
   releaseClass: "engineering-candidate",
   productionTrust: false,
+  zipCompressionLevel: argumentsValue.zipCompressionLevel,
   ...(reviewedReleaseEvidence ?? {}),
 };
 const measurement = {
@@ -178,6 +181,7 @@ const measurement = {
   runner: process.env.RUNNER_IMAGE ?? inputManifest.builder.runner,
   releaseClass: provenance.releaseClass,
   productionTrust: false,
+  zipCompressionLevel: argumentsValue.zipCompressionLevel,
 };
 await writeJson(join(outputRoot, "runtime.json"), runtimeManifest);
 await writeFile(
@@ -529,7 +533,20 @@ function parseArgs(argv) {
     ),
     releaseBudgetPath: optionalResolvedValue(argv, "--release-budget"),
     performanceReportPath: optionalResolvedValue(argv, "--performance-report"),
+    zipCompressionLevel: parseZipCompressionLevel(
+      optionValue(argv, "--compression-level") ??
+        process.env.PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL ??
+        "9",
+    ),
   };
+}
+
+function parseZipCompressionLevel(value) {
+  const level = Number(value);
+  if (!Number.isInteger(level) || level < 0 || level > 9) {
+    throw new Error("Expected --compression-level to be an integer from 0 through 9.");
+  }
+  return level;
 }
 
 function optionalResolvedValue(argv, name) {

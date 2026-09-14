@@ -65,7 +65,8 @@ export async function writeStoredZipArchive(path, inputEntries) {
 // Production Runtime archives are intentionally written as streaming Deflate
 // ZIPs. This keeps the build process independent of the aggregate unpacked
 // Runtime size while retaining ordinary ZIP compatibility for the installer.
-export async function writeDeflatedZipArchive(path, inputEntries) {
+export async function writeDeflatedZipArchive(path, inputEntries, options = {}) {
+  const compressionLevel = assertCompressionLevel(options.compressionLevel ?? 9);
   const entries = normalizeEntries(inputEntries, { allowSourcePath: true });
   await mkdir(dirname(path), { recursive: true });
   const output = createWriteStream(path, { mode: 0o600 });
@@ -81,7 +82,7 @@ export async function writeDeflatedZipArchive(path, inputEntries) {
       await write(output, localHeader);
       offset = checkedZip32(offset + localHeader.byteLength, "local ZIP offset");
 
-      const result = await writeDeflatedFile(output, entry);
+      const result = await writeDeflatedFile(output, entry, { compressionLevel });
       const descriptor = dataDescriptor(result);
       await write(output, descriptor);
       offset = checkedZip32(
@@ -287,11 +288,11 @@ function crc32Update(crc, buffer) {
   return value >>> 0;
 }
 
-async function writeDeflatedFile(output, entry) {
+async function writeDeflatedFile(output, entry, { compressionLevel }) {
   const input = entry.sourcePath
     ? createReadStream(entry.sourcePath)
     : Readable.from([Buffer.from(entry.data)]);
-  const compressor = createDeflateRaw({ level: 9 });
+  const compressor = createDeflateRaw({ level: compressionLevel });
   let crc = 0xffffffff;
   let uncompressedSize = 0;
   let compressedSize = 0;
@@ -323,6 +324,19 @@ async function writeDeflatedFile(output, entry) {
     compressedSize,
     uncompressedSize,
   };
+}
+
+function assertCompressionLevel(value) {
+  const level =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isInteger(level) || level < 0 || level > 9) {
+    throw new Error("ZIP compression level must be an integer from 0 through 9.");
+  }
+  return level;
 }
 
 function dataDescriptor({ crc, compressedSize, uncompressedSize }) {

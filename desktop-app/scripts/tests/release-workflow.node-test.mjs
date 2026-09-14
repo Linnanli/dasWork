@@ -123,7 +123,15 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /^permissions:\n {2}contents: read\n {2}actions: read$/mu)
   assert.match(
     buildWorkflow,
-    /^concurrency:\n {2}group: primary-runtime-engineering-build-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: true$/mu
+    /^concurrency:\n {2}# PR\/push fast lanes may supersede an earlier fast lane\./mu
+  )
+  assert.match(
+    buildWorkflow,
+    /group: primary-runtime-engineering-build-\$\{\{ github\.event_name == 'pull_request'/u
+  )
+  assert.match(
+    buildWorkflow,
+    /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/u
   )
   assert.doesNotMatch(buildWorkflow, /continue-on-error:\s*true/u)
   assert.doesNotMatch(buildWorkflow, /NODE_TLS_REJECT_UNAUTHORIZED/u)
@@ -146,8 +154,38 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /npm --prefix primary-runtime run verify:inputs/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run measure:unpack/u)
   assert.match(buildWorkflow, /PRIMARY_RUNTIME_MODE/u)
+  assert.match(buildWorkflow, /- fast/u)
   assert.match(buildWorkflow, /- calibrate/u)
   assert.match(buildWorkflow, /- final/u)
+  assert.match(buildWorkflow, /^ {2}schedule:/mu)
+  assert.match(buildWorkflow, /cache: npm/u)
+  assert.match(buildWorkflow, /cache-dependency-path: desktop-app\/package-lock\.json/u)
+  assert.match(buildWorkflow, /actions\/cache@v4/u)
+  assert.match(buildWorkflow, /primary-runtime-source-cache-\$\{\{ matrix\.target \}\}/u)
+  assert.match(buildWorkflow, /Capture immutable GitHub-hosted builder image identity/u)
+  assert.match(buildWorkflow, /Restore verified Windows Runtime inputs/u)
+  assert.match(buildWorkflow, /Save verified Windows Runtime inputs/u)
+  assert.match(buildWorkflow, /primary-runtime-windows-inputs-v1-/u)
+  assert.match(buildWorkflow, /actions\/cache\/restore@v4/u)
+  assert.match(buildWorkflow, /actions\/cache\/save@v4/u)
+  assert.match(buildWorkflow, /Stage restartable target-native build artifacts/u)
+  assert.match(buildWorkflow, /primary-runtime-\$\{\{ matrix\.target \}\}-build-artifacts/u)
+  assert.match(buildWorkflow, /validate-target/u)
+  assert.match(buildWorkflow, /Download the same-run target-native build artifact for P3 validation/u)
+  assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1/u)
+  assert.match(
+    buildWorkflow,
+    /validate-target:[\s\S]*?if: \$\{\{ !cancelled\(\) && needs\.build-target\.result != 'skipped'[\s\S]*?needs: build-target[\s\S]*?Download the same-run target-native build artifact for P3 validation[\s\S]*?name: primary-runtime-\$\{\{ matrix\.target \}\}-build-artifacts/u
+  )
+  assert.match(
+    buildWorkflow,
+    /aggregate-engineering-feed:[\s\S]*?needs: validate-target/u
+  )
+  assert.doesNotMatch(buildWorkflow, /^ {2}PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL:/mu)
+  assert.match(
+    buildWorkflow,
+    /build-target:[\s\S]*?^ {4}env:\n {6}PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL: "6"$/mu
+  )
   assert.match(buildWorkflow, /prepare-final-calibration/u)
   assert.match(buildWorkflow, /calibration_run_id/u)
   assert.match(buildWorkflow, /P3b measure ten cold installs and Main event-loop delay/u)
@@ -197,33 +235,38 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /Install desktop dependencies for P3a\/P3b installer gates\n {8}run: npm --prefix desktop-app ci$/mu
   )
-  assert.match(buildWorkflow, /Build AI-free Codex app-server client for P3a\/P3b installer gates/u)
+  assert.match(buildWorkflow, /Build desktop test host once for P3b/u)
+  assert.match(buildWorkflow, /Build AI-free Codex app-server client for final P3a installer gates/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)
   assert.match(
     buildWorkflow,
-    /P3a install the generated archive through the real desktop installer/u
+    /P3a install the downloaded archive through the real desktop installer/u
   )
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime-real/u)
-  assert.match(buildWorkflow, /P3a stress-install the generated archive/u)
+  assert.match(buildWorkflow, /P3a stress-install the downloaded archive/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime:stress/u)
   assert.ok(
     buildWorkflow.indexOf('Produce five P1a build and unpack measurements') <
-      buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer')
+      buildWorkflow.indexOf('P3a install the downloaded archive through the real desktop installer')
   )
   assert.ok(
     buildWorkflow.indexOf('Verify final archive binds reviewed calibration evidence') <
+      buildWorkflow.indexOf('Download the same-run target-native build artifact for P3 validation')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Download the same-run target-native build artifact for P3 validation') <
       buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates')
   )
   assert.ok(
     buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates') <
-      buildWorkflow.indexOf('Build AI-free Codex app-server client for P3a/P3b installer gates')
+      buildWorkflow.indexOf('Build desktop test host once for P3b')
   )
   assert.ok(
-    buildWorkflow.indexOf('Build AI-free Codex app-server client for P3a/P3b installer gates') <
-      buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer')
+    buildWorkflow.indexOf('Build desktop test host once for P3b') <
+      buildWorkflow.indexOf('P3a install the downloaded archive through the real desktop installer')
   )
   assert.ok(
-    buildWorkflow.indexOf('P3a install the generated archive through the real desktop installer') <
+    buildWorkflow.indexOf('P3a install the downloaded archive through the real desktop installer') <
       buildWorkflow.indexOf(
         'P3b run ordinary app-server chat through the signed local calibration feed'
       )
@@ -252,7 +295,7 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.ok(
     buildWorkflow.indexOf('Bind target staging provenance to platform validation') <
-      buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates')
+      buildWorkflow.indexOf('Download the same-run target-native build artifact for P3 validation')
   )
   assert.ok(
     buildWorkflow.indexOf('Verify P1a candidate archive and component smoke') <

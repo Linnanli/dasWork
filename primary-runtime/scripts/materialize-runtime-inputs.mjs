@@ -17,7 +17,6 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import {
   assertApprovedSources,
@@ -38,27 +37,84 @@ import {
   parseRuntimeTargetOption,
 } from "./runtime-target.mjs";
 
-const run = promisify((file, args, options, callback) => {
-  const child = spawn(file, args, { ...options, stdio: "pipe" });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk;
+const defaultCommandTimeoutMs = positiveIntegerEnv(
+  "DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_COMMAND_TIMEOUT_MS",
+  45 * 60 * 1000,
+);
+const msiExtractionTimeoutMs = positiveIntegerEnv(
+  "DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_MSI_TIMEOUT_MS",
+  20 * 60 * 1000,
+);
+const capturedCommandOutputBytes = 1024 * 1024;
+
+async function run(file, args, options = {}) {
+  const {
+    label = `${file} ${args.join(" ")}`,
+    timeoutMs = defaultCommandTimeoutMs,
+    ...spawnOptions
+  } = options;
+  const startedAt = Date.now();
+  process.stderr.write(
+    `[primary-runtime:materialize] start ${label} (timeout ${timeoutMs}ms)\n`,
+  );
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(file, args, {
+      ...spawnOptions,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    const capture = (current, chunk) =>
+      `${current}${chunk}`.slice(-capturedCommandOutputBytes);
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (!settled) child.kill("SIGKILL");
+      }, 5_000).unref();
+    }, timeoutMs);
+    timer.unref();
+    child.stdout.on("data", (chunk) => {
+      stdout = capture(stdout, chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = capture(stderr, chunk);
+    });
+    child.once("error", (error) => {
+      finish(() => rejectPromise(error));
+    });
+    child.once("exit", (code, signal) => {
+      finish(() => {
+        const elapsedMs = Date.now() - startedAt;
+        if (code === 0 && !timedOut) {
+          process.stderr.write(
+            `[primary-runtime:materialize] ok ${label} (${elapsedMs}ms)\n`,
+          );
+          resolvePromise({ stdout, stderr });
+          return;
+        }
+        process.stderr.write(
+          `[primary-runtime:materialize] failed ${label} (${elapsedMs}ms)\n`,
+        );
+        const output = (stderr.trim() || stdout.trim() || "no command output").slice(
+          -capturedCommandOutputBytes,
+        );
+        const reason = timedOut
+          ? `timed out after ${timeoutMs}ms`
+          : `exited ${code ?? `with signal ${signal ?? "unknown"}`}`;
+        rejectPromise(new Error(`${label} ${reason}: ${output}`));
+      });
+    });
   });
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk;
-  });
-  child.once("error", callback);
-  child.once("exit", (code) => {
-    if (code === 0) callback(null, { stdout, stderr });
-    else
-      callback(
-        new Error(
-          `${file} exited ${code ?? "unknown"}: ${(stderr.trim() || stdout.trim() || "no command output")}`,
-        ),
-      );
-  });
-});
+}
 
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
@@ -333,6 +389,7 @@ async function materializePythonPackages({
       ...sources,
     ],
     {
+      label: "python packages: pip install locked wheels",
       cwd: wheelhouse,
       env: {
         ...process.env,
@@ -355,6 +412,7 @@ async function materializePlugin({
   const sourceRoot = join(workRoot, "plugin-source");
   await extractLockedArtifact({ artifact, output: sourceRoot, cacheRoot });
   await run("git", ["apply", "--whitespace=error", patchPath], {
+    label: "presentation plugin: apply locked Runtime patch",
     cwd: sourceRoot,
   });
   const source = join(sourceRoot, sourceLock.candidate.pluginDirectory.path);
@@ -562,6 +620,7 @@ async function materializeNativeRecipes({
           dependencyPrefixes,
         });
         await run(resolveLockedBuilderCommand(file), commandArgs, {
+          label: `native recipe ${recipe.name}: ${file}`,
           cwd: buildRoot,
           env: {
             ...process.env,
@@ -666,7 +725,11 @@ async function materializePrebuiltNativeRecipe({ recipe, buildRoot }) {
     await run(
       resolveLockedBuilderCommand("dpkg-deb"),
       ["--extract", join(buildRoot, packageName), runtimeRoot],
-      { cwd: buildRoot, env: process.env },
+      {
+        label: `native recipe ${recipe.name}: extract ${packageName}`,
+        cwd: buildRoot,
+        env: process.env,
+      },
     );
   }
 }
@@ -720,7 +783,12 @@ async function extractWindowsMsi({ archive, output, stripComponents }) {
   await run(
     resolveLockedBuilderCommand("msiexec"),
     ["/a", archive, "/qn", `TARGETDIR=${output}`],
-    { cwd: output, env: process.env },
+    {
+      label: "LibreOffice MSI administrative extraction",
+      cwd: output,
+      env: process.env,
+      timeoutMs: msiExtractionTimeoutMs,
+    },
   );
 }
 
@@ -739,10 +807,15 @@ async function extractMacosDmg({ archive, output, stripComponents }) {
   await mkdir(mountpoint, { recursive: true });
   let attached = false;
   try {
-    await run("hdiutil", ["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive], {
-      cwd: output,
-      env: process.env,
-    });
+    await run(
+      "hdiutil",
+      ["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive],
+      {
+        label: "LibreOffice DMG attach",
+        cwd: output,
+        env: process.env,
+      },
+    );
     attached = true;
     const application = await safeChild(mountpoint, "LibreOffice.app");
     await assertRegularDirectory(application, "locked macOS LibreOffice application");
@@ -757,6 +830,7 @@ async function extractMacosDmg({ archive, output, stripComponents }) {
   } finally {
     if (attached) {
       await run("hdiutil", ["detach", mountpoint, "-force"], {
+        label: "LibreOffice DMG detach",
         cwd: output,
         env: process.env,
       });
@@ -767,10 +841,12 @@ async function extractMacosDmg({ archive, output, stripComponents }) {
 
 async function clearMacosQuarantine(application) {
   const attributes = await run("xattr", ["-lr", application], {
+    label: "LibreOffice app quarantine probe",
     env: process.env,
   });
   if (!attributes.stdout.includes("com.apple.quarantine")) return;
   await run("xattr", ["-dr", "com.apple.quarantine", application], {
+    label: "LibreOffice app quarantine clear",
     env: process.env,
   });
 }
@@ -797,7 +873,10 @@ async function extractWithLockedTar({ archive, output, stripComponents }) {
   const args = ["-xf", archiveArgument];
   if (target !== "win32-x64") args.push("-C", output);
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
-  await run(resolveLockedBuilderCommand("tar"), args, { cwd: output });
+  await run(resolveLockedBuilderCommand("tar"), args, {
+    label: `extract ${basename(archive)} with locked tar`,
+    cwd: output,
+  });
 }
 
 async function extractZipArchive({ archive, output, stripComponents, python }) {
@@ -829,6 +908,7 @@ async function extractZipArchive({ archive, output, stripComponents, python }) {
   ].join("\n");
   await mkdir(output, { recursive: true });
   await run(python, ["-c", extractor, archive, output, String(stripComponents)], {
+    label: `extract ${basename(archive)} with Runtime Python`,
     cwd: output,
     env: {
       ...process.env,
@@ -1012,6 +1092,16 @@ async function assertRegularDirectory(path, label) {
   if (!details.isDirectory() || details.isSymbolicLink()) {
     throw new Error(`AT-RT-INPUT-01 blocked: ${label} is not a directory.`);
   }
+}
+
+function positiveIntegerEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer number of milliseconds.`);
+  }
+  return value;
 }
 
 function parseArgs(argv) {

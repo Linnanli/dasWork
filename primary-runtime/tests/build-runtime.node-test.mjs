@@ -18,7 +18,11 @@ import {
   buildSyntheticRuntime,
   syntheticRuntimeTargets,
 } from "../scripts/build-synthetic-runtime.mjs";
-import { listStoredZipEntries } from "../scripts/zip-writer.mjs";
+import {
+  listStoredZipEntries,
+  readStoredZipArchive,
+  writeDeflatedZipArchive,
+} from "../scripts/zip-writer.mjs";
 import {
   assertNativeRuntimeTarget,
   currentRuntimeTarget,
@@ -410,6 +414,43 @@ test("rejects unsafe synthetic ZIP entry paths", async () => {
   }
 });
 
+test("writes readable Deflate ZIP archives with an explicit compression level", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-zip-"));
+  try {
+    const archive = join(directory, "runtime.zip");
+    await writeDeflatedZipArchive(
+      archive,
+      [
+        {
+          path: "runtime.json",
+          data: JSON.stringify({ bundleVersion: "zip-level-test" }),
+        },
+      ],
+      { compressionLevel: 6 },
+    );
+    assert.deepEqual(
+      readStoredZipArchive(await readFile(archive)).map((entry) => ({
+        path: entry.path,
+        data: entry.data.toString("utf8"),
+      })),
+      [
+        {
+          path: "runtime.json",
+          data: JSON.stringify({ bundleVersion: "zip-level-test" }),
+        },
+      ],
+    );
+    await assert.rejects(
+      writeDeflatedZipArchive(archive, [{ path: "runtime.json", data: "{}" }], {
+        compressionLevel: 10,
+      }),
+      /ZIP compression level must be an integer from 0 through 9/u,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("builds and verifies a generic v2 Runtime archive from offline inputs", async () => {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-build-"));
   const target = currentRuntimeTarget();
@@ -436,6 +477,7 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
     const provenance = JSON.parse(buildStdout);
     assert.equal(provenance.target, target);
     assert.equal(provenance.bundleVersion, "1.2.3-test");
+    assert.equal(provenance.zipCompressionLevel, 9);
     const targetRoot = join(outputRoot, target);
     const runtimeManifest = JSON.parse(
       await readFile(join(targetRoot, "runtime.json"), "utf8"),

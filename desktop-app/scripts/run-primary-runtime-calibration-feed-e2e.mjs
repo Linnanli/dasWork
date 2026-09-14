@@ -47,7 +47,7 @@ try {
     DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1',
     DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: fixture.tls.caPath
   })
-  const buildStatus = await run('npm', ['run', 'build'], environment)
+  const buildStatus = await ensureDesktopBuild(environment)
   if (buildStatus !== 0) process.exitCode = buildStatus
   else {
     const e2eStatus = await run(
@@ -221,6 +221,24 @@ function parseOptions(argv) {
     p1aReceipt: resolve(required('--p1a-receipt')),
     output: resolve(required('--output'))
   }
+}
+
+async function ensureDesktopBuild(environment) {
+  if (environment.DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY !== '1') {
+    return run('npm', ['run', 'build'], environment)
+  }
+
+  const expectedOutputs = ['out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html']
+  for (const output of expectedOutputs) {
+    let details
+    try {
+      details = await stat(resolve(appRoot, output))
+    } catch {
+      throw new Error(`P3b prebuilt desktop output is missing: ${output}`)
+    }
+    if (!details.isFile()) throw new Error(`P3b prebuilt desktop output is invalid: ${output}`)
+  }
+  return 0
 }
 
 function generateFeedKey() {
