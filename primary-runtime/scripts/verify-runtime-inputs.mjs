@@ -11,6 +11,12 @@ import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
 import { readRuntimeSourcesLock, sha256 } from "./source-lock.mjs";
 import { assertNativeRuntimeTarget, parseRuntimeTargetOption } from "./runtime-target.mjs";
 
+const defaultCommandTimeoutMs = positiveIntegerEnv(
+  "DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS",
+  5 * 60 * 1000,
+);
+const capturedCommandOutputBytes = 1024 * 1024;
+
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
 const { manifest } = await assertRuntimeInputsManifest({
@@ -505,6 +511,7 @@ async function renderChineseDeck({ target, node, python, soffice, pdftoppm, inpu
         [renderSlides, "--input", pptx, "--outdir", renderedSlides, "--format", "png", "--dpi", "72"],
         {
           ...fontEnvironment({ font, fontConfig }),
+          ...libreOfficeProfileEnvironment({ target, directory }),
           PYTHONPATH: [join(pluginRoot, "scripts"), pythonPackages].join(delimiter),
           PYTHONNOUSERSITE: "1",
           PPTX_RUNTIME_SOFFICE: soffice,
@@ -593,6 +600,16 @@ function fontEnvironment({ font, fontConfig }) {
   };
 }
 
+function libreOfficeProfileEnvironment({ target, directory }) {
+  if (!target.startsWith("win32")) return {};
+  const profile = join(directory, "libreoffice-profile");
+  return {
+    APPDATA: join(profile, "AppData", "Roaming"),
+    LOCALAPPDATA: join(profile, "AppData", "Local"),
+    USERPROFILE: profile,
+  };
+}
+
 function runtimeUtilityPaths(target) {
   if (target.startsWith("win32")) {
     const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
@@ -608,12 +625,17 @@ function escapeXml(value) {
 }
 
 async function runCommand(name, file, args, environment = undefined) {
-  const output = await runRawCommand(file, args, environment);
+  process.stderr.write(
+    `[primary-runtime:verify-inputs] start ${name} (timeout ${defaultCommandTimeoutMs}ms)\n`,
+  );
+  const { output, elapsedMs } = await runRawCommand({ file, args, environment, name });
+  process.stderr.write(`[primary-runtime:verify-inputs] ok ${name} (${elapsedMs}ms)\n`);
   return { name, executable: basename(file), args, resultSha256: createHash("sha256").update(output).digest("hex") };
 }
 
-async function runRawCommand(file, args, environment = undefined) {
+async function runRawCommand({ file, args, environment = undefined, name }) {
   return new Promise((resolveCommand, rejectCommand) => {
+    const startedAt = Date.now();
     const child = spawn(file, args, {
       env: {
         ...process.env,
@@ -624,14 +646,53 @@ async function runRawCommand(file, args, environment = undefined) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     const output = [];
+    let settled = false;
+    let timedOut = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback();
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (!settled) child.kill("SIGKILL");
+      }, 5_000).unref();
+    }, defaultCommandTimeoutMs);
+    timer.unref();
     child.stdout.on("data", (chunk) => output.push(Buffer.from(chunk)));
     child.stderr.on("data", (chunk) => output.push(Buffer.from(chunk)));
-    child.once("error", rejectCommand);
+    child.once("error", (error) => finish(() => rejectCommand(error)));
     child.once("exit", (code, signal) => {
-      if (code === 0) resolveCommand(Buffer.concat(output));
-      else rejectCommand(new Error(`${file} ${args.join(" ")} failed with ${code ?? signal ?? "unknown"}: ${Buffer.concat(output).toString("utf8").slice(0, 500)}`));
+      finish(() => {
+        const elapsedMs = Date.now() - startedAt;
+        const outputBytes = Buffer.concat(output);
+        const capturedOutput = outputBytes.toString("utf8").slice(-capturedCommandOutputBytes);
+        if (code === 0 && !timedOut) {
+          resolveCommand({ output: outputBytes, elapsedMs });
+          return;
+        }
+        const reason = timedOut
+          ? `timed out after ${defaultCommandTimeoutMs}ms`
+          : `failed with ${code ?? signal ?? "unknown"}`;
+        rejectCommand(
+          new Error(`${name} ${reason}: ${capturedOutput.slice(-500) || "no command output"}`),
+        );
+      });
     });
   });
+}
+
+function positiveIntegerEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer number of milliseconds.`);
+  }
+  return value;
 }
 
 function normalizeDistributionName(value) {

@@ -674,6 +674,17 @@ test("Windows Runtime keeps the official Node ZIP executable at its extracted ro
   assert.doesNotMatch(builder, /dependencies\/node\/bin\/node\.exe/u);
 });
 
+test("Windows Runtime input verification isolates LibreOffice and bounds child commands", async () => {
+  const verifier = await readFile(verifyInputsScript, "utf8");
+
+  assert.match(verifier, /DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS/u);
+  assert.match(verifier, /primary-runtime:verify-inputs\] start/u);
+  assert.match(verifier, /libreoffice-profile/u);
+  assert.match(verifier, /APPDATA/u);
+  assert.match(verifier, /LOCALAPPDATA/u);
+  assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);
+});
+
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {
   const source = await readFile(materializeScript, "utf8");
 
