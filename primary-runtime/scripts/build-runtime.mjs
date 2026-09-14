@@ -380,6 +380,9 @@ function assertRequiredRuntimeInputs(entries, target) {
 }
 
 function libreofficeBinaryPath(target, extension) {
+  if (target.startsWith("win32")) {
+    return "dependencies/native/libreoffice/program/soffice.com";
+  }
   const relativePath = target.startsWith("darwin")
     ? "libreoffice/LibreOffice.app/Contents/MacOS/soffice"
     : "libreoffice/program/soffice";

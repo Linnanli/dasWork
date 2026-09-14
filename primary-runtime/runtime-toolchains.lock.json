@@ -514,7 +514,7 @@
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/program/soffice.exe"]
+            "entrypoints": ["dependencies/native/libreoffice/program/soffice.com"]
           }
         },
         {

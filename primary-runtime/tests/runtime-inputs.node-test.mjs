@@ -682,6 +682,8 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(verifier, /libreoffice-profile/u);
   assert.match(verifier, /primary-runtime-lo-version-/u);
   assert.match(verifier, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
+  assert.match(verifier, /name === "soffice" && target\.startsWith\("win32"\)/u);
+  assert.match(verifier, /\? "\.com"/u);
   assert.match(verifier, /APPDATA/u);
   assert.match(verifier, /LOCALAPPDATA/u);
   assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);

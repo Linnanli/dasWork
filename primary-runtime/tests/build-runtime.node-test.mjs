@@ -693,13 +693,13 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   const sofficePath = target.startsWith("darwin")
     ? "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"
     : "dependencies/native/libreoffice/program/soffice";
-  for (const [, path] of [
+  for (const [name, path] of [
     ["soffice", sofficePath],
     ["pdfinfo", "dependencies/native/poppler/bin/pdfinfo"],
     ["pdftoppm", "dependencies/native/poppler/bin/pdftoppm"],
   ]) {
     await writeExecutable(
-      join(inputRoot, `${path}${extension}`),
+      join(inputRoot, `${path}${name === "soffice" && platform === "win32" ? ".com" : extension}`),
       "#!/bin/sh\nexit 0\n",
     );
   }
