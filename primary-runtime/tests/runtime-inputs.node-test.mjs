@@ -209,6 +209,7 @@ test("LibreOffice recipes use locked target-native binary materialization", asyn
     if (target === "win32-x64") {
       assert.equal(recipe?.sourceComponent, "libreoffice-windows-x64");
       assert.equal(recipe?.sourceArchiveFormat, "msi");
+      assert.equal(recipe?.sourceDirectory, "LibreOffice");
       assert.ok(toolchain.builder.tools.includes("msiexec"));
       continue;
     }

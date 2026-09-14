@@ -502,7 +502,7 @@
           "materialization": "prebuilt",
           "sourceComponent": "libreoffice-windows-x64",
           "sourceArchiveFormat": "msi",
-          "sourceDirectory": "Program Files/LibreOffice",
+          "sourceDirectory": "LibreOffice",
           "toolchain": {
             "distribution": "TheDocumentFoundation-26.2.6-MSI",
             "extraction": "msiexec-administrative"
