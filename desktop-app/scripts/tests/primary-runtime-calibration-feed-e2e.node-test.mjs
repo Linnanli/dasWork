@@ -34,6 +34,8 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(runnerSource, /P3b normal-chat feed target .*native runner/u)
   assert.match(runnerSource, /tests\/e2e\/primary-runtime-feed\.e2e\.ts/u)
   assert.match(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY/u)
+  assert.match(runnerSource, /process\.platform === 'win32' \? 'npm\.cmd' : 'npm'/u)
+  assert.match(runnerSource, /process\.platform === 'win32' \? 'npx\.cmd' : 'npx'/u)
   assert.match(runnerSource, /P3b prebuilt desktop output is missing/u)
   assert.match(runnerSource, /out\/main\/index\.js/u)
   assert.match(runnerSource, /out\/preload\/index\.js/u)
@@ -56,6 +58,9 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /Primary Runtime did not become ready/u)
   assert.match(e2eSource, /Diagnostic retry status/u)
   assert.match(e2eSource, /safePrimaryRuntimeDiagnosticLogs/u)
+  assert.match(e2eSource, /\[bundled-plugins\]/u)
+  assert.match(e2eSource, /\^\(\?:ready\|failed\)\$/u)
+  assert.match(e2eSource, /post-install plugin synchronization failed/u)
   assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)
   assert.match(

@@ -23,6 +23,8 @@ const executeFile = promisify(execFile)
 const appRoot = resolve(import.meta.dirname, '..')
 const channel = 'p3b-calibration'
 const options = parseOptions(process.argv.slice(2))
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 
 const root = await mkdtemp(join(tmpdir(), 'dascowork-primary-runtime-p3b-feed-'))
 let server
@@ -51,7 +53,7 @@ try {
   if (buildStatus !== 0) process.exitCode = buildStatus
   else {
     const e2eStatus = await run(
-      'npx',
+      npxCommand,
       ['playwright', 'test', 'tests/e2e/primary-runtime-feed.e2e.ts', '--reporter=line'],
       environment
     )
@@ -225,7 +227,7 @@ function parseOptions(argv) {
 
 async function ensureDesktopBuild(environment) {
   if (environment.DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY !== '1') {
-    return run('npm', ['run', 'build'], environment)
+    return run(npmCommand, ['run', 'build'], environment)
   }
 
   const expectedOutputs = ['out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html']

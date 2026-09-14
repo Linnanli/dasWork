@@ -187,6 +187,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
 
 async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): Promise<void> {
   let latestStatus: unknown
+  let pollError: unknown
   try {
     await expect
       .poll(
@@ -195,37 +196,49 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
             const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
             return result.runtime
           })
-          return (latestStatus as { state?: unknown }).state
+          const state = (latestStatus as { state?: unknown }).state
+          return typeof state === 'string' ? state : 'unknown'
         },
         { timeout: 120_000 }
       )
-      .toBe('ready')
+      .toMatch(/^(?:ready|failed)$/u)
   } catch (error) {
-    // The startup check may fail before Playwright can subscribe to Electron's
-    // Main-process streams. Re-run the same Main-owned check only after the
-    // timeout so its redacted diagnostic is observable; this is diagnostic
-    // only and never turns a failed automatic install into a passing test.
-    const retryStatus = await page
-      .evaluate(async () => {
-        const result = await window.desktopApp.plugins.runPrimaryRuntimeUpdate({ version: 1 })
-        return result.runtime
-      })
-      .catch(() => undefined)
-    const diagnosticLogs = safePrimaryRuntimeDiagnosticLogs(logs)
-    throw new Error(
-      `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}\n` +
-        `Diagnostic retry status: ${JSON.stringify(retryStatus)}\n${diagnosticLogs}`,
-      { cause: error }
-    )
+    pollError = error
   }
+
+  if ((latestStatus as { state?: unknown }).state === 'ready') return
+
+  // A verified Runtime whose post-install plugin synchronization failed is a
+  // terminal state for this exact candidate. Retrying its update would only
+  // spend another full installer interval and hide the original diagnostic.
+  const retryStatus =
+    (latestStatus as { state?: unknown }).state === 'failed'
+      ? undefined
+      : await page
+          .evaluate(async () => {
+            const result = await window.desktopApp.plugins.runPrimaryRuntimeUpdate({ version: 1 })
+            return result.runtime
+          })
+          .catch(() => undefined)
+  const diagnosticLogs = safePrimaryRuntimeDiagnosticLogs(logs)
+  throw new Error(
+    `Primary Runtime did not become ready: ${JSON.stringify(latestStatus)}\n` +
+      `Diagnostic retry status: ${JSON.stringify(retryStatus)}\n${diagnosticLogs}`,
+    { cause: pollError }
+  )
 }
 
 function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
   try {
-    // Keep the failure surface to Main's Primary Runtime diagnostics, then
-    // apply the shared serializer before exposing any test attachment output.
-    const primaryRuntimeLogs = logs.filter((log) => log.includes('[primary-runtime]')).slice(-8)
-    return serializeDiagnosticData({ primaryRuntimeLogs }).slice(-8_000)
+    // Keep the failure surface to Main's Primary Runtime and its direct
+    // post-install plugin reconciliation diagnostics, then apply the shared
+    // serializer before exposing any test attachment output.
+    const runtimeAndPluginLogs = logs
+      .filter(
+        (log) => log.includes('[primary-runtime]') || log.includes('[bundled-plugins]')
+      )
+      .slice(-8)
+    return serializeDiagnosticData({ runtimeAndPluginLogs }).slice(-8_000)
   } catch {
     return 'Primary Runtime diagnostic logs were unavailable after redaction.'
   }

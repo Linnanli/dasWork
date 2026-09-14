@@ -194,6 +194,8 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     /P3b run ordinary app-server chat through the signed local calibration feed/u
   )
   assert.match(buildWorkflow, /test:e2e:primary-runtime-calibration-feed/u)
+  assert.match(buildWorkflow, /matrix\.target \}\}" == "linux-x64"/u)
+  assert.match(buildWorkflow, /xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed/u)
   assert.match(buildWorkflow, /--normal-chat-receipt/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime:performance/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run assemble:performance/u)

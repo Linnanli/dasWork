@@ -516,15 +516,26 @@ jobs:
           runtime_json="$target_root/runtime.json"
           version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
           sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
-          DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1 \
-          npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
-            --target "${{ matrix.target }}" \
-            --archive "$archive" \
-            --version "$version" \
-            --sha256 "$sha256" \
-            --provenance "$target_root/provenance.json" \
-            --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
-            --output "$target_root/normal-chat-smoke.json"
+          export DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1
+          if [[ "${{ matrix.target }}" == "linux-x64" ]]; then
+            xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
+              --target "${{ matrix.target }}" \
+              --archive "$archive" \
+              --version "$version" \
+              --sha256 "$sha256" \
+              --provenance "$target_root/provenance.json" \
+              --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+              --output "$target_root/normal-chat-smoke.json"
+          else
+            npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
+              --target "${{ matrix.target }}" \
+              --archive "$archive" \
+              --version "$version" \
+              --sha256 "$sha256" \
+              --provenance "$target_root/provenance.json" \
+              --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+              --output "$target_root/normal-chat-smoke.json"
+          fi
 
       - name: P3b measure ten cold installs and Main event-loop delay
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
