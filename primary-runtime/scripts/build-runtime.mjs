@@ -240,7 +240,7 @@ function buildRuntimeManifest({
     node: {
       path:
         platform === "win32"
-          ? "dependencies/node/bin/node.exe"
+          ? "dependencies/node/node.exe"
           : "dependencies/node/bin/node",
       version: toolchains.targets[target].node.version,
     },
@@ -341,9 +341,10 @@ function assertRequiredRuntimeInputs(entries, target) {
       );
     }
   }
-  if (
-    ![...paths].some((path) => path.startsWith("dependencies/node/bin/node"))
-  ) {
+  const nodePath = target.startsWith("win32")
+    ? "dependencies/node/node.exe"
+    : "dependencies/node/bin/node";
+  if (!paths.has(nodePath)) {
     throw new Error(
       "AT-RT-BUILD-01 blocked: missing Runtime-owned Node executable.",
     );

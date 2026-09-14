@@ -637,6 +637,24 @@ test("P1 scripts resolve default lock paths through file URLs safely on Windows"
   }
 });
 
+test("Windows Runtime keeps the official Node ZIP executable at its extracted root", async () => {
+  const [verifier, builder] = await Promise.all([
+    readFile(verifyInputsScript, "utf8"),
+    readFile(resolve(import.meta.dirname, "../scripts/build-runtime.mjs"), "utf8"),
+  ]);
+
+  assert.match(
+    verifier,
+    /target\.startsWith\("win32"\)[\s\S]*?dependencies\/node\/node\.exe/u,
+  );
+  assert.match(
+    builder,
+    /platform === "win32"[\s\S]*?dependencies\/node\/node\.exe/u,
+  );
+  assert.doesNotMatch(verifier, /dependencies\/node\/bin\/node\.exe/u);
+  assert.doesNotMatch(builder, /dependencies\/node\/bin\/node\.exe/u);
+});
+
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {
   const source = await readFile(materializeScript, "utf8");
 

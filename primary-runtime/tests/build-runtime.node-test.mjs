@@ -681,7 +681,7 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   const [platform] = target.split("-");
   const nodePath =
     platform === "win32"
-      ? "dependencies/node/bin/node.exe"
+      ? "dependencies/node/node.exe"
       : "dependencies/node/bin/node";
   const pythonPath =
     platform === "win32"
