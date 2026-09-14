@@ -683,6 +683,7 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(verifier, /APPDATA/u);
   assert.match(verifier, /LOCALAPPDATA/u);
   assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);
+  assert.doesNotMatch(verifier, /runRawCommand\("(?:ldd|otool)"/u);
 });
 
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {

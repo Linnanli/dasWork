@@ -306,7 +306,12 @@ function isWindowsSystemLibrary(name) {
 }
 
 async function inspectMachODependencies({ object, nativeRoot }) {
-  const output = (await runRawCommand("otool", ["-L", object])).toString("utf8");
+  const { output: outputBytes } = await runRawCommand({
+    file: "otool",
+    args: ["-L", object],
+    name: `otool ${relative(nativeRoot, object)}`,
+  });
+  const output = outputBytes.toString("utf8");
   for (const line of output.split(/\r?\n/u).slice(1)) {
     const match = line.trim().match(/^(.+?)\s+\(/u);
     if (!match) continue;
@@ -329,7 +334,12 @@ async function inspectMachODependencies({ object, nativeRoot }) {
 }
 
 async function inspectElfDependencies({ object, nativeRoot }) {
-  const output = (await runRawCommand("ldd", [object])).toString("utf8");
+  const { output: outputBytes } = await runRawCommand({
+    file: "ldd",
+    args: [object],
+    name: `ldd ${relative(nativeRoot, object)}`,
+  });
+  const output = outputBytes.toString("utf8");
   for (const line of output.split(/\r?\n/u)) {
     if (/not found/iu.test(line)) {
       throw new Error(
