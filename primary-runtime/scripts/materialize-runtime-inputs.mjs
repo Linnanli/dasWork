@@ -519,6 +519,28 @@ async function writeRuntimePluginMarketplace({
   files,
 }) {
   const name = "presentation-skill";
+  const pluginManifest = JSON.parse(
+    await readFile(
+      join(
+        marketplaceRoot,
+        "plugins",
+        name,
+        ".codex-plugin",
+        "plugin.json",
+      ),
+      "utf8",
+    ),
+  );
+  if (
+    !pluginManifest ||
+    pluginManifest.name !== name ||
+    typeof pluginManifest.version !== "string" ||
+    pluginManifest.version.trim() === ""
+  ) {
+    throw new Error(
+      "AT-RT-INPUT-01 blocked: Runtime plugin manifest must provide its exact name and version.",
+    );
+  }
   await writeJson(join(marketplaceRoot, ".agents/plugins/marketplace.json"), {
     name,
     plugins: [
@@ -534,7 +556,10 @@ async function writeRuntimePluginMarketplace({
     plugins: [
       {
         name,
-        version: sourceLock.candidate.tag,
+        // Git tags identify the audited source snapshot, while app-server
+        // reports the version declared by the copied plugin manifest. Lock
+        // that manifest version so the post-install readback is exact.
+        version: pluginManifest.version,
         installWhenMissing: true,
         internal: true,
         provenance: {

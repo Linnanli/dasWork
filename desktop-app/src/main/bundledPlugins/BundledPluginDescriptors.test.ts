@@ -177,7 +177,7 @@ describe('BundledPluginDescriptors', () => {
         plugins: [
           {
             name: 'presentation-skill',
-            version: 'v0.8.0',
+            version: '0.8.0',
             installWhenMissing: true,
             internal: true,
             provenance: {

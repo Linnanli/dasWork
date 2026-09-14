@@ -177,7 +177,15 @@ function verifyBundledPlugin({ entryMap, manifest }) {
       throw new Error("AT-RT-BUILD-01 blocked: bundled plugin lock is invalid.");
     }
     for (const item of lock.plugins ?? []) {
-      requireEntry(entryMap, `${plugin.path}/plugins/${item.name}/.codex-plugin/plugin.json`);
+      const pluginManifest = readJsonEntry(
+        entryMap,
+        `${plugin.path}/plugins/${item.name}/.codex-plugin/plugin.json`,
+      );
+      if (pluginManifest?.name !== item.name || pluginManifest?.version !== item.version) {
+        throw new Error(
+          `AT-RT-BUILD-01 blocked: bundled plugin manifest does not match lock for ${item.name}.`,
+        );
+      }
       for (const file of item.files ?? []) {
         const pluginFilePath = `${plugin.path}/plugins/${item.name}/${file.path}`;
         const data = requireEntry(entryMap, pluginFilePath);

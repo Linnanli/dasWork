@@ -711,6 +711,21 @@ test("materialization keeps source-build intermediates outside the immutable inp
   );
 });
 
+test("Runtime plugin lock records the copied manifest version and archive verification binds them", async () => {
+  const [materializer, verifier] = await Promise.all([
+    readFile(materializeScript, "utf8"),
+    readFile(resolve(import.meta.dirname, "../scripts/verify-runtime.mjs"), "utf8"),
+  ]);
+
+  assert.match(materializer, /\.codex-plugin",\s*"plugin\.json"/u);
+  assert.match(materializer, /version: pluginManifest\.version/u);
+  assert.match(
+    verifier,
+    /pluginManifest\?\.name !== item\.name \|\| pluginManifest\?\.version !== item\.version/u,
+  );
+  assert.match(verifier, /bundled plugin manifest does not match lock/u);
+});
+
 async function createInputFixture() {
   const root = await (
     await import("node:fs/promises")
