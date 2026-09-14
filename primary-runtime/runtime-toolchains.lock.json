@@ -502,7 +502,7 @@
           "materialization": "prebuilt",
           "sourceComponent": "libreoffice-windows-x64",
           "sourceArchiveFormat": "msi",
-          "sourceDirectory": "LibreOffice",
+          "sourceDirectory": ".",
           "toolchain": {
             "distribution": "TheDocumentFoundation-26.2.6-MSI",
             "extraction": "msiexec-administrative"
@@ -510,7 +510,7 @@
           "environment": {},
           "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "instdir", "destination": "dependencies/native/libreoffice" }
+            { "kind": "directory", "source": ".", "destination": "dependencies/native/libreoffice" }
           ],
           "closure": {
             "mode": "directory",

@@ -484,7 +484,7 @@ function isNativeRecipe(value) {
     isNonEmptyString(value.sourceComponent) &&
     isNativeDependencies(value.nativeDependencies) &&
     allowedArchiveFormats.has(value.sourceArchiveFormat) &&
-    isRelativePath(value.sourceDirectory) &&
+    isRelativePathOrRoot(value.sourceDirectory) &&
     isPlainObject(value.toolchain) &&
     Object.values(value.toolchain).every(isNonEmptyString) &&
     isRecipeEnvironment(value.environment, value.materialization) &&
@@ -530,7 +530,9 @@ function isRecipeOutput(value) {
     isPlainObject(value) &&
     !hasUnexpectedKeys(value, recipeOutputKeys) &&
     (value.kind === "file" || value.kind === "directory") &&
-    isRelativePath(value.source) &&
+    (value.kind === "directory"
+      ? isRelativePathOrRoot(value.source)
+      : isRelativePath(value.source)) &&
     isRelativePath(value.destination) &&
     (value.kind === "directory"
       ? value.mode === undefined
@@ -644,6 +646,10 @@ function isRelativePath(value) {
     !value.split("/").includes("..") &&
     basename(value) !== "."
   );
+}
+
+function isRelativePathOrRoot(value) {
+  return value === "." || isRelativePath(value);
 }
 
 function isHttpsUrl(value) {

@@ -614,7 +614,10 @@ async function materializeNativeRecipes({
     }
     const sourceRoot = join(workRoot, "native", recipe.name);
     await extractLockedArtifact({ artifact, output: sourceRoot, cacheRoot });
-    const buildRoot = await safeChild(sourceRoot, recipe.sourceDirectory);
+    const buildRoot =
+      recipe.sourceDirectory === "."
+        ? sourceRoot
+        : await safeChild(sourceRoot, recipe.sourceDirectory);
     await assertRegularDirectory(
       buildRoot,
       `${recipe.name} locked source directory`,
@@ -646,7 +649,8 @@ async function materializeNativeRecipes({
       await materializePrebuiltNativeRecipe({ recipe, buildRoot });
     }
     for (const output of recipe.outputs) {
-      const source = await safeChild(buildRoot, output.source);
+      const source =
+        output.source === "." ? buildRoot : await safeChild(buildRoot, output.source);
       const destination = await safeChild(outputRoot, output.destination);
       await mkdir(resolve(destination, ".."), { recursive: true });
       if (output.kind === "directory") {
