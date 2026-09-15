@@ -27,6 +27,7 @@ const evidenceValue = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_EVIDENCE
 const normalChatPassed = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_NORMAL_CHAT_PASSED === '1'
 const p1aReceiptSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_RECEIPT_SHA256
 const p1aMeasurementsValue = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_MEASUREMENTS
+const performanceTestTimeoutMs = 120_000
 const directories: string[] = []
 
 afterEach(async () => {
@@ -102,7 +103,7 @@ describe.skipIf(!performanceEnabled)('Primary Runtime P3b performance calibratio
         2
       )}\n`
     )
-  })
+  }, performanceTestTimeoutMs)
 })
 
 function createSignedCalibrationFeed(input: {

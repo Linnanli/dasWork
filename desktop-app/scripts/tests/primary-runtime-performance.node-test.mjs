@@ -16,6 +16,10 @@ const runnerPath = resolve(
   repositoryRoot,
   'desktop-app/scripts/run-primary-runtime-performance.mjs'
 )
+const performanceTestPath = resolve(
+  repositoryRoot,
+  'desktop-app/src/main/primaryRuntime/PrimaryRuntimePerformance.test.ts'
+)
 
 test('primary runtime performance runner is registered and fail-closed', async () => {
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
@@ -27,6 +31,12 @@ test('primary runtime performance runner is registered and fail-closed', async (
     () => executeFile(process.execPath, [runnerPath], { cwd: repositoryRoot }),
     /Expected --target/u
   )
+})
+
+test('ten-install calibration exceeds Vitest default timeout without weakening Runtime budgets', async () => {
+  const performanceTestSource = await readFile(performanceTestPath, 'utf8')
+  assert.match(performanceTestSource, /const performanceTestTimeoutMs = 120_000/u)
+  assert.match(performanceTestSource, /\}, performanceTestTimeoutMs\)/u)
 })
 
 test('primary runtime performance runner verifies an external measurement report', async () => {
