@@ -219,8 +219,23 @@ function readSlideGeometry(xml, slidePath, slideSize) {
     if (!offset || !extent) continue
     const x = readNonNegativeIntegerAttribute(offset, 'x')
     const y = readNonNegativeIntegerAttribute(offset, 'y')
-    const cx = readPositiveIntegerAttribute(extent, 'cx')
-    const cy = readPositiveIntegerAttribute(extent, 'cy')
+    const cx = readNonNegativeIntegerAttribute(extent, 'cx')
+    const cy = readNonNegativeIntegerAttribute(extent, 'cy')
+    // PptxGenJS writes the root p:spTree group with a zero-sized child
+    // coordinate space. It is OOXML scaffolding rather than a drawable shape,
+    // so accept that exact form without allowing zero-sized drawings.
+    const isZeroSizedGroupCoordinateSpace =
+      cx === 0 &&
+      cy === 0 &&
+      /<a:chOff\b[^>]*\/>/u.test(body) &&
+      /<a:chExt\b[^>]*\/>/u.test(body)
+    if (isZeroSizedGroupCoordinateSpace) {
+      assert(
+        x !== undefined && y !== undefined,
+        `PPTX has invalid group coordinate geometry in ${slidePath}.`
+      )
+      continue
+    }
     assert(
       x !== undefined && y !== undefined && cx && cy,
       `PPTX has invalid drawing geometry in ${slidePath}.`
