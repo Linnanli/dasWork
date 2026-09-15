@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,9 +31,23 @@ const performanceTestTimeoutMs = 600_000
 const directories: string[] = []
 
 afterEach(async () => {
-  await Promise.all(
-    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
-  )
+  await Promise.all(directories.splice(0).map((directory) => removePerformanceDirectory(directory)))
+})
+
+describe('Primary Runtime performance cleanup', () => {
+  it('removes the locked Runtime trees created by each cold install', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'primary-runtime-performance-cleanup-'))
+    directories.push(directory)
+    const dependencyDirectory = join(directory, 'versions', 'candidate', 'dependencies')
+    await mkdir(dependencyDirectory, { recursive: true })
+    await writeFile(join(dependencyDirectory, 'runtime.txt'), 'fixture\n')
+    await chmod(dependencyDirectory, 0o500)
+    await chmod(join(directory, 'versions', 'candidate'), 0o500)
+
+    await removePerformanceDirectory(directory)
+
+    await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
 })
 
 describe.skipIf(!performanceEnabled)('Primary Runtime P3b performance calibration', () => {
@@ -288,6 +302,25 @@ function parseP1aMeasurements(
 
 function toPositiveMilliseconds(value: number): number {
   return Math.max(1, Math.ceil(Number.isFinite(value) ? value : 1))
+}
+
+async function removePerformanceDirectory(directory: string): Promise<void> {
+  await makePerformanceTreeWritable(directory)
+  await rm(directory, { recursive: true, force: true })
+}
+
+async function makePerformanceTreeWritable(root: string): Promise<void> {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    const path = join(root, entry.name)
+    if (entry.isDirectory()) {
+      await makePerformanceTreeWritable(path)
+      await chmod(path, 0o700)
+    } else if (entry.isFile()) {
+      await chmod(path, 0o600)
+    }
+  }
+  await chmod(root, 0o700).catch(() => undefined)
 }
 
 async function sha256File(path: string): Promise<string> {

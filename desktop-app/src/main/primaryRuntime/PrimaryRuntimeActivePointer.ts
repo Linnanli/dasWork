@@ -242,15 +242,17 @@ export async function sha256File(path: string): Promise<string> {
 }
 
 function normalizedVersionDirectory(directory: string): string {
+  // `path.join` uses the host separator, so a directory generated on Windows
+  // arrives here as \`versions\\<name>\`. Persist pointers in portable form.
+  const normalized = directory.replace(/\\/gu, '/')
   if (
     isAbsolute(directory) ||
-    directory.split(/[\\/]+/u).includes('..') ||
-    !directory.startsWith(`${VERSIONS_DIRECTORY}/`) ||
-    directory === VERSIONS_DIRECTORY
+    normalized.split('/').includes('..') ||
+    !normalized.startsWith(`${VERSIONS_DIRECTORY}/`) ||
+    normalized === VERSIONS_DIRECTORY
   ) {
     throw new Error('Primary Runtime active pointer contains an unsafe version directory.')
   }
-  const normalized = directory.replace(/\\/gu, '/')
   if (!/^versions\/[A-Za-z0-9._-]+$/u.test(normalized)) {
     throw new Error('Primary Runtime active pointer contains an invalid version directory.')
   }

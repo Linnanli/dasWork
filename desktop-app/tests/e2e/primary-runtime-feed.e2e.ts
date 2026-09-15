@@ -52,7 +52,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
   // download, staging, activation, plugin sync, QA, and render can exceed the
   // generic 60-second default. P3b separately measures the numeric cold-install
   // budget; this timeout only keeps the real end-to-end acceptance path intact.
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   expect(browserName).toBe('chromium')
 
   await withR07PresentationWorkspace(async (workspace) => {
