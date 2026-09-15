@@ -144,8 +144,11 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       await expect(runtimeSuccessMessage).toHaveCount(1, { timeout: 120_000 })
 
       const providerBodies = providerResponseBodies(backend)
-      expect(functionCallOutputCount(providerBodies, loaderCallId)).toBe(1)
-      expect(functionCallOutputCount(providerBodies, runtimeCommandCallId)).toBe(1)
+      // Follow-up Responses requests retain earlier tool outputs as context.
+      // Presence proves each desktop tool ran; counting replayed provider input
+      // as a second invocation would make this product gate flaky.
+      expect(functionCallOutputCount(providerBodies, loaderCallId)).toBeGreaterThanOrEqual(1)
+      expect(functionCallOutputCount(providerBodies, runtimeCommandCallId)).toBeGreaterThanOrEqual(1)
 
       const loaderRequest = providerBodies.find((body) =>
         Boolean(functionCallOutputText(body, loaderCallId))

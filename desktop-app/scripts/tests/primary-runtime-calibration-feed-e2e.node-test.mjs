@@ -69,6 +69,9 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /runtimeSuccessMessage/u)
   assert.match(e2eSource, /\.filter\(\{\s*hasText:/u)
   assert.match(e2eSource, /toHaveCount\(1, \{ timeout: 120_000 \}\)/u)
+  assert.match(e2eSource, /retain earlier tool outputs as context/u)
+  assert.match(e2eSource, /functionCallOutputCount\(providerBodies, loaderCallId\)\)\.toBeGreaterThanOrEqual\(1\)/u)
+  assert.match(e2eSource, /functionCallOutputCount\(providerBodies, runtimeCommandCallId\)\)\.toBeGreaterThanOrEqual\(1\)/u)
   assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)
   assert.match(
