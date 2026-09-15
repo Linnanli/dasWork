@@ -1,10 +1,11 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { expect, type Page } from '@playwright/test'
+import JSZip from 'jszip'
 
 import { appRoot } from './app'
 
@@ -143,9 +144,66 @@ export async function verifyR07Presentation(path: string): Promise<void> {
       hasImage: true,
       hasChineseFont: true
     })
+  } catch (error) {
+    const diagnostics = await readPptxChartDiagnostics(path).catch((diagnosticError: unknown) => ({
+      diagnosticError:
+        diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)
+    }))
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`${message}\nPPTX chart diagnostics: ${JSON.stringify(diagnostics)}`)
   } finally {
     await rm(reportPath, { force: true })
   }
+}
+
+async function readPptxChartDiagnostics(path: string): Promise<{
+  chartParts: string[]
+  slides: Array<{
+    path: string
+    chartTags: string[]
+    chartRelationshipIds: string[]
+    chartRelationships: Array<{ id: string | null; target: string | null }>
+  }>
+}> {
+  const archive = await JSZip.loadAsync(await readFile(path))
+  const paths = Object.keys(archive.files)
+  const slidePaths = paths
+    .filter((entry) => /^ppt\/slides\/slide\d+\.xml$/u.test(entry))
+    .sort((left, right) => left.localeCompare(right, 'en'))
+
+  return {
+    chartParts: paths.filter((entry) => /^ppt\/charts\/chart\d+\.xml$/u.test(entry)).sort(),
+    slides: await Promise.all(
+      slidePaths.map(async (slidePath) => {
+        const slideXml = await archive.file(slidePath)?.async('string')
+        const relationshipsPath = join(
+          'ppt',
+          'slides',
+          '_rels',
+          `${basename(slidePath)}.rels`
+        )
+        const relationshipsXml = await archive.file(relationshipsPath)?.async('string')
+        const chartTags = [...(slideXml ?? '').matchAll(/<[^>]*:chart\b[^>]*>/gu)].map(
+          (match) => match[0]
+        )
+        const chartRelationshipIds = chartTags
+          .map((tag) => readXmlAttribute(tag, 'r:id'))
+          .filter((id): id is string => id !== null)
+        const chartRelationships = [...(relationshipsXml ?? '').matchAll(/<Relationship\b[^>]*>/gu)]
+          .filter((tag) => /\/chart(?:["']|\s|$)/u.test(tag[0]))
+          .map((tag) => ({
+            id: readXmlAttribute(tag[0], 'Id'),
+            target: readXmlAttribute(tag[0], 'Target')
+          }))
+
+        return { path: slidePath, chartTags, chartRelationshipIds, chartRelationships }
+      })
+    )
+  }
+}
+
+function readXmlAttribute(tag: string, name: string): string | null {
+  return new RegExp(`\\b${name}="([^"]*)"`, 'u').exec(tag)?.[1] ?? null
 }
 
 export async function openR07PresentationInWorkspace(
