@@ -66,6 +66,10 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /sandbox_permissions: 'require_escalated'/u)
   assert.match(e2eSource, /data:text\/javascript;base64/u)
   assert.match(e2eSource, /invalid `,;` separators/u)
+  assert.match(
+    e2eSource,
+    /PATH: \[dirname\(dependencies\.soffice\), dirname\(dependencies\.pdftoppm\), process\.env\.PATH\]\.filter\(Boolean\)\.join\(delimiter\)/u
+  )
   assert.match(e2eSource, /renderer approval surface/u)
   assert.match(e2eSource, /await expect\(approvalPanel\)\.toContainText\('是否允许执行以下命令？'/u)
   assert.match(e2eSource, /\{ timeout: 120_000 \}/u)
