@@ -314,6 +314,10 @@ function runtimePresentationCommandResponse(
 
   return shellCommandResponse('response-runtime-command', runtimeCommandCallId, {
     command,
+    // Rendering the generated PDF pages can exceed the app-server command
+    // default on cold macOS runners. This is an acceptance-path allowance;
+    // P3b still measures and enforces the cold-install performance budget.
+    timeout_ms: 60_000,
     sandbox_permissions: 'require_escalated',
     justification: 'The signed Primary Runtime presentation command needs its one-time approved execution path.'
   })
