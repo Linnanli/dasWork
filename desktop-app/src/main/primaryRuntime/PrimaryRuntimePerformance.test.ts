@@ -32,7 +32,7 @@ const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => removePerformanceDirectory(directory)))
-})
+}, performanceTestTimeoutMs)
 
 describe('Primary Runtime performance cleanup', () => {
   it('removes the locked Runtime trees created by each cold install', async () => {

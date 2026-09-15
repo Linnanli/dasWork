@@ -36,6 +36,7 @@ test('primary runtime performance runner is registered and fail-closed', async (
 test('ten-install calibration exceeds Vitest default timeout without weakening Runtime budgets', async () => {
   const performanceTestSource = await readFile(performanceTestPath, 'utf8')
   assert.match(performanceTestSource, /const performanceTestTimeoutMs = 600_000/u)
+  assert.match(performanceTestSource, /afterEach\(async \(\) => \{[\s\S]*?\}, performanceTestTimeoutMs\)/u)
   assert.match(performanceTestSource, /\}, performanceTestTimeoutMs\)/u)
 })
 

@@ -237,6 +237,12 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /Install desktop dependencies for P3a\/P3b installer gates\n {8}run: npm --prefix desktop-app ci$/mu
   )
+  assert.match(buildWorkflow, /Use locked Codex CLI for P3b normal-chat validation/u)
+  assert.match(
+    buildWorkflow,
+    /echo "\$GITHUB_WORKSPACE\/desktop-app\/node_modules\/\.bin" >> "\$GITHUB_PATH"/u
+  )
+  assert.match(buildWorkflow, /node desktop-app\/scripts\/verify-pinned-codex-cli\.mjs/u)
   assert.match(buildWorkflow, /Build desktop test host once for P3b/u)
   assert.match(buildWorkflow, /Build AI-free Codex app-server client for final P3a installer gates/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)
@@ -261,6 +267,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.ok(
     buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates') <
+      buildWorkflow.indexOf('Use locked Codex CLI for P3b normal-chat validation')
+  )
+  assert.ok(
+    buildWorkflow.indexOf('Use locked Codex CLI for P3b normal-chat validation') <
       buildWorkflow.indexOf('Build desktop test host once for P3b')
   )
   assert.ok(

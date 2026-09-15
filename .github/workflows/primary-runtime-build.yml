@@ -473,6 +473,13 @@ jobs:
       - name: Install desktop dependencies for P3a/P3b installer gates
         run: npm --prefix desktop-app ci
 
+      - name: Use locked Codex CLI for P3b normal-chat validation
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
+          node desktop-app/scripts/verify-pinned-codex-cli.mjs
+
       - name: Build desktop test host once for P3b
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
         run: npm --prefix desktop-app run build
