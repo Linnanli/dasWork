@@ -150,6 +150,13 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       expect(functionCallOutputCount(providerBodies, loaderCallId)).toBeGreaterThanOrEqual(1)
       expect(functionCallOutputCount(providerBodies, runtimeCommandCallId)).toBeGreaterThanOrEqual(1)
 
+      const runtimeCommandOutput = providerBodies
+        .map((body) => functionCallOutputText(body, runtimeCommandCallId))
+        .find((output): output is string => Boolean(output))
+      expect(serializeDiagnosticData({ runtimeCommandOutput })).toContain(
+        'presentation-skill:created:6'
+      )
+
       const loaderRequest = providerBodies.find((body) =>
         Boolean(functionCallOutputText(body, loaderCallId))
       )
