@@ -321,13 +321,24 @@ function hasRelatedPart(archive, relationshipsXml, relationshipId, requiredTypeS
   )?.[0]
   const type = relationship ? readAttribute(relationship, 'Type') : undefined
   const target = relationship ? readAttribute(relationship, 'Target') : undefined
+  const partPath = target ? resolveRelatedPartPath(target, requiredTargetPrefix) : undefined
   return Boolean(
     type?.endsWith(requiredTypeSuffix) &&
-      target &&
-      target.startsWith(requiredTargetPrefix) &&
-      /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u.test(target.slice(requiredTargetPrefix.length)) &&
-      archive.file(join('ppt/slides', target).replaceAll('\\', '/'))
+      partPath &&
+      archive.file(partPath)
   )
+}
+
+function resolveRelatedPartPath(target, relativeTargetPrefix) {
+  const relativeDirectory = relativeTargetPrefix.replace(/^\.\.\//u, '')
+  const absoluteTargetPrefix = `/ppt/${relativeDirectory}`
+  const filename = target.startsWith(relativeTargetPrefix)
+    ? target.slice(relativeTargetPrefix.length)
+    : target.startsWith(absoluteTargetPrefix)
+      ? target.slice(absoluteTargetPrefix.length)
+      : undefined
+  if (!filename || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u.test(filename)) return undefined
+  return `ppt/${relativeDirectory}${filename}`
 }
 
 function extractText(xml) {

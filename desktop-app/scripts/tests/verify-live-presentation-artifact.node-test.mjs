@@ -40,6 +40,24 @@ test('validates an R07 PPTX against the HTML facts, slide graph, visual, and geo
   }
 })
 
+test('accepts an absolute OOXML chart relationship target', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'live-presentation-artifact-'))
+  try {
+    const presentationPath = join(directory, 'absolute-chart-target.pptx')
+    await writeFile(
+      presentationPath,
+      await createPresentation({ chartRelationshipTarget: '/ppt/charts/chart1.xml' })
+    )
+
+    const report = await verifyLivePresentationArtifact({ inputPath: presentationPath, expectedPath })
+
+    assert.equal(report.status, 'passed')
+    assert.equal(report.slides.hasChart, true)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('rejects a PPTX that places a shape outside the declared slide bounds', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'live-presentation-artifact-'))
   try {
@@ -72,7 +90,11 @@ test('rejects a PPTX that provides a media file without a slide relationship', a
 })
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Node test fixture uses JavaScript's inferred return value.
-async function createPresentation({ outOfBounds = false, includeVisualRelationship = true } = {}) {
+async function createPresentation({
+  outOfBounds = false,
+  includeVisualRelationship = true,
+  chartRelationshipTarget = '../charts/chart1.xml'
+} = {}) {
   const expected = JSON.parse(await readFile(expectedPath, 'utf8'))
   const zip = new JSZip()
   const titles = expected.expectedPageTypes.map((pageType) => pageType.titleToken)
@@ -109,7 +131,7 @@ async function createPresentation({ outOfBounds = false, includeVisualRelationsh
     if (expected.expectedPageTypes[index].id === 'chart') {
       zip.file(
         `ppt/slides/_rels/slide${index + 1}.xml.rels`,
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/></Relationships>'
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdChart" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="${chartRelationshipTarget}"/></Relationships>`
       )
     }
   }
