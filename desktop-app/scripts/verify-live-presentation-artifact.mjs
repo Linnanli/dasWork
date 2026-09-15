@@ -285,9 +285,9 @@ async function hasChartRelationship(archive, slidePaths, slideXml) {
     const relationship = archive.file(relationshipPath)
     if (!relationship) continue
     const relationshipXml = await relationship.async('string')
-    const chartRelationshipIds = [
-      ...slideXml[index].matchAll(/<c:chart\b[^>]*\br:id="([^"]+)"[^>]*\/>/gu)
-    ].map((match) => match[1])
+    const chartRelationshipIds = [...slideXml[index].matchAll(/<c:chart\b[^>]*>/gu)]
+      .map((match) => readAttribute(match[0], 'r:id'))
+      .filter((id) => typeof id === 'string' && id.length > 0)
     for (const relationshipId of chartRelationshipIds) {
       if (hasRelatedPart(archive, relationshipXml, relationshipId, '/chart', '../charts/')) return true
     }
