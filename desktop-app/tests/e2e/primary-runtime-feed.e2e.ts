@@ -34,6 +34,8 @@ import {
 const loaderCallId = 'call-primary-runtime-loader'
 const runtimeCommandCallId = 'call-primary-runtime-presentation-command'
 const packagedExecutable = process.env['DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE']?.trim()
+const primaryRuntimeE2eTimeoutMs = 600_000
+const primaryRuntimeReadinessTimeoutMs = 300_000
 
 type WorkspaceDependencies = {
   node: string
@@ -52,7 +54,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
   // download, staging, activation, plugin sync, QA, and render can exceed the
   // generic 60-second default. P3b separately measures the numeric cold-install
   // budget; this timeout only keeps the real end-to-end acceptance path intact.
-  test.setTimeout(300_000)
+  test.setTimeout(primaryRuntimeE2eTimeoutMs)
   expect(browserName).toBe('chromium')
 
   await withR07PresentationWorkspace(async (workspace) => {
@@ -87,7 +89,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         // The P3b job boots a fresh Electron process beside a target-native
         // Runtime archive. Hosted macOS/Linux runners can need longer than
         // Playwright's generic 30-second debugger-connect default, while the
-        // test's own 180-second end-to-end bound still limits the full path.
+        // test's own end-to-end bound still limits the full path.
         launchTimeoutMs: 90_000,
         // Electron resolves the development entrypoint from its first argument,
         // independently of the workspace used for app-server commands.
@@ -225,7 +227,7 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
           const state = (latestStatus as { state?: unknown }).state
           return typeof state === 'string' ? state : 'unknown'
         },
-        { timeout: 120_000 }
+        { timeout: primaryRuntimeReadinessTimeoutMs }
       )
       .toMatch(/^(?:ready|failed)$/u)
   } catch (error) {
