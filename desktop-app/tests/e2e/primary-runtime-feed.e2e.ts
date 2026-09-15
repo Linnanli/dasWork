@@ -125,15 +125,16 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       )
 
       const approvalPanel = page.locator('[data-slot="server-request-panel"]')
-      // `on-request` asks only when app-server needs an escalation. A command
-      // fully contained in the workspace sandbox may run without a panel, so
-      // P3b accepts either protocol outcome and proves the actual command
-      // result below. Dedicated approval E2E coverage owns the panel contract.
-      if (await approvalPanel.isVisible({ timeout: 20_000 }).catch(() => false)) {
-        await expect(approvalPanel).toContainText('是否允许执行以下命令？')
-        await expect(approvalPanel).toContainText('build_deck_pptxgenjs.js')
-        await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
-      }
+      // The P3b command is explicitly escalated and must pass through the
+      // renderer approval surface. GitHub's Linux runner forbids Bubblewrap
+      // from creating its loopback interface, so using the approved command
+      // path is the only faithful way to exercise the desktop command flow
+      // there without weakening the product's sandbox or approval defaults.
+      await expect(approvalPanel).toContainText('是否允许执行以下命令？', {
+        timeout: 20_000
+      })
+      await expect(approvalPanel).toContainText('build_deck_pptxgenjs.js')
+      await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
 
       const runtimeSuccessMessage = page
         .locator('[data-role="assistant"]')
@@ -303,7 +304,11 @@ function runtimePresentationCommandResponse(
     shellQuote(`eval(Buffer.from('${encodedSource}','base64').toString('utf8'))`)
   ].join(' ')
 
-  return shellCommandResponse('response-runtime-command', runtimeCommandCallId, { command })
+  return shellCommandResponse('response-runtime-command', runtimeCommandCallId, {
+    command,
+    sandbox_permissions: 'require_escalated',
+    justification: 'The signed Primary Runtime presentation command needs its one-time approved execution path.'
+  })
 }
 
 function runtimePresentationCommandSource(
