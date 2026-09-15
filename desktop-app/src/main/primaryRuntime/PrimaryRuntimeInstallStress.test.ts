@@ -15,11 +15,16 @@ const sourceArchive = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_ARCHIVE?.trim
 const version = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_VERSION?.trim()
 const expectedSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256?.trim().toLowerCase()
 const maxRssDeltaMiB = Number(process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_MAX_RSS_MIB ?? '384')
+const stressTimeoutMs = parsePositiveTimeout(
+  // P3a is one full archive install and must retain enough headroom for the
+  // fixed Intel macOS runner. P3b separately measures ten cold installs.
+  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? String(4 * 60 * 1000)
+)
 const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(removeRuntimeCache))
-})
+}, stressTimeoutMs)
 
 describe.skipIf(!enabled)('Primary Runtime install stress', () => {
   it('installs a real archive without an archive-sized main-process allocation', async () => {
@@ -68,8 +73,16 @@ describe.skipIf(!enabled)('Primary Runtime install stress', () => {
     } finally {
       clearInterval(sampler)
     }
-  })
+  }, stressTimeoutMs)
 })
+
+function parsePositiveTimeout(value: string): number {
+  const timeoutMs = Number(value)
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS must be a positive integer.')
+  }
+  return timeoutMs
+}
 
 async function sha256File(path: string): Promise<string> {
   const digest = createHash('sha256')

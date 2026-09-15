@@ -1,0 +1,787 @@
+name: Primary Runtime engineering build
+
+on:
+  pull_request:
+    paths:
+      - "primary-runtime/**"
+      - "services/primary-runtime-feed/**"
+      - "desktop-app/src/main/primaryRuntime/**"
+      - "desktop-app/src/main/index.ts"
+      - "desktop-app/src/main/runtimeConfig.ts"
+      - "desktop-app/scripts/run-primary-runtime-performance.mjs"
+      - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
+      - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/support/r07Presentation.ts"
+      - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-publish.yml"
+  push:
+    paths:
+      - "primary-runtime/**"
+      - "services/primary-runtime-feed/**"
+      - "desktop-app/src/main/primaryRuntime/**"
+      - "desktop-app/src/main/index.ts"
+      - "desktop-app/src/main/runtimeConfig.ts"
+      - "desktop-app/scripts/run-primary-runtime-performance.mjs"
+      - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
+      - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
+      - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/support/r07Presentation.ts"
+      - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-publish.yml"
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run fast contracts, P1a/P3b calibration, or a budget-bound final rebuild.
+        required: true
+        default: calibrate
+        type: choice
+        options:
+          - fast
+          - calibrate
+          - final
+      calibration_run_id:
+        description: Required by final mode; successful P3b calibration run with reviewed evidence.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  # PR/push fast lanes may supersede an earlier fast lane. Scheduled and
+  # manually requested four-target calibrations stay queued instead, so a
+  # new commit cannot discard hours of target-native evidence.
+  group: primary-runtime-engineering-build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'push' && github.ref || github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+env:
+  PRIMARY_RUNTIME_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }}
+
+jobs:
+  source-and-contract:
+    name: Validate source authority and stage order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Install desktop contract test dependencies
+        run: npm --prefix desktop-app ci --ignore-scripts
+
+      - name: Verify Runtime producer contracts
+        run: npm --prefix primary-runtime test
+
+      - name: Verify Runtime feed contracts
+        run: npm --prefix services/primary-runtime-feed test
+
+      - name: Verify desktop release/workflow contracts
+        run: npm --prefix desktop-app run test:release-contract
+
+      - name: Require authorized immutable Runtime sources
+        run: npm --prefix primary-runtime run create-provenance
+
+      - name: Verify immutable P1a hard limits
+        run: npm --prefix primary-runtime run verify:hard-limits
+
+      - name: Reject final mode without a prior calibration run
+        if: env.PRIMARY_RUNTIME_MODE == 'final' && inputs.calibration_run_id == ''
+        run: |
+          echo "final mode requires a reviewed calibration_run_id" >&2
+          exit 1
+
+  prepare-final-calibration:
+    name: Verify independently reviewed P3b evidence before final rebuild
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
+    needs: source-and-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Skip reviewed-calibration download outside final mode
+        if: env.PRIMARY_RUNTIME_MODE != 'final'
+        run: echo "calibration mode intentionally cannot consume a reviewed budget"
+
+      - name: Download fixed darwin-x64 calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/darwin-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download fixed darwin-arm64 calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-arm64-candidate-staging
+          path: ${{ runner.temp }}/calibration/darwin-arm64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download fixed win32-x64 calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-win32-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/win32-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download fixed linux-x64 calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-linux-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/linux-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Assemble and verify reviewed P3b calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/reviewed-calibration/performance-report.json"
+          mkdir -p "$RUNNER_TEMP/reviewed-calibration"
+          npm --prefix primary-runtime run assemble:performance -- \
+            --output "$report" \
+            --report "darwin-x64=$RUNNER_TEMP/calibration/darwin-x64/performance-target-report.json" \
+            --report "darwin-arm64=$RUNNER_TEMP/calibration/darwin-arm64/performance-target-report.json" \
+            --report "win32-x64=$RUNNER_TEMP/calibration/win32-x64/performance-target-report.json" \
+            --report "linux-x64=$RUNNER_TEMP/calibration/linux-x64/performance-target-report.json"
+          npm --prefix primary-runtime run verify:budgets -- \
+            --budget primary-runtime/runtime-budgets.json \
+            --measurements "$report"
+          cp primary-runtime/runtime-budgets.json "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
+
+      - name: Upload reviewed calibration for target-native final rebuilds
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-reviewed-calibration
+          if-no-files-found: error
+          path: ${{ runner.temp }}/reviewed-calibration
+
+  build-target:
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }} native Runtime ${{ matrix.target }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
+    needs:
+      - source-and-contract
+      - prepare-final-calibration
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    env:
+      PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL: "6"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: win32-x64
+            runner: windows-2025
+          - target: linux-x64
+            runner: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Capture immutable GitHub-hosted builder image identity
+        id: builder-image
+        shell: bash
+        run: |
+          : "${ImageVersion:?GitHub-hosted runner image version is required}"
+          printf 'image_version=%s\n' "$ImageVersion" >> "$GITHUB_OUTPUT"
+
+      - name: Download independently reviewed P3b calibration
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-reviewed-calibration
+          path: ${{ runner.temp }}/reviewed-calibration
+
+      - name: Restore immutable Runtime source object cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/primary-runtime-source-cache
+          key: primary-runtime-source-cache-${{ matrix.target }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json') }}
+
+      - name: Fetch only immutable Runtime source objects
+        shell: bash
+        run: |
+          npm --prefix primary-runtime run fetch:sources -- \
+            --target=${{ matrix.target }} \
+            --cache "$RUNNER_TEMP/primary-runtime-source-cache" \
+            --receipt "$RUNNER_TEMP/source-fetch.json" \
+            --timeout-ms 900000
+
+      - name: Configure locked Windows MSVC builder environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Restore verified Windows Runtime inputs
+        if: matrix.target == 'win32-x64'
+        id: windows-runtime-inputs-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/runtime-inputs/win32-x64
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
+
+      - name: Materialize target-native offline Runtime inputs
+        if: matrix.target != 'win32-x64' || steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${{ matrix.runner }}:${ImageVersion}"
+          npm --prefix primary-runtime run materialize:inputs -- \
+            --target=${{ matrix.target }} \
+            --source-cache "$RUNNER_TEMP/primary-runtime-source-cache" \
+            --output "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
+            --allow-source-build
+
+      - name: Verify input manifest and native component closure
+        shell: bash
+        env:
+          RUNNER_IMAGE: ${{ matrix.runner }}
+        run: |
+          npm --prefix primary-runtime run verify:inputs -- \
+            --target=${{ matrix.target }} \
+            --input-root "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
+            --receipt "$RUNNER_TEMP/component-smoke.json"
+
+      - name: Save verified Windows Runtime inputs
+        if: success() && matrix.target == 'win32-x64' && steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/runtime-inputs/win32-x64
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
+
+      - name: Produce five P1a build and unpack measurements
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/p1a-measurements"
+          for attempt in 1 2 3 4 5; do
+            npm --prefix primary-runtime run build -- \
+              --target=${{ matrix.target }} \
+              --input-root "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
+              --input-validation "$RUNNER_TEMP/component-smoke.json" \
+              --output-root "$RUNNER_TEMP/runtime-dist" \
+              --version "${GITHUB_SHA}-${{ matrix.target }}-p1a-${attempt}"
+            npm --prefix primary-runtime run measure:unpack -- \
+              --target=${{ matrix.target }} \
+              --archive "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/primary-runtime.zip" \
+              --provenance "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/provenance.json" \
+              --output "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/build-unpack-measurement.json"
+            cp "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/build-unpack-measurement.json" \
+              "$RUNNER_TEMP/p1a-measurements/build-unpack-${attempt}.json"
+          done
+
+      - name: Rebuild final candidate from reviewed calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        shell: bash
+        run: |
+          npm --prefix primary-runtime run build -- \
+            --target=${{ matrix.target }} \
+            --input-root "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
+            --input-validation "$RUNNER_TEMP/component-smoke.json" \
+            --output-root "$RUNNER_TEMP/runtime-dist" \
+            --version "${GITHUB_SHA}-${{ matrix.target }}-final" \
+            --release-budget "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json" \
+            --performance-report "$RUNNER_TEMP/reviewed-calibration/performance-report.json"
+
+      - name: Verify P1a candidate archive and component smoke
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          npm --prefix primary-runtime run verify -- \
+            --target=${{ matrix.target }} \
+            --output-root "$RUNNER_TEMP/runtime-dist"
+
+      - name: Verify final archive binds reviewed calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        shell: bash
+        run: |
+          npm --prefix primary-runtime run verify -- \
+            --target=${{ matrix.target }} \
+            --output-root "$RUNNER_TEMP/runtime-dist" \
+            --release-budget "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json" \
+            --performance-report "$RUNNER_TEMP/reviewed-calibration/performance-report.json"
+          npm --prefix desktop-app run test:primary-runtime:performance -- \
+            --measurements "$RUNNER_TEMP/reviewed-calibration/performance-report.json" \
+            --budget "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
+
+      - name: Verify target-native Runtime archive execution and rendering
+        shell: bash
+        env:
+          RUNNER_IMAGE: ${{ matrix.runner }}
+        run: |
+          npm --prefix primary-runtime run verify:platform -- \
+            --target=${{ matrix.target }} \
+            --archive "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/primary-runtime.zip" \
+            --output "$RUNNER_TEMP/runtime-dist/${{ matrix.target }}/platform-validation.json"
+
+      - name: Bind target staging provenance to platform validation
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          npm --prefix primary-runtime run bind:provenance -- \
+            --target=${{ matrix.target }} \
+            --provenance "$target_root/provenance.json" \
+            --platform-validation "$target_root/platform-validation.json" \
+            --archive "$target_root/primary-runtime.zip" \
+            --source-lock runtime-sources.lock.json \
+            --toolchains-lock runtime-toolchains.lock.json \
+            --input-manifest "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" \
+            --canonical-file-manifest "$target_root/canonical-file-manifest.txt" \
+            --runtime-manifest "$target_root/runtime.json" \
+            --sbom "$target_root/SBOM.json" \
+            --notices "$target_root/THIRD_PARTY_NOTICES.txt" \
+            --component-smoke "$target_root/component-smoke.json" \
+            --desktop-commit "$GITHUB_SHA" \
+            --runtime-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-repository "$GITHUB_REPOSITORY" \
+            --workflow-run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Stage restartable target-native build artifacts
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          staging_root="$RUNNER_TEMP/primary-runtime-${{ matrix.target }}-build-artifacts"
+          mkdir -p "$staging_root"
+          cp "$target_root/primary-runtime.zip" "$staging_root/"
+          cp "$target_root/runtime.json" "$staging_root/"
+          cp "$target_root/provenance.json" "$staging_root/"
+          cp "$target_root/canonical-file-manifest.txt" "$staging_root/"
+          cp "$target_root/THIRD_PARTY_NOTICES.txt" "$staging_root/"
+          cp "$target_root/SBOM.json" "$staging_root/"
+          cp "$target_root/component-smoke.json" "$staging_root/"
+          cp "$target_root/build-unpack-measurement.json" "$staging_root/"
+          cp "$target_root/platform-validation.json" "$staging_root/"
+          cp "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$RUNNER_TEMP/source-fetch.json" "$staging_root/"
+          if [ -d "$RUNNER_TEMP/p1a-measurements" ]; then
+            mkdir -p "$staging_root/measurements"
+            cp "$RUNNER_TEMP/p1a-measurements/"*.json "$staging_root/measurements/"
+          fi
+
+      - name: Upload restartable target-native build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-${{ matrix.target }}-build-artifacts
+          if-no-files-found: error
+          path: ${{ runner.temp }}/primary-runtime-${{ matrix.target }}-build-artifacts
+
+  validate-target:
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }} P3 validation ${{ matrix.target }}
+    if: ${{ !cancelled() && needs.build-target.result != 'skipped' && (github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule') }}
+    needs: build-target
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-x64
+            runner: macos-15-intel
+          - target: darwin-arm64
+            runner: macos-15
+          - target: win32-x64
+            runner: windows-2025
+          - target: linux-x64
+            runner: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Download the same-run target-native build artifact for P3 validation
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-${{ matrix.target }}-build-artifacts
+          path: ${{ runner.temp }}/runtime-dist/${{ matrix.target }}
+
+      - name: Download independently reviewed calibration for final staging
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-reviewed-calibration
+          path: ${{ runner.temp }}/reviewed-calibration
+
+      - name: Install desktop dependencies for P3a/P3b installer gates
+        run: npm --prefix desktop-app ci
+
+      - name: Build desktop test host once for P3b
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        run: npm --prefix desktop-app run build
+
+      - name: Build AI-free Codex app-server client for final P3a installer gates
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        run: npm --prefix desktop-app run build:codex-app-server-client
+
+      - name: P3a install the downloaded archive through the real desktop installer
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          archive="$target_root/primary-runtime.zip"
+          runtime_json="$target_root/runtime.json"
+          version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
+          sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
+          npm --prefix desktop-app run test:primary-runtime-real -- \
+            --archive "$archive" \
+            --version "$version" \
+            --sha256 "$sha256"
+
+      - name: P3a stress-install the downloaded archive without archive-sized heap allocation
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          archive="$target_root/primary-runtime.zip"
+          runtime_json="$target_root/runtime.json"
+          version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
+          sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
+          DASCOWORK_PRIMARY_RUNTIME_STRESS_ARCHIVE="$archive" \
+          DASCOWORK_PRIMARY_RUNTIME_STRESS_VERSION="$version" \
+          DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256="$sha256" \
+          npm --prefix desktop-app run test:primary-runtime:stress
+
+      - name: P3b run ordinary app-server chat through the signed local calibration feed
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          archive="$target_root/primary-runtime.zip"
+          runtime_json="$target_root/runtime.json"
+          version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
+          sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
+          export DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1
+          if [[ "${{ matrix.target }}" == "linux-x64" ]]; then
+            xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
+              --target "${{ matrix.target }}" \
+              --archive "$archive" \
+              --version "$version" \
+              --sha256 "$sha256" \
+              --provenance "$target_root/provenance.json" \
+              --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+              --output "$target_root/normal-chat-smoke.json"
+          else
+            npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
+              --target "${{ matrix.target }}" \
+              --archive "$archive" \
+              --version "$version" \
+              --sha256 "$sha256" \
+              --provenance "$target_root/provenance.json" \
+              --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+              --output "$target_root/normal-chat-smoke.json"
+          fi
+
+      - name: P3b measure ten cold installs and Main event-loop delay
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          archive="$target_root/primary-runtime.zip"
+          runtime_json="$target_root/runtime.json"
+          version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
+          sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
+          npm --prefix desktop-app run test:primary-runtime:performance -- \
+            --target "${{ matrix.target }}" \
+            --archive "$archive" \
+            --version "$version" \
+            --sha256 "$sha256" \
+            --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
+            --p1a-measurement-directory "$target_root/measurements" \
+            --normal-chat-receipt "$target_root/normal-chat-smoke.json" \
+            --source-run-id "${GITHUB_RUN_ID}" \
+            --source-commit "${GITHUB_SHA}" \
+            --installer-commit "${GITHUB_SHA}" \
+            --runner "${{ matrix.runner }}" \
+            --output "$target_root/performance-target-report.json"
+
+      - name: Stage declared P1a calibration evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          staging_root="$RUNNER_TEMP/primary-runtime-${{ matrix.target }}-candidate-staging"
+          mkdir -p "$staging_root/measurements"
+          cp "$target_root/primary-runtime.zip" "$staging_root/"
+          cp "$target_root/runtime.json" "$staging_root/"
+          cp "$target_root/provenance.json" "$staging_root/"
+          cp "$target_root/canonical-file-manifest.txt" "$staging_root/"
+          cp "$target_root/THIRD_PARTY_NOTICES.txt" "$staging_root/"
+          cp "$target_root/SBOM.json" "$staging_root/"
+          cp "$target_root/component-smoke.json" "$staging_root/"
+          cp "$target_root/build-unpack-measurement.json" "$staging_root/"
+          cp "$target_root/normal-chat-smoke.json" "$staging_root/"
+          cp "$target_root/performance-target-report.json" "$staging_root/"
+          cp "$target_root/platform-validation.json" "$staging_root/"
+          cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$target_root/source-fetch.json" "$staging_root/"
+          cp "$target_root/measurements/"*.json "$staging_root/measurements/"
+
+      - name: Stage declared final engineering evidence
+        if: env.PRIMARY_RUNTIME_MODE == 'final'
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          staging_root="$RUNNER_TEMP/primary-runtime-${{ matrix.target }}-staging"
+          mkdir -p "$staging_root"
+          cp "$target_root/primary-runtime.zip" "$staging_root/"
+          cp "$target_root/runtime.json" "$staging_root/"
+          cp "$target_root/provenance.json" "$staging_root/"
+          cp "$target_root/canonical-file-manifest.txt" "$staging_root/"
+          cp "$target_root/THIRD_PARTY_NOTICES.txt" "$staging_root/"
+          cp "$target_root/SBOM.json" "$staging_root/"
+          cp "$target_root/component-smoke.json" "$staging_root/"
+          cp "$target_root/build-unpack-measurement.json" "$staging_root/"
+          cp "$target_root/platform-validation.json" "$staging_root/"
+          cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
+          cp "$target_root/source-fetch.json" "$staging_root/"
+          cp "$RUNNER_TEMP/reviewed-calibration/performance-report.json" "$staging_root/"
+          cp "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json" "$staging_root/"
+
+      - name: Upload target-native calibration staging
+        if: success() && env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-${{ matrix.target }}-candidate-staging
+          if-no-files-found: error
+          path: ${{ runner.temp }}/primary-runtime-${{ matrix.target }}-candidate-staging
+
+      - name: Upload target-native final staging
+        if: success() && env.PRIMARY_RUNTIME_MODE == 'final'
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-${{ matrix.target }}-staging
+          if-no-files-found: error
+          path: ${{ runner.temp }}/primary-runtime-${{ matrix.target }}-staging
+
+  aggregate-engineering-feed:
+    name: Aggregate one final run into an engineering-only feed artifact
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'final' }}
+    needs: validate-target
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-app/package-lock.json
+
+      - name: Download fixed darwin-x64 final staging from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-x64-staging
+          path: ${{ runner.temp }}/targets/darwin-x64
+
+      - name: Download fixed darwin-arm64 final staging from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-arm64-staging
+          path: ${{ runner.temp }}/targets/darwin-arm64
+
+      - name: Download fixed win32-x64 final staging from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-win32-x64-staging
+          path: ${{ runner.temp }}/targets/win32-x64
+
+      - name: Download fixed linux-x64 final staging from this run
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-linux-x64-staging
+          path: ${{ runner.temp }}/targets/linux-x64
+
+      - name: Revalidate final target evidence before metadata assembly
+        shell: bash
+        run: |
+          for target in darwin-x64 darwin-arm64 win32-x64 linux-x64; do
+            root="$RUNNER_TEMP/targets/$target"
+            npm --prefix primary-runtime run verify -- \
+              --target="$target" \
+              --archive "$root/primary-runtime.zip" \
+              --provenance "$root/provenance.json" \
+              --release-budget "$root/runtime-budgets.json" \
+              --performance-report "$root/performance-report.json"
+          done
+
+      - name: Generate ephemeral engineering metadata keys
+        shell: bash
+        run: npm --prefix services/primary-runtime-feed run generate:engineering-key -- --output "$RUNNER_TEMP/engineering-key"
+
+      - name: Reserve one loopback origin for this engineering-only feed test
+        shell: bash
+        run: |
+          port="$(node -e "const {createServer}=require('node:net'); const server=createServer(); server.listen(0, '127.0.0.1', () => { const {port}=server.address(); server.close(() => process.stdout.write(String(port))); });")"
+          echo "ENGINEERING_FEED_ORIGIN=https://127.0.0.1:${port}" >> "$GITHUB_ENV"
+
+      - name: Create and sign only engineering feed metadata
+        shell: bash
+        run: |
+          metadata="$RUNNER_TEMP/metadata"
+          key="$RUNNER_TEMP/engineering-key/private-key.pem"
+          npm --prefix services/primary-runtime-feed run create:metadata -- \
+            --release-class engineering \
+            --origin "$ENGINEERING_FEED_ORIGIN" \
+            --output "$metadata" \
+            --target "darwin-x64=$RUNNER_TEMP/targets/darwin-x64" \
+            --target "darwin-arm64=$RUNNER_TEMP/targets/darwin-arm64" \
+            --target "win32-x64=$RUNNER_TEMP/targets/win32-x64" \
+            --target "linux-x64=$RUNNER_TEMP/targets/linux-x64"
+          mkdir -p "$metadata/channels/engineering"
+          npm --prefix services/primary-runtime-feed run sign:config -- --key "$key" --input "$metadata/config.unsigned.json" --output "$metadata/config.json"
+          npm --prefix services/primary-runtime-feed run sign:manifest -- --key "$key" --input "$metadata/manifest.unsigned.json" --output "$metadata/channels/engineering/manifest.json"
+          cp "$RUNNER_TEMP/engineering-key/public-keyring.json" "$metadata/public-keyring.json"
+          rm -f "$key"
+
+      - name: Assemble one engineering-only feed repository and summary
+        shell: bash
+        run: |
+          keyring="$(cat "$RUNNER_TEMP/metadata/public-keyring.json")"
+          export DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring"
+          export DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring"
+          npm --prefix services/primary-runtime-feed run assemble-release-staging -- \
+            --output "$RUNNER_TEMP/feed-staging" \
+            --metadata "$RUNNER_TEMP/metadata" \
+            --target "darwin-x64=$RUNNER_TEMP/targets/darwin-x64" \
+            --target "darwin-arm64=$RUNNER_TEMP/targets/darwin-arm64" \
+            --target "win32-x64=$RUNNER_TEMP/targets/win32-x64" \
+            --target "linux-x64=$RUNNER_TEMP/targets/linux-x64"
+          mkdir -p "$RUNNER_TEMP/feed-repository/staged"
+          cp -R "$RUNNER_TEMP/feed-staging/." "$RUNNER_TEMP/feed-repository/staged/"
+          npm --prefix services/primary-runtime-feed run publish-release -- \
+            --repository-root "$RUNNER_TEMP/feed-repository" \
+            --staged-root "$RUNNER_TEMP/feed-repository/staged"
+          node -e "const fs=require('node:fs'); const path=process.argv[1]; const targets=['darwin-x64','darwin-arm64','win32-x64','linux-x64']; fs.writeFileSync(path, JSON.stringify({schemaVersion:'dascowork-primary-runtime-four-target-summary.v1', engineeringOnly:true, productionTrust:false, publiclyDeployable:false, sourceRunId:process.env.GITHUB_RUN_ID, sourceCommit:process.env.GITHUB_SHA, targets}, null, 2)+'\\n')" "$RUNNER_TEMP/feed-repository/four-target-summary.json"
+
+      - name: Install deterministic packaged R07 gate dependencies
+        run: npm --prefix desktop-app ci
+
+      - name: Build the AI-free client for deterministic packaged R07
+        run: npm --prefix desktop-app run build:codex-app-server-client
+
+      - name: Create an ephemeral loopback CA for the packaged engineering feed
+        shell: bash
+        run: |
+          tls="$RUNNER_TEMP/packaged-r07-tls"
+          mkdir -p "$tls"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$tls/ca-key.pem" \
+            -out "$tls/ca-cert.pem" \
+            -subj '/CN=DasCowork packaged R07 engineering test CA' \
+            -addext 'basicConstraints=critical,CA:TRUE' \
+            -addext 'keyUsage=critical,keyCertSign,cRLSign'
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$tls/server-key.pem" \
+            -out "$tls/server.csr" \
+            -subj '/CN=127.0.0.1'
+          openssl x509 -req -days 1 \
+            -in "$tls/server.csr" \
+            -CA "$tls/ca-cert.pem" \
+            -CAkey "$tls/ca-key.pem" \
+            -CAcreateserial \
+            -out "$tls/server-cert.pem" \
+            -extfile <(printf 'subjectAltName=IP:127.0.0.1\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth\\n')
+          rm -f "$tls/ca-key.pem" "$tls/server.csr" "$tls/ca-cert.srl"
+
+      - name: Run packaged R07 from the same-run engineering feed and an empty cache
+        shell: bash
+        run: |
+          tls="$RUNNER_TEMP/packaged-r07-tls"
+          keyring="$(cat "$RUNNER_TEMP/engineering-key/public-keyring.json")"
+          DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_REPOSITORY_ROOT="$RUNNER_TEMP/feed-repository" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_STAGED_ROOT="$RUNNER_TEMP/feed-repository/staged" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_KEY="$tls/server-key.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CERT="$tls/server-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CA="$tls/ca-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_HOST=127.0.0.1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_PORT="${ENGINEERING_FEED_ORIGIN##*:}" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
+          npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
+
+      - name: Verify no private key entered the artifact
+        shell: bash
+        run: |
+          if rg -n --hidden --glob '!*.zip' 'BEGIN (?:[A-Z ]+ )?PRIVATE KEY|private-key\.pem' "$RUNNER_TEMP/feed-repository"; then
+            echo "engineering feed artifact contains private signing material" >&2
+            exit 1
+          fi
+
+      - name: Upload same-run engineering feed aggregate
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-engineering-feed
+          if-no-files-found: error
+          path: ${{ runner.temp }}/feed-repository

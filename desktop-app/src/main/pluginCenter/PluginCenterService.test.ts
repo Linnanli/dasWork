@@ -326,6 +326,44 @@ describe('PluginCenterService', () => {
     ])
   })
 
+  it('exposes only the safe Primary Runtime recovery surface', async () => {
+    const primaryRuntime = {
+      getUserStatus: vi.fn(async () => ({
+        state: 'failed' as const,
+        targetVersion: '2026.9.10',
+        failureKind: 'integrity' as const,
+        message: '下载的 Primary Runtime 未通过安全校验，未启用该版本。',
+        recovery: '请稍后重试；安全校验失败的文件不会被安装。',
+        canInstallOrRepair: true,
+        canRunUpdate: true,
+        canCancel: false
+      })),
+      installOrRepair: vi.fn(async () => undefined),
+      runUpdateNow: vi.fn(async () => undefined),
+      cancelInstall: vi.fn(async () => undefined)
+    }
+    const service = new PluginCenterService({
+      provider: createProvider(),
+      defaultCwd: () => '/repo',
+      primaryRuntime
+    })
+
+    await expect(service.getPrimaryRuntimeStatus(undefined)).resolves.toEqual({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: expect.objectContaining({ state: 'failed', failureKind: 'integrity' })
+    })
+    await service.installOrRepairPrimaryRuntime(undefined)
+    await service.runPrimaryRuntimeUpdate(undefined)
+    await service.cancelPrimaryRuntime(undefined)
+
+    expect(primaryRuntime.installOrRepair).toHaveBeenCalledOnce()
+    expect(primaryRuntime.runUpdateNow).toHaveBeenCalledOnce()
+    expect(primaryRuntime.cancelInstall).toHaveBeenCalledOnce()
+    const response = JSON.stringify(await service.getPrimaryRuntimeStatus(undefined))
+    expect(response).not.toContain('https://')
+    expect(response).not.toContain('/primary-runtime/')
+  })
+
   it('lists MCP servers when config/read returns the camelCase mcpServers field', async () => {
     const service = new PluginCenterService({
       provider: createProvider({
@@ -1850,10 +1888,10 @@ describe('PluginCenterService', () => {
       listPluginCatalog: vi.fn(async () => ({
         marketplaces: [
           {
-            name: 'openai-primary-runtime',
+            name: 'presentation-skill',
             plugins: [
               {
-                id: 'latex@openai-primary-runtime',
+                id: 'latex@presentation-skill',
                 name: 'latex',
                 installed: false,
                 enabled: false,
@@ -1881,7 +1919,7 @@ describe('PluginCenterService', () => {
     })
 
     expect(result.snapshot.plugins.map((plugin) => plugin.id)).toEqual([
-      'latex@openai-primary-runtime'
+      'latex@presentation-skill'
     ])
     expect(result.snapshot.catalogUnavailableReason).toContain('当前仅显示本地插件')
   })

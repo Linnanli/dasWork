@@ -14,7 +14,8 @@ const descriptor: BundledPluginDescriptor = {
   version: '0.1.0',
   installWhenMissing: true,
   internal: true,
-  sourceKind: 'app-resource'
+  sourceKind: 'app-resource',
+  owner: 'app-bundled'
 }
 
 describe('BundledPluginManager', () => {
@@ -46,6 +47,7 @@ describe('BundledPluginManager', () => {
     expect(client.listInstalledPluginsForManagement).toHaveBeenCalledWith({
       cwd: descriptor.marketplaceRoot
     })
+    expect(client.listSkillsForManagement).toHaveBeenCalledWith({ forceReload: true })
     expect(invalidateCaches).toHaveBeenCalled()
   })
 
@@ -96,19 +98,20 @@ describe('BundledPluginManager', () => {
   it('does not treat a plugin from an older runtime marketplace path as active', async () => {
     const oldRuntimeMarketplace = installedResponse(
       [plugin({ installed: true, enabled: true })],
-      '/app/cache/primary-runtime/versions/old/plugins/openai-primary-runtime'
+      '/app/cache/primary-runtime/versions/old/plugins/presentation-skill'
     )
-    oldRuntimeMarketplace.marketplaces[0]!.name = 'openai-primary-runtime'
+    oldRuntimeMarketplace.marketplaces[0]!.name = 'presentation-skill'
     const activeDescriptor: BundledPluginDescriptor = {
       ...descriptor,
-      marketplaceName: 'openai-primary-runtime',
-      marketplaceRoot: '/app/cache/primary-runtime/active/plugins/openai-primary-runtime',
+      marketplaceName: 'presentation-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/active/plugins/presentation-skill',
       marketplacePath:
-        '/app/cache/primary-runtime/active/plugins/openai-primary-runtime/.agents/plugins/marketplace.json',
+        '/app/cache/primary-runtime/active/plugins/presentation-skill/.agents/plugins/marketplace.json',
       pluginRoot:
-        '/app/cache/primary-runtime/active/plugins/openai-primary-runtime/plugins/presentations',
-      pluginName: 'presentations',
-      sourceKind: 'primary-runtime'
+        '/app/cache/primary-runtime/active/plugins/presentation-skill/plugins/presentation-skill',
+      pluginName: 'presentation-skill',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:2026.09.10'
     }
     const installed = [
       oldRuntimeMarketplace,
@@ -116,14 +119,14 @@ describe('BundledPluginManager', () => {
         [
           {
             ...plugin({ installed: true, enabled: true }),
-            id: 'presentations@openai-primary-runtime',
-            name: 'presentations'
+            id: 'presentation-skill@presentation-skill',
+            name: 'presentation-skill'
           }
         ],
         activeDescriptor.marketplacePath
       )
     ]
-    installed[1]!.marketplaces[0]!.name = 'openai-primary-runtime'
+    installed[1]!.marketplaces[0]!.name = 'presentation-skill'
     const client = catalogClient({
       listInstalledPluginsForManagement: vi.fn(async () => installed.shift() ?? installed.at(-1)!)
     })
@@ -141,6 +144,73 @@ describe('BundledPluginManager', () => {
     )
   })
 
+  it('retires only an obsolete Runtime-owned plugin after committing the replacement desired set', async () => {
+    const current: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'presentation-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/new/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/new/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/new/plugins/presentation-skill/plugins/presentation-skill',
+      pluginName: 'presentation-skill',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:2'
+    }
+    const retired: BundledPluginDescriptor = {
+      ...current,
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/plugins/presentation-skill',
+      owner: 'primary-runtime:1'
+    }
+    let retiredEnabled = true
+    const responseFor = (
+      entry: BundledPluginDescriptor,
+      enabled: boolean
+    ): PluginInstalledResponse => {
+      const response = installedResponse(
+        [
+          {
+            ...plugin({ installed: true, enabled }),
+            id: 'presentation-skill@presentation-skill',
+            name: 'presentation-skill'
+          }
+        ],
+        entry.marketplacePath
+      )
+      response.marketplaces[0]!.name = entry.marketplaceName
+      return response
+    }
+    const client = catalogClient({
+      listInstalledPluginsForManagement: vi.fn(async ({ cwd } = {}) =>
+        cwd === retired.marketplaceRoot
+          ? responseFor(retired, retiredEnabled)
+          : responseFor(current, true)
+      ),
+      setPluginEnabled: vi.fn(async ({ pluginId, enabled }) => {
+        if (pluginId === 'presentation-skill@presentation-skill' && !enabled) retiredEnabled = false
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [current],
+      retiredDescriptors: [retired]
+    }).reconcile()
+
+    expect(result.status).toBe('ready')
+    expect(result.reconciled).toContainEqual(
+      expect.objectContaining({ descriptor: retired, action: 'retired' })
+    )
+    expect(client.setPluginEnabled).toHaveBeenCalledWith({
+      pluginId: 'presentation-skill@presentation-skill',
+      enabled: false
+    })
+  })
+
   it('fails degraded when install readback does not confirm the plugin', async () => {
     const client = catalogClient({
       listInstalledPluginsForManagement: vi.fn(async () => installedResponse([]))
@@ -156,6 +226,7 @@ describe('BundledPluginManager', () => {
     expect(result.failures).toMatchObject([
       {
         descriptor,
+        stage: 'sync_plugins',
         message: expect.stringContaining('was not installed after reconcile')
       }
     ])
@@ -173,8 +244,65 @@ describe('BundledPluginManager', () => {
 
     expect(result).toMatchObject({
       status: 'unavailable',
-      failures: [{ message: 'app-server unavailable' }]
+      failures: [{ stage: 'sync_plugins', message: 'app-server unavailable' }]
     })
+  })
+
+  it('does not report success when the required skill reload fails', async () => {
+    const client = catalogClient({
+      listSkillsForManagement: vi.fn(async () => {
+        throw new Error('skills reload failed')
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor]
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [{ descriptor, stage: 'reload_skills', message: 'skills reload failed' }]
+    })
+  })
+
+  it('synchronizes Runtime-owned skills after the marketplace and before the reload', async () => {
+    const order: string[] = []
+    const client = catalogClient({
+      listSkillsForManagement: vi.fn(async () => {
+        order.push('reload')
+        return []
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor],
+      syncRuntimeSkills: async () => {
+        order.push('sync-skills')
+      }
+    }).reconcile()
+
+    expect(result.status).toBe('ready')
+    expect(order).toEqual(['sync-skills', 'reload'])
+  })
+
+  it('does not reload or report ready when Runtime-owned skill sync fails', async () => {
+    const client = catalogClient()
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor],
+      syncRuntimeSkills: async () => {
+        throw new Error('legacy skill move failed')
+      }
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [{ stage: 'sync_skills', message: 'legacy skill move failed' }]
+    })
+    expect(client.listSkillsForManagement).not.toHaveBeenCalled()
   })
 
   it('exposes deterministic internal plugin ids for UI hiding', async () => {
@@ -208,6 +336,7 @@ function catalogClient(
     listInstalledPluginsForManagement: vi.fn(async () =>
       installedResponse([plugin({ installed: true, enabled: true })])
     ),
+    listSkillsForManagement: vi.fn(async () => []),
     installPlugin: vi.fn(async () => ({})),
     setPluginEnabled: vi.fn(async () => ({})),
     ...overrides

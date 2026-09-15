@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-budget-review-pending.v1",
+  "status": "awaiting-clean-runner-calibration-and-independent-review",
+  "releaseClass": "engineering",
+  "reason": "This repository has no P1a/P3b clean-runner baseline yet. Numeric release budgets are forbidden until a separate review commit binds the four-target calibration report."
+}

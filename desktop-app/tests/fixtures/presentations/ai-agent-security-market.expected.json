@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "dascowork-r07-presentations-expected.v2",
+  "inputFile": "ai-agent-security-market.html",
+  "outputFile": "r07-ai-agent-security-market.pptx",
+  "expectedPageTypes": [
+    { "id": "cover", "titleToken": "封面｜AI Agent 安全市场" },
+    { "id": "agenda", "titleToken": "议程｜市场机会与风险" },
+    { "id": "summary", "titleToken": "摘要｜核心结论" },
+    { "id": "table", "titleToken": "数据表｜细分需求对比" },
+    { "id": "chart", "titleToken": "数据图｜市场规模与渗透率" },
+    { "id": "image", "titleToken": "图片｜安全控制图示" }
+  ],
+  "requiredChineseFont": "Noto Sans CJK SC",
+  "requiredImageAltText": "AI Agent 安全控制图示",
+  "facts": [
+    {
+      "id": "market-size",
+      "value": "2026 年 AI Agent 安全市场规模为 18.4 亿元"
+    },
+    {
+      "id": "pilot-penetration",
+      "value": "企业试点渗透率为 37%"
+    },
+    {
+      "id": "identity-governance-demand",
+      "value": "身份与权限治理占需求的 46%"
+    },
+    {
+      "id": "priority-risk",
+      "value": "高优先级风险是提示注入与工具权限滥用"
+    },
+    {
+      "id": "priority-action",
+      "value": "第一优先行动是建立工具调用审计"
+    }
+  ]
+}

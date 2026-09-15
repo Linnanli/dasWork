@@ -35,6 +35,8 @@ import {
   type PluginCenterInstalledPluginsResult,
   type PluginCenterMcpServerInput,
   type PluginCenterMutationResult,
+  type PluginCenterPrimaryRuntimeResult,
+  type PluginCenterPrimaryRuntimeStatus,
   type PluginCenterPlugin,
   type PluginCenterPluginDetail,
   type PluginCenterPluginMcpServer,
@@ -164,6 +166,14 @@ type PluginCenterPerformanceLogger = (
   details: Record<string, string | number | boolean | undefined>
 ) => void
 
+/** Main-owned control surface; no feed configuration or Runtime paths cross this boundary. */
+export type PluginCenterPrimaryRuntimeController = {
+  getUserStatus(): Promise<PluginCenterPrimaryRuntimeStatus>
+  installOrRepair(): Promise<unknown>
+  runUpdateNow(): Promise<unknown>
+  cancelInstall(): Promise<void>
+}
+
 type SnapshotReadName =
   | 'plugin/list'
   | 'plugin/installed'
@@ -242,7 +252,7 @@ const SHARED_CACHE_GC_MS = 5 * 60_000
 const MAX_CATALOG_CWD_KEYS = 3
 const REMOTE_PLUGIN_MARKETPLACE_NAME = 'openai-curated-remote'
 const LEGACY_REMOTE_PLUGIN_MARKETPLACE_NAME = 'openai-curated'
-const OFFICIAL_LOCAL_MARKETPLACE_NAMES = new Set(['openai-primary-runtime', 'openai-bundled'])
+const OFFICIAL_LOCAL_MARKETPLACE_NAMES = new Set(['presentation-skill', 'openai-bundled'])
 const REMOTE_CATALOG_FALLBACK_MESSAGE =
   '远程插件市场暂时不可用，正在显示最近一次成功加载的目录。请稍后刷新重试。'
 const REMOTE_CATALOG_LOCAL_ONLY_MESSAGE =
@@ -275,8 +285,37 @@ export class PluginCenterService {
       recommendedSkills?: RecommendedSkillsService
       codexHome?: string
       isInternalPlugin?: (plugin: { id: string; name?: string; marketplaceId?: string }) => boolean
+      primaryRuntime?: PluginCenterPrimaryRuntimeController
     }
   ) {}
+
+  async getPrimaryRuntimeStatus(_input: unknown): Promise<PluginCenterPrimaryRuntimeResult> {
+    void _input
+    return {
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: await this.primaryRuntimeStatus()
+    }
+  }
+
+  async installOrRepairPrimaryRuntime(_input: unknown): Promise<PluginCenterPrimaryRuntimeResult> {
+    void _input
+    const runtime = this.dependencies.primaryRuntime
+    if (runtime) await runtime.installOrRepair().catch(() => undefined)
+    return this.getPrimaryRuntimeStatus(undefined)
+  }
+
+  async runPrimaryRuntimeUpdate(_input: unknown): Promise<PluginCenterPrimaryRuntimeResult> {
+    void _input
+    const runtime = this.dependencies.primaryRuntime
+    if (runtime) await runtime.runUpdateNow().catch(() => undefined)
+    return this.getPrimaryRuntimeStatus(undefined)
+  }
+
+  async cancelPrimaryRuntime(_input: unknown): Promise<PluginCenterPrimaryRuntimeResult> {
+    void _input
+    await this.dependencies.primaryRuntime?.cancelInstall()
+    return this.getPrimaryRuntimeStatus(undefined)
+  }
 
   async getSnapshot(
     input: PluginCenterSnapshotRequest,
@@ -1759,6 +1798,19 @@ export class PluginCenterService {
       })
       .catch(() => undefined)
     return current
+  }
+
+  private async primaryRuntimeStatus(): Promise<PluginCenterPrimaryRuntimeStatus> {
+    const runtime = this.dependencies.primaryRuntime
+    if (runtime) return runtime.getUserStatus()
+    return {
+      state: 'disabled',
+      message: '此版本尚未配置 Primary Runtime 发布服务。',
+      recovery: '请联系管理员配置受信任的 Runtime 发布服务。',
+      canInstallOrRepair: false,
+      canRunUpdate: false,
+      canCancel: false
+    }
   }
 
   private cwdFor(input: { cwd?: string }): string | undefined {

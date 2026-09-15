@@ -338,6 +338,37 @@ describe('AppServerClient', () => {
     )
   })
 
+  it('waits for queued notification state before a state-dependent inbound request', async () => {
+    const transport = new MemoryTransport()
+    const client = new AppServerClient(transport)
+    const notification = deferred<void>()
+    const requestHandler = vi.fn(() => ({ changes: ['expected diff'] }))
+    client.onNotification('item/started', async () => {
+      await notification.promise
+    })
+    client.onRequest('item/fileChange/requestApproval', requestHandler, {
+      waitForQueuedNotifications: true
+    })
+    await client.connect()
+
+    transport.emit({ method: 'item/started', params: { itemId: 'file-change-1' } })
+    transport.emit({
+      id: 18,
+      method: 'item/fileChange/requestApproval',
+      params: { itemId: 'file-change-1' }
+    })
+
+    await Promise.resolve()
+    expect(requestHandler).not.toHaveBeenCalled()
+    notification.resolve()
+
+    await vi.waitFor(() => expect(requestHandler).toHaveBeenCalledOnce())
+    expect(transport.sentMessages).toContainEqual({
+      id: 18,
+      result: { changes: ['expected diff'] }
+    })
+  })
+
   it('rejects an unknown inbound server request instead of leaving the connection pending', async () => {
     const transport = new MemoryTransport()
     const client = new AppServerClient(transport)

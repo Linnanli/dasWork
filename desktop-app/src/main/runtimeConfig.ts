@@ -1,9 +1,13 @@
+import { isAbsolute } from 'node:path'
+
 export type DesktopRuntimeConfig = {
   adminBackendUrl?: string
   adminBackendModelUserId?: string
   adminBackendModelCacheTtlMs?: number
   remoteCodexCommand?: string
   terminalCommand?: string
+  /** Product-owned gate for the local workspace-dependencies capability. */
+  workspaceDependenciesFeatureEnabled?: boolean
   primaryRuntimeRelease?: {
     version: string
     archiveUrl: string
@@ -16,6 +20,23 @@ export type DesktopRuntimeConfig = {
     allowedOrigins: string[]
     channel: string
   }
+  /** Signed config/feed override used by development and managed deployments. */
+  primaryRuntimeProductConfig?: {
+    configUrl: string
+    allowedConfigOrigins: string[]
+    allowedManifestOrigins: string[]
+    channel: string
+    configPublicKeys: Readonly<Record<string, string>>
+    manifestPublicKeys: Readonly<Record<string, string>>
+    pollIntervalMs?: number
+    /** Main-only development input; packaged builds reject it before network use. */
+    localTestCaPath?: string
+    /**
+     * Present only when a packaged engineering test resource binds a loopback
+     * feed to an ephemeral local CA. It is never sourced from the environment.
+     */
+    engineeringTestOnly?: true
+  }
 }
 
 export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntimeConfig {
@@ -24,11 +45,19 @@ export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntime
   const adminBackendModelCacheTtlMs = parsePositiveInteger(env['ADMIN_BACKEND_MODEL_CACHE_TTL_MS'])
   const remoteCodexCommand = parseRemoteCodexCommand(env['DASCOWORK_REMOTE_CODEX_COMMAND'])
   const terminalCommand = parseTerminalCommand(env['DASCOWORK_TERMINAL_COMMAND'])
+  const workspaceDependenciesFeatureEnabled = parseOptionalBoolean(
+    env['DASCOWORK_WORKSPACE_DEPENDENCIES_ENABLED'],
+    'DASCOWORK_WORKSPACE_DEPENDENCIES_ENABLED'
+  )
   const primaryRuntimeRelease = parsePrimaryRuntimeRelease(env)
   const primaryRuntimeManifest = parsePrimaryRuntimeManifest(env)
-  if (primaryRuntimeRelease && primaryRuntimeManifest) {
+  const primaryRuntimeProductConfig = parsePrimaryRuntimeProductConfig(env)
+  if (
+    [primaryRuntimeRelease, primaryRuntimeManifest, primaryRuntimeProductConfig].filter(Boolean)
+      .length > 1
+  ) {
     throw new Error(
-      'Primary Runtime direct release override and signed manifest configuration cannot be used together.'
+      'Primary Runtime direct release, signed manifest, and signed product config configuration cannot be used together.'
     )
   }
 
@@ -36,8 +65,12 @@ export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntime
     return {
       ...(remoteCodexCommand ? { remoteCodexCommand } : {}),
       ...(terminalCommand ? { terminalCommand } : {}),
+      ...(workspaceDependenciesFeatureEnabled === undefined
+        ? {}
+        : { workspaceDependenciesFeatureEnabled }),
       ...(primaryRuntimeRelease ? { primaryRuntimeRelease } : {}),
-      ...(primaryRuntimeManifest ? { primaryRuntimeManifest } : {})
+      ...(primaryRuntimeManifest ? { primaryRuntimeManifest } : {}),
+      ...(primaryRuntimeProductConfig ? { primaryRuntimeProductConfig } : {})
     }
   }
 
@@ -47,9 +80,121 @@ export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntime
     ...(adminBackendModelCacheTtlMs ? { adminBackendModelCacheTtlMs } : {}),
     ...(remoteCodexCommand ? { remoteCodexCommand } : {}),
     ...(terminalCommand ? { terminalCommand } : {}),
+    ...(workspaceDependenciesFeatureEnabled === undefined
+      ? {}
+      : { workspaceDependenciesFeatureEnabled }),
     ...(primaryRuntimeRelease ? { primaryRuntimeRelease } : {}),
-    ...(primaryRuntimeManifest ? { primaryRuntimeManifest } : {})
+    ...(primaryRuntimeManifest ? { primaryRuntimeManifest } : {}),
+    ...(primaryRuntimeProductConfig ? { primaryRuntimeProductConfig } : {})
   }
+}
+
+function parsePrimaryRuntimeProductConfig(
+  env: NodeJS.ProcessEnv
+): DesktopRuntimeConfig['primaryRuntimeProductConfig'] {
+  const configUrl = env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL']?.trim()
+  const allowedConfigOrigins = env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS']?.trim()
+  const allowedManifestOrigins =
+    env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS']?.trim()
+  const channel = env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL']?.trim()
+  const configPublicKeys = env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON']?.trim()
+  const manifestPublicKeys =
+    env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON']?.trim()
+  const localTestCaPath = env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH']?.trim()
+  const configured = [
+    configUrl,
+    allowedConfigOrigins,
+    allowedManifestOrigins,
+    channel,
+    configPublicKeys,
+    manifestPublicKeys
+  ].filter((value) => value !== undefined && value !== '').length
+  if (configured === 0) {
+    if (localTestCaPath) {
+      throw new Error('Primary Runtime local test CA requires signed product config settings.')
+    }
+    return undefined
+  }
+  if (
+    configured !== 6 ||
+    !configUrl ||
+    !allowedConfigOrigins ||
+    !allowedManifestOrigins ||
+    !channel ||
+    !configPublicKeys ||
+    !manifestPublicKeys
+  ) {
+    throw new Error(
+      'Primary Runtime signed product config must provide URL, config/manifest origins, channel, and both public keyrings together.'
+    )
+  }
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(channel)) {
+    throw new Error('DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL is invalid.')
+  }
+  const url = new URL(configUrl)
+  if (url.protocol !== 'https:' || url.username || url.password || url.hash) {
+    throw new Error(
+      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL must be an HTTPS URL without credentials or fragment.'
+    )
+  }
+  const configOrigins = parseAllowedHttpsOrigins(allowedConfigOrigins)
+  if (!configOrigins.includes(url.origin)) {
+    throw new Error('Primary Runtime config URL origin is not in the configured allowlist.')
+  }
+  const pollIntervalMs = parsePositiveInteger(
+    env['DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS']
+  )
+  if (pollIntervalMs !== undefined && pollIntervalMs < 30_000) {
+    throw new Error('DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS must be at least 30000.')
+  }
+  if (localTestCaPath && !isAbsolute(localTestCaPath)) {
+    throw new Error('DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH must be absolute.')
+  }
+  return {
+    configUrl: url.toString(),
+    allowedConfigOrigins: configOrigins,
+    allowedManifestOrigins: parseAllowedHttpsOrigins(allowedManifestOrigins),
+    channel,
+    configPublicKeys: parseRuntimePublicKeyring(
+      configPublicKeys,
+      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON'
+    ),
+    manifestPublicKeys: parseRuntimePublicKeyring(
+      manifestPublicKeys,
+      'DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON'
+    ),
+    ...(pollIntervalMs ? { pollIntervalMs } : {}),
+    ...(localTestCaPath ? { localTestCaPath } : {})
+  }
+}
+
+function parseRuntimePublicKeyring(
+  value: string,
+  variable: string
+): Readonly<Record<string, string>> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error(`${variable} must contain a JSON public key map.`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${variable} must contain a JSON public key map.`)
+  }
+  const entries = Object.entries(parsed)
+  if (
+    entries.length === 0 ||
+    entries.some(
+      ([keyId, key]) =>
+        !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/u.test(keyId) ||
+        typeof key !== 'string' ||
+        !key.includes('BEGIN PUBLIC KEY') ||
+        key.includes('PRIVATE KEY')
+    )
+  ) {
+    throw new Error(`${variable} must contain non-empty PEM public keys only.`)
+  }
+  return Object.freeze(Object.fromEntries(entries))
 }
 
 function parsePrimaryRuntimeManifest(
@@ -89,6 +234,14 @@ function parsePositiveInteger(value: string | undefined): number | undefined {
 
   const parsed = Number(trimmed)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function parseOptionalBoolean(value: string | undefined, name: string): boolean | undefined {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return undefined
+  if (normalized === 'true') return true
+  if (normalized === 'false') return false
+  throw new Error(`${name} must be true or false when configured.`)
 }
 
 function parseRemoteCodexCommand(value: string | undefined): string | undefined {

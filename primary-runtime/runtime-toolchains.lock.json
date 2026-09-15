@@ -1,0 +1,826 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-toolchains.v1",
+  "materializerVersion": "1.2.0",
+  "targets": {
+    "darwin-x64": {
+      "runner": "macos-15-intel",
+      "builder": {
+        "identity": "github-hosted:macos-15-intel",
+        "image": {
+          "version": "20260824.0482.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15%2F20260824.0482",
+          "sourceCommit": "f10516542b8f2fef89b652a8d5f5de63aa543b77",
+          "imageDigestSha256": "a876bf325c645f85a3184e0ef2414c972de2e7b601f834cc60ea5ad1f0e9a16a"
+        },
+        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
+      },
+      "node": {
+        "name": "node-runtime",
+        "version": "22.16.0",
+        "url": "https://nodejs.org/dist/v22.16.0/node-v22.16.0-darwin-x64.tar.gz",
+        "sha256": "838d400f7e66c804e5d11e2ecb61d6e9e878611146baff69d6a2def3cc23f4ac",
+        "sizeBytes": 49423532,
+        "license": "MIT",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "python": {
+        "name": "cpython-runtime",
+        "version": "3.13.15+20260901",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15%2B20260901-x86_64-apple-darwin-install_only.tar.gz",
+        "sha256": "49f0d97f506b855eed60b74a8ac138595c5b39799a6aa5e0d7ca8abe1019a4d4",
+        "sizeBytes": 25037769,
+        "license": "PSF-2.0",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "pythonWheels": [
+        {
+          "name": "python-pptx",
+          "version": "1.0.2",
+          "url": "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+          "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba",
+          "sizeBytes": 472788,
+          "license": "MIT",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "Pillow",
+          "version": "11.3.0",
+          "url": "https://files.pythonhosted.org/packages/01/f4/91d5b3ffa718df2f53b0dc109877993e511f4fd055d7e9508682e8aba092/pillow-11.3.0-cp313-cp313-macosx_10_13_x86_64.whl",
+          "sha256": "ec1ee50470b0d050984394423d96325b744d55c701a439d2bd66089bff963d3c",
+          "sizeBytes": 5278474,
+          "license": "MIT-CMU",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "lxml",
+          "version": "6.1.3",
+          "url": "https://files.pythonhosted.org/packages/8c/a5/eee2fc77eee5ea68e4a4334b1def1781a3beaeefd3d98e81b4a38dc447b7/lxml-6.1.3-cp313-cp313-macosx_10_13_x86_64.whl",
+          "sha256": "887c021d9a977cff89cb273047c1352997b772a8908a25c21836861f69b92be1",
+          "sizeBytes": 4632616,
+          "license": "BSD-3-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "XlsxWriter",
+          "version": "3.2.9",
+          "url": "https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl",
+          "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3",
+          "sizeBytes": 175315,
+          "license": "BSD-2-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0",
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "sizeBytes": 45571,
+          "license": "PSF-2.0",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        }
+      ],
+      "nativeRecipes": [
+        {
+          "name": "libreoffice",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-darwin-x64",
+          "sourceArchiveFormat": "dmg",
+          "sourceDirectory": "LibreOffice.app",
+          "toolchain": {
+            "distribution": "TheDocumentFoundation-26.2.6-DMG",
+            "extraction": "hdiutil-readonly"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"]
+          }
+        },
+        {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
+          "name": "libpng",
+          "materialization": "source-build",
+          "sourceComponent": "libpng",
+          "nativeDependencies": ["zlib"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "libpng-1.6.52",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+          }
+        },
+        {
+          "name": "poppler",
+          "materialization": "source-build",
+          "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "poppler-26.09.0",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+          }
+        }
+      ]
+    },
+    "darwin-arm64": {
+      "runner": "macos-15",
+      "builder": {
+        "identity": "github-hosted:macos-15",
+        "image": {
+          "version": "20260907.0337.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20260907.0337",
+          "sourceCommit": "9312c564c4df0b842ce00a6c202dccb519b8dfdd",
+          "imageDigestSha256": "a56806e89d54145f181c278f55fdb80f08e959b6161070bdd608bfcd907700b2"
+        },
+        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
+      },
+      "node": {
+        "name": "node-runtime",
+        "version": "22.16.0",
+        "url": "https://nodejs.org/dist/v22.16.0/node-v22.16.0-darwin-arm64.tar.gz",
+        "sha256": "1d7f34ec4c03e12d8b33481e5c4560432d7dc31a0ef3ff5a4d9a8ada7cf6ecc9",
+        "sizeBytes": 47716750,
+        "license": "MIT",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "python": {
+        "name": "cpython-runtime",
+        "version": "3.13.15+20260901",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15%2B20260901-aarch64-apple-darwin-install_only.tar.gz",
+        "sha256": "b9054a9d3d54f4cb5573d44907fddb29874b08909bde73f29f2868cf872223ee",
+        "sizeBytes": 25293188,
+        "license": "PSF-2.0",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "pythonWheels": [
+        {
+          "name": "python-pptx",
+          "version": "1.0.2",
+          "url": "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+          "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba",
+          "sizeBytes": 472788,
+          "license": "MIT",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "Pillow",
+          "version": "11.3.0",
+          "url": "https://files.pythonhosted.org/packages/f9/0e/37d7d3eca6c879fbd9dba21268427dffda1ab00d4eb05b32923d4fbe3b12/pillow-11.3.0-cp313-cp313-macosx_11_0_arm64.whl",
+          "sha256": "7db51d222548ccfd274e4572fdbf3e810a5e66b00608862f947b163e613b67dd",
+          "sizeBytes": 4686038,
+          "license": "MIT-CMU",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "lxml",
+          "version": "6.1.3",
+          "url": "https://files.pythonhosted.org/packages/52/05/3ef45db776baea068044c799bbba68f3ca00a440c0e930a17c572f3d9639/lxml-6.1.3-cp313-cp313-macosx_10_13_universal2.whl",
+          "sha256": "3a48093cdb058a93af842ede9703520e810b05dcd0fc6d7190a06376c3bfb6bd",
+          "sizeBytes": 8590357,
+          "license": "BSD-3-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "XlsxWriter",
+          "version": "3.2.9",
+          "url": "https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl",
+          "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3",
+          "sizeBytes": 175315,
+          "license": "BSD-2-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0",
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "sizeBytes": 45571,
+          "license": "PSF-2.0",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        }
+      ],
+      "nativeRecipes": [
+        {
+          "name": "libreoffice",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-darwin-arm64",
+          "sourceArchiveFormat": "dmg",
+          "sourceDirectory": "LibreOffice.app",
+          "toolchain": {
+            "distribution": "TheDocumentFoundation-26.2.6-DMG",
+            "extraction": "hdiutil-readonly"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"]
+          }
+        },
+        {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
+          "name": "libpng",
+          "materialization": "source-build",
+          "sourceComponent": "libpng",
+          "nativeDependencies": ["zlib"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "libpng-1.6.52",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+          }
+        },
+        {
+          "name": "poppler",
+          "materialization": "source-build",
+          "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "poppler-26.09.0",
+          "toolchain": {
+            "compiler": "AppleClang-17",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+          },
+          "environment": { "CC": "clang", "CXX": "clang++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+          }
+        }
+      ]
+    },
+    "win32-x64": {
+      "runner": "windows-2025",
+      "builder": {
+        "identity": "github-hosted:windows-2025",
+        "image": {
+          "version": "20260907.229.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260907.229",
+          "sourceCommit": "c240f76fa0dd523af7376dbe8480964a3cb0af47",
+          "imageDigestSha256": "40a6ee9a9d9abcb58105c6fd3ed117f3ece7ae4c6ff80ccd8eb607006f056b15"
+        },
+        "tools": ["git", "tar", "msiexec", "cmake", "ninja", "cl"]
+      },
+      "node": {
+        "name": "node-runtime",
+        "version": "22.16.0",
+        "url": "https://nodejs.org/dist/v22.16.0/node-v22.16.0-win-x64.zip",
+        "sha256": "21c2d9735c80b8f86dab19305aa6a9f6f59bbc808f68de3eef09d5832e3bfbbd",
+        "sizeBytes": 35466975,
+        "license": "MIT",
+        "archiveFormat": "zip",
+        "stripComponents": 1
+      },
+      "python": {
+        "name": "cpython-runtime",
+        "version": "3.13.15+20260901",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15%2B20260901-x86_64-pc-windows-msvc-install_only.tar.gz",
+        "sha256": "9bcc038a0bf180612ed56dec93d4977d035e80b8d9320ef51a38c287baf134b7",
+        "sizeBytes": 47042104,
+        "license": "PSF-2.0",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "pythonWheels": [
+        {
+          "name": "python-pptx",
+          "version": "1.0.2",
+          "url": "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+          "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba",
+          "sizeBytes": 472788,
+          "license": "MIT",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "Pillow",
+          "version": "11.3.0",
+          "url": "https://files.pythonhosted.org/packages/23/85/397c73524e0cd212067e0c969aa245b01d50183439550d24d9f55781b776/pillow-11.3.0-cp313-cp313-win_amd64.whl",
+          "sha256": "0bce5c4fd0921f99d2e858dc4d4d64193407e1b99478bc5cacecba2311abde51",
+          "sizeBytes": 6978450,
+          "license": "MIT-CMU",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "lxml",
+          "version": "6.1.3",
+          "url": "https://files.pythonhosted.org/packages/c0/28/e46a7702bd95e9043291f7c3539b6184cba66f96cea9936f20939b284eeb/lxml-6.1.3-cp313-cp313-win_amd64.whl",
+          "sha256": "e477aca0bc0d19f3b4ae9e4f2a1cfd687c31bf772d78734910658186b40b2477",
+          "sizeBytes": 4004091,
+          "license": "BSD-3-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "XlsxWriter",
+          "version": "3.2.9",
+          "url": "https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl",
+          "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3",
+          "sizeBytes": 175315,
+          "license": "BSD-2-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0",
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "sizeBytes": 45571,
+          "license": "PSF-2.0",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        }
+      ],
+      "nativeRecipes": [
+        {
+          "name": "libreoffice",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-windows-x64",
+          "sourceArchiveFormat": "msi",
+          "sourceDirectory": ".",
+          "toolchain": {
+            "distribution": "TheDocumentFoundation-26.2.6-MSI",
+            "extraction": "msiexec-administrative"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            { "kind": "directory", "source": ".", "destination": "dependencies/native/libreoffice" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libreoffice/program/soffice.com"]
+          }
+        },
+        {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
+          "name": "libpng",
+          "materialization": "source-build",
+          "sourceComponent": "libpng",
+          "nativeDependencies": ["zlib"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "libpng-1.6.52",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+          }
+        },
+        {
+          "name": "poppler",
+          "materialization": "source-build",
+          "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "poppler-26.09.0",
+          "toolchain": {
+            "compiler": "MSVC-17.14",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "cl", "CXX": "cl" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo.exe", "dependencies/native/poppler/bin/pdftoppm.exe"]
+          }
+        }
+      ]
+    },
+    "linux-x64": {
+      "runner": "ubuntu-24.04",
+      "builder": {
+        "identity": "github-hosted:ubuntu-24.04",
+        "image": {
+          "version": "20260907.300.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300",
+          "sourceCommit": "fc63e1b4dbfacf7e2449bf0706226f9f6eea583e",
+          "imageDigestSha256": "f204fd2ffb287b4612bdfabe9f5f0e42ad3ef17c674878b4bba2283b018cda7c"
+        },
+        "tools": ["tar", "dpkg-deb", "cmake", "ninja", "gcc", "g++"]
+      },
+      "node": {
+        "name": "node-runtime",
+        "version": "22.16.0",
+        "url": "https://nodejs.org/dist/v22.16.0/node-v22.16.0-linux-x64.tar.xz",
+        "sha256": "f4cb75bb036f0d0eddf6b79d9596df1aaab9ddccd6a20bf489be5abe9467e84e",
+        "sizeBytes": 30425588,
+        "license": "MIT",
+        "archiveFormat": "tar.xz",
+        "stripComponents": 1
+      },
+      "python": {
+        "name": "cpython-runtime",
+        "version": "3.13.15+20260901",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260901/cpython-3.13.15%2B20260901-x86_64-unknown-linux-gnu-install_only.tar.gz",
+        "sha256": "0651dd7157d3debf769e15a52c1de9de7fbcdc36ba72faf79fde3c44f14d9461",
+        "sizeBytes": 119758082,
+        "license": "PSF-2.0",
+        "archiveFormat": "tar.gz",
+        "stripComponents": 1
+      },
+      "pythonWheels": [
+        {
+          "name": "python-pptx",
+          "version": "1.0.2",
+          "url": "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl",
+          "sha256": "160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba",
+          "sizeBytes": 472788,
+          "license": "MIT",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "Pillow",
+          "version": "11.3.0",
+          "url": "https://files.pythonhosted.org/packages/fc/c1/c6c423134229f2a221ee53f838d4be9d82bab86f7e2f8e75e47b6bf6cd77/pillow-11.3.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+          "sha256": "f0f5d8f4a08090c6d6d578351a2b91acf519a54986c055af27e7a93feae6d3f1",
+          "sizeBytes": 7639094,
+          "license": "MIT-CMU",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "lxml",
+          "version": "6.1.3",
+          "url": "https://files.pythonhosted.org/packages/ab/8d/8a7b91df0b54d09d25f5f44885d6b3e0a6d6643a8c070191580318d20c42/lxml-6.1.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+          "sha256": "b477912f42c5c33405a10c759d22f80cf5af043ae02d95b9d8e5e5bc555739ed",
+          "sizeBytes": 5093324,
+          "license": "BSD-3-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "XlsxWriter",
+          "version": "3.2.9",
+          "url": "https://files.pythonhosted.org/packages/3a/0c/3662f4a66880196a590b202f0db82d919dd2f89e99a27fadef91c4a33d41/xlsxwriter-3.2.9-py3-none-any.whl",
+          "sha256": "9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3",
+          "sizeBytes": 175315,
+          "license": "BSD-2-Clause",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        },
+        {
+          "name": "typing_extensions",
+          "version": "4.16.0",
+          "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "sizeBytes": 45571,
+          "license": "PSF-2.0",
+          "archiveFormat": "zip",
+          "stripComponents": 0
+        }
+      ],
+      "nativeRecipes": [
+        {
+          "name": "libreoffice",
+          "materialization": "prebuilt",
+          "sourceComponent": "libreoffice-linux-x64",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "LibreOffice_26.2.6.3_Linux_x86-64_deb/DEBS",
+          "toolchain": {
+            "distribution": "TheDocumentFoundation-26.2.6-DEB",
+            "extraction": "dpkg-deb-readonly"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-root/opt/libreoffice26.2", "destination": "dependencies/native/libreoffice" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libreoffice/program/soffice"]
+          }
+        },
+        {
+          "name": "zlib",
+          "materialization": "source-build",
+          "sourceComponent": "zlib",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "zlib-51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+          }
+        },
+        {
+          "name": "freetype",
+          "materialization": "source-build",
+          "sourceComponent": "freetype",
+          "sourceArchiveFormat": "tar.gz",
+          "sourceDirectory": "freetype-42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+          }
+        },
+        {
+          "name": "libpng",
+          "materialization": "source-build",
+          "sourceComponent": "libpng",
+          "nativeDependencies": ["zlib"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "libpng-1.6.52",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+          }
+        },
+        {
+          "name": "poppler",
+          "materialization": "source-build",
+          "sourceComponent": "poppler",
+          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "sourceArchiveFormat": "tar.xz",
+          "sourceDirectory": "poppler-26.09.0",
+          "toolchain": {
+            "compiler": "gcc-13",
+            "buildSystem": "cmake+ninja",
+            "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
+          },
+          "environment": { "CC": "gcc", "CXX": "g++" },
+          "commands": [
+            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
+            ["cmake", "--build", "build", "--target", "install"]
+          ],
+          "outputs": [
+            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+          ],
+          "closure": {
+            "mode": "directory",
+            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+          }
+        }
+      ]
+    }
+  }
+}

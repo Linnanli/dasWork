@@ -1,0 +1,120 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-sources.v2",
+  "builderVersion": "1.2.0",
+  "candidate": {
+    "name": "siril9/presentation-skill",
+    "repository": "https://github.com/siril9/presentation-skill",
+    "publisher": {
+      "githubAccount": "siril9",
+      "commitAuthor": "Siril Sengolraj <sirilsengolraj-source@users.noreply.github.com>"
+    },
+    "tag": "v0.8.0",
+    "commit": "a25708686160a13a4cdcb9cc1cc206fa9cb86219",
+    "sourceArchive": {
+      "url": "https://github.com/siril9/presentation-skill/archive/refs/tags/v0.8.0.tar.gz",
+      "sha256": "763827964186eeac53ee19d18055b640766ad840839cd35488c32fac9ed95fb7"
+    },
+    "pluginDirectory": {
+      "path": "plugins/presentation-skill",
+      "fileCount": 153,
+      "treeSha256": "9cb6bf30c6fa91e80aed59feece84119b63f81aa124f74d97ec871ce17c11fe4"
+    },
+    "license": {
+      "spdx": "MIT",
+      "path": "LICENSE",
+      "sha256": "35ad5e04d561f55065144021e70024bf94f50ef43903f4c54fc62802ed9f50f5"
+    },
+    "patch": {
+      "path": "patches/presentation-skill-runtime-v0.8.0.patch",
+      "sha256": "eaaa6f87e64639964a9c1cb5cb3d627fe91538f54c2dc3217795e94416944157"
+    },
+    "runtimeScope": {
+      "entryPoints": [
+        "skills/presentation-skill/scripts/build_deck_pptxgenjs.js",
+        "skills/presentation-skill/scripts/layout_lint.py",
+        "skills/presentation-skill/scripts/render_slides.py"
+      ],
+      "nodeDependencyClosure": [
+        "pptxgenjs@4.0.1",
+        "jszip@3.10.1",
+        "image-size@1.2.1",
+        "queue@6.0.2",
+        "@types/node@22.19.17",
+        "undici-types@6.21.0",
+        "https@1.0.0",
+        "lie@3.3.0",
+        "pako@1.0.11",
+        "readable-stream@2.3.8",
+        "setimmediate@1.0.5",
+        "core-util-is@1.0.3",
+        "inherits@2.0.4",
+        "isarray@1.0.0",
+        "process-nextick-args@2.0.1",
+        "safe-buffer@5.1.2",
+        "string_decoder@1.1.1",
+        "util-deprecate@1.0.2"
+      ],
+      "excludedCapabilities": [
+        "existing-pptx-editing",
+        "direct-model-http",
+        "model-api-key-access",
+        "online-dependency-install",
+        "virtual-environment-creation",
+        "system-dependency-discovery",
+        "network-asset-download",
+        "react-sharp-icon-rendering"
+      ]
+    }
+  },
+  "rejectedCandidates": [
+    {
+      "tag": "v0.11.0",
+      "commit": "311e29920c7c7ab37a93c12676bab7baecc0f4a6",
+      "sourceArchiveSha256": "b34fcadf960a157b838098608ba64c5e58e5e3c62b51924cb8e4944f199991f4",
+      "status": "candidate_rejected",
+      "reason": "Pinned Pillow==12.3.0 is not published by PyPI, so the requested dependency graph cannot be reproduced."
+    }
+  ],
+  "components": {
+    "node": [
+      { "name": "pptxgenjs", "version": "4.0.1", "source": "https://registry.npmjs.org/pptxgenjs/-/pptxgenjs-4.0.1.tgz", "sha256": "305e8870cc03c4402efb99d4a62cb73f611af64998b8988915d6c65b7fe7a5f0", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "jszip", "version": "3.10.1", "source": "https://registry.npmjs.org/jszip/-/jszip-3.10.1.tgz", "sha256": "5117f4a2a645aeb307bf3b829c575ad58135cc97e75291e594532ab5b5b21b23", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "image-size", "version": "1.2.1", "source": "https://registry.npmjs.org/image-size/-/image-size-1.2.1.tgz", "sha256": "8d49e2e64cb3a52fec74d0ef9434069facae41a03833a6caec51c2d0da1c873d", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "queue", "version": "6.0.2", "source": "https://registry.npmjs.org/queue/-/queue-6.0.2.tgz", "sha256": "abcca1d492923f902c1c60ac59afaeb83ff065b60000ee1287e789dc30edba04", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "@types/node", "version": "22.19.17", "source": "https://registry.npmjs.org/@types/node/-/node-22.19.17.tgz", "sha256": "4a370257b25f086131f818f435a83527303ceba524b30233a5eda8c9aafafbb0", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "undici-types", "version": "6.21.0", "source": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz", "sha256": "cfa1a9a5e18988850e548f4f6b629c58da32dc32bebb116e58ea301e516fd16d", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "https", "version": "1.0.0", "source": "https://registry.npmjs.org/https/-/https-1.0.0.tgz", "sha256": "7d6cc44a6471377a9299371e4d207cd2607bbaf7bcca1b220c8bd6831fbbe645", "license": "ISC", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"], "entryRequired": false },
+      { "name": "lie", "version": "3.3.0", "source": "https://registry.npmjs.org/lie/-/lie-3.3.0.tgz", "sha256": "2db8461cd4a10e2fc3588c8c55da34d33465ff81cc19c72416bbcaec7ee6a36e", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "pako", "version": "1.0.11", "source": "https://registry.npmjs.org/pako/-/pako-1.0.11.tgz", "sha256": "0d4028dc0352a740c30cbfd772917f2744986d42bfa0b06ec7642bffe7ad3941", "license": "MIT AND Zlib", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "readable-stream", "version": "2.3.8", "source": "https://registry.npmjs.org/readable-stream/-/readable-stream-2.3.8.tgz", "sha256": "1648613948f68ac9cbbe8f72a3f93a67ecdb862ffb57946a2c0bbb5a1479a532", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "setimmediate", "version": "1.0.5", "source": "https://registry.npmjs.org/setimmediate/-/setimmediate-1.0.5.tgz", "sha256": "5cb9fc22698364ed42c02d6aa3dc50ffeafa68452ae84699672e3dfd74922c9e", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "core-util-is", "version": "1.0.3", "source": "https://registry.npmjs.org/core-util-is/-/core-util-is-1.0.3.tgz", "sha256": "4430fdc71f2cf3b5e297113b9a692da2d6cff96cf84da00f0ecef5e5a6e74d0c", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "inherits", "version": "2.0.4", "source": "https://registry.npmjs.org/inherits/-/inherits-2.0.4.tgz", "sha256": "d94dbc6c1bb3c5ac0fb12a73ade187108fc60de273a1b754f55044eb5e24afaf", "license": "ISC", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "isarray", "version": "1.0.0", "source": "https://registry.npmjs.org/isarray/-/isarray-1.0.0.tgz", "sha256": "e23c76f14f5222e07e39d89858b61e8e33f96956de9e0df3659cbdf8db950c87", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "process-nextick-args", "version": "2.0.1", "source": "https://registry.npmjs.org/process-nextick-args/-/process-nextick-args-2.0.1.tgz", "sha256": "425bf8c725d23bc5ac76bcedd10d9cdbbd6354c7273dd7def44417cfbca8889b", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "safe-buffer", "version": "5.1.2", "source": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.1.2.tgz", "sha256": "e09206c60fccafb952c854af7629cbb031a98d6da2e143fb3aa3c8a48402aa22", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "string_decoder", "version": "1.1.1", "source": "https://registry.npmjs.org/string_decoder/-/string_decoder-1.1.1.tgz", "sha256": "af8262434508fa8292407f7fef4690d19eabb73387ca230b41f2a1155216963a", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "util-deprecate", "version": "1.0.2", "source": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz", "sha256": "79a1de983c1b393180c47456d6b73caab278a00ea6e37d5c6675f2dcdec2a3e5", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
+    ],
+    "python": [
+      { "name": "python-pptx", "version": "1.0.2", "source": "https://files.pythonhosted.org/packages/52/a9/0c0db8d37b2b8a645666f7fd8accea4c6224e013c42b1d5c17c93590cd06/python_pptx-1.0.2.tar.gz", "sha256": "479a8af0eaf0f0d76b6f00b0887732874ad2e3188230315290cd1f9dd9cc7095", "license": "MIT", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "Pillow", "version": "11.3.0", "source": "https://files.pythonhosted.org/packages/f3/0d/d0d6dea55cd152ce3d6767bb38a8fc10e33796ba4ba210cbab9354b6d238/pillow-11.3.0.tar.gz", "sha256": "3828ee7586cd0b2091b6209e5ad53e20d0649bbe87164a459d0676e035e8f523", "license": "MIT-CMU", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "lxml", "version": "6.1.3", "source": "https://files.pythonhosted.org/packages/23/ad/28ecd7cb894d172f3c9c80a075eeeb2017ac62e3632cee05a5f9493547eb/lxml-6.1.3.tar.gz", "sha256": "45222d94ddd511536f3b2f7d9deae3b2339b4ce0f075f1ca25703b07cad9dd21", "license": "BSD-3-Clause", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "XlsxWriter", "version": "3.2.9", "source": "https://files.pythonhosted.org/packages/46/2c/c06ef49dc36e7954e55b802a8b231770d286a9758b3d936bd1e04ce5ba88/xlsxwriter-3.2.9.tar.gz", "sha256": "254b1c37a368c444eac6e2f867405cc9e461b0ed97a3233b2ac1e574efb4140c", "license": "BSD-2-Clause", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "typing_extensions", "version": "4.16.0", "source": "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", "sha256": "dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", "license": "PSF-2.0", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
+    ],
+    "native": [
+      { "name": "libreoffice-linux-x64", "capability": "libreoffice", "version": "26.2.6.3", "source": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/deb/x86_64/LibreOffice_26.2.6_Linux_x86-64_deb.tar.gz", "sha256": "fd0e8f8f2408dd2e5b90286e60f3f97cf566ba441cd48cfc5bcc68067303e0bc", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["linux-x64"] },
+      { "name": "libreoffice-darwin-x64", "capability": "libreoffice", "version": "26.2.6", "source": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/mac/x86_64/LibreOffice_26.2.6_MacOS_x86-64.dmg", "sha256": "135b8a95b8133396d54bf8e726dbc0066145efa0d785963fc3d4592acbfcfe5b", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["darwin-x64"] },
+      { "name": "libreoffice-darwin-arm64", "capability": "libreoffice", "version": "26.2.6", "source": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/mac/aarch64/LibreOffice_26.2.6_MacOS_aarch64.dmg", "sha256": "94bb3248df074c225490a8a6d1d9dc87c7d6783dbb7a8e9f0d0c3d94348552af", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["darwin-arm64"] },
+      { "name": "libreoffice-windows-x64", "capability": "libreoffice", "version": "26.2.6", "source": "https://download.documentfoundation.org/libreoffice/stable/26.2.6/win/x86_64/LibreOffice_26.2.6_Win_x86-64.msi", "sha256": "f9877032fd908beb9c0ddf06df4af5c2e85f419c42e14876c4cce5aae5fb2660", "license": "MPL-2.0 OR LGPL-3.0-or-later", "platforms": ["win32-x64"] },
+      { "name": "poppler", "version": "26.09.0", "source": "https://poppler.freedesktop.org/poppler-26.09.0.tar.xz", "sha256": "8059eadb6805340768f138c465b57f8164c92b4a0773c37ef031ea6c0d987b2e", "license": "GPL-2.0-or-later", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "zlib", "version": "1.3.1", "source": "https://github.com/madler/zlib/archive/51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf.tar.gz", "sha256": "d9e270d46252734aa49770fbc544125391617956266f220bd63216c834f3a522", "license": "Zlib", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "libpng", "version": "1.6.52", "source": "https://download.sourceforge.net/libpng/libpng-1.6.52.tar.xz", "sha256": "36bd726228ec93a3b6c22fdb49e94a67b16f2fe9b39b78b7cb65772966661ccc", "license": "Libpng-2.0", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] },
+      { "name": "freetype", "version": "2.13.3", "source": "https://github.com/freetype/freetype/archive/42608f77f20749dd6ddc9e0536788eaad70ea4b5.tar.gz", "sha256": "68ce87bb59ea209eb7350f41a94a27519ce16b37011b475a1e62d4abee154b66", "license": "FTL OR GPL-2.0-only", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
+    ],
+    "fonts": [
+      { "name": "noto-sans-cjk-sc", "version": "2.004", "source": "https://github.com/notofonts/noto-cjk/releases/download/Sans2.004/08_NotoSansCJKsc.zip", "sha256": "a927e56f53bd6c3b920bc139c0b94aa36c7d9ad0cf009b159437a1a003581140", "license": "OFL-1.1", "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"] }
+    ]
+  }
+}

@@ -1,16 +1,29 @@
-import { createPublicKey, randomUUID, verify, type KeyObject } from 'node:crypto'
+import { createHash, createPublicKey, randomUUID, verify, type KeyObject } from 'node:crypto'
 import { mkdir, open, readFile, rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { z } from 'zod'
 
+import { PrimaryRuntimeHttpClient } from './PrimaryRuntimeHttpClient'
 import type {
   PrimaryRuntimeArch,
   PrimaryRuntimePlatform,
+  PrimaryRuntimeReleaseBudget,
   PrimaryRuntimeReleaseDescriptor
 } from './primaryRuntimeTypes'
 
 const MAX_MANIFEST_BYTES = 1024 * 1024
+
+const releaseBudgetSchema = z
+  .object({
+    maxArchiveBytes: z.number().int().positive(),
+    maxUnpackedBytes: z.number().int().positive(),
+    minimumFreeDiskBytes: z.number().int().positive(),
+    maxColdInstallMs: z.number().int().positive(),
+    maxMainEventLoopDelayP99Ms: z.number().int().positive(),
+    maxMainEventLoopDelayMaxMs: z.number().int().positive()
+  })
+  .strict()
 
 const manifestReleaseSchema = z
   .object({
@@ -20,7 +33,8 @@ const manifestReleaseSchema = z
     archiveFormat: z.literal('zip'),
     archiveUrl: z.string().url(),
     archiveSizeBytes: z.number().int().positive(),
-    archiveSha256: z.string().regex(/^[a-f0-9]{64}$/u)
+    archiveSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+    budget: releaseBudgetSchema
   })
   .strict()
 
@@ -64,6 +78,9 @@ export type PrimaryRuntimeVerifiedRelease = PrimaryRuntimeReleaseDescriptor & {
   archiveUrl: string
   allowedOrigins: readonly string[]
   sequence: number
+  payloadHash: string
+  keyId: string
+  channel: string
 }
 
 export function parseAndVerifyPrimaryRuntimeReleaseManifest(input: {
@@ -123,14 +140,19 @@ export function parseAndVerifyPrimaryRuntimeReleaseManifest(input: {
   }
   const release = releases[0]
   const archiveUrl = validateArchiveUrl(release.archiveUrl, input.allowedOrigins)
+  const canonical = canonicalPrimaryRuntimeReleaseManifestPayload(unsigned)
   return {
     version: release.version,
     archiveFormat: release.archiveFormat,
     archiveSizeBytes: release.archiveSizeBytes,
     archiveSha256: release.archiveSha256,
+    budget: release.budget satisfies PrimaryRuntimeReleaseBudget,
     archiveUrl: archiveUrl.toString(),
     allowedOrigins: normalizedAllowedOrigins(input.allowedOrigins),
-    sequence: manifest.sequence
+    sequence: manifest.sequence,
+    payloadHash: createHash('sha256').update(canonical).digest('hex'),
+    keyId: manifest.keyId,
+    channel: manifest.channel
   }
 }
 
@@ -146,31 +168,10 @@ export async function fetchPrimaryRuntimeReleaseManifest(input: {
   fetchImpl?: typeof fetch
   signal?: AbortSignal
 }): Promise<unknown> {
-  const manifestUrl = validateArchiveUrl(input.manifestUrl, input.allowedOrigins)
-  const response = await (input.fetchImpl ?? fetch)(manifestUrl, {
-    method: 'GET',
-    redirect: 'error',
-    ...(input.signal ? { signal: input.signal } : {})
-  })
-  if (!response.ok) {
-    throw new Error(`Primary Runtime manifest request failed: HTTP ${response.status}`)
-  }
-  const advertisedLength = response.headers.get('content-length')
-  if (
-    advertisedLength !== null &&
-    (!/^\d+$/u.test(advertisedLength) || Number(advertisedLength) > MAX_MANIFEST_BYTES)
-  ) {
-    throw new Error('Primary Runtime manifest exceeds the permitted size.')
-  }
-  const text = await response.text()
-  if (Buffer.byteLength(text, 'utf8') > MAX_MANIFEST_BYTES) {
-    throw new Error('Primary Runtime manifest exceeds the permitted size.')
-  }
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error('Primary Runtime manifest is not valid JSON.')
-  }
+  return new PrimaryRuntimeHttpClient({
+    allowedOrigins: input.allowedOrigins,
+    fetchImpl: input.fetchImpl
+  }).getJson(input.manifestUrl, { maxBytes: MAX_MANIFEST_BYTES, signal: input.signal })
 }
 
 export class FilePrimaryRuntimeManifestSequenceStore implements PrimaryRuntimeManifestSequenceStore {

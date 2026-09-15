@@ -1,5 +1,6 @@
 import { access, readFile, realpath, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 
 import {
@@ -11,6 +12,7 @@ import type {
   PrimaryRuntimeDependencies,
   PrimaryRuntimeDiagnostic,
   PrimaryRuntimeDiagnosticIssue,
+  PrimaryRuntimeFontManifest,
   PrimaryRuntimeManifest,
   PrimaryRuntimePackageManifest,
   PrimaryRuntimeResolvedPackage
@@ -19,17 +21,19 @@ import type {
 export type PrimaryRuntimeDiagnosticsInput = {
   platform?: NodeJS.Platform
   arch?: NodeJS.Architecture
+  /** Only the explicit synthetic Feed E2E lane may opt in to this marker. */
+  allowSyntheticTestRuntime?: boolean
 }
-
-const REQUIRED_NODE_PACKAGE = '@oai/artifact-tool'
 
 export class PrimaryRuntimeDiagnostics {
   private readonly platform: NodeJS.Platform
   private readonly arch: NodeJS.Architecture
+  private readonly allowSyntheticTestRuntime: boolean
 
   constructor(input: PrimaryRuntimeDiagnosticsInput = {}) {
     this.platform = input.platform ?? process.platform
     this.arch = input.arch ?? process.arch
+    this.allowSyntheticTestRuntime = input.allowSyntheticTestRuntime === true
   }
 
   async diagnose(root: string): Promise<PrimaryRuntimeDiagnostic> {
@@ -75,16 +79,24 @@ export class PrimaryRuntimeDiagnostics {
       }
     }
 
+    if (manifest.syntheticTestOnly && !this.allowSyntheticTestRuntime) {
+      return {
+        status: 'broken',
+        root: runtimeRoot,
+        manifest,
+        issues: [
+          {
+            code: 'synthetic-test-runtime-disallowed',
+            message: 'Synthetic test-only Primary Runtime is not enabled for this application mode.'
+          }
+        ]
+      }
+    }
+
     const nodePath = await resolveRuntimeFile(runtimeRoot, manifest.node.path, issues, {
       executable: true
     })
     const nodePackages = await resolveNodePackages(runtimeRoot, manifest.nodePackages, issues)
-    if (!nodePackages.some((entry) => entry.name === REQUIRED_NODE_PACKAGE)) {
-      issues.push({
-        code: 'missing-package',
-        message: `Primary Runtime is missing ${REQUIRED_NODE_PACKAGE}.`
-      })
-    }
 
     const pythonPath = manifest.python
       ? await resolveRuntimeFile(runtimeRoot, manifest.python.path, issues, { executable: true })
@@ -93,6 +105,10 @@ export class PrimaryRuntimeDiagnostics {
       ? await resolveDirectories(runtimeRoot, manifest.python.packages, issues)
       : []
     const binaries = await resolveBinaries(runtimeRoot, manifest.binaries ?? [], issues)
+    const fonts = await resolveFonts(runtimeRoot, manifest.fonts ?? [], issues)
+    await resolveBundledPlugins(runtimeRoot, manifest.bundledPlugins ?? [], issues)
+    await resolveBundledSkills(runtimeRoot, manifest.bundledSkills ?? [], issues)
+    await verifySourceDigests(runtimeRoot, manifest.sourceDigests ?? [], issues)
 
     if (issues.length > 0 || !nodePath) {
       return { status: 'broken', root: runtimeRoot, manifest, issues }
@@ -115,7 +131,8 @@ export class PrimaryRuntimeDiagnostics {
             }
           }
         : {}),
-      binaries
+      binaries,
+      fonts
     }
 
     return { status: 'ready', root: runtimeRoot, manifest, dependencies, issues: [] }
@@ -194,6 +211,8 @@ async function validateNodePackage(
     return false
   }
 
+  if (entry.entryRequired === false) return true
+
   const entryPath = await resolveNodePackageEntry(packageRoot, manifest, issues)
   return Boolean(entryPath)
 }
@@ -226,7 +245,7 @@ function packageEntryCandidates(manifest: Record<string, unknown>): string[] {
       if (typeof value === 'string') candidates.push(value)
     }
   }
-  for (const field of ['main', 'module']) {
+  for (const field of ['main', 'module', 'types', 'typings']) {
     const value = manifest[field]
     if (typeof value === 'string') candidates.push(value)
   }
@@ -256,6 +275,93 @@ async function resolveBinaries(
     if (path) resolved.push({ name: entry.name, path })
   }
   return resolved
+}
+
+async function resolveFonts(
+  root: string,
+  fonts: readonly PrimaryRuntimeFontManifest[],
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): Promise<Array<{ name: string; path: string }>> {
+  const resolved: Array<{ name: string; path: string }> = []
+  for (const entry of fonts) {
+    const path = await resolveRuntimeFile(root, entry.path, issues, { executable: false })
+    if (path) resolved.push({ name: entry.name, path })
+  }
+  return resolved
+}
+
+async function resolveBundledPlugins(
+  root: string,
+  plugins: NonNullable<PrimaryRuntimeManifest['bundledPlugins']>,
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): Promise<void> {
+  for (const plugin of plugins) {
+    const marketplaceRoot = await resolveRuntimeDirectory(root, plugin.path, issues)
+    if (!marketplaceRoot) continue
+    const marketplaceManifest = await resolveRuntimeFile(
+      marketplaceRoot,
+      '.agents/plugins/marketplace.json',
+      issues,
+      { executable: false }
+    )
+    if (!marketplaceManifest) {
+      issues.push({
+        code: 'missing-plugin-marketplace',
+        message: `Primary Runtime plugin marketplace ${plugin.marketplace} is missing its descriptor.`,
+        path: marketplaceRoot
+      })
+    }
+  }
+}
+
+async function resolveBundledSkills(
+  root: string,
+  skills: NonNullable<PrimaryRuntimeManifest['bundledSkills']>,
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): Promise<void> {
+  for (const skill of skills) {
+    const path = await resolveRuntimeFile(root, skill.path, issues, { executable: false })
+    if (!path) continue
+    try {
+      const digest = createHash('sha256')
+        .update(await readFile(path))
+        .digest('hex')
+      if (digest !== skill.sha256) {
+        issues.push({
+          code: 'bundled-skill-digest-mismatch',
+          message: 'Runtime-owned bundled skill digest does not match its manifest.',
+          path
+        })
+      }
+    } catch {
+      issues.push({
+        code: 'bundled-skill-unreadable',
+        message: 'Runtime-owned bundled skill cannot be read.',
+        path
+      })
+    }
+  }
+}
+
+async function verifySourceDigests(
+  root: string,
+  sourceDigests: NonNullable<PrimaryRuntimeManifest['sourceDigests']>,
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): Promise<void> {
+  for (const sourceDigest of sourceDigests) {
+    const path = await resolveRuntimeFile(root, sourceDigest.path, issues, { executable: false })
+    if (!path) continue
+    const actual = createHash('sha256')
+      .update(await readFile(path))
+      .digest('hex')
+    if (actual !== sourceDigest.sha256) {
+      issues.push({
+        code: 'source-digest-mismatch',
+        message: `Primary Runtime source digest does not match ${sourceDigest.path}.`,
+        path
+      })
+    }
+  }
 }
 
 async function resolveRuntimeRoot(path: string): Promise<string | null> {

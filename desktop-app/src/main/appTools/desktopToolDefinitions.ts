@@ -8,9 +8,21 @@ import type { DynamicAppToolDefinition } from './DynamicAppToolRegistry'
 
 export type WorkspaceDependencies = object
 
+export type WorkspaceDependencyDiagnostic = {
+  status: 'ready' | 'missing' | 'broken' | 'unsupported' | 'installing' | 'checking' | 'failed'
+  issues?: readonly {
+    code?: string
+    message: string
+    path?: string
+  }[]
+  operationId?: string
+  activeVersion?: string
+  recovery?: string
+}
+
 export type WorkspaceDependencyLoader = {
   loadDependencies(): Promise<WorkspaceDependencies>
-  diagnoseDependencies?(): Promise<{ status: 'ready' | 'missing' | 'broken' | 'unsupported' }>
+  diagnoseDependencies?(): Promise<WorkspaceDependencyDiagnostic>
 }
 
 const emptyObjectSchema = {
@@ -27,6 +39,21 @@ const unavailable = (message: string): CodexToolCallResult => ({
 const success = (result: unknown): CodexToolCallResult => ({
   success: true,
   contentItems: [{ type: 'inputText', text: JSON.stringify(result) }]
+})
+
+const workspaceDependenciesSuccess = (result: WorkspaceDependencies): CodexToolCallResult => ({
+  success: true,
+  contentItems: [
+    {
+      type: 'inputText',
+      text:
+        typeof result === 'object' &&
+        result !== null &&
+        typeof (result as { text?: unknown }).text === 'string'
+          ? (result as { text: string }).text
+          : JSON.stringify(result)
+    }
+  ]
 })
 
 export function createReadThreadTerminalTool(
@@ -72,11 +99,16 @@ export function createLoadWorkspaceDependenciesTool(
         }
       if (!runtime)
         return { state: 'unavailable', reason: 'Workspace dependencies are unavailable.' }
-      const status =
-        context.primaryRuntimeStatus ?? (await runtime.diagnoseDependencies?.())?.status
-      return status && status !== 'ready'
-        ? { state: 'unavailable', reason: 'Workspace dependencies are unavailable.' }
-        : { state: 'available' }
+      if (context.workspaceDependenciesEnabled === false) {
+        return {
+          state: 'unavailable',
+          reason: 'Workspace dependencies are not enabled for this host.'
+        }
+      }
+      // The loader is intentionally published before the Runtime is healthy.
+      // This is the only safe way for a task to obtain actionable recovery
+      // guidance without searching private paths or installing substitutes.
+      return { state: 'available' }
     },
     async execute(context, argumentsValue) {
       if (!runtime) return unavailable('Workspace dependencies are unavailable.')
@@ -88,12 +120,38 @@ export function createLoadWorkspaceDependenciesTool(
       try {
         const dependencies = await runtime.loadDependencies()
         if (context.signal.aborted) return unavailable('Dynamic tool call was cancelled.')
-        return success(dependencies)
+        return workspaceDependenciesSuccess(dependencies)
       } catch {
-        return unavailable('Workspace dependencies are unavailable.')
+        return unavailable(await unavailableRuntimeResult(runtime))
       }
     }
   }
+}
+
+async function unavailableRuntimeResult(runtime: WorkspaceDependencyLoader): Promise<string> {
+  let diagnostic: WorkspaceDependencyDiagnostic | undefined
+  try {
+    diagnostic = await runtime.diagnoseDependencies?.()
+  } catch {
+    // Preserve the least-privilege failure result if diagnostics itself is
+    // unavailable. Never surface a Runtime path or a raw error stack here.
+  }
+
+  const status = diagnostic?.status ?? 'failed'
+  return JSON.stringify({
+    status,
+    ...(diagnostic?.operationId ? { operationId: diagnostic.operationId } : {}),
+    ...(diagnostic?.activeVersion ? { activeVersion: diagnostic.activeVersion } : {}),
+    issues: (diagnostic?.issues ?? []).map((issue) => ({
+      ...(issue.code ? { code: issue.code } : {}),
+      message: issue.message
+    })),
+    recovery:
+      diagnostic?.recovery ??
+      (status === 'unsupported'
+        ? 'This host does not support the Primary Runtime.'
+        : 'Install or repair the Primary Runtime from Plugins & Skills, then create a new task.')
+  })
 }
 
 function isEmptyObject(value: unknown): boolean {
