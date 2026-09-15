@@ -135,10 +135,13 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
       }
 
-      await expect(page.locator('[data-role="assistant"]')).toContainText(
-        'The signed Primary Runtime created, rendered, checked, and previewed the six-page presentation through the native desktop command path.',
-        { timeout: 120_000 }
-      )
+      const runtimeSuccessMessage = page
+        .locator('[data-role="assistant"]')
+        .filter({
+          hasText:
+            'The signed Primary Runtime created, rendered, checked, and previewed the six-page presentation through the native desktop command path.'
+        })
+      await expect(runtimeSuccessMessage).toHaveCount(1, { timeout: 120_000 })
 
       const providerBodies = providerResponseBodies(backend)
       expect(functionCallOutputCount(providerBodies, loaderCallId)).toBe(1)

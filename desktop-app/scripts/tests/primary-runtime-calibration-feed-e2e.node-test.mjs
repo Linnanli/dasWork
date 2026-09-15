@@ -66,6 +66,9 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /approvalPanel\.isVisible\(\{ timeout: 20_000 \}\)/u)
   assert.match(e2eSource, /P3b accepts either protocol outcome/u)
   assert.match(e2eSource, /\{ timeout: 120_000 \}/u)
+  assert.match(e2eSource, /runtimeSuccessMessage/u)
+  assert.match(e2eSource, /\.filter\(\{\s*hasText:/u)
+  assert.match(e2eSource, /toHaveCount\(1, \{ timeout: 120_000 \}\)/u)
   assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)
   assert.match(
