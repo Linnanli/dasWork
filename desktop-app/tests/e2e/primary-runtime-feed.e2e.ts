@@ -306,7 +306,10 @@ function runtimePresentationCommandResponse(
     shellQuote(dependencies.node),
     '--input-type=module',
     '-e',
-    shellQuote(`eval(Buffer.from('${encodedSource}','base64').toString('utf8'))`)
+    // `eval` parses its input as a classic script even when Node itself is
+    // running in ESM mode. Importing the same Base64 payload as a data module
+    // preserves the source's top-level imports on every target platform.
+    shellQuote(`await import('data:text/javascript;base64,${encodedSource}')`)
   ].join(' ')
 
   return shellCommandResponse('response-runtime-command', runtimeCommandCallId, {
