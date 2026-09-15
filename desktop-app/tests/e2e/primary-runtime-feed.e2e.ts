@@ -375,7 +375,10 @@ function runtimePresentationCommandSource(
     'const rendered = readdirSync(renderedSlides).filter((name) => /^slide-\\d+\\.png$/u.test(name))',
     "if (rendered.length < 6 || !existsSync(contactSheet) || !existsSync(layoutPath) || !existsSync(outputPath) || !existsSync(imagePath)) throw new Error('Runtime presentation QA outputs are incomplete.')",
     'process.stdout.write(`presentation-skill:created:${rendered.length}`)'
-  ].join('; ')
+  // Source rows already carry the commas needed by the outline's slide array.
+  // Newlines preserve that syntax, whereas semicolon joining would inject
+  // invalid `,;` separators between array elements.
+  ].join('\n')
 }
 
 function parseWorkspaceDependencies(value: string): WorkspaceDependencies {
