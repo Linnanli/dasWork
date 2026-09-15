@@ -302,7 +302,7 @@ async function hasImageRelationshipAndAltText(archive, slidePaths, slideXml, req
     if (!relationship) continue
     const relationshipXml = await relationship.async('string')
     const imageRelationshipIds = [
-      ...slideXml[index].matchAll(/<a:blip\b[^>]*\br:embed="([^"]+)"[^>]*\/>/gu)
+      ...slideXml[index].matchAll(/<a:blip\b[^>]*\br:embed="([^"]+)"[^>]*>/gu)
     ].map((match) => match[1])
     const hasImage = imageRelationshipIds.some((relationshipId) =>
       hasRelatedPart(archive, relationshipXml, relationshipId, '/image', '../media/')

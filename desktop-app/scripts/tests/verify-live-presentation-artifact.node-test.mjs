@@ -122,7 +122,7 @@ async function createPresentation({
       expected.expectedPageTypes[index].id === 'chart' ? '<c:chart r:id="rIdChart"></c:chart>' : ''
     const image =
       expected.expectedPageTypes[index].id === 'image'
-        ? `<p:pic><p:nvPicPr><p:cNvPr descr="${expected.requiredImageAltText}"/></p:nvPicPr><p:blipFill><a:blip r:embed="rIdImage"/></p:blipFill></p:pic>`
+        ? `<p:pic><p:nvPicPr><p:cNvPr descr="${expected.requiredImageAltText}"/></p:nvPicPr><p:blipFill><a:blip r:embed="rIdImage"></p:blipFill></p:pic>`
         : ''
     zip.file(
       `ppt/slides/slide${index + 1}.xml`,

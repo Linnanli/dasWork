@@ -145,24 +145,29 @@ export async function verifyR07Presentation(path: string): Promise<void> {
       hasChineseFont: true
     })
   } catch (error) {
-    const diagnostics = await readPptxChartDiagnostics(path).catch((diagnosticError: unknown) => ({
+    const diagnostics = await readPptxRelationshipDiagnostics(path).catch((diagnosticError: unknown) => ({
       diagnosticError:
         diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)
     }))
     const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`${message}\nPPTX chart diagnostics: ${JSON.stringify(diagnostics)}`)
+    throw new Error(`${message}\nPPTX relationship diagnostics: ${JSON.stringify(diagnostics)}`)
   } finally {
     await rm(reportPath, { force: true })
   }
 }
 
-async function readPptxChartDiagnostics(path: string): Promise<{
+async function readPptxRelationshipDiagnostics(path: string): Promise<{
   chartParts: string[]
+  mediaParts: string[]
   slides: Array<{
     path: string
     chartTags: string[]
     chartRelationshipIds: string[]
     chartRelationships: Array<{ id: string | null; target: string | null }>
+    imageTags: string[]
+    imageRelationshipIds: string[]
+    imageRelationships: Array<{ id: string | null; target: string | null }>
+    imageDescriptions: string[]
   }>
 }> {
   const archive = await JSZip.loadAsync(await readFile(path))
@@ -173,6 +178,7 @@ async function readPptxChartDiagnostics(path: string): Promise<{
 
   return {
     chartParts: paths.filter((entry) => /^ppt\/charts\/chart\d+\.xml$/u.test(entry)).sort(),
+    mediaParts: paths.filter((entry) => /^ppt\/media\//u.test(entry)).sort(),
     slides: await Promise.all(
       slidePaths.map(async (slidePath) => {
         const slideXml = await archive.file(slidePath)?.async('string')
@@ -195,8 +201,32 @@ async function readPptxChartDiagnostics(path: string): Promise<{
             id: readXmlAttribute(tag[0], 'Id'),
             target: readXmlAttribute(tag[0], 'Target')
           }))
+        const imageTags = [...(slideXml ?? '').matchAll(/<a:blip\b[^>]*>/gu)].map(
+          (match) => match[0]
+        )
+        const imageRelationshipIds = imageTags
+          .map((tag) => readXmlAttribute(tag, 'r:embed'))
+          .filter((id): id is string => id !== null)
+        const imageRelationships = [...(relationshipsXml ?? '').matchAll(/<Relationship\b[^>]*>/gu)]
+          .filter((tag) => /\/image(?:["']|\s|$)/u.test(tag[0]))
+          .map((tag) => ({
+            id: readXmlAttribute(tag[0], 'Id'),
+            target: readXmlAttribute(tag[0], 'Target')
+          }))
+        const imageDescriptions = [...(slideXml ?? '').matchAll(/<p:cNvPr\b[^>]*>/gu)]
+          .map((tag) => readXmlAttribute(tag[0], 'descr'))
+          .filter((description): description is string => description !== null)
 
-        return { path: slidePath, chartTags, chartRelationshipIds, chartRelationships }
+        return {
+          path: slidePath,
+          chartTags,
+          chartRelationshipIds,
+          chartRelationships,
+          imageTags,
+          imageRelationshipIds,
+          imageRelationships,
+          imageDescriptions
+        }
       })
     )
   }
