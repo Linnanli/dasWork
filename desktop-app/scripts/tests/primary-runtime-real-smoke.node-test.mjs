@@ -27,9 +27,11 @@ test('real Runtime smoke accepts only a P1a archive identity, never a direct Run
   )
 })
 
-test('real Runtime smoke uses the Windows npm shim and preserves launcher failures', async () => {
+test('real Runtime smoke launches Vitest through Node on every platform and preserves launcher failures', async () => {
   const source = await readFile(runnerPath, 'utf8')
 
-  assert.match(source, /process\.platform === 'win32' \? 'npm\.cmd' : 'npm'/u)
+  assert.match(source, /process\.execPath/u)
+  assert.match(source, /node_modules\/vitest\/vitest\.mjs/u)
+  assert.doesNotMatch(source, /npm\.cmd/u)
   assert.match(source, /if \(result\.error\) throw result\.error/u)
 })

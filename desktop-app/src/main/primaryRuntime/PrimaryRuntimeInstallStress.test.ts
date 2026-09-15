@@ -16,7 +16,9 @@ const version = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_VERSION?.trim()
 const expectedSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256?.trim().toLowerCase()
 const maxRssDeltaMiB = Number(process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_MAX_RSS_MIB ?? '384')
 const stressTimeoutMs = parsePositiveTimeout(
-  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? '180000'
+  // P3a is one full archive install and must retain enough headroom for the
+  // fixed Intel macOS runner. P3b separately measures ten cold installs.
+  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? String(4 * 60 * 1000)
 )
 const directories: string[] = []
 

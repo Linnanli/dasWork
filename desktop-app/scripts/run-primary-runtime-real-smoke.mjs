@@ -6,7 +6,6 @@ import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const appRoot = resolve(import.meta.dirname, '..')
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const options = parseOptions(process.argv.slice(2))
 const archive = options.archive ?? process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_ARCHIVE?.trim()
 const version = options.version ?? process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_VERSION?.trim()
@@ -28,8 +27,12 @@ if (!/^[a-f0-9]{64}$/iu.test(sha256)) {
 await access(archive)
 
 const result = spawnSync(
-  npmCommand,
-  ['exec', '--', 'vitest', 'run', 'src/main/primaryRuntime/PrimaryRuntimeRealSmoke.test.ts'],
+  process.execPath,
+  [
+    'node_modules/vitest/vitest.mjs',
+    'run',
+    'src/main/primaryRuntime/PrimaryRuntimeRealSmoke.test.ts'
+  ],
   {
     cwd: appRoot,
     env: {

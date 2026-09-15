@@ -23,8 +23,6 @@ const executeFile = promisify(execFile)
 const appRoot = resolve(import.meta.dirname, '..')
 const channel = 'p3b-calibration'
 const options = parseOptions(process.argv.slice(2))
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 
 const root = await mkdtemp(join(tmpdir(), 'dascowork-primary-runtime-p3b-feed-'))
 let server
@@ -53,8 +51,13 @@ try {
   if (buildStatus !== 0) process.exitCode = buildStatus
   else {
     const e2eStatus = await run(
-      npxCommand,
-      ['playwright', 'test', 'tests/e2e/primary-runtime-feed.e2e.ts', '--reporter=line'],
+      process.execPath,
+      [
+        'node_modules/@playwright/test/cli.js',
+        'test',
+        'tests/e2e/primary-runtime-feed.e2e.ts',
+        '--reporter=line'
+      ],
       environment
     )
     if (e2eStatus !== 0) process.exitCode = e2eStatus
@@ -227,7 +230,29 @@ function parseOptions(argv) {
 
 async function ensureDesktopBuild(environment) {
   if (environment.DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY !== '1') {
-    return run(npmCommand, ['run', 'build'], environment)
+    for (const arguments_ of [
+      [
+        'node_modules/typescript/bin/tsc',
+        '--noEmit',
+        '-p',
+        'tsconfig.node.json',
+        '--composite',
+        'false'
+      ],
+      [
+        'node_modules/typescript/bin/tsc',
+        '--noEmit',
+        '-p',
+        'tsconfig.web.json',
+        '--composite',
+        'false'
+      ],
+      ['node_modules/electron-vite/bin/electron-vite.js', 'build']
+    ]) {
+      const status = await run(process.execPath, arguments_, environment)
+      if (status !== 0) return status
+    }
+    return 0
   }
 
   const expectedOutputs = ['out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html']
