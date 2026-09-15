@@ -133,7 +133,12 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       await expect(approvalPanel).toContainText('是否允许执行以下命令？', {
         timeout: 20_000
       })
-      await expect(approvalPanel).toContainText('build_deck_pptxgenjs.js')
+      // The command payload is Base64-encoded to preserve Windows quoting, so
+      // assert the renderer-visible escalation reason rather than a source
+      // filename that is intentionally absent from the displayed shell text.
+      await expect(approvalPanel).toContainText(
+        'The signed Primary Runtime presentation command needs its one-time approved execution path.'
+      )
       await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
 
       const runtimeSuccessMessage = page
