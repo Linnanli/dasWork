@@ -198,10 +198,10 @@ index ffb73d9..12fcffa 100755
        } else {
          // Plain filename — resolve against outline dir.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65..e8e7765 100755
+index f26dc65..a3e0f73 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,73 +45,67 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +45,87 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -241,8 +241,38 @@ index f26dc65..e8e7765 100755
      expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
 -
 -    if shutil.which("unoconvert"):
--        t0 = time.perf_counter()
--        result = subprocess.run(
++    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
++    user_installation = _runtime_user_installation()
++    base_args = [
++        "--headless",
++        "--convert-to",
++        "pdf:impress_pdf_Export",
++        "--outdir",
++        str(out_dir),
++        str(pptx_path),
++    ]
++    commands = [
++        [
++            soffice,
++            *user_installation,
++            *base_args,
++        ]
++    ]
++    executable = Path(soffice)
++    sibling = executable.with_suffix(".exe")
++    if executable.suffix.lower() == ".com" and sibling.is_file():
++        commands.append([str(sibling), *user_installation, *base_args])
++    retry_profile = out_dir / "libreoffice-retry-profile"
++    retry_profile.mkdir(parents=True, exist_ok=True)
++    retry_installation = [f"-env:UserInstallation={retry_profile.as_uri()}"]
++    if retry_installation != user_installation:
++        commands.append([soffice, *retry_installation, *base_args])
++        if executable.suffix.lower() == ".com" and sibling.is_file():
++            commands.append([str(sibling), *retry_installation, *base_args])
++    attempts = []
++    for command in commands:
+         t0 = time.perf_counter()
+         result = subprocess.run(
 -            [
 -                "unoconvert",
 -                "--convert-to",
@@ -250,12 +280,13 @@ index f26dc65..e8e7765 100755
 -                str(pptx_path),
 -                str(expected_pdf),
 -            ],
--            stdout=subprocess.PIPE,
--            stderr=subprocess.PIPE,
--            text=True,
--            env=_soffice_env(),
--        )
--        elapsed = time.perf_counter() - t0
++            command,
+             stdout=subprocess.PIPE,
+             stderr=subprocess.PIPE,
+             text=True,
+             env=_soffice_env(),
+         )
+         elapsed = time.perf_counter() - t0
 -        if result.returncode == 0 and expected_pdf.exists():
 -            # Quiet — one-liner with timing only. Daemon path is the
 -            # expected fast path; no nagging banner.
@@ -267,21 +298,12 @@ index f26dc65..e8e7765 100755
 -            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
 -            "falling back to soffice",
 -            file=sys.stderr,
--        )
++        output = result.stderr.strip() or result.stdout.strip() or "No error output."
++        attempts.append(
++            f"exit={result.returncode} elapsed={elapsed:.2f}s {' '.join(command)}: {output}"
+         )
 -
-+    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
-+    user_installation = _runtime_user_installation()
-+    command = [
-+        soffice,
-+        *user_installation,
-+        "--headless",
-+        "--convert-to",
-+        "pdf:impress_pdf_Export",
-+        "--outdir",
-+        str(out_dir),
-+        str(pptx_path),
-+    ]
-     t0 = time.perf_counter()
+-    t0 = time.perf_counter()
 -    _run(
 -        [
 -            "soffice",
@@ -292,41 +314,38 @@ index f26dc65..e8e7765 100755
 -            str(out_dir),
 -            str(pptx_path),
 -        ]
-+    result = subprocess.run(
-+        command,
-+        stdout=subprocess.PIPE,
-+        stderr=subprocess.PIPE,
-+        text=True,
-+        env=_soffice_env(),
++        if expected_pdf.exists():
++            if result.returncode != 0:
++                print(
++                    f"[render] Runtime soffice returned {result.returncode} after writing the PDF: {output}",
++                    file=sys.stderr,
++                )
++            print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
++            return expected_pdf
++    raise RuntimeError(
++        "Runtime LibreOffice did not produce the expected PDF after "
++        f"{len(attempts)} attempts:\n" + "\n".join(attempts)
      )
-     elapsed = time.perf_counter() - t0
+-    elapsed = time.perf_counter() - t0
 -    # Terse by default. Emit the "install unoserver" hint only on a truly
 -    # cold start (≥8s) — the usual case on first build after a reboot —
 -    # so repeated rapid rebuilds don't nag with the same line every run.
 -    if elapsed >= 8.0:
-+    output = result.stderr.strip() or result.stdout.strip() or "No error output."
-+    if result.returncode != 0 and not expected_pdf.exists():
-+        raise RuntimeError(
-+            "Command failed:\n"
-+            + " ".join(command)
-+            + "\n"
-+            + output
-+        )
-+    if result.returncode != 0:
-         print(
+-        print(
 -            f"[render] PDF via soffice in {elapsed:.2f}s — "
 -            "install unoserver for ~15x speedup "
 -            "(`pip install unoserver && unoserver &`)",
-+            f"[render] Runtime soffice returned {result.returncode} after writing the PDF: {output}",
-             file=sys.stderr,
-         )
+-            file=sys.stderr,
+-        )
 -    else:
 -        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
-+    print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
-     if not expected_pdf.exists():
-         raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
-     return expected_pdf
-@@ -179,12 +173,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+-    if not expected_pdf.exists():
+-        raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
+-    return expected_pdf
+ 
+ 
+ def _args() -> argparse.Namespace:
+@@ -179,12 +190,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -339,7 +358,7 @@ index f26dc65..e8e7765 100755
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +189,20 @@ def main() -> int:
+@@ -201,23 +206,20 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
@@ -381,9 +400,43 @@ index 18efabc..4c9cd71 100644
    }
  
    const sectionGap = 0.10;
+diff --git a/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
+new file mode 100644
+index 0000000..a6998ff
+--- /dev/null
++++ b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
+@@ -0,0 +1,28 @@
++{
++  "name": "presentation-skill",
++  "version": "0.8.0",
++  "description": "Runtime-owned, offline PPTX creation with automated QA and workspace preview.",
++  "author": {
++    "name": "dasCowork Runtime"
++  },
++  "license": "MIT",
++  "skills": "./skills/",
++  "interface": {
++    "displayName": "presentation-skill",
++    "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
++    "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
++    "developerName": "dasCowork Runtime",
++    "category": "Productivity",
++    "capabilities": [
++      "Write",
++      "Files",
++      "Presentations",
++      "Quality assurance"
++    ],
++    "defaultPrompt": [
++      "Create a new PowerPoint deck from the supplied workspace inputs.",
++      "Run the Runtime presentation QA and preview the generated deck."
++    ],
++    "brandColor": "#2563EB"
++  }
++}
 diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
 new file mode 100644
-index 0000000..20ab087
+index 0000000..4b467bd
 --- /dev/null
 +++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
 @@ -0,0 +1,29 @@
@@ -416,43 +469,9 @@ index 0000000..20ab087
 +- setup, bootstrap, virtual-environment, npm, and pip installers.
 +- Existing PPTX inspection, editing, redesign, or round-trip workflows.
 +- React-icon slugs and the React/sharp icon renderer.
-diff --git a/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
-new file mode 100644
-index 0000000..d6efabc
---- /dev/null
-+++ b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
-@@ -0,0 +1,28 @@
-+{
-+  "name": "presentation-skill",
-+  "version": "0.8.0",
-+  "description": "Runtime-owned, offline PPTX creation with automated QA and workspace preview.",
-+  "author": {
-+    "name": "dasCowork Runtime"
-+  },
-+  "license": "MIT",
-+  "skills": "./skills/",
-+  "interface": {
-+    "displayName": "presentation-skill",
-+    "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
-+    "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
-+    "developerName": "dasCowork Runtime",
-+    "category": "Productivity",
-+    "capabilities": [
-+      "Write",
-+      "Files",
-+      "Presentations",
-+      "Quality assurance"
-+    ],
-+    "defaultPrompt": [
-+      "Create a new PowerPoint deck from the supplied workspace inputs.",
-+      "Run the Runtime presentation QA and preview the generated deck."
-+    ],
-+    "brandColor": "#2563EB"
-+  }
-+}
 diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
 new file mode 100644
-index 0000000..f43d52a
+index 0000000..9574fec
 --- /dev/null
 +++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
 @@ -0,0 +1,47 @@
@@ -503,3 +522,4 @@ index 0000000..f43d52a
 +PptxGenJS templates, and this policy. Network clients, image-generation
 +scripts, installers, existing-PPTX workflows, and React/sharp icon rendering
 +are intentionally absent.
+
