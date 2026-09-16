@@ -1,13 +1,12 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { expect, type Page } from '@playwright/test'
 import JSZip from 'jszip'
 
-import { appRoot } from './app'
+import { appRoot, e2eTempRoot } from './app'
 
 const execFile = promisify(execFileCallback)
 const r07AssertionTimeoutMs = 120_000
@@ -47,7 +46,7 @@ export async function withR07PresentationWorkspace(
 ): Promise<void> {
   // This workspace is passed to Runtime-owned Python and office tools on
   // Windows; keep its root short enough for the nested command arguments.
-  const root = await mkdtemp(join(tmpdir(), 'dsc-r07-'))
+  const root = await mkdtemp(join(e2eTempRoot(), 'dsc-r07-'))
   const fixture = await readR07PresentationFixture()
   const imageFile = 'ai-agent-security-control.png'
   const workspace: R07PresentationWorkspace = {

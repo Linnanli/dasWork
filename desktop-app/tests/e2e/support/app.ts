@@ -14,6 +14,12 @@ import type { MockBackend } from './mockBackend'
 export const appRoot = resolve(__dirname, '..', '..', '..')
 export const repoRoot = resolve(appRoot, '..')
 
+export function e2eTempRoot(): string {
+  // GitHub-hosted Windows runners expose a short D:\a\_temp root. Prefer it
+  // so Runtime dependency paths remain below the Windows DLL loader limit.
+  return process.env.RUNNER_TEMP?.trim() || tmpdir()
+}
+
 export type LaunchAppOptions = {
   configureCodexHome?: (codexHomeDir: string) => Promise<void>
   userDataDir?: string
@@ -53,9 +59,9 @@ export async function launchApp(
   options: LaunchAppOptions = {}
 ): Promise<ElectronApplication> {
   const userDataDir =
-    options.userDataDir ?? (await mkdtemp(join(tmpdir(), e2eUserDataPrefix)))
+    options.userDataDir ?? (await mkdtemp(join(e2eTempRoot(), e2eUserDataPrefix)))
   const codexHomeDir =
-    options.codexHomeDir ?? (await mkdtemp(join(tmpdir(), e2eCodexHomePrefix)))
+    options.codexHomeDir ?? (await mkdtemp(join(e2eTempRoot(), e2eCodexHomePrefix)))
   const dataDirectories = [userDataDir, codexHomeDir]
   const documentsDir = join(userDataDir, 'Documents')
   let app: ElectronApplication | undefined
