@@ -24,6 +24,18 @@ const installerSmokePath = resolve(
   repositoryRoot,
   'desktop-app/scripts/run-installer-local-media-smoke.mjs'
 )
+const pinnedCodexCliVerifierPath = resolve(
+  repositoryRoot,
+  'desktop-app/scripts/verify-pinned-codex-cli.mjs'
+)
+
+test('locked Codex CLI verification executes the installed package entrypoint directly', async () => {
+  const verifierSource = await readFile(pinnedCodexCliVerifierPath, 'utf8')
+
+  assert.match(verifierSource, /node_modules\/@openai\/codex\/package\.json/u)
+  assert.match(verifierSource, /spawnSync\(process\.execPath, \[codexEntrypoint, '--version'\]/u)
+  assert.doesNotMatch(verifierSource, /npm(?:Command)?/u)
+})
 
 test('release workflows use the locked Codex CLI without remote script execution', async () => {
   const [
