@@ -85,6 +85,8 @@ export async function launchApp(
         DASCOWORK_E2E_DOCUMENTS_DIR: documentsDir,
         DASCOWORK_E2E_USER_DATA_DIR: userDataDir,
         ELECTRON_ENABLE_LOGGING: '1',
+        TEMP: e2eTempRoot(),
+        TMP: e2eTempRoot(),
         ...options.environment
       },
       timeout: options.launchTimeoutMs ?? 30_000
