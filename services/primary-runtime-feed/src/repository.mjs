@@ -151,7 +151,7 @@ export function runtimeFeedPathForRequest(pathname) {
     );
   if (manifest) return `channels/${manifest[1]}/manifest.json`;
   const archive =
-    /^\/v1\/runtime\/archives\/([A-Za-z0-9._-]+)\/([a-z]+)-(x64|arm64)\/primary-runtime\.zip$/u.exec(
+    /^\/v1\/runtime\/archives\/([A-Za-z0-9._-]+)\/([a-z0-9]+)-(x64|arm64)\/primary-runtime\.zip$/u.exec(
       pathname,
     );
   if (archive)

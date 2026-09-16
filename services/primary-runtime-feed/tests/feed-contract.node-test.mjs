@@ -48,6 +48,12 @@ test("maps only the versioned config, manifest, and immutable archive layout", (
     "archives/2026.09.10/darwin-arm64/primary-runtime.zip",
   );
   assert.equal(
+    runtimeFeedPathForRequest(
+      "/v1/runtime/archives/2026.09.10/win32-x64/primary-runtime.zip",
+    ),
+    "archives/2026.09.10/win32-x64/primary-runtime.zip",
+  );
+  assert.equal(
     runtimeFeedPathForRequest("/v1/runtime/archives/../secret"),
     null,
   );
