@@ -21,6 +21,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: primary-runtime-win32-x64-build-artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: Linnanli/dasWork
           run-id: 35156223185
           path: ${{ runner.temp }}/runtime-dist
