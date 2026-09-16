@@ -1,0 +1,85 @@
+name: debug-r07-windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  isolate:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-win32-x64-build-artifacts
+          repository: Linnanli/dasWork
+          run-id: 35156223185
+          path: ${{ runner.temp }}/runtime-dist
+      - name: Isolate R07 rendering inputs
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'runtime-root'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Expand-Archive -LiteralPath (Join-Path $env:RUNNER_TEMP 'runtime-dist/primary-runtime.zip') -DestinationPath $root -Force
+          $script = Join-Path $env:RUNNER_TEMP 'isolate-r07.mjs'
+          @'
+          import { execFileSync } from 'node:child_process'
+          import { mkdirSync, writeFileSync } from 'node:fs'
+          import { join } from 'node:path'
+          const runtimeRoot = process.env.RUNTIME_ROOT
+          const node = join(runtimeRoot, 'dependencies', 'node', 'node.exe')
+          const python = join(runtimeRoot, 'dependencies', 'python', 'python.exe')
+          const pluginRoot = join(runtimeRoot, 'plugins', 'presentation-skill', 'plugins', 'presentation-skill', 'skills', 'presentation-skill')
+          const outlineRoot = join(process.env.RUNNER_TEMP, 'r07-variants')
+          mkdirSync(outlineRoot, { recursive: true })
+          const imagePath = join(outlineRoot, 'ai-agent-security-control.png')
+          writeFileSync(imagePath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'))
+          const facts = [
+            '2026 年 AI Agent 安全市场规模为 18.4 亿元',
+            '企业试点渗透率为 37%',
+            '身份与权限治理占需求的 46%',
+            '高优先级风险是提示注入与工具权限滥用',
+            '第一优先行动是建立工具调用审计'
+          ]
+          const slides = [
+            { type: 'title', title: '封面｜AI Agent 安全市场', subtitle: '从市场机会到可审计的工具调用治理' },
+            { type: 'section', title: '议程｜市场机会与风险', subtitle: '市场规模、需求结构、风险优先级与下一步行动' },
+            { type: 'content', variant: 'standard', title: '摘要｜核心结论', subtitle: '来自工作区 HTML 的五项可验证事实', bullets: facts, footer: '来源：工作区 AI Agent 安全市场 HTML' },
+            { type: 'content', variant: 'table', title: '数据表｜细分需求对比', subtitle: '客户需求按控制面归类', table: { headers: ['细分需求', '需求占比', '建议控制'], rows: [['身份与权限治理', '46%', '最小权限与强制审批'], ['提示注入防护', '高优先级', '输入隔离与策略检测'], ['工具调用审计', '第一优先行动', '记录参数、结果与责任主体']], caption: '需求结构来自工作区输入', footnotes: ['表格用于决策对比，不替代完整市场研究'] } },
+            { type: 'content', variant: 'chart', title: '数据图｜市场规模与渗透率', subtitle: '市场规模与企业试点采用的可视化读数', chart: { type: 'bar', series: [{ name: '市场指标', labels: ['市场规模（亿元）', '企业试点渗透率（%）'], values: [18.4, 37] }], facts: [{ value: '18.4 亿元', label: '2026 年 AI Agent 安全市场规模' }, { value: '37%', label: '企业试点渗透率' }], options: { showValue: true, catAxisTitle: '指标', valAxisTitle: '数值' } }, message: '市场规模与企业试点渗透率均来自工作区输入。' },
+            { type: 'content', variant: 'image-sidebar', title: '图片｜安全控制图示', subtitle: '把高优先级风险映射到可审计动作', image_alt_text: 'AI Agent 安全控制图示', image_side: 'left', assets: { image: imagePath }, caption: '本地工作区图片；无网络下载。', sidebar_sections: [{ title: '高优先级风险', body: facts[3] }, { title: '第一优先行动', body: facts[4] }, { title: '执行边界', body: '通过普通 command 保留 sandbox 与审批。' }] }
+          ]
+          const makeOutline = (slideList, font = true) => ({ title: 'AI Agent 安全市场', deck_style: font ? { font_pair: 'dascowork_cjk_v1', visual_density: 'medium', emoji_mode: 'none' } : { visual_density: 'medium', emoji_mode: 'none' }, slides: slideList })
+          const variants = {
+            all: makeOutline(slides),
+            nochart: makeOutline(slides.filter((_, i) => i !== 4)),
+            noimage: makeOutline(slides.filter((_, i) => i !== 5)),
+            onlychart: makeOutline([slides[0], slides[4]]),
+            onlytable: makeOutline([slides[0], slides[3]]),
+            chartAscii: makeOutline([slides[0], { ...slides[4], chart: { ...slides[4].chart, series: [{ ...slides[4].chart.series[0], labels: ['Market Size', 'Pilot Adoption'] }] } }]),
+            tableAscii: makeOutline([slides[0], { ...slides[3], table: { ...slides[3].table, headers: ['Need', 'Share', 'Control'], rows: [['Identity', '46%', 'Least privilege'], ['Injection', 'High', 'Input isolation'], ['Audit', 'First', 'Record calls']] } }]),
+            defaultFont: makeOutline(slides, false)
+          }
+          for (const [name, variant] of Object.entries(variants)) {
+            const outline = join(outlineRoot, `${name}.json`)
+            const output = join(outlineRoot, `${name}.pptx`)
+            writeFileSync(outline, `${JSON.stringify(variant, null, 2)}\n`)
+            try {
+              execFileSync(node, [join(pluginRoot, 'scripts', 'build_deck_pptxgenjs.js'), '--outline', outline, '--output', output, '--asset-root', outlineRoot], { env: { ...process.env, PPTX_NODE_MODULES: join(runtimeRoot, 'dependencies', 'node', 'node_modules'), NODE_PATH: join(runtimeRoot, 'dependencies', 'node', 'node_modules') }, stdio: 'pipe' })
+              const rendered = join(outlineRoot, `${name}-rendered`)
+              execFileSync(python, [join(pluginRoot, 'scripts', 'render_slides.py'), '--input', output, '--outdir', rendered, '--format', 'png', '--dpi', '72'], { env: { ...process.env, PPTX_RUNTIME_SOFFICE: join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program', 'soffice.com'), PPTX_RUNTIME_PDFTOPPM: join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin', 'pdftoppm.exe'), PATH: `${join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program')};${join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin')};${process.env.PATH}` }, stdio: 'pipe' })
+              console.log(`${name}: PASS`)
+            } catch (error) {
+              console.log(`${name}: FAIL ${error.status ?? 'unknown'}`)
+              if (error.stderr) console.log(error.stderr.toString())
+            }
+          }
+          '@ | Set-Content -LiteralPath $script -Encoding utf8
+          $env:RUNTIME_ROOT = $root
+          node $script
