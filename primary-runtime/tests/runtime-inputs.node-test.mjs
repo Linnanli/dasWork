@@ -695,7 +695,9 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(patch, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
   assert.match(patch, /-env:UserInstallation=file:/u);
   assert.match(patch, /\+    if not value:\n\+        return \[\]/u);
-  assert.match(patch, /\+            \*user_installation,/u);
+  assert.match(patch, /\+\s+\*user_installation,/u);
+  assert.match(patch, /pdf:impress_pdf_Export/u);
+  assert.match(patch, /result\.returncode != 0 and not expected_pdf\.exists\(\)/u);
 });
 
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {

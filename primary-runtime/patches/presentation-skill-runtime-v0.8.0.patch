@@ -1,12 +1,11 @@
 diff --git a/plugins/presentation-skill/skills/presentation-skill/SKILL.md b/plugins/presentation-skill/skills/presentation-skill/SKILL.md
-index 3e68091..b4bca7d 100644
+index b476174..32ebd59 100644
 --- a/plugins/presentation-skill/skills/presentation-skill/SKILL.md
 +++ b/plugins/presentation-skill/skills/presentation-skill/SKILL.md
-@@ -2,6 +2,31 @@
- name: presentation-skill
+@@ -3,6 +3,31 @@ name: presentation-skill
  description: "Presentation skill for Codex, ChatGPT agents, and OpenAI-style agents that build, edit, verify, or iterate polished PowerPoint `.pptx` presentations, slides, and slide decks from structured `outline.json` or saved workspaces. Use for editable deck generation, lab/clinical/scientific deck assembly, investor or board decks, editorial briefs, presentation design, source-backed assets, optional generated-image slides, alignment QA, overflow/overlap checks, layout validation, and reusable deck workspaces. Aliases: `powerpoint-deck-builder`, `pptx-skill`, PowerPoint skill, PPTX skill, slide-deck generator, slides generator, deck builder, presentation generator."
  ---
-+
+ 
 +## dasCowork Runtime distribution policy
 +
 +This Runtime-owned distribution is restricted to creating a **new** PPTX, its
@@ -31,9 +30,357 @@ index 3e68091..b4bca7d 100644
 +The Runtime excludes React icon slugs (for example `fa6:`) and the
 +React/sharp-dependent icon renderer. Use simple shapes, text, charts, tables,
 +or approved workspace images instead.
- 
++
  # Presentation Skill
  
+ Repo-native PowerPoint skill for editable, aligned, QA-checked `.pptx`
+diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
+index ffb73d9..12fcffa 100755
+--- a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
++++ b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
+@@ -26,7 +26,6 @@
+ 'use strict';
+ 
+ const fs = require('fs');
+-const os = require('os');
+ const path = require('path');
+ const { spawnSync } = require('child_process');
+ const Module = require('module');
+@@ -35,28 +34,14 @@ const Module = require('module');
+ // Make pptxgenjs resolvable even when node_modules lives outside the skill.
+ // ---------------------------------------------------------------------------
+ function configureNodePath() {
+-  const sep = path.delimiter;
+-  const existing = String(process.env.NODE_PATH || '')
+-    .split(sep)
+-    .map((s) => s.trim())
+-    .filter(Boolean);
+-  const candidates = [
+-    process.env.PPTX_NODE_MODULES || '',
+-    path.resolve(__dirname, '..', 'node_modules'),
+-    path.resolve(process.cwd(), 'node_modules'),
+-    path.resolve(os.homedir(), 'codex', 'CascadeProjects', 'pptx_ab_comparison', 'node_modules'),
+-  ].filter(Boolean);
+-  let changed = false;
+-  for (const candidate of candidates) {
+-    if (!candidate || !fs.existsSync(candidate)) continue;
+-    if (existing.includes(candidate)) continue;
+-    existing.push(candidate);
+-    changed = true;
+-  }
+-  if (changed) {
+-    process.env.NODE_PATH = existing.join(sep);
+-    Module._initPaths();
++  const runtimeNodeModules = String(process.env.PPTX_NODE_MODULES || '').trim();
++  if (!runtimeNodeModules || !fs.existsSync(runtimeNodeModules)) {
++    throw new Error(
++      'Runtime Node modules are required. Call load_workspace_dependencies and set PPTX_NODE_MODULES.',
++    );
+   }
++  process.env.NODE_PATH = runtimeNodeModules;
++  Module._initPaths();
+ }
+ configureNodePath();
+ 
+@@ -65,8 +50,8 @@ try {
+   PptxGenJS = require('pptxgenjs');
+ } catch (err) {
+   console.error(
+-    'Error: missing dependency "pptxgenjs". Install with: npm install pptxgenjs\n' +
+-      'Or set PPTX_NODE_MODULES to a directory that contains it.',
++    'Error: the Runtime-owned "pptxgenjs" dependency is unavailable.\n' +
++      'Call load_workspace_dependencies and set PPTX_NODE_MODULES to its Node modules path.',
+   );
+   process.exit(2);
+ }
+@@ -638,6 +623,10 @@ const FONT_PAIRS = {
+     font_heading: 'Helvetica Neue',
+     font_body: 'Helvetica Neue',
+   },
++  dascowork_cjk_v1: {
++    font_heading: 'Noto Sans CJK SC',
++    font_body: 'Noto Sans CJK SC',
++  },
+ };
+ 
+ const PALETTE_LIBRARY = {
+@@ -1268,72 +1257,6 @@ function renderSlide(pptx, pSlide, slide, preset) {
+   }
+ }
+ 
+-// ---------------------------------------------------------------------------
+-// Icon pre-resolution: rasterize react-icons slugs to PNG before slide render.
+-// ---------------------------------------------------------------------------
+-
+-// Shared cache dir — icon PNGs are content-addressable (same slug+color+size
+-// → same PNG), so sharing across slides and across runs is safe.
+-const ICON_CACHE_DIR = path.join(os.tmpdir(), 'presentation-skill-icon-cache');
+-
+-function iconCacheKey(slug, color, size) {
+-  // Filesystem-safe filename: replace ':' → '__', '#' → '', lowercase.
+-  const safeSlug = String(slug).replace(/[^\w-]/g, '_');
+-  const safeColor = String(color || '000000').replace(/[^\w]/g, '').toLowerCase();
+-  return path.join(ICON_CACHE_DIR, `${safeSlug}_${safeColor}_${size}.png`);
+-}
+-
+-async function rasterizeIcon(slug, color, size) {
+-  const outPath = iconCacheKey(slug, color, size);
+-  if (fs.existsSync(outPath)) return outPath;
+-  fs.mkdirSync(ICON_CACHE_DIR, { recursive: true });
+-  const [pack, exportName] = String(slug).split(':');
+-  if (!pack || !exportName) {
+-    throw new Error(`invalid icon slug "${slug}" (expected pack:ExportName)`);
+-  }
+-  const packageByPack = {
+-    fa6: 'react-icons/fa6',
+-    fa: 'react-icons/fa',
+-    bi: 'react-icons/bi',
+-    bs: 'react-icons/bs',
+-    md: 'react-icons/md',
+-    lu: 'react-icons/lu',
+-  };
+-  const packageName = packageByPack[pack];
+-  if (!packageName) {
+-    throw new Error(`unsupported icon pack "${pack}"`);
+-  }
+-
+-  let React;
+-  let ReactDOMServer;
+-  let sharp;
+-  let iconModule;
+-  try {
+-    React = require('react');
+-    ReactDOMServer = require('react-dom/server');
+-    sharp = require('sharp');
+-    iconModule = require(packageName);
+-  } catch (err) {
+-    throw new Error(
+-      `missing optional icon deps (${err.message}). Run npm install once or use local PNG icons.`,
+-    );
+-  }
+-
+-  const Icon = iconModule[exportName];
+-  if (!Icon) {
+-    throw new Error(`icon export "${exportName}" not found in ${packageName}`);
+-  }
+-  const cleanColor = String(color || '#000000').startsWith('#') ? String(color) : `#${color}`;
+-  let svg = ReactDOMServer.renderToStaticMarkup(
+-    React.createElement(Icon, { size, color: cleanColor, title: exportName }),
+-  );
+-  if (!/\sxmlns=/.test(svg)) {
+-    svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+-  }
+-  await sharp(Buffer.from(svg)).png().toFile(outPath);
+-  return outPath;
+-}
+-
+ async function resolveIconsForSlides(slides, outlineDir, preset) {
+   // Resolve each slide's assets.icons array in parallel. Slugs with ':' are
+   // react-icons; others are filenames and we leave them alone.
+@@ -1352,17 +1275,8 @@ async function resolveIconsForSlides(slides, outlineDir, preset) {
+       const s = String(assets.icons[i] || '').trim();
+       if (!s) continue;
+       if (s.includes(':')) {
+-        // react-icons slug: pack:ExportName. Bind index in closure so the
+-        // promise writes to the correct slot.
+-        const idx = i;
+-        const paths = resolved;
+-        tasks.push(
+-          rasterizeIcon(s, color, 256)
+-            .then((p) => { paths[idx] = p; })
+-            .catch((err) => {
+-              console.warn(`[pptxgenjs] icon '${s}' failed: ${err.message}`);
+-              paths[idx] = '';
+-            })
++        throw new Error(
++          `Runtime presentation-skill excludes React icon slug "${s}"; use a supplied image or native PPTX shapes instead.`,
+         );
+       } else {
+         // Plain filename — resolve against outline dir.
+diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
+index f26dc65..e8e7765 100755
+--- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
++++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
+@@ -45,73 +45,67 @@ def _run(command: list[str]) -> None:
+         )
+ 
+ 
+-def _render_with_daemon_or_fallback(pptx_path: Path, out_dir: Path) -> Path:
+-    """Convert a .pptx to PDF using unoserver (if available) or soffice.
++def _runtime_binary(variable: str) -> str:
++    value = os.environ.get(variable, "").strip()
++    candidate = Path(value).expanduser().resolve() if value else None
++    if not candidate or not candidate.is_file():
++        raise RuntimeError(
++            f"{variable} must name the Runtime-owned binary returned by "
++            "load_workspace_dependencies."
++        )
++    return str(candidate)
+ 
+-    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
+-    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
+-    (~10-15s per call due to LibreOffice startup cost).
++def _runtime_user_installation() -> list[str]:
++    value = os.environ.get("PPTX_RUNTIME_SOFFICE_USER_INSTALLATION", "").strip()
++    if not value:
++        return []
++    if not value.startswith("-env:UserInstallation=file:"):
++        raise RuntimeError(
++            "PPTX_RUNTIME_SOFFICE_USER_INSTALLATION must name an isolated "
++            "Runtime LibreOffice profile."
++        )
++    return [value]
+ 
+-    Returns the path to the resulting PDF inside ``out_dir``.
+-    Logs the chosen path and timing to stderr.
+-    """
++
++def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
++    """Convert a .pptx using only the supplied Runtime soffice binary."""
+     out_dir.mkdir(parents=True, exist_ok=True)
+     expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
+-
+-    if shutil.which("unoconvert"):
+-        t0 = time.perf_counter()
+-        result = subprocess.run(
+-            [
+-                "unoconvert",
+-                "--convert-to",
+-                "pdf",
+-                str(pptx_path),
+-                str(expected_pdf),
+-            ],
+-            stdout=subprocess.PIPE,
+-            stderr=subprocess.PIPE,
+-            text=True,
+-            env=_soffice_env(),
+-        )
+-        elapsed = time.perf_counter() - t0
+-        if result.returncode == 0 and expected_pdf.exists():
+-            # Quiet — one-liner with timing only. Daemon path is the
+-            # expected fast path; no nagging banner.
+-            print(f"[render] PDF via unoserver in {elapsed:.2f}s", file=sys.stderr)
+-            return expected_pdf
+-        # Non-zero exit or missing artifact: log and fall through to soffice.
+-        err = (result.stderr.strip() or result.stdout.strip() or "no output")
+-        print(
+-            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
+-            "falling back to soffice",
+-            file=sys.stderr,
+-        )
+-
++    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
++    user_installation = _runtime_user_installation()
++    command = [
++        soffice,
++        *user_installation,
++        "--headless",
++        "--convert-to",
++        "pdf:impress_pdf_Export",
++        "--outdir",
++        str(out_dir),
++        str(pptx_path),
++    ]
+     t0 = time.perf_counter()
+-    _run(
+-        [
+-            "soffice",
+-            "--headless",
+-            "--convert-to",
+-            "pdf",
+-            "--outdir",
+-            str(out_dir),
+-            str(pptx_path),
+-        ]
++    result = subprocess.run(
++        command,
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++        text=True,
++        env=_soffice_env(),
+     )
+     elapsed = time.perf_counter() - t0
+-    # Terse by default. Emit the "install unoserver" hint only on a truly
+-    # cold start (≥8s) — the usual case on first build after a reboot —
+-    # so repeated rapid rebuilds don't nag with the same line every run.
+-    if elapsed >= 8.0:
++    output = result.stderr.strip() or result.stdout.strip() or "No error output."
++    if result.returncode != 0 and not expected_pdf.exists():
++        raise RuntimeError(
++            "Command failed:\n"
++            + " ".join(command)
++            + "\n"
++            + output
++        )
++    if result.returncode != 0:
+         print(
+-            f"[render] PDF via soffice in {elapsed:.2f}s — "
+-            "install unoserver for ~15x speedup "
+-            "(`pip install unoserver && unoserver &`)",
++            f"[render] Runtime soffice returned {result.returncode} after writing the PDF: {output}",
+             file=sys.stderr,
+         )
+-    else:
+-        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
++    print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
+     if not expected_pdf.exists():
+         raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
+     return expected_pdf
+@@ -179,12 +173,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+     print("=" * 72)
+ 
+ 
+-def _require_binary(name: str) -> None:
+-    if shutil.which(name):
+-        return
+-    raise RuntimeError(f"Required binary not found in PATH: {name}")
+-
+-
+ def _sort_key(path: Path, prefix: str) -> int:
+     suffix = path.stem.replace(prefix, "").lstrip("-")
+     try:
+@@ -201,23 +189,20 @@ def main() -> int:
+     if not input_path.exists():
+         raise FileNotFoundError(f"Input file not found: {input_path}")
+ 
+-    # unoconvert is optional (preferred); soffice is the fallback.
+-    if not shutil.which("unoconvert"):
+-        _require_binary("soffice")
+-    _require_binary("pdftoppm")
++    pdftoppm = _runtime_binary("PPTX_RUNTIME_PDFTOPPM")
+ 
+     outdir.mkdir(parents=True, exist_ok=True)
+ 
+     with tempfile.TemporaryDirectory(prefix="pptx-render-") as tmp:
+         tmp_path = Path(tmp)
+-        pdf_path = _render_with_daemon_or_fallback(input_path, tmp_path)
++        pdf_path = _render_with_runtime_soffice(input_path, tmp_path)
+ 
+         render_prefix = tmp_path / "slide"
+         if args.format == "png":
+-            _run(["pdftoppm", "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
++            _run([pdftoppm, "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
+             extension = ".png"
+         else:
+-            _run(["pdftoppm", "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
++            _run([pdftoppm, "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
+             extension = ".jpg"
+ 
+         generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
+diff --git a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
+index 18efabc..4c9cd71 100644
+--- a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
++++ b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
+@@ -4359,7 +4359,8 @@ function renderImageSidebar(pptx, slide, slideData, preset) {
+       line: { color: preset.line, width: 0.75 },
+     }));
+     const sized = imageSizingContainLocal(imagePath, imageX + 0.06, contentY + 0.06, imageW - 0.12, contentH - 0.12);
+-    slide.addImage(Object.assign({ path: imagePath }, sized));
++    const imageAltText = safeText(slideData.image_alt_text || slideData.image_alt);
++    slide.addImage(Object.assign({ path: imagePath, altText: imageAltText }, sized));
+   }
+ 
+   const sectionGap = 0.10;
 diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
 new file mode 100644
 index 0000000..20ab087
@@ -156,317 +503,3 @@ index 0000000..f43d52a
 +PptxGenJS templates, and this policy. Network clients, image-generation
 +scripts, installers, existing-PPTX workflows, and React/sharp icon rendering
 +are intentionally absent.
-diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
-index ffb73d9..bc931bc 100755
---- a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
-+++ b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
-@@ -26,7 +26,6 @@
- 'use strict';
- 
- const fs = require('fs');
--const os = require('os');
- const path = require('path');
- const { spawnSync } = require('child_process');
- const Module = require('module');
-@@ -35,28 +34,14 @@ const Module = require('module');
- // Make pptxgenjs resolvable even when node_modules lives outside the skill.
- // ---------------------------------------------------------------------------
- function configureNodePath() {
--  const sep = path.delimiter;
--  const existing = String(process.env.NODE_PATH || '')
--    .split(sep)
--    .map((s) => s.trim())
--    .filter(Boolean);
--  const candidates = [
--    process.env.PPTX_NODE_MODULES || '',
--    path.resolve(__dirname, '..', 'node_modules'),
--    path.resolve(process.cwd(), 'node_modules'),
--    path.resolve(os.homedir(), 'codex', 'CascadeProjects', 'pptx_ab_comparison', 'node_modules'),
--  ].filter(Boolean);
--  let changed = false;
--  for (const candidate of candidates) {
--    if (!candidate || !fs.existsSync(candidate)) continue;
--    if (existing.includes(candidate)) continue;
--    existing.push(candidate);
--    changed = true;
--  }
--  if (changed) {
--    process.env.NODE_PATH = existing.join(sep);
--    Module._initPaths();
-+  const runtimeNodeModules = String(process.env.PPTX_NODE_MODULES || '').trim();
-+  if (!runtimeNodeModules || !fs.existsSync(runtimeNodeModules)) {
-+    throw new Error(
-+      'Runtime Node modules are required. Call load_workspace_dependencies and set PPTX_NODE_MODULES.',
-+    );
-   }
-+  process.env.NODE_PATH = runtimeNodeModules;
-+  Module._initPaths();
- }
- configureNodePath();
- 
-@@ -65,8 +50,8 @@ try {
-   PptxGenJS = require('pptxgenjs');
- } catch (err) {
-   console.error(
--    'Error: missing dependency "pptxgenjs". Install with: npm install pptxgenjs\n' +
--      'Or set PPTX_NODE_MODULES to a directory that contains it.',
-+    'Error: the Runtime-owned "pptxgenjs" dependency is unavailable.\n' +
-+      'Call load_workspace_dependencies and set PPTX_NODE_MODULES to its Node modules path.',
-   );
-   process.exit(2);
- }
-@@ -637,5 +622,9 @@ const FONT_PAIRS = {
-   clean_modern_v1: {
-     font_heading: 'Helvetica Neue',
-     font_body: 'Helvetica Neue',
-   },
-+  dascowork_cjk_v1: {
-+    font_heading: 'Noto Sans CJK SC',
-+    font_body: 'Noto Sans CJK SC',
-+  },
- };
-@@ -1269,69 +1269,3 @@ function renderSlide(pptx, pSlide, slide, preset) {
- }
- 
--// ---------------------------------------------------------------------------
--// Icon pre-resolution: rasterize react-icons slugs to PNG before slide render.
--// ---------------------------------------------------------------------------
--
--// Shared cache dir — icon PNGs are content-addressable (same slug+color+size
--// → same PNG), so sharing across slides and across runs is safe.
--const ICON_CACHE_DIR = path.join(os.tmpdir(), 'presentation-skill-icon-cache');
--
--function iconCacheKey(slug, color, size) {
--  // Filesystem-safe filename: replace ':' → '__', '#' → '', lowercase.
--  const safeSlug = String(slug).replace(/[^\w-]/g, '_');
--  const safeColor = String(color || '000000').replace(/[^\w]/g, '').toLowerCase();
--  return path.join(ICON_CACHE_DIR, `${safeSlug}_${safeColor}_${size}.png`);
--}
--
--async function rasterizeIcon(slug, color, size) {
--  const outPath = iconCacheKey(slug, color, size);
--  if (fs.existsSync(outPath)) return outPath;
--  fs.mkdirSync(ICON_CACHE_DIR, { recursive: true });
--  const [pack, exportName] = String(slug).split(':');
--  if (!pack || !exportName) {
--    throw new Error(`invalid icon slug "${slug}" (expected pack:ExportName)`);
--  }
--  const packageByPack = {
--    fa6: 'react-icons/fa6',
--    fa: 'react-icons/fa',
--    bi: 'react-icons/bi',
--    bs: 'react-icons/bs',
--    md: 'react-icons/md',
--    lu: 'react-icons/lu',
--  };
--  const packageName = packageByPack[pack];
--  if (!packageName) {
--    throw new Error(`unsupported icon pack "${pack}"`);
--  }
--
--  let React;
--  let ReactDOMServer;
--  let sharp;
--  let iconModule;
--  try {
--    React = require('react');
--    ReactDOMServer = require('react-dom/server');
--    sharp = require('sharp');
--    iconModule = require(packageName);
--  } catch (err) {
--    throw new Error(
--      `missing optional icon deps (${err.message}). Run npm install once or use local PNG icons.`,
--    );
--  }
--
--  const Icon = iconModule[exportName];
--  if (!Icon) {
--    throw new Error(`icon export "${exportName}" not found in ${packageName}`);
--  }
--  const cleanColor = String(color || '#000000').startsWith('#') ? String(color) : `#${color}`;
--  let svg = ReactDOMServer.renderToStaticMarkup(
--    React.createElement(Icon, { size, color: cleanColor, title: exportName }),
--  );
--  if (!/\sxmlns=/.test(svg)) {
--    svg = svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
--  }
--  await sharp(Buffer.from(svg)).png().toFile(outPath);
--  return outPath;
--}
--
- async function resolveIconsForSlides(slides, outlineDir, preset) {
-@@ -1352,17 +1286,8 @@ async function resolveIconsForSlides(slides, outlineDir, preset) {
-       const s = String(assets.icons[i] || '').trim();
-       if (!s) continue;
-       if (s.includes(':')) {
--        // react-icons slug: pack:ExportName. Bind index in closure so the
--        // promise writes to the correct slot.
--        const idx = i;
--        const paths = resolved;
--        tasks.push(
--          rasterizeIcon(s, color, 256)
--            .then((p) => { paths[idx] = p; })
--            .catch((err) => {
--              console.warn(`[pptxgenjs] icon '${s}' failed: ${err.message}`);
--              paths[idx] = '';
--            })
-+        throw new Error(
-+          `Runtime presentation-skill excludes React icon slug "${s}"; use a supplied image or native PPTX shapes instead.`,
-         );
-       } else {
-         // Plain filename — resolve against outline dir.
-diff --git a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
-index 8e39458..aefbce7 100644
---- a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
-+++ b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
-@@ -4349,7 +4349,8 @@ function renderImageSidebar(pptx, slide, slideData, preset) {
-       line: { color: preset.line, width: 0.75 },
-     }));
-     const sized = imageSizingContainLocal(imagePath, imageX + 0.06, contentY + 0.06, imageW - 0.12, contentH - 0.12);
--    slide.addImage(Object.assign({ path: imagePath }, sized));
-+    const imageAltText = safeText(slideData.image_alt_text || slideData.image_alt);
-+    slide.addImage(Object.assign({ path: imagePath, altText: imageAltText }, sized));
-   }
-
-   const sectionGap = 0.10;
-diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65..3459f08 100755
---- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-+++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,51 +45,38 @@ def _run(command: list[str]) -> None:
-         )
- 
- 
--def _render_with_daemon_or_fallback(pptx_path: Path, out_dir: Path) -> Path:
--    """Convert a .pptx to PDF using unoserver (if available) or soffice.
-+def _runtime_binary(variable: str) -> str:
-+    value = os.environ.get(variable, "").strip()
-+    candidate = Path(value).expanduser().resolve() if value else None
-+    if not candidate or not candidate.is_file():
-+        raise RuntimeError(
-+            f"{variable} must name the Runtime-owned binary returned by "
-+            "load_workspace_dependencies."
-+        )
-+    return str(candidate)
- 
-+def _runtime_user_installation() -> list[str]:
-+    value = os.environ.get("PPTX_RUNTIME_SOFFICE_USER_INSTALLATION", "").strip()
-+    if not value:
-+        return []
-+    if not value.startswith("-env:UserInstallation=file:"):
-+        raise RuntimeError(
-+            "PPTX_RUNTIME_SOFFICE_USER_INSTALLATION must name an isolated "
-+            "Runtime LibreOffice profile."
-+        )
-+    return [value]
-+
--    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
--    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
--    (~10-15s per call due to LibreOffice startup cost).
- 
--    Returns the path to the resulting PDF inside ``out_dir``.
--    Logs the chosen path and timing to stderr.
--    """
-+def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
-+    """Convert a .pptx using only the supplied Runtime soffice binary."""
-     out_dir.mkdir(parents=True, exist_ok=True)
-     expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
--
--    if shutil.which("unoconvert"):
--        t0 = time.perf_counter()
--        result = subprocess.run(
--            [
--                "unoconvert",
--                "--convert-to",
--                "pdf",
--                str(pptx_path),
--                str(expected_pdf),
--            ],
--            stdout=subprocess.PIPE,
--            stderr=subprocess.PIPE,
--            text=True,
--            env=_soffice_env(),
--        )
--        elapsed = time.perf_counter() - t0
--        if result.returncode == 0 and expected_pdf.exists():
--            # Quiet — one-liner with timing only. Daemon path is the
--            # expected fast path; no nagging banner.
--            print(f"[render] PDF via unoserver in {elapsed:.2f}s", file=sys.stderr)
--            return expected_pdf
--        # Non-zero exit or missing artifact: log and fall through to soffice.
--        err = (result.stderr.strip() or result.stdout.strip() or "no output")
--        print(
--            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
--            "falling back to soffice",
--            file=sys.stderr,
--        )
--
-+    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
-+    user_installation = _runtime_user_installation()
-     t0 = time.perf_counter()
-     _run(
-         [
--            "soffice",
-+            soffice,
-+            *user_installation,
-             "--headless",
-             "--convert-to",
-@@ -100,18 +74,7 @@ def _render_with_daemon_or_fallback(pptx_path: Path, out_dir: Path) -> Path:
-         ]
-     )
-     elapsed = time.perf_counter() - t0
--    # Terse by default. Emit the "install unoserver" hint only on a truly
--    # cold start (≥8s) — the usual case on first build after a reboot —
--    # so repeated rapid rebuilds don't nag with the same line every run.
--    if elapsed >= 8.0:
--        print(
--            f"[render] PDF via soffice in {elapsed:.2f}s — "
--            "install unoserver for ~15x speedup "
--            "(`pip install unoserver && unoserver &`)",
--            file=sys.stderr,
--        )
--    else:
--        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
-+    print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
-     if not expected_pdf.exists():
-         raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
-     return expected_pdf
-@@ -179,12 +142,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
-     print("=" * 72)
- 
- 
--def _require_binary(name: str) -> None:
--    if shutil.which(name):
--        return
--    raise RuntimeError(f"Required binary not found in PATH: {name}")
--
--
- def _sort_key(path: Path, prefix: str) -> int:
-     suffix = path.stem.replace(prefix, "").lstrip("-")
-     try:
-@@ -201,21 +158,18 @@ def main() -> int:
-     if not input_path.exists():
-         raise FileNotFoundError(f"Input file not found: {input_path}")
- 
--    # unoconvert is optional (preferred); soffice is the fallback.
--    if not shutil.which("unoconvert"):
--        _require_binary("soffice")
--    _require_binary("pdftoppm")
-+    pdftoppm = _runtime_binary("PPTX_RUNTIME_PDFTOPPM")
- 
-     outdir.mkdir(parents=True, exist_ok=True)
- 
-     with tempfile.TemporaryDirectory(prefix="pptx-render-") as tmp:
-         tmp_path = Path(tmp)
--        pdf_path = _render_with_daemon_or_fallback(input_path, tmp_path)
-+        pdf_path = _render_with_runtime_soffice(input_path, tmp_path)
- 
-         render_prefix = tmp_path / "slide"
-         if args.format == "png":
--            _run(["pdftoppm", "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            _run([pdftoppm, "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-             extension = ".png"
-         else:
--            _run(["pdftoppm", "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            _run([pdftoppm, "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-             extension = ".jpg"
