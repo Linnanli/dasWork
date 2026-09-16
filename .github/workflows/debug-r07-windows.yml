@@ -34,7 +34,7 @@ jobs:
           $script = Join-Path $env:RUNNER_TEMP 'isolate-r07.mjs'
           @'
           import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+          import { mkdirSync, writeFileSync } from 'node:fs'
           import { join } from 'node:path'
           const runtimeRoot = process.env.RUNTIME_ROOT
           const node = join(runtimeRoot, 'dependencies', 'node', 'node.exe')
