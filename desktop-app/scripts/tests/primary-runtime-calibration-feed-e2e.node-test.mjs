@@ -76,6 +76,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
     /shellCommandResponse\('response-runtime-command', runtimeCommandCallId, \{[\s\S]*?timeout_ms: 60_000/u
   )
   assert.match(e2eSource, /data:text\/javascript;base64/u)
+  assert.match(e2eSource, /process\.platform === 'win32'[\s\S]*?& \$\{shellQuote\(dependencies\.node\)\}/u)
   assert.match(e2eSource, /invalid `,;` separators/u)
   assert.match(
     e2eSource,

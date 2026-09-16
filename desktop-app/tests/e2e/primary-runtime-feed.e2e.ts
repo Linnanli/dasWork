@@ -304,8 +304,15 @@ function runtimePresentationCommandResponse(
   // source on Windows. The only executable remains the Runtime Node path from
   // load_workspace_dependencies; this is still one ordinary command item.
   const encodedSource = Buffer.from(source, 'utf8').toString('base64')
+  // The Windows desktop command shell is PowerShell. A quoted executable path
+  // is parsed as a string there unless it is prefixed with the call operator;
+  // keep the POSIX form unchanged for the native Linux/macOS runners.
+  const nodeExecutable =
+    process.platform === 'win32'
+      ? `& ${shellQuote(dependencies.node)}`
+      : shellQuote(dependencies.node)
   const command = [
-    shellQuote(dependencies.node),
+    nodeExecutable,
     '--input-type=module',
     '-e',
     // `eval` parses its input as a classic script even when Node itself is
