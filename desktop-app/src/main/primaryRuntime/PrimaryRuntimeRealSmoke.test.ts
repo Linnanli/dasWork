@@ -17,8 +17,9 @@ const candidateVersion = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_VERSION
 const candidateSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_SHA256?.trim().toLowerCase()
 const realRuntimeSmokeEnabled = process.env.DASCOWORK_REAL_PRIMARY_RUNTIME_SMOKE === '1'
 // P3a proves native installer correctness. P3b owns the cold-install timing
-// budget, so this gate must accommodate the slower fixed Intel Mac runner.
-const realRuntimeSmokeTimeoutMs = 4 * 60 * 1000
+// budget, so this collection ceiling must accommodate the slower fixed Intel
+// Mac runner without changing the reviewed product budget.
+const realRuntimeSmokeTimeoutMs = 15 * 60 * 1000
 const directories: string[] = []
 
 afterEach(async () => {

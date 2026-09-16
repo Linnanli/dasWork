@@ -17,8 +17,9 @@ const expectedSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256?.trim
 const maxRssDeltaMiB = Number(process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_MAX_RSS_MIB ?? '384')
 const stressTimeoutMs = parsePositiveTimeout(
   // P3a is one full archive install and must retain enough headroom for the
-  // fixed Intel macOS runner. P3b separately measures ten cold installs.
-  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? String(4 * 60 * 1000)
+  // fixed Intel macOS runner. P3b separately measures ten cold installs and
+  // owns the reviewed product budget.
+  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? String(15 * 60 * 1000)
 )
 const directories: string[] = []
 
