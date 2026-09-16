@@ -31,6 +31,12 @@ const appTempDirs = new WeakMap<ElectronApplication, string[]>()
 const e2eLaunchCooldownMs = 1_500
 let nextE2eLaunchAt = 0
 
+// Keep the generated roots compact so Runtime-owned scripts (notably the
+// Windows Python presentation lint path) stay below MAX_PATH after the
+// version/target/plugin directories are appended.
+const e2eUserDataPrefix = 'dsc-ud-'
+const e2eCodexHomePrefix = 'dsc-ch-'
+
 export type AppReadinessSnapshot = {
   bridgeReady: boolean
   modelCatalogReady: boolean
@@ -47,9 +53,9 @@ export async function launchApp(
   options: LaunchAppOptions = {}
 ): Promise<ElectronApplication> {
   const userDataDir =
-    options.userDataDir ?? (await mkdtemp(join(tmpdir(), 'dascowork-e2e-user-data-')))
+    options.userDataDir ?? (await mkdtemp(join(tmpdir(), e2eUserDataPrefix)))
   const codexHomeDir =
-    options.codexHomeDir ?? (await mkdtemp(join(tmpdir(), 'dascowork-e2e-codex-home-')))
+    options.codexHomeDir ?? (await mkdtemp(join(tmpdir(), e2eCodexHomePrefix)))
   const dataDirectories = [userDataDir, codexHomeDir]
   const documentsDir = join(userDataDir, 'Documents')
   let app: ElectronApplication | undefined

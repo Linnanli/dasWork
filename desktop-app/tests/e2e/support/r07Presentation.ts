@@ -45,7 +45,9 @@ export type R07PresentationWorkspace = R07PresentationFixture & {
 export async function withR07PresentationWorkspace(
   run: (workspace: R07PresentationWorkspace) => Promise<void>
 ): Promise<void> {
-  const root = await mkdtemp(join(tmpdir(), 'dascowork-r07-presentations-'))
+  // This workspace is passed to Runtime-owned Python and office tools on
+  // Windows; keep its root short enough for the nested command arguments.
+  const root = await mkdtemp(join(tmpdir(), 'dsc-r07-'))
   const fixture = await readR07PresentationFixture()
   const imageFile = 'ai-agent-security-control.png'
   const workspace: R07PresentationWorkspace = {
