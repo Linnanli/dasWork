@@ -36,6 +36,7 @@ jobs:
           import { execFileSync } from 'node:child_process'
           import { mkdirSync, writeFileSync } from 'node:fs'
           import { join } from 'node:path'
+          import { pathToFileURL } from 'node:url'
           const runtimeRoot = process.env.RUNTIME_ROOT
           const node = join(runtimeRoot, 'dependencies', 'node', 'node.exe')
           const python = join(runtimeRoot, 'dependencies', 'python', 'python.exe')
@@ -81,7 +82,7 @@ jobs:
             try {
               execFileSync(node, [join(pluginRoot, 'scripts', 'build_deck_pptxgenjs.js'), '--outline', outline, '--output', output, '--asset-root', outlineRoot], { env: { ...process.env, PPTX_NODE_MODULES: join(runtimeRoot, 'dependencies', 'node', 'node_modules'), NODE_PATH: join(runtimeRoot, 'dependencies', 'node', 'node_modules') }, stdio: 'pipe' })
               const rendered = join(outlineRoot, `${name}-rendered`)
-              execFileSync(python, [join(pluginRoot, 'scripts', 'render_slides.py'), '--input', output, '--outdir', rendered, '--format', 'png', '--dpi', '72'], { env: { ...process.env, FONTCONFIG_FILE: fontConfig, FONTCONFIG_PATH: join(runtimeRoot, 'fonts'), PPTX_RUNTIME_SOFFICE: join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program', 'soffice.com'), PPTX_RUNTIME_PDFTOPPM: join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin', 'pdftoppm.exe'), APPDATA: join(libreOfficeProfile, 'AppData', 'Roaming'), LOCALAPPDATA: join(libreOfficeProfile, 'AppData', 'Local'), USERPROFILE: libreOfficeProfile, PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=file:///${libreOfficeProfile.replaceAll('\\\\', '/')}`, PATH: `${join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program')};${join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin')};${process.env.PATH}` }, stdio: 'pipe' })
+              execFileSync(python, [join(pluginRoot, 'scripts', 'render_slides.py'), '--input', output, '--outdir', rendered, '--format', 'png', '--dpi', '72'], { env: { ...process.env, FONTCONFIG_FILE: fontConfig, FONTCONFIG_PATH: join(runtimeRoot, 'fonts'), PPTX_RUNTIME_SOFFICE: join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program', 'soffice.com'), PPTX_RUNTIME_PDFTOPPM: join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin', 'pdftoppm.exe'), APPDATA: join(libreOfficeProfile, 'AppData', 'Roaming'), LOCALAPPDATA: join(libreOfficeProfile, 'AppData', 'Local'), USERPROFILE: libreOfficeProfile, PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=${pathToFileURL(libreOfficeProfile).href}`, PATH: `${join(runtimeRoot, 'dependencies', 'native', 'libreoffice', 'program')};${join(runtimeRoot, 'dependencies', 'native', 'poppler', 'bin')};${process.env.PATH}` }, stdio: 'pipe' })
               console.log(`${name}: PASS`)
             } catch (error) {
               console.log(`${name}: FAIL ${error.status ?? 'unknown'}`)
