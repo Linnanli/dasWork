@@ -84,6 +84,8 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)
   assert.match(e2eSource, /Buffer\.from\(source, 'utf8'\)\.toString\('base64'\)/u)
   assert.match(e2eSource, /process\.platform === 'win32'/u)
+  assert.match(e2eSource, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u)
+  assert.match(e2eSource, /libreoffice-profile/u)
   assert.match(presentationSmokeSource, /run-primary-runtime-feed-e2e\.mjs/u)
   assert.doesNotMatch(presentationSmokeSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(presentationSmokeSource, /spawnSync/u)

@@ -339,8 +339,9 @@ function runtimePresentationCommandSource(
   const facts = workspace.facts.map((fact) => fact.value)
   return [
     "import { execFileSync } from 'node:child_process'",
-    "import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'",
+    "import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'",
     "import { dirname, join, delimiter } from 'node:path'",
+    "import { pathToFileURL } from 'node:url'",
     `const dependencies = ${JSON.stringify(dependencies)}`,
     `const workspace = ${JSON.stringify({
       root: workspace.root,
@@ -365,6 +366,7 @@ function runtimePresentationCommandSource(
     'const renderedSlides = join(workspace.root, workspace.renderedSlidesDirectory)',
     'const contactSheet = join(workspace.root, workspace.contactSheetFile)',
     'const imagePath = join(workspace.root, workspace.imageFile)',
+    "const libreOfficeProfile = join(workspace.root, 'libreoffice-profile')",
     "const outline = { title: 'AI Agent 安全市场', deck_style: { font_pair: 'dascowork_cjk_v1', visual_density: 'medium', emoji_mode: 'none' }, slides: [",
     "  { type: 'title', title: '封面｜AI Agent 安全市场', subtitle: '从市场机会到可审计的工具调用治理' },",
     "  { type: 'section', title: '议程｜市场机会与风险', subtitle: '市场规模、需求结构、风险优先级与下一步行动' },",
@@ -380,10 +382,11 @@ function runtimePresentationCommandSource(
     'const commonEnv = { ...process.env, PPTX_NODE_MODULES: dependencies.nodeModules, NODE_PATH: dependencies.nodeModules }',
     "execFileSync(dependencies.node, [scripts.build, '--outline', outlinePath, '--output', outputPath, '--asset-root', workspace.root], { cwd: workspace.root, env: commonEnv, stdio: 'inherit' })",
     "const pythonEnv = { ...process.env, PYTHONPATH: [join(skillRoot, 'scripts'), ...dependencies.pythonPackages].join(delimiter), PYTHONNOUSERSITE: '1' }",
+    "mkdirSync(libreOfficeProfile, { recursive: true })",
     "execFileSync(dependencies.python, [scripts.layout, '--input', outputPath, '--outline', outlinePath, '--output', layoutPath, '--fail-on-error'], { cwd: workspace.root, env: pythonEnv, stdio: 'inherit' })",
     // Keep runtime-native tools ahead of the host while retaining the system
     // utilities that the bundled LibreOffice launcher invokes internally.
-    'const renderEnv = { ...pythonEnv, FONTCONFIG_FILE: fontConfig, FONTCONFIG_PATH: dirname(dependencies.font), PPTX_RUNTIME_SOFFICE: dependencies.soffice, PPTX_RUNTIME_PDFTOPPM: dependencies.pdftoppm, PATH: [dirname(dependencies.soffice), dirname(dependencies.pdftoppm), process.env.PATH].filter(Boolean).join(delimiter) }',
+    "const renderEnv = { ...pythonEnv, FONTCONFIG_FILE: fontConfig, FONTCONFIG_PATH: dirname(dependencies.font), PPTX_RUNTIME_SOFFICE: dependencies.soffice, PPTX_RUNTIME_PDFTOPPM: dependencies.pdftoppm, ...(process.platform === 'win32' ? { APPDATA: join(libreOfficeProfile, 'AppData', 'Roaming'), LOCALAPPDATA: join(libreOfficeProfile, 'AppData', 'Local'), PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=${pathToFileURL(libreOfficeProfile).href}`, USERPROFILE: libreOfficeProfile } : {}), PATH: [dirname(dependencies.soffice), dirname(dependencies.pdftoppm), process.env.PATH].filter(Boolean).join(delimiter) }",
     "execFileSync(dependencies.python, [scripts.render, '--input', outputPath, '--outdir', renderedSlides, '--format', 'png', '--dpi', '72'], { cwd: workspace.root, env: renderEnv, stdio: 'inherit' })",
     "const contactSheetScript = `from pathlib import Path\\nfrom PIL import Image, ImageDraw\\nimport sys\\nsource=Path(sys.argv[1])\\nout=Path(sys.argv[2])\\npaths=sorted(source.glob('slide-*.png'))\\nif len(paths) < 6: raise SystemExit('expected six rendered slides')\\nthumbs=[]\\nfor path in paths:\\n    image=Image.open(path).convert('RGB')\\n    image.thumbnail((420, 236))\\n    canvas=Image.new('RGB', (432, 268), 'white')\\n    canvas.paste(image, ((432-image.width)//2, 8))\\n    ImageDraw.Draw(canvas).text((8, 246), path.name, fill='black')\\n    thumbs.append(canvas)\\nsheet=Image.new('RGB', (864, ((len(thumbs)+1)//2)*268), 'white')\\nfor i, image in enumerate(thumbs): sheet.paste(image, ((i%2)*432, (i//2)*268))\\nsheet.save(out, 'PNG')`",
     "execFileSync(dependencies.python, ['-c', contactSheetScript, renderedSlides, contactSheet], { cwd: workspace.root, env: renderEnv, stdio: 'inherit' })",
