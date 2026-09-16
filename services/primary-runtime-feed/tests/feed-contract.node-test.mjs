@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import {
   copyFile,
@@ -9,8 +10,10 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import {
   CONFIG_PATH,
@@ -26,6 +29,11 @@ import {
   isAllowedRequestHost,
   normalizeAllowedRequestHosts,
 } from "../src/server.mjs";
+
+const execFileAsync = promisify(execFile);
+const packageRoot = dirname(
+  fileURLToPath(new URL("../package.json", import.meta.url)),
+);
 
 test("maps only the versioned config, manifest, and immutable archive layout", () => {
   assert.equal(runtimeFeedPathForRequest(CONFIG_PATH), "config.json");
@@ -113,6 +121,72 @@ test("canonical signed payload removes only the signature and has stable key ord
     canonicalSignedPayload({ z: 1, signature: "x", a: { b: true } }),
     '{"a":{"b":true},"z":1}',
   );
+});
+
+test("P7 feed signing CLI package scripts are registered and callable", async () => {
+  const packageJson = JSON.parse(
+    await readFile(join(packageRoot, "package.json"), "utf8"),
+  );
+  assert.equal(
+    packageJson.scripts["sign:config"],
+    "node scripts/sign-config.mjs",
+  );
+  assert.equal(
+    packageJson.scripts["sign:manifest"],
+    "node scripts/sign-manifest.mjs",
+  );
+
+  const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-cli-"));
+  try {
+    const signing = generateKeyPairSync("ed25519");
+    const keyPath = join(root, "private-key.pem");
+    await writeFile(
+      keyPath,
+      signing.privateKey.export({ type: "pkcs8", format: "pem" }),
+      { mode: 0o600 },
+    );
+
+    for (const [script, label] of [
+      ["sign:config", "config"],
+      ["sign:manifest", "manifest"],
+    ]) {
+      const input = join(root, `${label}.unsigned.json`);
+      const output = join(root, `${label}.json`);
+      await writeFile(
+        input,
+        `${JSON.stringify({
+          schemaVersion: 1,
+          sequence: 1,
+          keyId: `${label}-test`,
+        })}\n`,
+      );
+      await execFileAsync(
+        process.platform === "win32" ? "npm.cmd" : "npm",
+        [
+          "run",
+          script,
+          "--",
+          "--key",
+          keyPath,
+          "--input",
+          input,
+          "--output",
+          output,
+        ],
+        { cwd: packageRoot, timeout: 10_000 },
+      );
+      const signed = JSON.parse(await readFile(output, "utf8"));
+      assert.equal(signed.keyId, `${label}-test`);
+      assert.match(signed.signature, /^[A-Za-z0-9+/]+={0,2}$/u);
+      assert.equal(
+        signed.signature.length > 40,
+        true,
+        `${script} should write a real signature`,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("accepts only the configured HTTPS Host header", () => {
