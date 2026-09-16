@@ -8,7 +8,7 @@ import { createReadStream } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { signFeedMetadata } from '../../services/primary-runtime-feed/src/repository.mjs'
@@ -42,11 +42,13 @@ try {
     DASCOWORK_PRIMARY_RUNTIME_FEED_PORT: String(fixture.port)
   })
   server = await startPrimaryRuntimeFeed(configuration, { allowCalibrationCandidate: true })
-  const environment = primaryRuntimeFeedChildEnvironment(configuration, {
-    ...process.env,
-    DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1',
-    DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: fixture.tls.caPath
-  })
+  const environment = withPinnedCodexCliOnPath(
+    primaryRuntimeFeedChildEnvironment(configuration, {
+      ...process.env,
+      DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1',
+      DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: fixture.tls.caPath
+    })
+  )
   const buildStatus = await ensureDesktopBuild(environment)
   if (buildStatus !== 0) process.exitCode = buildStatus
   else {
@@ -175,6 +177,20 @@ function calibrationFeedBudget(archiveBytes, unpackedBytes) {
     maxColdInstallMs: 86_400_000,
     maxMainEventLoopDelayP99Ms: 60_000,
     maxMainEventLoopDelayMaxMs: 60_000
+  }
+}
+
+function withPinnedCodexCliOnPath(environment) {
+  const pathEntries = Object.entries(environment)
+  const existingPath = pathEntries.find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? ''
+  const pathKey = process.platform === 'win32' ? 'Path' : 'PATH'
+  const withoutPath = Object.fromEntries(
+    pathEntries.filter(([key]) => key.toUpperCase() !== 'PATH')
+  )
+  const pinnedCliDirectory = join(appRoot, 'node_modules', '.bin')
+  return {
+    ...withoutPath,
+    [pathKey]: [pinnedCliDirectory, existingPath].filter(Boolean).join(delimiter)
   }
 }
 

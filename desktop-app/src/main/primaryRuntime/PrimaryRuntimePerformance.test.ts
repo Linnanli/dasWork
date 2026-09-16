@@ -27,7 +27,10 @@ const evidenceValue = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_EVIDENCE
 const normalChatPassed = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_NORMAL_CHAT_PASSED === '1'
 const p1aReceiptSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_RECEIPT_SHA256
 const p1aMeasurementsValue = process.env.DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_MEASUREMENTS
-const performanceTestTimeoutMs = 900_000
+// Intel macOS hosted runners have needed almost sixteen minutes to extract the
+// ten target-native Runtime archives. This is only the collection ceiling; the
+// reviewed P3b budget remains the enforceable product limit.
+const performanceTestTimeoutMs = 1_500_000
 const directories: string[] = []
 
 afterEach(async () => {
