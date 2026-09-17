@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 
 import { canonicalJson } from "../src/repository.mjs";
 
+const supportedTargets = new Set(["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"]);
 const targets = new Map();
 const options = parseArgs(process.argv.slice(2));
 for (const [target, root] of targets) await assertTargetEvidence(target, root);
@@ -201,5 +202,3 @@ function sha256(value) {
 function isSha256(value) {
   return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 }
-
-const supportedTargets = new Set(["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"]);
