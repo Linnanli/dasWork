@@ -229,7 +229,31 @@ index f26dc65..4d86260 100755
 +            f"{variable} must name the Runtime-owned binary returned by "
 +            "load_workspace_dependencies."
 +        )
-+    return str(candidate)
++    return _windows_short_path(candidate)
++
++def _windows_short_path(path: Path) -> str:
++    """Use an 8.3 path for Runtime binaries when Windows exposes one.
++
++    Feed-installed Runtime versions contain immutable commit and archive
++    digests, so their LibreOffice paths can approach Windows legacy path
++    limits even though the archive itself is valid.  GetShortPathNameW is a
++    compatibility fallback; on volumes without 8.3 names the long path is
++    retained and the normal command path remains unchanged.
++    """
++    if os.name != "nt":
++        return str(path)
++    try:
++        import ctypes
++
++        buffer = ctypes.create_unicode_buffer(32768)
++        length = ctypes.windll.kernel32.GetShortPathNameW(
++            str(path), buffer, len(buffer)
++        )
++        if length:
++            return buffer.value
++    except (AttributeError, OSError, TypeError):
++        pass
++    return str(path)
 +
 +def _runtime_user_installation() -> list[str]:
 +    value = os.environ.get("PPTX_RUNTIME_SOFFICE_USER_INSTALLATION", "").strip()
