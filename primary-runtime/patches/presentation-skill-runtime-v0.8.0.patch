@@ -215,7 +215,7 @@ index f26dc65..4d86260 100755
  from pathlib import Path
  
  
-@@ -45,76 +47,133 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +47,137 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -311,24 +311,27 @@ index f26dc65..4d86260 100755
 +        str(out_dir),
 +        str(render_input),
 +    ]
++    executable = Path(soffice)
++    command_cwd = str(executable.parent) if os.name == "nt" else None
++    soffice_command = executable.name if os.name == "nt" else soffice
++    sibling = executable.with_suffix(".exe")
 +    commands = [
 +        [
-+            soffice,
++            soffice_command,
 +            *user_installation,
 +            *base_args,
 +        ]
 +    ]
-+    executable = Path(soffice)
-+    sibling = executable.with_suffix(".exe")
 +    if executable.suffix.lower() == ".com" and sibling.is_file():
-+        commands.append([str(sibling), *user_installation, *base_args])
++        sibling_command = sibling.name if os.name == "nt" else str(sibling)
++        commands.append([sibling_command, *user_installation, *base_args])
 +    retry_profile = out_dir / "libreoffice-retry-profile"
 +    retry_profile.mkdir(parents=True, exist_ok=True)
 +    retry_installation = [f"-env:UserInstallation={retry_profile.as_uri()}"]
 +    if retry_installation != user_installation:
-+        commands.append([soffice, *retry_installation, *base_args])
++        commands.append([soffice_command, *retry_installation, *base_args])
 +        if executable.suffix.lower() == ".com" and sibling.is_file():
-+            commands.append([str(sibling), *retry_installation, *base_args])
++            commands.append([sibling_command, *retry_installation, *base_args])
 +    attempts = []
 +    for command in commands:
          t0 = time.perf_counter()
@@ -345,6 +348,7 @@ index f26dc65..4d86260 100755
              stderr=subprocess.PIPE,
              text=True,
              env=_soffice_env(),
++            cwd=command_cwd,
          )
          elapsed = time.perf_counter() - t0
 -        if result.returncode == 0 and expected_pdf.exists():
@@ -405,7 +409,7 @@ index f26dc65..4d86260 100755
  
  
  def _args() -> argparse.Namespace:
-@@ -179,12 +214,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +218,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -418,7 +422,7 @@ index f26dc65..4d86260 100755
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +230,20 @@ def main() -> int:
+@@ -201,23 +234,20 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
