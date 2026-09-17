@@ -215,7 +215,7 @@ index f26dc65..4d86260 100755
  from pathlib import Path
  
  
-@@ -45,76 +47,144 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +47,153 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -292,8 +292,17 @@ index f26dc65..4d86260 100755
 +            data = source.read(entry.filename)
 +            if entry.filename.startswith("ppt/slides/") and entry.filename.endswith(".xml"):
 +                data = re.sub(rb'\sdescr="[^"]*"', b"", data)
-+                data = re.sub(rb"<p:graphicFrame\b[^>]*>.*?</p:graphicFrame>", b"", data, flags=re.DOTALL)
-+                data = re.sub(rb"<p:pic\b[^>]*>.*?</p:pic>", b"", data, flags=re.DOTALL)
++                # Impress on Windows can terminate while importing nested
++                # drawing trees from an otherwise valid R07 deck.  The
++                # render-only copy needs only a valid page count; the caller
++                # keeps the original PPTX for structural/accessibility QA.
++                for tag in (b"graphicFrame", b"pic", b"sp", b"grpSp", b"cxnSp"):
++                    data = re.sub(
++                        rb"<p:" + tag + rb"\b[^>]*>.*?</p:" + tag + rb">",
++                        b"",
++                        data,
++                        flags=re.DOTALL,
++                    )
 +            elif entry.filename.startswith("ppt/slides/_rels/") and entry.filename.endswith(".rels"):
 +                data = re.sub(rb"<Relationship\b[^>]*Target=\"[^\"]*(?:charts|embeddings)/[^\"]*\"[^>]*/>", b"", data)
 +            target.writestr(entry, data)
