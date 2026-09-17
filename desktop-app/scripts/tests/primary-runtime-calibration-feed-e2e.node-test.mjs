@@ -81,7 +81,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /runtimeSystemPaths/u)
   assert.match(
     e2eSource,
-    /PATH: \[dirname\(dependencies\.soffice\), dirname\(dependencies\.pdftoppm\), \.\.\.runtimeSystemPaths\]\.join\(delimiter\)/u
+    /PATH: \[dirname\(dependencies\.soffice\), dirname\(dependencies\.pdftoppm\), \.\.\.runtimeSystemPaths, process\.env\.PATH\]\.filter\(Boolean\)\.join\(delimiter\)/u
   )
   assert.match(e2eSource, /renderer approval surface/u)
   assert.match(e2eSource, /await expect\(approvalPanel\)\.toContainText\('是否允许执行以下命令？'/u)
