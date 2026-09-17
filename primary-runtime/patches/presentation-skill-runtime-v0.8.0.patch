@@ -215,7 +215,7 @@ index f26dc65..4d86260 100755
  from pathlib import Path
  
  
-@@ -45,76 +47,137 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +47,147 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -273,22 +273,32 @@ index f26dc65..4d86260 100755
 -    Returns the path to the resulting PDF inside ``out_dir``.
 -    Logs the chosen path and timing to stderr.
 +def _windows_render_input(pptx_path: Path, out_dir: Path) -> Path:
-+    """Strip image descriptions for the Windows Impress import workaround.
++    """Strip Windows-fragile presentation metadata for the Impress workaround.
 +
 +    LibreOffice 26.2.x on Windows can terminate while importing a PPTX that
-+    contains non-ASCII image descriptions, even though the same artifact is
-+    valid and its accessibility metadata is required by the final verifier.
-+    Render a temporary metadata-light copy and leave the caller's artifact
-+    untouched so the original ``descr`` value remains available to consumers.
++    contains non-ASCII image descriptions or a chart frame with long CJK axis
++    labels, even though the same artifact is valid and its accessibility and
++    chart metadata are required by the final verifier. Render a temporary
++    metadata-light copy and leave the caller's artifact untouched so the
++    original content remains available to consumers.
      """
 +    if os.name != "nt":
 +        return pptx_path
 +    sanitized = out_dir / f".{pptx_path.stem}.render.pptx"
 +    with zipfile.ZipFile(pptx_path, "r") as source, zipfile.ZipFile(sanitized, "w") as target:
 +        for entry in source.infolist():
++            if entry.filename.startswith("ppt/charts/") or entry.filename.startswith("ppt/embeddings/"):
++                continue
 +            data = source.read(entry.filename)
 +            if entry.filename.startswith("ppt/slides/") and entry.filename.endswith(".xml"):
 +                data = re.sub(rb'\sdescr="[^"]*"', b"", data)
++                if b"/chart" in data:
++                    def strip_chart_frame(match: re.Match[bytes]) -> bytes:
++                        frame = match.group(0)
++                        return b"" if b"/chart" in frame else frame
++                    data = re.sub(rb"<p:graphicFrame\b[^>]*>.*?</p:graphicFrame>", strip_chart_frame, data, flags=re.DOTALL)
++            elif entry.filename.startswith("ppt/slides/_rels/") and entry.filename.endswith(".rels"):
++                data = re.sub(rb"<Relationship\b[^>]*Target=\"[^\"]*(?:charts|embeddings)/[^\"]*\"[^>]*/>", b"", data)
 +            target.writestr(entry, data)
 +    return sanitized
 +
@@ -409,7 +419,7 @@ index f26dc65..4d86260 100755
  
  
  def _args() -> argparse.Namespace:
-@@ -179,12 +218,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +228,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -422,7 +432,7 @@ index f26dc65..4d86260 100755
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +234,20 @@ def main() -> int:
+@@ -201,23 +244,20 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
