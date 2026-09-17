@@ -797,7 +797,7 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
-          npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
+          xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
 
       - name: Verify no private key entered the artifact
         shell: bash
