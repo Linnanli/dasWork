@@ -9,11 +9,14 @@ import { readRuntimeHardLimits } from "./runtime-hard-limits.mjs";
 import {
   assertNativeRuntimeTarget,
   parseRuntimeTargetOption,
+  supportedRuntimeTargets,
 } from "./runtime-target.mjs";
 import { readStoredZipArchive } from "./zip-writer.mjs";
 
 const argumentsValue = parseArgs(process.argv.slice(2));
-const target = assertNativeRuntimeTarget(argumentsValue.target);
+const target = argumentsValue.allowCrossTarget
+  ? assertSupportedRuntimeTarget(argumentsValue.target)
+  : assertNativeRuntimeTarget(argumentsValue.target);
 const targetRoot = join(argumentsValue.outputRoot, target);
 const archivePath = argumentsValue.archive ?? join(targetRoot, "primary-runtime.zip");
 const provenancePath = argumentsValue.provenance ?? join(targetRoot, "provenance.json");
@@ -224,6 +227,10 @@ function parseArgs(argv) {
   const target = parseRuntimeTargetOption(argv);
   return {
     target,
+    // The final engineering-feed aggregator runs on Linux while rechecking
+    // archives produced by the native matrix. This flag permits artifact
+    // integrity verification without misrepresenting the runner as native.
+    allowCrossTarget: argv.includes("--allow-cross-target"),
     outputRoot: resolve(
       optionValue(argv, "--output-root") ??
         fileURLToPath(new URL("../dist", import.meta.url)),
@@ -249,6 +256,15 @@ function parseArgs(argv) {
     releaseBudgetPath: optionalResolvedValue(argv, "--release-budget"),
     performanceReportPath: optionalResolvedValue(argv, "--performance-report"),
   };
+}
+
+function assertSupportedRuntimeTarget(target) {
+  if (!supportedRuntimeTargets.includes(target)) {
+    throw new Error(
+      `AT-RT-BUILD-01 blocked: ${target} is not a supported Runtime target.`,
+    );
+  }
+  return target;
 }
 
 function optionalResolvedValue(argv, name) {

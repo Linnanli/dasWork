@@ -694,6 +694,7 @@ jobs:
           for target in darwin-x64 darwin-arm64 win32-x64 linux-x64; do
             root="$RUNNER_TEMP/targets/$target"
             npm --prefix primary-runtime run verify -- \
+              --allow-cross-target \
               --target="$target" \
               --archive "$root/primary-runtime.zip" \
               --provenance "$root/provenance.json" \
