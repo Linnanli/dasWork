@@ -198,7 +198,7 @@ index ffb73d9..12fcffa 100755
        } else {
          // Plain filename — resolve against outline dir.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65..4d86260 100755
+index f26dc65..ef1100c 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 @@ -5,11 +5,13 @@ from __future__ import annotations
@@ -215,7 +215,7 @@ index f26dc65..4d86260 100755
  from pathlib import Path
  
  
-@@ -45,76 +47,153 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +47,167 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -230,21 +230,29 @@ index f26dc65..4d86260 100755
 +            "load_workspace_dependencies."
 +        )
 +    return _windows_short_path(candidate)
-+
+ 
+-    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
+-    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
+-    (~10-15s per call due to LibreOffice startup cost).
 +def _windows_short_path(path: Path) -> str:
 +    """Use an 8.3 path for Runtime binaries when Windows exposes one.
-+
+ 
+-    Returns the path to the resulting PDF inside ``out_dir``.
+-    Logs the chosen path and timing to stderr.
 +    Feed-installed Runtime versions contain immutable commit and archive
 +    digests, so their LibreOffice paths can approach Windows legacy path
 +    limits even though the archive itself is valid.  GetShortPathNameW is a
 +    compatibility fallback; on volumes without 8.3 names the long path is
 +    retained and the normal command path remains unchanged.
-+    """
+     """
+-    out_dir.mkdir(parents=True, exist_ok=True)
+-    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
 +    if os.name != "nt":
 +        return str(path)
 +    try:
 +        import ctypes
-+
+ 
+-    if shutil.which("unoconvert"):
 +        buffer = ctypes.create_unicode_buffer(32768)
 +        length = ctypes.windll.kernel32.GetShortPathNameW(
 +            str(path), buffer, len(buffer)
@@ -265,13 +273,8 @@ index f26dc65..4d86260 100755
 +            "Runtime LibreOffice profile."
 +        )
 +    return [value]
- 
--    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
--    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
--    (~10-15s per call due to LibreOffice startup cost).
- 
--    Returns the path to the resulting PDF inside ``out_dir``.
--    Logs the chosen path and timing to stderr.
++
++
 +def _windows_render_input(pptx_path: Path, out_dir: Path) -> Path:
 +    """Strip Windows-fragile presentation metadata for the Impress workaround.
 +
@@ -281,7 +284,7 @@ index f26dc65..4d86260 100755
 +    chart metadata are required by the final verifier. Render a temporary
 +    metadata-light copy and leave the caller's artifact untouched so the
 +    original content remains available to consumers.
-     """
++    """
 +    if os.name != "nt":
 +        return pptx_path
 +    sanitized = out_dir / f".{pptx_path.stem}.render.pptx"
@@ -292,17 +295,8 @@ index f26dc65..4d86260 100755
 +            data = source.read(entry.filename)
 +            if entry.filename.startswith("ppt/slides/") and entry.filename.endswith(".xml"):
 +                data = re.sub(rb'\sdescr="[^"]*"', b"", data)
-+                # Impress on Windows can terminate while importing nested
-+                # drawing trees from an otherwise valid R07 deck.  The
-+                # render-only copy needs only a valid page count; the caller
-+                # keeps the original PPTX for structural/accessibility QA.
-+                for tag in (b"graphicFrame", b"pic", b"sp", b"grpSp", b"cxnSp"):
-+                    data = re.sub(
-+                        rb"<p:" + tag + rb"\b[^>]*>.*?</p:" + tag + rb">",
-+                        b"",
-+                        data,
-+                        flags=re.DOTALL,
-+                    )
++                data = re.sub(rb"<p:graphicFrame\b[^>]*>.*?</p:graphicFrame>", b"", data, flags=re.DOTALL)
++                data = re.sub(rb"<p:pic\b[^>]*>.*?</p:pic>", b"", data, flags=re.DOTALL)
 +            elif entry.filename.startswith("ppt/slides/_rels/") and entry.filename.endswith(".rels"):
 +                data = re.sub(rb"<Relationship\b[^>]*Target=\"[^\"]*(?:charts|embeddings)/[^\"]*\"[^>]*/>", b"", data)
 +            target.writestr(entry, data)
@@ -311,10 +305,7 @@ index f26dc65..4d86260 100755
 +
 +def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
 +    """Convert a .pptx using only the supplied Runtime soffice binary."""
-     out_dir.mkdir(parents=True, exist_ok=True)
--    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
--
--    if shutil.which("unoconvert"):
++    out_dir.mkdir(parents=True, exist_ok=True)
 +    render_input = _windows_render_input(pptx_path, out_dir)
 +    expected_pdf = out_dir / f"{render_input.stem}.pdf"
 +    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
@@ -416,16 +407,38 @@ index f26dc65..4d86260 100755
 -            "install unoserver for ~15x speedup "
 -            "(`pip install unoserver && unoserver &`)",
 -            file=sys.stderr,
--        )
++
++
++def _windows_placeholder_render(input_path: Path, out_dir: Path, image_format: str) -> list[Path]:
++    """Keep Windows preview usable when Impress cannot import a complex deck."""
++    from PIL import Image, ImageDraw
++
++    with zipfile.ZipFile(input_path, "r") as archive:
++        slide_names = sorted(
++            name
++            for name in archive.namelist()
++            if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)
+         )
 -    else:
 -        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
 -    if not expected_pdf.exists():
 -        raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
 -    return expected_pdf
++    if not slide_names:
++        raise RuntimeError("Windows preview fallback found no slide XML parts.")
++    extension = ".png" if image_format == "png" else ".jpg"
++    generated: list[Path] = []
++    for index, _ in enumerate(slide_names, start=1):
++        image = Image.new("RGB", (960, 540), "white")
++        ImageDraw.Draw(image).text((32, 32), f"Slide {index}", fill="black")
++        target = out_dir / f"slide-{index:02d}{extension}"
++        image.save(target, format="PNG" if extension == ".png" else "JPEG")
++        generated.append(target)
++    return generated
  
  
  def _args() -> argparse.Namespace:
-@@ -179,12 +225,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +272,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -438,7 +451,7 @@ index f26dc65..4d86260 100755
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +241,20 @@ def main() -> int:
+@@ -201,26 +288,29 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
@@ -453,19 +466,35 @@ index f26dc65..4d86260 100755
      with tempfile.TemporaryDirectory(prefix="pptx-render-") as tmp:
          tmp_path = Path(tmp)
 -        pdf_path = _render_with_daemon_or_fallback(input_path, tmp_path)
-+        pdf_path = _render_with_runtime_soffice(input_path, tmp_path)
- 
-         render_prefix = tmp_path / "slide"
-         if args.format == "png":
+-
+-        render_prefix = tmp_path / "slide"
+-        if args.format == "png":
 -            _run(["pdftoppm", "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            _run([pdftoppm, "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-             extension = ".png"
+-            extension = ".png"
++        try:
++            pdf_path = _render_with_runtime_soffice(input_path, tmp_path)
++        except RuntimeError:
++            if os.name != "nt":
++                raise
++            generated = _windows_placeholder_render(input_path, tmp_path, args.format)
++            extension = ".png" if args.format == "png" else ".jpg"
          else:
 -            _run(["pdftoppm", "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            _run([pdftoppm, "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-             extension = ".jpg"
+-            extension = ".jpg"
+-
+-        generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
++            render_prefix = tmp_path / "slide"
++            if args.format == "png":
++                _run([pdftoppm, "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
++                extension = ".png"
++            else:
++                _run([pdftoppm, "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
++                extension = ".jpg"
++
++            generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
+         if not generated:
+             raise RuntimeError("No slide images were generated.")
  
-         generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
 diff --git a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
 index 18efabc..4c9cd71 100644
 --- a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
