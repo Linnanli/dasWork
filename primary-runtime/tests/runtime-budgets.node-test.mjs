@@ -179,6 +179,7 @@ test("budget CLIs read files and fail closed", async () => {
         "utf8",
       ),
     );
+    awaitingReviewBudget.evidence.reviewed = false;
     assert.throws(
       () => verifyRuntimeBudgets({ budgets: awaitingReviewBudget }),
       /invalid schema|incomplete provenance/u,
