@@ -77,26 +77,30 @@ describe.skipIf(!performanceEnabled)('Primary Runtime P3b performance calibratio
     const mainEventLoopDelayMaxMs: number[] = []
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const cacheRoot = await mkdtemp(join(tmpdir(), 'primary-runtime-performance-'))
-      directories.push(cacheRoot)
       const eventLoop = monitorEventLoopDelay({ resolution: 1 })
       eventLoop.enable()
       const startedAt = performance.now()
-      await new PrimaryRuntimeService({
-        cacheRoot,
-        locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
-        releaseProvider: createSignedCalibrationFeed({
-          archivePath: archivePath!,
-          archiveSizeBytes: archive.size,
-          archiveSha256: expectedSha256!.toLowerCase(),
-          version: version!,
-          unpackedBytes
-        })
-      }).install()
-      await new Promise<void>((resolveAttempt) => setImmediate(resolveAttempt))
-      eventLoop.disable()
-      coldInstallMs.push(toPositiveMilliseconds(performance.now() - startedAt))
-      mainEventLoopDelayP99Ms.push(toPositiveMilliseconds(eventLoop.percentile(99) / 1_000_000))
-      mainEventLoopDelayMaxMs.push(toPositiveMilliseconds(eventLoop.max / 1_000_000))
+      try {
+        await new PrimaryRuntimeService({
+          cacheRoot,
+          locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+          releaseProvider: createSignedCalibrationFeed({
+            archivePath: archivePath!,
+            archiveSizeBytes: archive.size,
+            archiveSha256: expectedSha256!.toLowerCase(),
+            version: version!,
+            unpackedBytes
+          })
+        }).install()
+        await new Promise<void>((resolveAttempt) => setImmediate(resolveAttempt))
+        eventLoop.disable()
+        coldInstallMs.push(toPositiveMilliseconds(performance.now() - startedAt))
+        mainEventLoopDelayP99Ms.push(toPositiveMilliseconds(eventLoop.percentile(99) / 1_000_000))
+        mainEventLoopDelayMaxMs.push(toPositiveMilliseconds(eventLoop.max / 1_000_000))
+      } finally {
+        eventLoop.disable()
+        await removePerformanceDirectory(cacheRoot)
+      }
     }
 
     await writeFile(
