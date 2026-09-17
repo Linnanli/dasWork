@@ -63,7 +63,7 @@ async function runCalibration(input) {
   }
   await mkdir(dirname(input.output), { recursive: true })
   await run(
-    'npm',
+    npmExecutable(),
     ['exec', '--', 'vitest', 'run', 'src/main/primaryRuntime/PrimaryRuntimePerformance.test.ts'],
     {
       cwd: resolve(repositoryRoot, 'desktop-app'),
@@ -85,6 +85,10 @@ async function runCalibration(input) {
       }
     }
   )
+}
+
+function npmExecutable() {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm'
 }
 
 async function readP1aMeasurements(directory, target) {
