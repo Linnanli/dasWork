@@ -193,7 +193,7 @@ jobs:
             --report "win32-x64=$RUNNER_TEMP/calibration/win32-x64/performance-target-report.json" \
             --report "linux-x64=$RUNNER_TEMP/calibration/linux-x64/performance-target-report.json"
           npm --prefix primary-runtime run verify:budgets -- \
-            --budget primary-runtime/runtime-budgets.json \
+            --budget runtime-budgets.json \
             --measurements "$report"
           cp primary-runtime/runtime-budgets.json "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
 
