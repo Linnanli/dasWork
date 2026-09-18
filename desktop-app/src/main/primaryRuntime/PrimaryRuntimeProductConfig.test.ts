@@ -98,6 +98,35 @@ describe('PrimaryRuntimeHttpClient', () => {
       'allowlist'
     )
   })
+
+  it('cancels streamed JSON metadata as soon as the byte limit is exceeded', async () => {
+    const encoder = new TextEncoder()
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      start(controller): void {
+        controller.enqueue(encoder.encode('{"payload":"'))
+        controller.enqueue(encoder.encode('oversized"}'))
+      },
+      cancel(): void {
+        cancelled = true
+      }
+    })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(body, {
+          headers: { 'content-length': '1' }
+        })
+    )
+    const client = new PrimaryRuntimeHttpClient({
+      allowedOrigins: ['https://feed.example.test'],
+      fetchImpl
+    })
+
+    await expect(
+      client.getJson('https://feed.example.test/v1/config.json', { maxBytes: 12 })
+    ).rejects.toThrow('exceeds')
+    expect(cancelled).toBe(true)
+  })
 })
 
 function signedConfig(): Record<string, unknown> {

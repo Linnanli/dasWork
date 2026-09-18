@@ -52,7 +52,12 @@ describe('desktop tool definitions', () => {
   it('rejects explicit null arguments instead of treating them as missing', async () => {
     const loadDependencies = vi.fn(async () => ({ text: 'Runtime paths' }))
     const registry = new DynamicAppToolRegistry()
-    registry.register(createLoadWorkspaceDependenciesTool({ loadDependencies }))
+    registry.register(
+      createLoadWorkspaceDependenciesTool({
+        loadDependencies,
+        diagnoseDependencies: async () => ({ status: 'ready' })
+      })
+    )
 
     await expect(
       registry.dispatch({
@@ -68,7 +73,7 @@ describe('desktop tool definitions', () => {
     expect(loadDependencies).not.toHaveBeenCalled()
   })
 
-  it('keeps the diagnostic loader available and returns structured recovery when the runtime is broken', async () => {
+  it('does not publish the loader while still returning structured recovery on direct failed calls', async () => {
     const tool = createLoadWorkspaceDependenciesTool({
       loadDependencies: async () => {
         throw new Error('runtime missing')
@@ -81,7 +86,9 @@ describe('desktop tool definitions', () => {
       })
     })
 
-    await expect(tool.availability({ hostId: 'local' })).resolves.toEqual({ state: 'available' })
+    await expect(tool.availability({ hostId: 'local' })).resolves.toMatchObject({
+      state: 'unavailable'
+    })
     await expect(tool.execute(context, {})).resolves.toEqual({
       success: false,
       contentItems: [
@@ -100,6 +107,17 @@ describe('desktop tool definitions', () => {
     })
   })
 
+  it('publishes the loader for pipe projections when diagnose confirms a ready Runtime', async () => {
+    const diagnoseDependencies = vi.fn(async () => ({ status: 'ready' as const }))
+    const tool = createLoadWorkspaceDependenciesTool({
+      loadDependencies: async () => ({ text: 'Runtime paths' }),
+      diagnoseDependencies
+    })
+
+    await expect(tool.availability({ hostId: 'local' })).resolves.toEqual({ state: 'available' })
+    expect(diagnoseDependencies).toHaveBeenCalledOnce()
+  })
+
   it('does not publish the loader when Main resolves the product or app-server feature as disabled', async () => {
     const tool = createLoadWorkspaceDependenciesTool({
       loadDependencies: async () => ({ text: 'Runtime paths' })
@@ -110,6 +128,8 @@ describe('desktop tool definitions', () => {
     ).resolves.toMatchObject({ state: 'unavailable' })
     // Dynamic calls from an already-created thread retain that thread's
     // snapshot; only new projections carry the gate value.
-    await expect(tool.availability({ hostId: 'local' })).resolves.toEqual({ state: 'available' })
+    await expect(
+      tool.availability({ hostId: 'local', primaryRuntimeStatus: 'ready' })
+    ).resolves.toEqual({ state: 'available' })
   })
 })

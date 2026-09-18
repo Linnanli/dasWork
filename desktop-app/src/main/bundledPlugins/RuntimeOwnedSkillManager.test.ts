@@ -60,6 +60,29 @@ describe('RuntimeOwnedSkillManager', () => {
     await expect(readFile(join(userDirectory, 'SKILL.md'), 'utf8')).resolves.toBe('# User-owned')
   })
 
+  it('removes its owned managed namespace when the active Runtime declares no skills', async () => {
+    const fixture = await createFixture()
+    await fixture.manager().reconcile()
+
+    await fixture.manager({ bundledSkills: [] }).reconcile()
+
+    await expect(
+      readdir(join(fixture.codexHome, 'skills', 'dascowork-primary-runtime'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('does not remove an unmarked user namespace when the active Runtime declares no skills', async () => {
+    const fixture = await createFixture()
+    const userDirectory = join(fixture.codexHome, 'skills', 'dascowork-primary-runtime')
+    await mkdir(userDirectory, { recursive: true })
+    await writeFile(join(userDirectory, 'SKILL.md'), '# User-owned')
+
+    await expect(fixture.manager({ bundledSkills: [] }).reconcile()).rejects.toThrow(
+      'refuses to replace an unowned Codex skills directory'
+    )
+    await expect(readFile(join(userDirectory, 'SKILL.md'), 'utf8')).resolves.toBe('# User-owned')
+  })
+
   it('rejects a legacy skill path that could leave the Codex skills root', async () => {
     const fixture = await createFixture()
 
@@ -72,7 +95,10 @@ describe('RuntimeOwnedSkillManager', () => {
 async function createFixture(): Promise<{
   codexHome: string
   skill: string
-  manager(overrides?: { skillsToRemove?: string[] }): RuntimeOwnedSkillManager
+  manager(overrides?: {
+    bundledSkills?: Array<{ path: string; sha256: string }>
+    skillsToRemove?: string[]
+  }): RuntimeOwnedSkillManager
 }> {
   const root = await mkdtemp(join(tmpdir(), 'dascowork-runtime-owned-skills-'))
   directories.push(root)
@@ -104,7 +130,7 @@ async function createFixture(): Promise<{
         runtimeRoot,
         bundleVersion: 'test-v1',
         manifest: {
-          bundledSkills: [{ path: relativeSkillPath, sha256 }],
+          bundledSkills: overrides.bundledSkills ?? [{ path: relativeSkillPath, sha256 }],
           skillsToRemove: overrides.skillsToRemove ?? []
         }
       })

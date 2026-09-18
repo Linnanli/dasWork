@@ -4,7 +4,7 @@ import { DesktopHostCapabilityRuntime } from './DesktopHostCapabilityRuntime'
 import { PrimaryRuntimeCapabilityPolicy } from '../primaryRuntime'
 
 describe('DesktopHostCapabilityRuntime', () => {
-  it('always publishes the workspace-dependency diagnostic loader on a supported local host', async () => {
+  it('publishes the workspace-dependency loader only after the Runtime is ready', async () => {
     let status: 'ready' | 'missing' = 'missing'
     let diagnoseCount = 0
     const runtime = new DesktopHostCapabilityRuntime({
@@ -25,13 +25,10 @@ describe('DesktopHostCapabilityRuntime', () => {
     expect(missing.codexAppMcp).toBe('unavailable')
     expect(missing.bundledPlugins).toBe('unavailable')
     expect(missing.degraded).toBe(true)
-    expect(missing.availableToolNames).toEqual([
-      'read_thread_terminal',
-      'load_workspace_dependencies'
-    ])
+    expect(missing.availableToolNames).toEqual(['read_thread_terminal'])
     expect(missing.dynamicTools[0]).toMatchObject({
       type: 'namespace',
-      tools: [{ name: 'read_thread_terminal' }, { name: 'load_workspace_dependencies' }]
+      tools: [{ name: 'read_thread_terminal' }]
     })
 
     status = 'ready'

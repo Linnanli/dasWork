@@ -202,11 +202,13 @@ describe('BundledPluginManager', () => {
     }
     const retired: BundledPluginDescriptor = {
       ...current,
-      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/presentation-skill',
+      marketplaceName: 'obsolete-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/obsolete-skill',
       marketplacePath:
-        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/.agents/plugins/marketplace.json',
+        '/app/cache/primary-runtime/versions/old/plugins/obsolete-skill/.agents/plugins/marketplace.json',
       pluginRoot:
-        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/plugins/presentation-skill',
+        '/app/cache/primary-runtime/versions/old/plugins/obsolete-skill/plugins/obsolete-skill',
+      pluginName: 'obsolete-skill',
       owner: 'primary-runtime:1'
     }
     let retiredEnabled = true
@@ -218,8 +220,8 @@ describe('BundledPluginManager', () => {
         [
           {
             ...plugin({ installed: true, enabled }),
-            id: 'presentation-skill@presentation-skill',
-            name: 'presentation-skill'
+            id: `${entry.pluginName}@${entry.marketplaceName}`,
+            name: entry.pluginName
           }
         ],
         entry.marketplacePath
@@ -234,7 +236,7 @@ describe('BundledPluginManager', () => {
           : responseFor(current, true)
       ),
       setPluginEnabled: vi.fn(async ({ pluginId, enabled }) => {
-        if (pluginId === 'presentation-skill@presentation-skill' && !enabled) retiredEnabled = false
+        if (pluginId === 'obsolete-skill@obsolete-skill' && !enabled) retiredEnabled = false
       })
     })
 
@@ -249,9 +251,60 @@ describe('BundledPluginManager', () => {
       expect.objectContaining({ descriptor: retired, action: 'retired' })
     )
     expect(client.setPluginEnabled).toHaveBeenCalledWith({
-      pluginId: 'presentation-skill@presentation-skill',
+      pluginId: 'obsolete-skill@obsolete-skill',
       enabled: false
     })
+  })
+
+  it('does not retire a Runtime plugin when the active desired set replaced the same logical plugin', async () => {
+    const current: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'presentation-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/new/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/new/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/new/plugins/presentation-skill/plugins/presentation-skill',
+      pluginName: 'presentation-skill',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:2'
+    }
+    const retiredSameLogicalPlugin: BundledPluginDescriptor = {
+      ...current,
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/plugins/presentation-skill',
+      version: '0.0.9',
+      owner: 'primary-runtime:1'
+    }
+    const response = installedResponse(
+      [
+        {
+          ...plugin({ installed: true, enabled: true }),
+          id: 'presentation-skill@presentation-skill',
+          name: 'presentation-skill'
+        }
+      ],
+      current.marketplacePath
+    )
+    response.marketplaces[0]!.name = current.marketplaceName
+    const client = catalogClient({
+      listInstalledPluginsForManagement: vi.fn(async () => response)
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [current],
+      retiredDescriptors: [retiredSameLogicalPlugin]
+    }).reconcile()
+
+    expect(result.status).toBe('ready')
+    expect(result.reconciled).not.toContainEqual(
+      expect.objectContaining({ descriptor: retiredSameLogicalPlugin, action: 'retired' })
+    )
+    expect(client.setPluginEnabled).not.toHaveBeenCalled()
   })
 
   it('fails degraded when install readback does not confirm the plugin', async () => {

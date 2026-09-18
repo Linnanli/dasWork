@@ -31,12 +31,10 @@ export class PrimaryRuntimeHttpClient {
       advertisedLength !== null &&
       (!/^\d+$/u.test(advertisedLength) || Number(advertisedLength) > maximum)
     ) {
+      await response.body?.cancel().catch(() => undefined)
       throw new Error('Primary Runtime metadata exceeds the permitted size.')
     }
-    const text = await response.text()
-    if (Buffer.byteLength(text, 'utf8') > maximum) {
-      throw new Error('Primary Runtime metadata exceeds the permitted size.')
-    }
+    const text = await readBoundedResponseText(response, maximum)
     try {
       return JSON.parse(text)
     } catch {
@@ -96,4 +94,33 @@ export function normalizeAllowedOrigins(origins: readonly string[]): readonly st
       })
     )
   ])
+}
+
+async function readBoundedResponseText(response: Response, maximum: number): Promise<string> {
+  if (!Number.isSafeInteger(maximum) || maximum <= 0) {
+    throw new Error('Primary Runtime metadata size limit is invalid.')
+  }
+  if (!response.body) {
+    return ''
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let totalBytes = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      totalBytes += value.byteLength
+      if (totalBytes > maximum) {
+        await reader.cancel().catch(() => undefined)
+        throw new Error('Primary Runtime metadata exceeds the permitted size.')
+      }
+      text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+    return text
+  } finally {
+    reader.releaseLock()
+  }
 }

@@ -13,7 +13,7 @@
 
 `DynamicToolsDispatcher` 继续属于 AI-free app-server client，负责协议调用的执行、超时、取消与结果归一化；main 的 registry 只定义业务工具、可用性与两种协议投影。因此不存在 renderer 输入的工具 schema、MCP command/env、Pipe path 或 Runtime 根目录。
 
-Primary Runtime 也由 main 诊断并提供；`load_workspace_dependencies` 是 local-only、无参数、只读工具。只要本机产品能力启用，它就在新 thread 工具目录中：Runtime 未安装、安装中或损坏时，工具返回稳定失败文本和恢复建议；健康后才返回已验证的白名单依赖路径说明。模型不得自行搜索目录、临时安装 npm/pip 包或改用替代生成器。
+Primary Runtime 也由 main 诊断并提供；`load_workspace_dependencies` 是 local-only、无参数、只读工具。只有本机产品能力、app-server feature gate 和 Runtime 健康状态同时满足时，它才进入新 thread 的工具目录并返回已验证的白名单依赖路径说明。Runtime 未安装、安装中或损坏时，由 Plugin Center 暴露稳定状态与恢复建议；模型不得自行搜索目录、临时安装 npm/pip 包或改用替代生成器。
 
 Runtime 激活事务只覆盖 candidate diagnostics、active pointer 和失败恢复。指针成功切换后，main 再通过 app-server catalog 按 marketplace、skills、`skills/list { forceReload: true }` 的顺序同步 Runtime-owned plugin；同步失败会让安装报告失败并可由 repair 重试，但不会扩张为跨 pointer/plugin 的持久事务。旧 Runtime-owned plugin 在新 desired set 成功后退役，用户插件不在该同步逻辑的所有权范围内。
 

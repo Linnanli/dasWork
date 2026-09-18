@@ -472,7 +472,7 @@ test("the source-lock-bound Runtime patch preserves its exact bytes on Windows c
   const attributes = await readFile(repositoryAttributesPath, "utf8");
   assert.match(
     attributes,
-    /^primary-runtime\/patches\/\*\.patch -text$/mu,
+    /^primary-runtime\/patches\/\*\.patch -text whitespace=-blank-at-eol$/mu,
     "a Windows checkout must not rewrite the patch bytes bound by runtime-sources.lock.json",
   );
 });

@@ -3,6 +3,7 @@ import {
   cp,
   lstat,
   mkdir,
+  readdir,
   readFile,
   realpath,
   rename,
@@ -166,7 +167,11 @@ export async function readPublishedRuntimeFeedAsset(repositoryRoot, pathname) {
   const path = resolve(root, relativePath);
   if (!isInside(root, path))
     throw new Error("Runtime feed path escapes the repository.");
-  const details = await lstat(path);
+  const details = await lstat(path).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!details) return null;
   if (!details.isFile()) {
     throw new Error("Runtime feed refuses a non-regular published asset.");
   }
@@ -209,6 +214,7 @@ export async function publishRepository({
     allowSyntheticTestOnly,
     allowCalibrationCandidate,
   });
+  await validatePublishedArchiveImmutability(root, staging);
   const releases = resolve(root, "releases");
   const next = resolve(
     releases,
@@ -228,6 +234,92 @@ export async function publishRepository({
   });
   await symlink(relative(root, next), nextLink);
   await rename(nextLink, current);
+}
+
+async function validatePublishedArchiveImmutability(repositoryRoot, stagedRoot) {
+  const [publishedReleases, stagedReleases] = await Promise.all([
+    publishedArchiveRecords(repositoryRoot),
+    releaseArchiveRecords(stagedRoot),
+  ]);
+  for (const [key, staged] of stagedReleases) {
+    const published = publishedReleases.get(key);
+    if (!published) continue;
+    if (published.archiveSha256 !== staged.archiveSha256) {
+      throw new Error(
+        `Runtime feed immutable archive ${key} is already published with a different SHA256.`,
+      );
+    }
+  }
+}
+
+async function publishedArchiveRecords(repositoryRoot) {
+  const records = new Map();
+  const releasesRoot = resolve(repositoryRoot, "releases");
+  let entries;
+  try {
+    entries = await readdir(releasesRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return records;
+    throw error;
+  }
+  for (const entry of entries) {
+    const releaseRoot = resolve(releasesRoot, entry.name);
+    if (!isInside(releasesRoot, releaseRoot)) {
+      throw new Error("Runtime feed release history path escapes repository.");
+    }
+    const details = await lstat(releaseRoot);
+    if (details.isSymbolicLink()) {
+      throw new Error("Runtime feed release history refuses symlinks.");
+    }
+    if (!details.isDirectory()) continue;
+    const releaseRecords = await releaseArchiveRecords(releaseRoot).catch(
+      (error) => {
+        if (error?.code === "ENOENT") return new Map();
+        throw error;
+      },
+    );
+    for (const [key, record] of releaseRecords) {
+      const existing = records.get(key);
+      if (existing && existing.archiveSha256 !== record.archiveSha256) {
+        throw new Error(
+          `Runtime feed immutable archive ${key} has conflicting published history.`,
+        );
+      }
+      records.set(key, record);
+    }
+  }
+  return records;
+}
+
+async function releaseArchiveRecords(root) {
+  const config = JSON.parse(
+    await readRegularFile(resolve(root, "config.json"), "config"),
+  );
+  const manifestPath = resolve(
+    root,
+    "channels",
+    config.channel,
+    "manifest.json",
+  );
+  const manifest = JSON.parse(
+    await readRegularFile(manifestPath, "channel manifest"),
+  );
+  const records = new Map();
+  if (!Array.isArray(manifest.releases)) return records;
+  for (const release of manifest.releases) {
+    if (
+      typeof release?.version !== "string" ||
+      typeof release.platform !== "string" ||
+      typeof release.arch !== "string" ||
+      typeof release.archiveSha256 !== "string"
+    ) {
+      continue;
+    }
+    records.set(`${release.version}/${release.platform}-${release.arch}`, {
+      archiveSha256: release.archiveSha256,
+    });
+  }
+  return records;
 }
 
 async function resolvePublishedRoot(repositoryRoot) {

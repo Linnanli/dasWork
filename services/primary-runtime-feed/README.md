@@ -4,6 +4,10 @@ This is a read-only HTTPS implementation of the Runtime feed protocol. In this p
 is assembled only as a test-signed engineering artifact; it is not a production feed.
 It serves signed `config.json`, signed channel manifests, and immutable ZIP archives;
 it never accepts uploads or holds model credentials or signing keys.
+Publication checks every retained release tree before advancing `current`, so a
+previously used version/target URL cannot later be rebound to different archive
+bytes. Missing assets return `404`, and internal failures never echo repository
+paths to clients.
 
 The server requires an exact allowlist of HTTP `Host` values in addition to TLS.
 Set `PRIMARY_RUNTIME_FEED_ALLOWED_HOSTS` to comma-separated host[:port] values in

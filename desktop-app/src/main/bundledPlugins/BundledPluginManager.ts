@@ -122,7 +122,8 @@ export class BundledPluginManager {
     }
 
     for (const descriptor of this.input.retiredDescriptors ?? []) {
-      if (this.descriptors.some((current) => sameDescriptor(current, descriptor))) continue
+      if (this.descriptors.some((current) => sameBundledPluginIdentity(current, descriptor)))
+        continue
       try {
         const item = await this.retireOne(descriptor)
         if (item) reconciled.push(item)
@@ -291,13 +292,11 @@ function isExpectedVersion(plugin: PluginSummary, version: string): boolean {
   return (plugin.localVersion ?? plugin.version) === version
 }
 
-function sameDescriptor(left: BundledPluginDescriptor, right: BundledPluginDescriptor): boolean {
-  return (
-    left.marketplacePath === right.marketplacePath &&
-    left.pluginName === right.pluginName &&
-    left.version === right.version &&
-    left.owner === right.owner
-  )
+function sameBundledPluginIdentity(
+  left: BundledPluginDescriptor,
+  right: BundledPluginDescriptor
+): boolean {
+  return left.marketplaceName === right.marketplaceName && left.pluginName === right.pluginName
 }
 
 function messageFor(error: unknown): string {

@@ -105,9 +105,14 @@ export function createLoadWorkspaceDependenciesTool(
           reason: 'Workspace dependencies are not enabled for this host.'
         }
       }
-      // The loader is intentionally published before the Runtime is healthy.
-      // This is the only safe way for a task to obtain actionable recovery
-      // guidance without searching private paths or installing substitutes.
+      const runtimeStatus =
+        context.primaryRuntimeStatus ?? (await runtime.diagnoseDependencies?.())?.status
+      if (runtimeStatus !== 'ready') {
+        return {
+          state: 'unavailable',
+          reason: 'Workspace dependencies are unavailable until the Primary Runtime is ready.'
+        }
+      }
       return { state: 'available' }
     },
     async execute(context, argumentsValue) {

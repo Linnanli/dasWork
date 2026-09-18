@@ -22,6 +22,11 @@ descriptors. Config can select a manifest only from the application's compiled
 manifest-origin allowlist; neither config nor manifest can add a new key or
 archive origin. Metadata is bounded to 1 MiB; archive size is bounded by the
 installer. Metadata is `no-cache`; archives carry immutable caching and ETags.
+Before advancing `current`, the publisher compares every staged version/target
+archive digest with all retained release-history manifests and rejects any
+attempt to reuse an immutable URL for different bytes. Missing valid asset
+routes return `404`; unexpected server failures use a generic body and never
+reflect repository paths.
 
 Key rotation overlaps an old and new public key in the compiled role-specific
 keyring. Revocation removes the old key in a subsequent desktop release; a key

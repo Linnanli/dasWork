@@ -141,9 +141,9 @@ Main 在创建新 thread 前生成不可变 `DesktopCapabilitySnapshot`，并通
 - `PrimaryRuntimeCapabilityPolicy` 只缓存已观察到的 Runtime 与 plugin/skill 同步状态；它不阻塞 thread 创建，也不参与 Runtime 指针事务。
 - `codex_app` MCP/Native Pipe 是同一注册表的兼容投影，不是第二套工具实现。
 - Native Pipe/MCP 失败时关闭该兼容能力，保留原生聊天和 dynamic tools。
-- 本机产品功能启用时始终发布 `load_workspace_dependencies`；Runtime missing、installing 或 broken 时它只返回 Main 生成的结构化诊断与恢复建议，不暴露 Runtime root，也不允许模型自行安装替代依赖。
-- 恢复已有 thread 不补发或伪造 `dynamicTools`；当前产品版本创建的本地 thread 从创建时就具备符合 feature gate 的 loader。
-- Runtime-owned plugin descriptor 是替换式 desired set。升级后会退役旧 Runtime-owned plugin，不会触碰用户插件或累积历史 descriptor。
+- 只有本机产品功能、app-server feature gate 和 Runtime 健康状态同时满足时，才向新 thread 发布 `load_workspace_dependencies`；Runtime missing、installing 或 broken 时由 Plugin Center 返回 Main 生成的结构化诊断与恢复建议，不暴露 Runtime root，也不允许模型自行安装替代依赖。
+- 恢复已有 thread 不补发或伪造 `dynamicTools`；符合产品、app-server 与 Runtime 健康门禁的本地 thread 从创建时就具备 loader。
+- Runtime-owned plugin descriptor 是替换式 desired set。升级后只退役逻辑 plugin ID 已从 desired set 消失的 Runtime-owned plugin；同 ID 的新版本替换不会被再次禁用，也不会触碰用户插件或累积历史 descriptor。
 
 TypeScript Native Pipe/MCP bridge 仍受公开发布门禁约束，路径权限或随机端点名不能替代 OS 级身份校验。
 

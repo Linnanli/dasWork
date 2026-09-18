@@ -46,7 +46,10 @@ export class RuntimeOwnedSkillManager {
     const skillsRoot = await this.skillsRoot()
     const legacySkillsMoved = await this.moveLegacySkills(skillsRoot)
     const skills = await this.resolveSources()
-    if (skills.length === 0) return { copiedSkills: [], legacySkillsMoved }
+    if (skills.length === 0) {
+      await this.removeManagedSkills(skillsRoot)
+      return { copiedSkills: [], legacySkillsMoved }
+    }
 
     await this.replaceManagedSkills(skillsRoot, skills)
     return {
@@ -117,6 +120,18 @@ export class RuntimeOwnedSkillManager {
       sources.push({ path: source, sha256: digest })
     }
     return sources
+  }
+
+  private async removeManagedSkills(skillsRoot: string): Promise<void> {
+    const managedRoot = pathInside(skillsRoot, MANAGED_SKILLS_DIRECTORY, 'managed skills')
+    const managedRootDetails = await lstat(managedRoot).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (!managedRootDetails) return
+
+    await assertManagedRoot(managedRoot)
+    await rm(managedRoot, { recursive: true, force: false })
   }
 
   private async replaceManagedSkills(

@@ -7,6 +7,7 @@ import {
   mkdir,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -28,6 +29,7 @@ import { assembleReleaseStaging } from "../scripts/assemble-release-staging.mjs"
 import {
   isAllowedRequestHost,
   normalizeAllowedRequestHosts,
+  runtimeFeedInternalErrorBody,
 } from "../src/server.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -89,6 +91,26 @@ test("serves metadata and archives with exact size, ETag, and immutable archive 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("returns missing for valid feed routes whose asset is not published", async () => {
+  const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-missing-"));
+  try {
+    await assert.doesNotReject(async () => {
+      assert.equal(await readPublishedRuntimeFeedAsset(root, CONFIG_PATH), null);
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not expose internal feed errors in the HTTP 500 body", () => {
+  assert.equal(
+    runtimeFeedInternalErrorBody(
+      new Error("/private/tmp/feed/current/config.json cannot be read"),
+    ),
+    "Runtime feed error",
+  );
 });
 
 test("refuses non-regular published assets before serving or validating them", async () => {
@@ -309,6 +331,114 @@ test("publishing serves its current pointer after realpath normalization", async
   }
 });
 
+test("publishing rejects a different archive digest for any historically published version target", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "primary-runtime-feed-immutable-"),
+  );
+  const first = join(root, "first");
+  const second = join(root, "second");
+  const third = join(root, "third");
+  try {
+    const verification = await writeReleaseTree(first);
+    await publishRepository({
+      repositoryRoot: root,
+      stagedRoot: first,
+      ...verification,
+    });
+
+    await writeReleaseTree(second, {
+      signing: verification.signing,
+      version: "2026.09.11",
+    });
+    await publishRepository({
+      repositoryRoot: root,
+      stagedRoot: second,
+      ...verification,
+    });
+    await writeFile(join(root, "releases", "ignored.txt"), "not a release");
+
+    await writeReleaseTree(third, { signing: verification.signing });
+    const archivePath = join(
+      third,
+      "archives",
+      "2026.09.10",
+      "darwin-arm64",
+      "primary-runtime.zip",
+    );
+    await writeFile(archivePath, "replacement");
+    const archiveSha256 = createHash("sha256")
+      .update("replacement")
+      .digest("hex");
+    const manifestPath = join(third, "channels", "stable", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    const release = manifest.releases.find(
+      (candidate) =>
+        candidate.platform === "darwin" && candidate.arch === "arm64",
+    );
+    release.archiveSizeBytes = Buffer.byteLength("replacement");
+    release.archiveSha256 = archiveSha256;
+    const provenancePath = join(
+      third,
+      "archives",
+      "2026.09.10",
+      "darwin-arm64",
+      "provenance.json",
+    );
+    const provenance = JSON.parse(await readFile(provenancePath, "utf8"));
+    provenance.archiveSizeBytes = Buffer.byteLength("replacement");
+    provenance.archiveSha256 = archiveSha256;
+    await writeFile(provenancePath, JSON.stringify(provenance));
+    await writeFile(
+      manifestPath,
+      JSON.stringify(
+        signFeedMetadata(manifest, verification.signing.manifest.privateKey),
+      ),
+    );
+
+    await assert.rejects(
+      publishRepository({
+        repositoryRoot: root,
+        stagedRoot: third,
+        ...verification,
+      }),
+      /immutable archive 2026\.09\.10\/darwin-arm64/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("publishing refuses symlinks in release history before immutable archive comparison", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "primary-runtime-feed-history-link-"),
+  );
+  const first = join(root, "first");
+  const second = join(root, "second");
+  try {
+    const verification = await writeReleaseTree(first);
+    await publishRepository({
+      repositoryRoot: root,
+      stagedRoot: first,
+      ...verification,
+    });
+    await symlink(first, join(root, "releases", "linked-release"));
+    await writeReleaseTree(second, {
+      signing: verification.signing,
+      version: "2026.09.11",
+    });
+    await assert.rejects(
+      publishRepository({
+        repositoryRoot: root,
+        stagedRoot: second,
+        ...verification,
+      }),
+      /release history refuses symlinks/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("assembles only the signed metadata and four independently verified targets", async () => {
   const source = await mkdtemp(join(tmpdir(), "primary-runtime-feed-source-"));
   const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-staging-"));
@@ -358,13 +488,15 @@ test("rejects structurally valid metadata when the matching role key cannot veri
   }
 });
 
-async function writeReleaseTree(root, { calibrationCandidateTarget } = {}) {
-  const version = "2026.09.10";
+async function writeReleaseTree(
+  root,
+  { calibrationCandidateTarget, signing, version = "2026.09.10" } = {},
+) {
   const now = new Date();
   const issuedAt = new Date(now.getTime() - 60_000).toISOString();
   const expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-  const configSigning = generateKeyPairSync("ed25519");
-  const manifestSigning = generateKeyPairSync("ed25519");
+  const configSigning = signing?.config ?? generateKeyPairSync("ed25519");
+  const manifestSigning = signing?.manifest ?? generateKeyPairSync("ed25519");
   const targets = calibrationCandidateTarget
     ? [calibrationCandidateTarget]
     : ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"];
@@ -466,6 +598,10 @@ async function writeReleaseTree(root, { calibrationCandidateTarget } = {}) {
     ),
   );
   return {
+    signing: {
+      config: configSigning,
+      manifest: manifestSigning,
+    },
     configPublicKeys: {
       "config-test": configSigning.publicKey.export({
         type: "spki",

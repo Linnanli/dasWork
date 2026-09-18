@@ -59,11 +59,13 @@ export async function createPrimaryRuntimeFeedServer({
       createReadStream(asset.path).pipe(response);
     } catch (error) {
       response.writeHead(500, { "cache-control": "no-store" });
-      response.end(
-        error instanceof Error ? error.message : "Runtime feed error",
-      );
+      response.end(runtimeFeedInternalErrorBody(error));
     }
   });
+}
+
+export function runtimeFeedInternalErrorBody(_error) {
+  return "Runtime feed error";
 }
 
 export function normalizeAllowedRequestHosts(hosts) {
