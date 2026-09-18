@@ -34,7 +34,7 @@ describe('BundledPluginDescriptors', () => {
       readBundledPluginDescriptorsFromMarketplaceRoot(marketplaceRoot, 'app-resource')
     ).resolves.toEqual([
       {
-        marketplaceName: 'openai-bundled',
+        marketplaceName: 'dascowork-bundled',
         marketplaceRoot,
         marketplacePath: join(marketplaceRoot, '.agents', 'plugins', 'marketplace.json'),
         pluginRoot: join(marketplaceRoot, 'plugins', 'codex-app-tools'),
@@ -51,7 +51,7 @@ describe('BundledPluginDescriptors', () => {
   it('reads app-bundled plugins from the repository resource layout in development', async () => {
     const appRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-development-app-')))
     directories.push(appRoot)
-    const marketplaceRoot = join(appRoot, 'resources', 'bundled-plugins', 'openai-bundled')
+    const marketplaceRoot = join(appRoot, 'resources', 'bundled-plugins', 'dascowork-bundled')
     await writeFixtureMarketplace(marketplaceRoot)
 
     const descriptors = await readAppBundledPluginDescriptors({
@@ -69,7 +69,7 @@ describe('BundledPluginDescriptors', () => {
       await mkdtemp(join(tmpdir(), 'dascowork-packaged-resources-'))
     )
     directories.push(resourcesPath)
-    const marketplaceRoot = join(resourcesPath, 'plugins', 'openai-bundled')
+    const marketplaceRoot = join(resourcesPath, 'plugins', 'dascowork-bundled')
     await writeFixtureMarketplace(marketplaceRoot)
 
     const descriptors = await readAppBundledPluginDescriptors({
@@ -148,7 +148,7 @@ describe('BundledPluginDescriptors', () => {
     expect(() =>
       parseBundledPluginLock({
         bundleFormatVersion: 2,
-        marketplace: { name: 'openai-bundled', pluginRoot: 'plugins' },
+        marketplace: { name: 'dascowork-bundled', pluginRoot: 'plugins' },
         plugins: [
           {
             name: 'codex-app-tools',
@@ -158,7 +158,7 @@ describe('BundledPluginDescriptors', () => {
             provenance: {
               kind: 'repo-owned',
               sourcePath:
-                'desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools',
+                'desktop-app/resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools',
               licensePath: '../LICENSE',
               reviewStatus: 'approved'
             },
@@ -215,7 +215,7 @@ async function writeFixtureMarketplace(root: string): Promise<void> {
   await writeFile(
     join(root, '.agents', 'plugins', 'marketplace.json'),
     JSON.stringify({
-      name: 'openai-bundled',
+      name: 'dascowork-bundled',
       plugins: [
         {
           name: 'codex-app-tools',
@@ -228,7 +228,7 @@ async function writeFixtureMarketplace(root: string): Promise<void> {
     join(root, 'bundle-lock.json'),
     JSON.stringify({
       bundleFormatVersion: 2,
-      marketplace: { name: 'openai-bundled', pluginRoot: 'plugins' },
+      marketplace: { name: 'dascowork-bundled', pluginRoot: 'plugins' },
       plugins: [
         {
           name: 'codex-app-tools',
@@ -238,7 +238,7 @@ async function writeFixtureMarketplace(root: string): Promise<void> {
           provenance: {
             kind: 'repo-owned',
             sourcePath:
-              'desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools',
+              'desktop-app/resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools',
             licensePath: 'LICENSE',
             reviewStatus: 'pending-independent-review'
           },

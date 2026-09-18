@@ -60,7 +60,7 @@ test('verify-bundled-plugins rejects any allowlist drift', async () => {
         'desktop-app',
         'resources',
         'bundled-plugins',
-        'openai-bundled',
+        'dascowork-bundled',
         'plugins',
         'codex-app-tools',
         'unexpected.txt'
@@ -88,7 +88,7 @@ test('verify-bundled-plugins rejects pinned SHA drift', async () => {
         'desktop-app',
         'resources',
         'bundled-plugins',
-        'openai-bundled',
+        'dascowork-bundled',
         'plugins',
         'codex-app-tools',
         'server.mjs'
@@ -115,7 +115,7 @@ test('verify-bundled-plugins rejects reference-project provenance', async () => 
       'desktop-app',
       'resources',
       'bundled-plugins',
-      'openai-bundled',
+      'dascowork-bundled',
       'bundle-lock.json'
     )
     const lock = JSON.parse(await readFile(lockPath, 'utf8'))
@@ -142,7 +142,7 @@ test('verify-bundled-plugins rejects the known proprietary server digest', async
       'desktop-app',
       'resources',
       'bundled-plugins',
-      'openai-bundled',
+      'dascowork-bundled',
       'bundle-lock.json'
     )
     const lock = JSON.parse(await readFile(lockPath, 'utf8'))
@@ -169,14 +169,14 @@ test('verify-bundled-plugins rejects the known proprietary server digest', async
 async function copyFixtureDirectory(sourceAppRoot, targetAppRoot) {
   const files = [
     'scripts/verify-bundled-plugins.mjs',
-    'resources/bundled-plugins/openai-bundled/bundle-lock.json',
-    'resources/bundled-plugins/openai-bundled/.agents/plugins/marketplace.json',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/.codex-plugin/plugin.json',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/.mcp.json',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/LICENSE',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/server.mjs',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp',
-    'resources/bundled-plugins/openai-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp.cmd'
+    'resources/bundled-plugins/dascowork-bundled/bundle-lock.json',
+    'resources/bundled-plugins/dascowork-bundled/.agents/plugins/marketplace.json',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/.codex-plugin/plugin.json',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/.mcp.json',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/LICENSE',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/server.mjs',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp',
+    'resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp.cmd'
   ]
   for (const file of files) {
     const target = join(targetAppRoot, file)

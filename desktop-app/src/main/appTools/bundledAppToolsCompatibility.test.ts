@@ -186,7 +186,7 @@ function bundledPluginRoot(): string {
     appRoot,
     'resources',
     'bundled-plugins',
-    'openai-bundled',
+    'dascowork-bundled',
     'plugins',
     'codex-app-tools'
   )

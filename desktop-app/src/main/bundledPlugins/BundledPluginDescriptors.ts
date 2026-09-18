@@ -231,8 +231,8 @@ export async function readAppBundledPluginDescriptors(
   options: { isPackaged: false; appPath: string } | { isPackaged: true; resourcesPath: string }
 ): Promise<BundledPluginDescriptor[]> {
   const marketplacePath = options.isPackaged
-    ? join(options.resourcesPath, 'plugins', 'openai-bundled')
-    : join(options.appPath, 'resources', 'bundled-plugins', 'openai-bundled')
+    ? join(options.resourcesPath, 'plugins', 'dascowork-bundled')
+    : join(options.appPath, 'resources', 'bundled-plugins', 'dascowork-bundled')
   return readBundledPluginDescriptorsFromMarketplaceRoot(marketplacePath, 'app-resource')
 }
 

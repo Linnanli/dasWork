@@ -6,10 +6,10 @@ import { BundledPluginManager, type BundledPluginCatalogClient } from './Bundled
 import type { BundledPluginDescriptor } from './BundledPluginDescriptors'
 
 const descriptor: BundledPluginDescriptor = {
-  marketplaceName: 'openai-bundled',
-  marketplaceRoot: '/app/resources/plugins/openai-bundled',
-  marketplacePath: '/app/resources/plugins/openai-bundled/.agents/plugins/marketplace.json',
-  pluginRoot: '/app/resources/plugins/openai-bundled/plugins/codex-app-tools',
+  marketplaceName: 'dascowork-bundled',
+  marketplaceRoot: '/app/resources/plugins/dascowork-bundled',
+  marketplacePath: '/app/resources/plugins/dascowork-bundled/.agents/plugins/marketplace.json',
+  pluginRoot: '/app/resources/plugins/dascowork-bundled/plugins/codex-app-tools',
   pluginName: 'codex-app-tools',
   version: '0.1.0',
   installWhenMissing: true,
@@ -37,7 +37,7 @@ describe('BundledPluginManager', () => {
 
     expect(result.status).toBe('ready')
     expect(result.reconciled).toMatchObject([
-      { action: 'installed', pluginId: 'codex-app-tools@openai-bundled' }
+      { action: 'installed', pluginId: 'codex-app-tools@dascowork-bundled' }
     ])
     expect(client.installPlugin).toHaveBeenCalledWith({
       marketplacePath: descriptor.marketplacePath,
@@ -49,6 +49,49 @@ describe('BundledPluginManager', () => {
     })
     expect(client.listSkillsForManagement).toHaveBeenCalledWith({ forceReload: true })
     expect(invalidateCaches).toHaveBeenCalled()
+  })
+
+  it('does not confuse the app bundle with Codex-managed openai-bundled plugins', async () => {
+    const codexManaged = installedResponse(
+      [
+        {
+          ...plugin({ installed: true, enabled: true, localVersion: '0.1.4' }),
+          id: 'codex-app-tools@openai-bundled',
+          source: {
+            type: 'local',
+            path: '/Users/test/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/codex-app-tools'
+          }
+        }
+      ],
+      '/Users/test/.codex/.tmp/bundled-marketplaces/openai-bundled/.agents/plugins/marketplace.json'
+    )
+    codexManaged.marketplaces[0]!.name = 'openai-bundled'
+    const appBundled = installedResponse([plugin({ installed: true, enabled: true })])
+    const installed = [
+      codexManaged,
+      {
+        marketplaces: [...codexManaged.marketplaces, ...appBundled.marketplaces],
+        marketplaceLoadErrors: []
+      } satisfies PluginInstalledResponse
+    ]
+    const client = catalogClient({
+      listInstalledPluginsForManagement: vi.fn(async () => installed.shift() ?? installed.at(-1)!)
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor]
+    }).reconcile()
+
+    expect(result.status).toBe('ready')
+    expect(result.reconciled).toMatchObject([
+      { action: 'installed', pluginId: 'codex-app-tools@dascowork-bundled' }
+    ])
+    expect(client.installPlugin).toHaveBeenCalledWith({
+      marketplacePath: descriptor.marketplacePath,
+      pluginName: descriptor.pluginName,
+      installAttemptId: expect.any(String)
+    })
   })
 
   it('restores a disabled bundled plugin without reinstalling it', async () => {
@@ -71,7 +114,7 @@ describe('BundledPluginManager', () => {
     expect(client.installPlugin).not.toHaveBeenCalled()
     expect(client.setPluginEnabled).toHaveBeenCalledWith({
       cwd: '/workspace',
-      pluginId: 'codex-app-tools@openai-bundled',
+      pluginId: 'codex-app-tools@dascowork-bundled',
       enabled: true
     })
   })
@@ -313,11 +356,11 @@ describe('BundledPluginManager', () => {
 
     expect(
       manager.internalPluginIds(installedResponse([plugin({ installed: true, enabled: true })]))
-    ).toEqual(['codex-app-tools@openai-bundled'])
+    ).toEqual(['codex-app-tools@dascowork-bundled'])
     expect(
       manager.isInternalPlugin({
-        id: 'codex-app-tools@openai-bundled',
-        marketplaceName: 'openai-bundled'
+        id: 'codex-app-tools@dascowork-bundled',
+        marketplaceName: 'dascowork-bundled'
       })
     ).toBe(true)
     expect(
@@ -350,7 +393,7 @@ function installedResponse(
   return {
     marketplaces: [
       {
-        name: 'openai-bundled',
+        name: 'dascowork-bundled',
         path: marketplacePath,
         interface: null,
         plugins
@@ -368,7 +411,7 @@ function plugin(
   }>
 ): PluginSummary {
   return {
-    id: 'codex-app-tools@openai-bundled',
+    id: 'codex-app-tools@dascowork-bundled',
     remotePluginId: null,
     version: '0.1.0',
     localVersion: overrides.localVersion ?? '0.1.0',
@@ -376,7 +419,7 @@ function plugin(
     shareContext: null,
     source: {
       type: 'local',
-      path: '/app/resources/plugins/openai-bundled/plugins/codex-app-tools'
+      path: '/app/resources/plugins/dascowork-bundled/plugins/codex-app-tools'
     },
     installed: overrides.installed ?? true,
     installedAt: 1,

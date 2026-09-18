@@ -216,7 +216,7 @@ function createProvider(overrides: Partial<PluginCenterProvider> = {}): PluginCe
 describe('PluginCenterService', () => {
   it('hides internal bundled plugins and refuses direct user mutations', async () => {
     const internalPlugin = {
-      id: 'codex-app-tools@openai-bundled',
+      id: 'codex-app-tools@dascowork-bundled',
       name: 'codex-app-tools',
       source: { type: 'local', path: '/plugins/codex-app-tools' },
       installed: true,
@@ -228,12 +228,12 @@ describe('PluginCenterService', () => {
     }
     const provider = createProvider({
       listPluginCatalog: vi.fn(async () => ({
-        marketplaces: [{ name: 'openai-bundled', path: '/plugins', plugins: [internalPlugin] }],
+        marketplaces: [{ name: 'dascowork-bundled', path: '/plugins', plugins: [internalPlugin] }],
         featuredPluginIds: [],
         marketplaceLoadErrors: []
       })),
       listInstalledPluginsForManagement: vi.fn(async () => ({
-        marketplaces: [{ name: 'openai-bundled', path: '/plugins', plugins: [internalPlugin] }],
+        marketplaces: [{ name: 'dascowork-bundled', path: '/plugins', plugins: [internalPlugin] }],
         featuredPluginIds: [],
         marketplaceLoadErrors: []
       }))
@@ -245,7 +245,7 @@ describe('PluginCenterService', () => {
     })
     const pluginInput = {
       version: PLUGIN_CENTER_API_VERSION,
-      plugin: { id: internalPlugin.id, marketplaceId: 'openai-bundled' }
+      plugin: { id: internalPlugin.id, marketplaceId: 'dascowork-bundled' }
     }
 
     const snapshot = await service.getSnapshot({

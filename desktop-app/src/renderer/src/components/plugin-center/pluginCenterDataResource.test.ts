@@ -996,7 +996,7 @@ describe('pluginCenterDataResource', () => {
       })
     )
     const bundledVisibilityCases = [
-      ['codex-app-tools', 'Codex App Tools', 'openai-bundled'],
+      ['codex-app-tools', 'Codex App Tools', 'dascowork-bundled'],
       ['browser', 'Browser', 'openai-bundled'],
       ['chrome', 'Chrome', 'openai-bundled']
     ].map(([name, displayName, marketplaceId]) =>

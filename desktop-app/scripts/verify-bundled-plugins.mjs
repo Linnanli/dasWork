@@ -11,7 +11,7 @@ const KNOWN_PROPRIETARY_SERVER_SHA256 =
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const appRoot = resolve(scriptDirectory, '..')
 const repoRoot = resolve(appRoot, '..')
-const marketplaceRoot = resolve(appRoot, 'resources', 'bundled-plugins', 'openai-bundled')
+const marketplaceRoot = resolve(appRoot, 'resources', 'bundled-plugins', 'dascowork-bundled')
 const lockPath = join(marketplaceRoot, 'bundle-lock.json')
 const marketplaceManifestRelativePath = '.agents/plugins/marketplace.json'
 const marketplaceManifestPath = join(marketplaceRoot, marketplaceManifestRelativePath)
@@ -22,8 +22,8 @@ async function main() {
   const lock = JSON.parse(await readFile(lockPath, 'utf8'))
   assert(lock.bundleFormatVersion === 2, 'bundle-lock.json must use bundleFormatVersion 2')
   assert(
-    lock.marketplace?.name === 'openai-bundled',
-    'bundle-lock.json marketplace must be openai-bundled'
+    lock.marketplace?.name === 'dascowork-bundled',
+    'bundle-lock.json marketplace must be dascowork-bundled'
   )
   assert(
     Array.isArray(lock.plugins) && lock.plugins.length > 0,
