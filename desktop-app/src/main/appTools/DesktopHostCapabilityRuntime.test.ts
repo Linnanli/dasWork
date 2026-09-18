@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { DesktopHostCapabilityRuntime } from './DesktopHostCapabilityRuntime'
+import { PrimaryRuntimeCapabilityPolicy } from '../primaryRuntime'
 
 describe('DesktopHostCapabilityRuntime', () => {
-  it('publishes workspace dependencies and matching prompt capability only after runtime diagnostics are ready', async () => {
+  it('publishes the workspace-dependency loader only after the Runtime is ready', async () => {
     let status: 'ready' | 'missing' = 'missing'
     let diagnoseCount = 0
     const runtime = new DesktopHostCapabilityRuntime({
@@ -85,5 +86,61 @@ describe('DesktopHostCapabilityRuntime', () => {
     expect(unavailable.revision).not.toBe(ready.revision)
     expect(unavailable.codexAppMcp).toBe('unavailable')
     expect(unavailable.threadConfig).toBeUndefined()
+  })
+
+  it('does not make thread resume depend on a Runtime-specific admission record', async () => {
+    const policy = new PrimaryRuntimeCapabilityPolicy(true)
+    const runtime = new DesktopHostCapabilityRuntime({
+      workspaceDependencies: {
+        diagnoseDependencies: async () => ({
+          status: 'ready',
+          manifest: {
+            bundleFormatVersion: 2,
+            bundleVersion: 'v2',
+            target: { platform: process.platform, arch: process.arch },
+            node: { path: 'dependencies/node/bin/node' },
+            nodePackages: []
+          },
+          issues: []
+        }),
+        loadDependencies: async () => ({ node: '/runtime/node' })
+      },
+      primaryRuntimeCapabilities: policy
+    })
+    runtime.updatePrimaryRuntimeState({
+      diagnostic: {
+        status: 'ready',
+        manifest: {
+          bundleFormatVersion: 2,
+          bundleVersion: 'v2',
+          target: { platform: process.platform, arch: process.arch },
+          node: { path: 'dependencies/node/bin/node' },
+          nodePackages: []
+        },
+        issues: []
+      },
+      runtimePluginsSynchronized: true
+    })
+
+    expect((await runtime.snapshot()).availableToolNames).toContain('load_workspace_dependencies')
+  })
+
+  it('omits the loader from a new-thread snapshot when Main closes the feature gate', async () => {
+    const runtime = new DesktopHostCapabilityRuntime({
+      workspaceDependencies: {
+        diagnoseDependencies: async () => ({ status: 'missing' }),
+        loadDependencies: async () => ({ node: '/runtime/node' })
+      },
+      primaryRuntimeCapabilities: new PrimaryRuntimeCapabilityPolicy({
+        productFeatureEnabled: true,
+        loaderFeatureGate: { isEnabled: async () => false }
+      })
+    })
+
+    await expect(runtime.snapshot()).resolves.toMatchObject({
+      availableToolNames: [],
+      dynamicTools: [],
+      workspaceInstructionsEnabled: false
+    })
   })
 })

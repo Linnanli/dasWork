@@ -20,7 +20,7 @@ export type MockBackend = {
 }
 
 export type MockBackendOptions = {
-  responses: ResponsesStep[]
+  responses: Array<ResponsesStep | ResponsesStepFactory>
   searchResponses?: unknown[]
   modelApiBasePath?: string
   modelProvider?: string
@@ -44,6 +44,14 @@ export type ResponsesErrorStep = {
 }
 
 export type ResponsesStep = ResponsesStreamStep | ResponsesErrorStep
+
+/**
+ * Derives the next model response from the actual preceding tool output. This
+ * remains a mock only at the model HTTP boundary; it lets E2E scenarios bind
+ * a follow-up command to values returned by the production app-server tool
+ * invocation instead of hard-coding a local fixture path.
+ */
+export type ResponsesStepFactory = (request: MockRequest) => ResponsesStep | Promise<ResponsesStep>
 
 export type ResponseEvent = {
   type: string
@@ -104,12 +112,16 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
     }
 
     if (request.method === 'POST' && isResponsesUrl(request.url)) {
-      const nextResponse = responses.shift()
-      if (!nextResponse) {
+      const configuredResponse = responses.shift()
+      if (!configuredResponse) {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: 'No scripted /responses payload remaining' }))
         return
       }
+      const nextResponse =
+        typeof configuredResponse === 'function'
+          ? await configuredResponse(capturedRequest)
+          : configuredResponse
       await nextResponse.beforeResponse?.()
       if ('status' in nextResponse) {
         response.writeHead(nextResponse.status, { 'content-type': 'application/json' })

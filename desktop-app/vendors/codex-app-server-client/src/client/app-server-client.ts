@@ -55,6 +55,13 @@ export type AppServerRequestLifecycleEvent = {
 type NotificationHandler = (params: unknown) => void | Promise<void>
 type AnyNotificationHandler = (method: string, params: unknown) => void | Promise<void>
 type RequestHandler = (params: unknown, request: JsonRpcRequest) => unknown
+export type InboundRequestDispatchOptions = {
+  /**
+   * Await notifications that arrived before this request. Use for server
+   * requests whose UI payload is projected from the notification stream.
+   */
+  waitForQueuedNotifications?: boolean
+}
 type ToolCallRequestHandler = (
   params: CodexToolCallRequestParams,
   request: JsonRpcRequest
@@ -261,8 +268,18 @@ export class AppServerClient {
     }
   }
 
-  onRequest(method: string, handler: RequestHandler): () => void {
-    this.requestHandlers.set(method, handler)
+  onRequest(
+    method: string,
+    handler: RequestHandler,
+    options: InboundRequestDispatchOptions = {}
+  ): () => void {
+    const registeredHandler: RequestHandler = options.waitForQueuedNotifications
+      ? async (params, request) => {
+          await this.notificationDispatch
+          return handler(params, request)
+        }
+      : handler
+    this.requestHandlers.set(method, registeredHandler)
 
     return () => {
       this.requestHandlers.delete(method)

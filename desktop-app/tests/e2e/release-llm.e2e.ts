@@ -240,6 +240,7 @@ async function withReleaseApp(
           // backend. Real catalog backends may reject it, so omit user_id unless explicitly set.
           ADMIN_BACKEND_MODEL_USER_ID: adminBackendUserId ?? '',
           CODEX_APP_SERVER_BIN: undefined,
+          ...withoutDirectPrimaryRuntimeOverrides(),
           CODEX_ASP_DEBUG_PACKETS: process.env.DASCOWORK_RELEASE_LLM_DEBUG === '1' ? '1' : undefined
         },
         executablePath: isReleaseRuntime ? packagedExecutable : undefined,
@@ -412,6 +413,20 @@ async function expectReleaseRuntime(page: Page, runtime: RuntimeExpectation): Pr
   const status = await page.evaluate(() => window.desktopApp.codex.getStatus())
   expect(status.binary).toBe(runtime.expectedBinary)
   expect(status.binary).not.toMatch(/(?:^|\s)cargo(?:\s|$)/u)
+}
+
+function withoutDirectPrimaryRuntimeOverrides(): NodeJS.ProcessEnv {
+  return {
+    DASCOWORK_PRIMARY_RUNTIME_ROOT: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_VERSION: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: undefined
+  }
 }
 
 async function expectNoBundledAppServerResources(resourcesPath: string): Promise<void> {

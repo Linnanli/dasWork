@@ -22,7 +22,7 @@ import {
   startMockBackend
 } from './support/mockBackend'
 
-test('AT-E2E-01 routes a real app-server MCP call through the desktop registry', async ({
+test('APP-TOOLS-PROTOCOL routes a real app-server MCP call through the desktop registry', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -55,6 +55,7 @@ test('AT-E2E-01 routes a real app-server MCP call through the desktop registry',
         // normal `codex app-server --listen stdio://` command, not a test RPC
         // implementation.
         CODEX_APP_SERVER_BIN: undefined,
+        NODE_ENV: 'test',
         DASCOWORK_PRIMARY_RUNTIME_ROOT: runtimeRoot
       }
     })
@@ -72,21 +73,11 @@ test('AT-E2E-01 routes a real app-server MCP call through the desktop registry',
     expect(functionCallOutputCount(providerBodies, callId)).toBe(1)
     const resultText = functionCallOutputText(providerBodies[1], callId)
     expect(resultText).toBeTruthy()
-    const result = JSON.parse(resultText!) as {
-      root?: string
-      node?: string
-      nodePackages?: Array<{ name?: string; path?: string }>
-    }
-    expect(result.root).toBe(runtimeRoot)
-    expect(result.node).toBeInsideRuntime(runtimeRoot)
-    expect(result.nodePackages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: '@oai/artifact-tool',
-          path: expect.toBeInsideRuntime(runtimeRoot)
-        })
-      ])
-    )
+    expect(resultText).toContain('Use only the following verified Primary Runtime paths.')
+    expect(resultText).toContain(`Runtime Node: ${join(runtimeRoot, 'bin', 'node')}`)
+    expect(resultText).toContain(`Runtime Node modules: ${join(runtimeRoot, 'node_modules')}`)
+    expect(resultText).not.toContain('Primary Runtime root:')
+    expect(resultText).not.toContain('nodePackages')
 
     const firstRequest = providerBodies[0] as {
       tools?: Array<{ name?: string; tools?: unknown[] }>
@@ -110,7 +101,7 @@ test('AT-E2E-01 routes a real app-server MCP call through the desktop registry',
     await toolGroup.locator('[data-slot="tool-fallback-trigger"]').click()
     await expect(toolGroup.locator('[data-slot="tool-fallback-args"]')).toContainText('{}')
     await expect(toolGroup.locator('[data-slot="tool-fallback-result"]')).toContainText(
-      '@oai/artifact-tool'
+      'Runtime Node modules:'
     )
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
@@ -120,7 +111,7 @@ test('AT-E2E-01 routes a real app-server MCP call through the desktop registry',
   }
 })
 
-test('AT-E2E-01 keeps a resumed thread on its original capability snapshot', async ({
+test('APP-TOOLS-PROTOCOL keeps a resumed thread on its original capability snapshot', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -154,6 +145,7 @@ test('AT-E2E-01 keeps a resumed thread on its original capability snapshot', asy
       preserveDataDirectories: true,
       environment: {
         CODEX_APP_SERVER_BIN: undefined,
+        NODE_ENV: 'test',
         DASCOWORK_PRIMARY_RUNTIME_ROOT: initialRuntimeRoot
       }
     })
@@ -174,6 +166,7 @@ test('AT-E2E-01 keeps a resumed thread on its original capability snapshot', asy
       preserveDataDirectories: true,
       environment: {
         CODEX_APP_SERVER_BIN: undefined,
+        NODE_ENV: 'test',
         DASCOWORK_PRIMARY_RUNTIME_ROOT: changedRuntimeRoot
       }
     })
@@ -203,7 +196,7 @@ test('AT-E2E-01 keeps a resumed thread on its original capability snapshot', asy
     const newThreadParams = outboundRequestParams(logs, 'thread/start').at(-1)
     expect(newThreadParams).toBeDefined()
     expect(dynamicToolNames(newThreadParams)).toContain('read_thread_terminal')
-    expect(dynamicToolNames(newThreadParams)).not.toContain('load_workspace_dependencies')
+    expect(dynamicToolNames(newThreadParams)).toContain('load_workspace_dependencies')
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)
@@ -213,27 +206,30 @@ test('AT-E2E-01 keeps a resumed thread on its original capability snapshot', asy
 })
 
 async function createRuntimeFixture(): Promise<string> {
+  // This intentionally minimal directory proves only the app-server-to-registry
+  // protocol. It is never evidence for AT-E2E-01, which requires a signed Feed
+  // and a provenance-verified Primary Runtime archive.
   const root = await mkdtemp(join(tmpdir(), 'dascowork-app-tools-runtime-'))
   await mkdir(join(root, 'bin'), { recursive: true })
-  await mkdir(join(root, 'node_modules', '@oai', 'artifact-tool'), { recursive: true })
+  await mkdir(join(root, 'node_modules', 'pptxgenjs'), { recursive: true })
   await writeFile(join(root, 'bin', 'node'), '#!/bin/sh\n')
-  await writeFile(join(root, 'node_modules', '@oai', 'artifact-tool', 'index.js'), 'export {}\n')
+  await writeFile(join(root, 'node_modules', 'pptxgenjs', 'index.js'), 'export {}\n')
   await writeFile(
-    join(root, 'node_modules', '@oai', 'artifact-tool', 'package.json'),
-    JSON.stringify({ name: '@oai/artifact-tool', version: '1.0.0', main: './index.js' })
+    join(root, 'node_modules', 'pptxgenjs', 'package.json'),
+    JSON.stringify({ name: 'pptxgenjs', version: '4.0.1', main: './index.js' })
   )
   await writeFile(
     join(root, 'runtime.json'),
     JSON.stringify({
-      bundleFormatVersion: 1,
+      bundleFormatVersion: 2,
       bundleVersion: 'e2e-fixture',
       target: { platform: process.platform, arch: process.arch },
       node: { path: 'bin/node', version: '22.0.0' },
       nodePackages: [
         {
-          name: '@oai/artifact-tool',
-          version: '1.0.0',
-          path: 'node_modules/@oai/artifact-tool'
+          name: 'pptxgenjs',
+          version: '4.0.1',
+          path: 'node_modules/pptxgenjs'
         }
       ]
     })

@@ -216,7 +216,13 @@ const desktopComposerContext: DesktopComposerContextApi = createComposerContextB
 
 const desktopPlugins = createPluginCenterBridge(
   (channel, payload) => ipcRenderer.invoke(channel, payload),
-  (channel, payload) => ipcRenderer.send(channel, payload)
+  (channel, payload) => ipcRenderer.send(channel, payload),
+  (channel, listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown): void =>
+      listener(_event, payload)
+    ipcRenderer.on(channel, wrapped)
+    return () => ipcRenderer.removeListener(channel, wrapped)
+  }
 )
 
 const desktopProjects: DesktopProjectsApi = {

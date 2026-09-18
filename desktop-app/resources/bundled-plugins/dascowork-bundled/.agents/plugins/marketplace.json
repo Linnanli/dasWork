@@ -1,5 +1,5 @@
 {
-  "name": "openai-bundled",
+  "name": "dascowork-bundled",
   "plugins": [
     {
       "name": "codex-app-tools",

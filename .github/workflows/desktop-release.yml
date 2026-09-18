@@ -56,9 +56,14 @@ jobs:
           mkdir -p test-results/contracts
           node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
 
-      - name: Verify App Tools release-gate contract
-        run: npm run verify:app-tools-release-gates
+      - name: Verify App Tools release-gate specification
+        run: npm run verify:app-tools-release-gate-spec
         working-directory: desktop-app
+
+      - name: Verify Primary Runtime builder and feed contracts
+        run: |
+          npm --prefix primary-runtime test
+          npm --prefix services/primary-runtime-feed test
 
       - name: Upload native runtime boundary report
         if: always()
@@ -97,14 +102,6 @@ jobs:
 
       - name: Run packaged smoke
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:packaged
-
-      - name: Run release LLM E2E
-        env:
-          DASCOWORK_RELEASE_LLM_SMOKE: ${{ secrets.DASCOWORK_RELEASE_LLM_SMOKE }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_URL: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_URL }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID }}
-          DASCOWORK_RELEASE_EXTERNAL_RETRY: ${{ secrets.DASCOWORK_RELEASE_EXTERNAL_RETRY }}
-        run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:release-llm
 
       - name: Check change scope
         shell: bash
@@ -190,6 +187,10 @@ jobs:
 
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
+        working-directory: desktop-app
+
+      - name: Disable Primary Runtime production configuration for engineering installer builds
+        run: node scripts/write-primary-runtime-product-config.mjs --disabled
         working-directory: desktop-app
 
       - name: Build installer

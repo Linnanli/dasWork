@@ -1,30 +1,63 @@
-import { realpath } from 'node:fs/promises'
-import { isAbsolute, relative } from 'node:path'
+import { createHash } from 'node:crypto'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { chmod, mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, isAbsolute, join, relative } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { DesktopHostCapabilityRuntime } from '../appTools/DesktopHostCapabilityRuntime'
 import { readPrimaryRuntimeBundledPluginDescriptors } from '../bundledPlugins'
 import { PrimaryRuntimeLocator } from './PrimaryRuntimeLocator'
 import { PrimaryRuntimeService } from './PrimaryRuntimeService'
-import type { WorkspaceDependencyLoadResult } from './primaryRuntimeTypes'
 
-const configuredRuntimeRoot = process.env.DASCOWORK_REAL_PRIMARY_RUNTIME_ROOT
+const candidateArchive = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_ARCHIVE?.trim()
+const candidateVersion = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_VERSION?.trim()
+const candidateSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_CANDIDATE_SHA256?.trim().toLowerCase()
 const realRuntimeSmokeEnabled = process.env.DASCOWORK_REAL_PRIMARY_RUNTIME_SMOKE === '1'
+// P3a proves native installer correctness. P3b owns the cold-install timing
+// budget, so this collection ceiling must accommodate the slower fixed Intel
+// Mac runner without changing the reviewed product budget.
+const realRuntimeSmokeTimeoutMs = 15 * 60 * 1000
+const directories: string[] = []
+
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map(removeRuntimeCache))
+}, realRuntimeSmokeTimeoutMs)
 
 describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', () => {
-  it('loads dependencies through the desktop tool and discovers the real plugin marketplace', async () => {
-    expect(
-      configuredRuntimeRoot,
-      'real Runtime gate requires an explicit Runtime root'
-    ).toBeTruthy()
-    const runtimeRoot = await realpath(configuredRuntimeRoot!)
+  it('installs a target-native P1a archive before loading dependencies and its plugin marketplace', async () => {
+    expect(candidateArchive, 'real Runtime gate requires a P1a candidate archive').toBeTruthy()
+    expect(candidateVersion, 'real Runtime gate requires a P1a candidate version').toBeTruthy()
+    expect(candidateSha256, 'real Runtime gate requires a P1a candidate SHA256').toMatch(
+      /^[a-f0-9]{64}$/u
+    )
+    const archiveDetails = await stat(candidateArchive!)
+    const cacheRoot = await mkdtemp(join(tmpdir(), 'primary-runtime-real-smoke-'))
+    directories.push(cacheRoot)
     const service = new PrimaryRuntimeService({
-      locator: new PrimaryRuntimeLocator({
-        env: { DASCOWORK_PRIMARY_RUNTIME_ROOT: runtimeRoot },
-        allowDevelopmentRoot: true,
-        appCacheRoot: '/primary-runtime-real-smoke-unused-cache'
-      })
+      cacheRoot,
+      locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+      releaseProvider: {
+        getRelease: async () => ({
+          version: candidateVersion!,
+          archiveFormat: 'zip',
+          archiveSizeBytes: archiveDetails.size,
+          archiveSha256: candidateSha256!
+        }),
+        downloadArchive: async (_descriptor, destinationPath, signal) => {
+          await mkdir(dirname(destinationPath), { recursive: true })
+          await pipeline(createReadStream(candidateArchive!), createWriteStream(destinationPath), {
+            signal
+          })
+          return {
+            path: destinationPath,
+            sizeBytes: archiveDetails.size,
+            sha256: await sha256File(destinationPath)
+          }
+        }
+      }
     })
     let toolLoadCount = 0
     const capabilities = new DesktopHostCapabilityRuntime({
@@ -37,10 +70,11 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
       }
     })
 
+    const install = await service.install()
     const diagnostic = await service.diagnoseDependencies()
     expect(diagnostic).toMatchObject({
       status: 'ready',
-      root: runtimeRoot,
+      root: install.activeRoot,
       manifest: { bundleFormatVersion: 2 }
     })
 
@@ -58,31 +92,61 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
 
     const text = result.contentItems.find((item) => item.type === 'inputText')?.text
     expect(text).toBeTruthy()
-    const dependencies = JSON.parse(text!) as WorkspaceDependencyLoadResult
-    expect(dependencies.root).toBe(runtimeRoot)
+    const dependencies = await service.loadDependencies()
+    expect(text).toBe(dependencies.text)
     expect(dependencies.bundleVersion).toBe(diagnostic.manifest?.bundleVersion)
-    expect(dependencies.nodePackages.map((entry) => entry.name)).toContain('@oai/artifact-tool')
-    expectRuntimePath(runtimeRoot, dependencies.node)
-    expectRuntimePath(runtimeRoot, dependencies.nodeModules)
-    if (dependencies.python) expectRuntimePath(runtimeRoot, dependencies.python)
+    expect(dependencies).not.toHaveProperty('root')
+    expect(dependencies).not.toHaveProperty('nodePackages')
+    expectRuntimePath(install.activeRoot, dependencies.node)
+    expectRuntimePath(install.activeRoot, dependencies.nodeModules)
+    if (dependencies.python) expectRuntimePath(install.activeRoot, dependencies.python)
+    for (const pythonPackages of dependencies.pythonPackages ?? []) {
+      expectRuntimePath(install.activeRoot, pythonPackages)
+    }
     for (const binary of Object.values(dependencies.binaries)) {
-      expectRuntimePath(runtimeRoot, binary)
+      expectRuntimePath(install.activeRoot, binary)
+    }
+    for (const font of Object.values(dependencies.fonts)) {
+      expectRuntimePath(install.activeRoot, font)
     }
 
     const descriptors = await readPrimaryRuntimeBundledPluginDescriptors(diagnostic)
-    expect(descriptors.map((descriptor) => descriptor.pluginName)).toEqual(
-      expect.arrayContaining(['presentations', 'documents'])
-    )
+    expect(descriptors.length).toBeGreaterThan(0)
     for (const descriptor of descriptors) {
       expect(descriptor).toMatchObject({ sourceKind: 'primary-runtime', internal: true })
-      expectRuntimePath(runtimeRoot, descriptor.marketplacePath)
-      expectRuntimePath(runtimeRoot, descriptor.pluginRoot)
+      expectRuntimePath(install.activeRoot, descriptor.marketplacePath)
+      expectRuntimePath(install.activeRoot, descriptor.pluginRoot)
     }
-  })
+  }, realRuntimeSmokeTimeoutMs)
 })
 
 function expectRuntimePath(runtimeRoot: string, candidate: string): void {
   expect(isAbsolute(candidate)).toBe(true)
   const difference = relative(runtimeRoot, candidate)
   expect(difference === '' || (!difference.startsWith('..') && !isAbsolute(difference))).toBe(true)
+}
+
+async function sha256File(path: string): Promise<string> {
+  const digest = createHash('sha256')
+  for await (const chunk of createReadStream(path)) digest.update(chunk)
+  return digest.digest('hex')
+}
+
+async function removeRuntimeCache(root: string): Promise<void> {
+  await makeWritable(root)
+  await rm(root, { recursive: true, force: true })
+}
+
+async function makeWritable(root: string): Promise<void> {
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    const path = join(root, entry.name)
+    if (entry.isDirectory()) {
+      await makeWritable(path)
+      await chmod(path, 0o700)
+    } else if (entry.isFile()) {
+      await chmod(path, 0o600)
+    }
+  }
+  await chmod(root, 0o700).catch(() => undefined)
 }

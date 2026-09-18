@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { access } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -10,6 +10,7 @@ import { CodexAppToolsNativePipeServer } from './nativePipeServer'
 
 const servers: CodexAppToolsNativePipeServer[] = []
 const children: ChildProcessWithoutNullStreams[] = []
+const appRoot = resolve(import.meta.dirname, '../../..')
 
 afterEach(async () => {
   for (const child of children.splice(0)) await stop(child)
@@ -24,14 +25,7 @@ describe('bundled Codex App Tools compatibility', () => {
     servers.push(pipe)
     const { pipePath } = await pipe.start()
 
-    const pluginRoot = join(
-      process.cwd(),
-      'resources',
-      'bundled-plugins',
-      'openai-bundled',
-      'plugins',
-      'codex-app-tools'
-    )
+    const pluginRoot = bundledPluginRoot()
     const config = new DesktopThreadConfigSource({ pipePath, pluginRoot }).snapshot()
     const server = mcpServerConfig(config)
     expect(server.env).toMatchObject({
@@ -83,14 +77,7 @@ describe('bundled Codex App Tools compatibility', () => {
   })
 
   it('does not fall back to PATH node when the controlled runtime env is missing', async () => {
-    const pluginRoot = join(
-      process.cwd(),
-      'resources',
-      'bundled-plugins',
-      'openai-bundled',
-      'plugins',
-      'codex-app-tools'
-    )
+    const pluginRoot = bundledPluginRoot()
     const launcher = join(
       pluginRoot,
       'scripts',
@@ -172,14 +159,7 @@ const echoTool: DynamicAppToolDefinition = {
 }
 
 async function startBundledMcpClient(pipePath: string): Promise<McpStdioClient> {
-  const pluginRoot = join(
-    process.cwd(),
-    'resources',
-    'bundled-plugins',
-    'openai-bundled',
-    'plugins',
-    'codex-app-tools'
-  )
+  const pluginRoot = bundledPluginRoot()
   const config = new DesktopThreadConfigSource({ pipePath, pluginRoot }).snapshot()
   const server = mcpServerConfig(config)
   const child = spawn(server.command, server.args, {
@@ -199,6 +179,17 @@ async function startBundledMcpClient(pipePath: string): Promise<McpStdioClient> 
   })
   client.notify('notifications/initialized')
   return client
+}
+
+function bundledPluginRoot(): string {
+  return join(
+    appRoot,
+    'resources',
+    'bundled-plugins',
+    'dascowork-bundled',
+    'plugins',
+    'codex-app-tools'
+  )
 }
 
 class McpStdioClient {

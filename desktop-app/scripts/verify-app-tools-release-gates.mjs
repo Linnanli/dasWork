@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Runtime validation makes JSDoc return annotations redundant in this executable verifier. */
+
 import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +12,7 @@ const defaultSpecPath = resolve(appRoot, 'tests/app-tools-release-gates.json')
 const evidenceSchema = 'dascowork-app-tools-evidence.v1'
 const gateSchema = 'dascowork-app-tools-release-gates.v1'
 const maxEvidenceAgeMs = 14 * 24 * 60 * 60 * 1000
+const tracedRuntimeGateIds = new Set(['AT-E2E-01', 'AT-LIVE-01', 'AT-LIVE-PKG-01'])
 
 export async function loadAppToolsReleaseGates(specPath = defaultSpecPath) {
   const parsed = JSON.parse(await readFile(specPath, 'utf8'))
@@ -28,6 +31,7 @@ export async function loadAppToolsReleaseGates(specPath = defaultSpecPath) {
       gate.producers.length === 0 ||
       !gate.producers.every((producer) => typeof producer === 'string' && producer.length > 0) ||
       typeof gate.assetBound !== 'boolean' ||
+      typeof gate.runtimeBound !== 'boolean' ||
       'status' in gate ||
       'covered' in gate
     ) {
@@ -38,7 +42,8 @@ export async function loadAppToolsReleaseGates(specPath = defaultSpecPath) {
       id: gate.id,
       layer: gate.layer,
       producers: Object.freeze([...gate.producers]),
-      assetBound: gate.assetBound
+      assetBound: gate.assetBound,
+      runtimeBound: gate.runtimeBound
     })
   })
   return Object.freeze(gates)
@@ -105,8 +110,16 @@ export async function verifyAppToolsReleaseGates({
     if (!gate.assetBound && record.assetSha256 !== undefined) {
       throw new Error(`Engineering evidence for ${id} must not claim a release asset binding.`)
     }
+    if (gate.runtimeBound) verifyRuntimeEvidence(record, id)
+    if (!gate.runtimeBound && record.runtime !== undefined) {
+      throw new Error(`Non-Runtime evidence for ${id} must not include a Runtime binding.`)
+    }
     await verifySourceReport(evidenceRoot, record)
-    verified.push({ id, producer: record.producer, capturedAt: new Date(record.capturedAtMs).toISOString() })
+    verified.push({
+      id,
+      producer: record.producer,
+      capturedAt: new Date(record.capturedAtMs).toISOString()
+    })
   }
   return { schemaVersion: gateSchema, commit, assetSha256, verified }
 }
@@ -150,15 +163,127 @@ function parseEvidenceRecord(value, filename) {
     commit: value.commit,
     capturedAtMs,
     ...(value.assetSha256 ? { assetSha256: value.assetSha256 } : {}),
+    ...(value.runtime !== undefined
+      ? { runtime: parseRuntimeEvidence(value.runtime, filename) }
+      : {}),
     report: { path: value.report.path, sha256: value.report.sha256 }
+  }
+}
+
+function parseRuntimeEvidence(value, filename) {
+  if (
+    !isRecord(value) ||
+    !isSha256(value.bundleSha256) ||
+    !isRecord(value.config) ||
+    !isRecord(value.manifest) ||
+    !isSequenceBinding(value.config) ||
+    !isSequenceBinding(value.manifest) ||
+    typeof value.target !== 'string' ||
+    !/^(darwin|win32|linux)-(x64|arm64)$/u.test(value.target) ||
+    !isPluginSourceBinding(value.plugin) ||
+    !isBudgetBinding(value.budget) ||
+    !isActivationBinding(value.activation)
+  ) {
+    throw new Error(`Invalid Runtime binding in App Tools release-gate evidence: ${filename}`)
+  }
+  return {
+    bundleSha256: value.bundleSha256,
+    config: value.config,
+    manifest: value.manifest,
+    target: value.target,
+    plugin: value.plugin,
+    budget: value.budget,
+    activation: value.activation,
+    ...(value.live !== undefined ? { live: parseLiveEvidence(value.live, filename) } : {})
+  }
+}
+
+function isSequenceBinding(value) {
+  return (
+    Number.isSafeInteger(value.sequence) &&
+    value.sequence > 0 &&
+    isSha256(value.payloadHash) &&
+    typeof value.keyId === 'string' &&
+    value.keyId.length > 0
+  )
+}
+
+function isActivationBinding(value) {
+  return (
+    isRecord(value) &&
+    typeof value.operationId === 'string' &&
+    value.operationId.length > 0 &&
+    typeof value.activeVersion === 'string' &&
+    value.activeVersion.length > 0
+  )
+}
+
+function isPluginSourceBinding(value) {
+  return (
+    isRecord(value) &&
+    typeof value.commit === 'string' &&
+    /^[a-f0-9]{40,64}$/u.test(value.commit) &&
+    isSha256(value.sourceArchiveSha256) &&
+    isSha256(value.patchSha256)
+  )
+}
+
+function isBudgetBinding(value) {
+  return isRecord(value) && isSha256(value.fileSha256) && isSha256(value.performanceReportSha256)
+}
+
+function parseLiveEvidence(value, filename) {
+  if (
+    !isRecord(value) ||
+    typeof value.threadId !== 'string' ||
+    value.threadId.length === 0 ||
+    typeof value.turnId !== 'string' ||
+    value.turnId.length === 0 ||
+    !isEventBinding(value.loader, 'loaderCallId') ||
+    !isSha256(value.loader.outputSha256) ||
+    !isEventBinding(value.command, 'commandItemId') ||
+    !isSha256(value.command.outputSha256) ||
+    !isEventBinding(value.artifact, 'artifactSourceId') ||
+    !isSha256(value.artifact.presentationSha256) ||
+    !isEventBinding(value.preview, 'receiptId') ||
+    !isSha256(value.preview.presentationSha256) ||
+    !isSha256(value.renderReportSha256) ||
+    value.loader.sequence >= value.command.sequence ||
+    value.command.sequence >= value.artifact.sequence ||
+    value.artifact.sequence >= value.preview.sequence ||
+    value.artifact.presentationSha256 !== value.preview.presentationSha256
+  ) {
+    throw new Error(`Invalid live Runtime trace in App Tools release-gate evidence: ${filename}`)
+  }
+  return value
+}
+
+function isEventBinding(value, id) {
+  return (
+    isRecord(value) &&
+    typeof value[id] === 'string' &&
+    value[id].length > 0 &&
+    Number.isSafeInteger(value.sequence) &&
+    value.sequence > 0
+  )
+}
+
+function verifyRuntimeEvidence(record, id) {
+  if (!record.runtime)
+    throw new Error(`Evidence for ${id} is missing its Runtime bundle and feed binding.`)
+  if (tracedRuntimeGateIds.has(id) && !record.runtime.live) {
+    throw new Error(`Evidence for ${id} is missing its ordered live Runtime trace.`)
   }
 }
 
 async function verifySourceReport(evidenceRoot, record) {
   const path = joinInside(evidenceRoot, record.report.path)
   const details = await stat(path)
-  if (!details.isFile()) throw new Error(`Evidence report is not a regular file: ${record.report.path}`)
-  const digest = createHash('sha256').update(await readFile(path)).digest('hex')
+  if (!details.isFile())
+    throw new Error(`Evidence report is not a regular file: ${record.report.path}`)
+  const digest = createHash('sha256')
+    .update(await readFile(path))
+    .digest('hex')
   if (digest !== record.report.sha256) {
     throw new Error(`Evidence report SHA256 does not match: ${record.report.path}`)
   }
@@ -169,7 +294,8 @@ function joinInside(root, candidate) {
     throw new Error('Evidence report path must be a relative POSIX path.')
   }
   const resolved = resolve(root, candidate)
-  if (!isInside(root, resolved)) throw new Error('Evidence report path escapes its evidence directory.')
+  if (!isInside(root, resolved))
+    throw new Error('Evidence report path escapes its evidence directory.')
   return resolved
 }
 
@@ -190,7 +316,9 @@ async function main() {
   const options = parseArguments(process.argv.slice(2))
   if (options.checkSpec) {
     const gates = await loadAppToolsReleaseGates(options.specPath)
-    console.log(JSON.stringify({ ok: true, gateCount: gates.length, gates: gates.map((gate) => gate.id) }))
+    console.log(
+      JSON.stringify({ ok: true, gateCount: gates.length, gates: gates.map((gate) => gate.id) })
+    )
     return
   }
   const result = await verifyAppToolsReleaseGates(options)

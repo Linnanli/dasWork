@@ -76,6 +76,22 @@ describe('PrimaryRuntimeActivePointer', () => {
     })
   })
 
+  it('normalizes a Windows-native version directory before publishing it', async () => {
+    const cacheRoot = await fixtureDirectory()
+    await mkdir(join(cacheRoot, 'versions', 'windows-p1a'), { recursive: true })
+    const pointer = new PrimaryRuntimeActivePointer(cacheRoot)
+
+    const published = await pointer.publish({
+      version: 'windows-p1a',
+      archiveSha256: 'a'.repeat(64),
+      manifestSha256: 'b'.repeat(64),
+      directory: 'versions\\windows-p1a'
+    })
+
+    expect(published.directory).toBe('versions/windows-p1a')
+    await expect(pointer.resolveRoot()).resolves.toBe(join(cacheRoot, 'versions', 'windows-p1a'))
+  })
+
   it('rejects malformed and escaping pointer records', () => {
     expect(() => parsePrimaryRuntimeActivePointer('{"schemaVersion":1}')).toThrow()
     expect(() =>

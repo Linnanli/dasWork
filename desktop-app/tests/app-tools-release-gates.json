@@ -1,20 +1,138 @@
 {
   "schemaVersion": "dascowork-app-tools-release-gates.v1",
   "gates": [
-    { "id": "AT-UNIT-01", "layer": "engineering", "producers": ["unit-stability"], "assetBound": false },
-    { "id": "AT-E2E-01", "layer": "engineering", "producers": ["real-app-server-e2e"], "assetBound": false },
-    { "id": "AT-RT-MEM-01", "layer": "engineering", "producers": ["runtime-stress"], "assetBound": false },
-    { "id": "AT-RT-SWAP-01", "layer": "engineering", "producers": ["runtime-pointer-stress"], "assetBound": false },
-    { "id": "AT-PIPE-MAC-01", "layer": "release", "producers": ["pipe-macos"], "assetBound": true },
-    { "id": "AT-PIPE-WIN-01", "layer": "release", "producers": ["pipe-windows"], "assetBound": true },
-    { "id": "AT-BUNDLE-01", "layer": "release", "producers": ["bundle-provenance"], "assetBound": true },
-    { "id": "AT-FEED-01", "layer": "release", "producers": ["runtime-feed"], "assetBound": true },
-    { "id": "AT-PKG-MAC-01", "layer": "release", "producers": ["packaged-macos"], "assetBound": true },
-    { "id": "AT-PKG-WIN-01", "layer": "release", "producers": ["packaged-windows"], "assetBound": true },
-    { "id": "AT-PKG-LINUX-01", "layer": "release", "producers": ["packaged-linux"], "assetBound": true },
-    { "id": "AT-LIVE-01", "layer": "engineering", "producers": ["live-presentations-dev"], "assetBound": false },
-    { "id": "AT-LIVE-PKG-01", "layer": "release", "producers": ["live-presentations-packaged"], "assetBound": true },
-    { "id": "AT-SIGN-MAC-01", "layer": "release", "producers": ["signing-macos"], "assetBound": true },
-    { "id": "AT-SIGN-WIN-01", "layer": "release", "producers": ["signing-windows"], "assetBound": true }
+    {
+      "id": "AT-UNIT-01",
+      "layer": "engineering",
+      "producers": ["unit-stability"],
+      "assetBound": false,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-E2E-01",
+      "layer": "engineering",
+      "producers": ["primary-runtime-feed-e2e"],
+      "assetBound": false,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-RT-MEM-01",
+      "layer": "engineering",
+      "producers": ["runtime-stress"],
+      "assetBound": false,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-RT-SWAP-01",
+      "layer": "engineering",
+      "producers": ["runtime-pointer-stress"],
+      "assetBound": false,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-PIPE-MAC-01",
+      "layer": "release",
+      "producers": ["pipe-macos"],
+      "assetBound": true,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-PIPE-WIN-01",
+      "layer": "release",
+      "producers": ["pipe-windows"],
+      "assetBound": true,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-BUNDLE-01",
+      "layer": "release",
+      "producers": ["bundle-provenance"],
+      "assetBound": true,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-RT-PROVENANCE-01",
+      "layer": "release",
+      "producers": ["runtime-provenance"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-RT-BUILD-01",
+      "layer": "release",
+      "producers": ["runtime-build-matrix"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-FEED-01",
+      "layer": "release",
+      "producers": ["runtime-feed"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-RT-UPDATE-01",
+      "layer": "engineering",
+      "producers": ["runtime-update-transaction"],
+      "assetBound": false,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-SKILL-CAP-01",
+      "layer": "engineering",
+      "producers": ["runtime-skill-sync"],
+      "assetBound": false,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-PKG-MAC-01",
+      "layer": "release",
+      "producers": ["packaged-macos"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-PKG-WIN-01",
+      "layer": "release",
+      "producers": ["packaged-windows"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-PKG-LINUX-01",
+      "layer": "release",
+      "producers": ["packaged-linux"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-LIVE-01",
+      "layer": "engineering",
+      "producers": ["live-presentation-skill-dev"],
+      "assetBound": false,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-LIVE-PKG-01",
+      "layer": "release",
+      "producers": ["live-presentation-skill-packaged"],
+      "assetBound": true,
+      "runtimeBound": true
+    },
+    {
+      "id": "AT-SIGN-MAC-01",
+      "layer": "release",
+      "producers": ["signing-macos"],
+      "assetBound": true,
+      "runtimeBound": false
+    },
+    {
+      "id": "AT-SIGN-WIN-01",
+      "layer": "release",
+      "producers": ["signing-windows"],
+      "assetBound": true,
+      "runtimeBound": false
+    }
   ]
 }

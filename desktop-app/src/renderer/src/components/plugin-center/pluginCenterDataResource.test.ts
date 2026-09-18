@@ -109,10 +109,25 @@ function mcpSnapshot(
 function createApi(snapshotResult = snapshot([githubPlugin])): TestPluginCenterApi {
   return {
     cancelRequest: vi.fn(),
+    subscribePrimaryRuntimeStatus: vi.fn(() => () => undefined),
     getSnapshot: vi.fn(async () => ({
       version: PLUGIN_CENTER_API_VERSION,
       snapshot: snapshotResult
     })),
+    getPrimaryRuntimeStatus: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'disabled' as const,
+        message: 'Primary Runtime 未配置。',
+        recovery: '请联系管理员。',
+        canInstallOrRepair: false,
+        canRunUpdate: false,
+        canCancel: false
+      }
+    })),
+    installOrRepairPrimaryRuntime: vi.fn(),
+    runPrimaryRuntimeUpdate: vi.fn(),
+    cancelPrimaryRuntime: vi.fn(),
     getInstalledPlugins: vi.fn(async () => ({
       version: PLUGIN_CENTER_API_VERSION,
       generatedAt: new Date(Date.now()).toISOString(),
@@ -793,8 +808,8 @@ describe('pluginCenterDataResource', () => {
       id: 'plugin:primary-runtime',
       name: 'primary-runtime',
       installedAt: 400,
-      marketplaceId: 'openai-primary-runtime',
-      marketplaceName: 'openai-primary-runtime'
+      marketplaceId: 'presentation-skill',
+      marketplaceName: 'presentation-skill'
     }
     const adminDisabled = {
       ...notion,
@@ -965,11 +980,11 @@ describe('pluginCenterDataResource', () => {
       })
     ]
     const builtIn = [
-      ['documents', 'Documents', 'openai-primary-runtime'],
-      ['pdf', 'PDF', 'openai-primary-runtime'],
-      ['spreadsheets', 'Spreadsheets', 'openai-primary-runtime'],
-      ['presentations', 'Presentations', 'openai-primary-runtime'],
-      ['template-creator', 'Template Creator', 'openai-primary-runtime'],
+      ['documents', 'Documents', 'presentation-skill'],
+      ['pdf', 'PDF', 'presentation-skill'],
+      ['spreadsheets', 'Spreadsheets', 'presentation-skill'],
+      ['presentation-skill', 'Presentation Skill', 'presentation-skill'],
+      ['template-creator', 'Template Creator', 'presentation-skill'],
       ['sites', 'Sites', 'openai-bundled'],
       ['visualize', 'Visualize', 'openai-bundled']
     ].map(([name, displayName, marketplaceId]) =>
@@ -981,7 +996,7 @@ describe('pluginCenterDataResource', () => {
       })
     )
     const bundledVisibilityCases = [
-      ['codex-app-tools', 'Codex App Tools', 'openai-bundled'],
+      ['codex-app-tools', 'Codex App Tools', 'dascowork-bundled'],
       ['browser', 'Browser', 'openai-bundled'],
       ['chrome', 'Chrome', 'openai-bundled']
     ].map(([name, displayName, marketplaceId]) =>
@@ -1038,7 +1053,7 @@ describe('pluginCenterDataResource', () => {
       'Documents',
       'PDF',
       'Spreadsheets',
-      'Presentations',
+      'Presentation Skill',
       'Template Creator',
       'Sites',
       'Visualize'

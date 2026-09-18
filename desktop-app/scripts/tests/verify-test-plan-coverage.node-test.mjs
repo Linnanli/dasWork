@@ -34,6 +34,11 @@ afterEach(async () => {
   )
 })
 
+test('recognizes the dedicated R07 Primary Runtime presentation-skill release scenario', () => {
+  assert.ok(expectedScenarioIds.includes('PRESENTATION-SKILL-RUNTIME'))
+  assert.ok(expectedReleaseIds.includes('R07'))
+})
+
 test('normalizes Playwright reporter files from its configured test root', () => {
   assert.equal(
     normalizePlaywrightReporterFile({
@@ -105,11 +110,7 @@ test('selects only manifest-declared Vitest evidence by file and parameterized t
       { file: 'src/main/runtime.test.ts', testName: 'C23 terminates once $phase' }
     ]),
     {
-      files: [
-        'src/main/service.test.ts',
-        'src/main/queue.test.ts',
-        'src/main/runtime.test.ts'
-      ],
+      files: ['src/main/service.test.ts', 'src/main/queue.test.ts', 'src/main/runtime.test.ts'],
       testNamePattern:
         '(?:A01 verifies \\(the\\) behavior|E13 pauses persisted .+ delivery|C23 terminates once .+)'
     }

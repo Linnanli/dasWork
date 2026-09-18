@@ -20,6 +20,8 @@ asarUnpack:
   - resources/**
   - node_modules/node-pty/**
 extraResources:
+  - from: resources/runtime/primary-runtime-product-config.json
+    to: primary-runtime-product-config.json
   - from: resources/bundled-plugins
     to: plugins
     filter:

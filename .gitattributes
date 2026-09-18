@@ -1,0 +1,3 @@
+# The Primary Runtime source lock binds this patch by its exact byte digest.
+# Keep Git's platform-specific text conversion from changing that evidence.
+primary-runtime/patches/*.patch -text whitespace=-blank-at-eol

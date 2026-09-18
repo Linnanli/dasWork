@@ -14,17 +14,20 @@ export const coverageStatuses = new Set([
 const priorities = new Set(['P0', 'P1', 'P2'])
 const layers = new Set(['client-unit', 'desktop-unit', 'integration', 'mock-e2e', 'release-e2e'])
 
-export const expectedScenarioIds = Object.entries({
-  A: 14,
-  B: 16,
-  C: 24,
-  D: 20,
-  E: 28,
-  F: 20,
-  G: 12
-}).flatMap(([prefix, count]) =>
-  Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(2, '0')}`)
-)
+export const expectedScenarioIds = [
+  ...Object.entries({
+    A: 14,
+    B: 16,
+    C: 24,
+    D: 20,
+    E: 28,
+    F: 20,
+    G: 12
+  }).flatMap(([prefix, count]) =>
+    Array.from({ length: count }, (_, index) => `${prefix}${String(index + 1).padStart(2, '0')}`)
+  ),
+  'PRESENTATION-SKILL-RUNTIME'
+]
 
 export const expectedMockIds = Array.from(
   { length: 12 },
@@ -32,7 +35,7 @@ export const expectedMockIds = Array.from(
 )
 
 export const expectedReleaseIds = Array.from(
-  { length: 6 },
+  { length: 7 },
   (_, index) => `R${String(index + 1).padStart(2, '0')}`
 )
 

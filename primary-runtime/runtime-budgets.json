@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-budgets.v1",
+  "evidence": {
+    "sourceRunId": "35237708762",
+    "sourceCommit": "09678c0dc5b8888856fdc1cdb720a17bb535f1e0",
+    "installerCommit": "09678c0dc5b8888856fdc1cdb720a17bb535f1e0",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "5fe3267a6adb2f17b21c6698affda917c1115ad428c0aa144b1aa39c61cbfbbb",
+    "toolchainsLockSha256": "9960fe23662fe9f81a000ceb6c551a0b907737b80e12664066ae40ac1931a3c2",
+    "measurementsFingerprint": "1d38278618c5dc69a26b304b4d3bbf2b65e10a8a2202e25c6a0a0570ba960370",
+    "reviewed": true,
+    "candidateArchiveSha256": {
+      "darwin-x64": "8ed1f4c406086b6d7511103b8d83e40923247f0161e8c4270bd91974101cb9b7",
+      "darwin-arm64": "1c7b61a48ab6a10e89d81235409c1a351a5c231c9cbe0faa7606c8db36105642",
+      "win32-x64": "641b5d829e6116c33d504201766d2d82781ee6c3c83785321601f115043a3372",
+      "linux-x64": "32012ac796fd4e96e2b4c202188b52fa4963ca131d43fec2bd4fb89dcf958ddc"
+    }
+  },
+  "targets": {
+    "darwin-x64": {
+      "maxArchiveBytes": 913577075,
+      "maxUnpackedBytes": 2302214490,
+      "minimumFreeDiskBytes": 6345706964,
+      "maxColdInstallMs": 211247,
+      "maxMainEventLoopDelayP99Ms": 5,
+      "maxMainEventLoopDelayMaxMs": 475
+    },
+    "darwin-arm64": {
+      "maxArchiveBytes": 894213345,
+      "maxUnpackedBytes": 2277865349,
+      "minimumFreeDiskBytes": 6267435650,
+      "maxColdInstallMs": 62162,
+      "maxMainEventLoopDelayP99Ms": 4,
+      "maxMainEventLoopDelayMaxMs": 100
+    },
+    "win32-x64": {
+      "maxArchiveBytes": 838181892,
+      "maxUnpackedBytes": 2317496799,
+      "minimumFreeDiskBytes": 6294151814,
+      "maxColdInstallMs": 155374,
+      "maxMainEventLoopDelayP99Ms": 20,
+      "maxMainEventLoopDelayMaxMs": 32
+    },
+    "linux-x64": {
+      "maxArchiveBytes": 955022176,
+      "maxUnpackedBytes": 2465844246,
+      "minimumFreeDiskBytes": 6769717269,
+      "maxColdInstallMs": 39162,
+      "maxMainEventLoopDelayP99Ms": 3,
+      "maxMainEventLoopDelayMaxMs": 10
+    }
+  }
+}
