@@ -80,6 +80,21 @@ a fully signed staging tree and loopback TLS material. See
 for the required inputs and immutable-artifact handoff. Do not substitute a local root,
 temporary `npm`/`pip` install, `officecli`, or `python-pptx` for the Runtime chain.
 
+For the normal one-command development path, run `npm run dev:primary-runtime`.
+It uses `gh` to find a successful final Primary Runtime workflow for the current Git
+commit, downloads and caches its four target staging artifacts in the ignored
+`.primary-runtime-dev-cache/`, validates and reassembles a local signed feed, then
+starts Electron against that loopback feed. The initial cache fill is several GB, but
+the client still downloads only its own platform's archive from the feed. It requires
+an authenticated GitHub CLI and a successful final workflow for the current commit;
+use `npm run dev:primary-runtime -- --source-run <run-id>` only to select that commit's
+known final run. The command has a stable local feed origin and signing key so later
+launches advance trusted metadata instead of changing the development trust identity.
+Ordinary `npm run dev` remains unchanged.
+The implementation is the repository-level development tool
+[`scripts/dev-primary-runtime.mjs`](../scripts/dev-primary-runtime.mjs), rather than
+desktop-client code.
+
 The deterministic Feed gate is separate from ordinary Mock E2E: set
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1` and run
 `npm run test:e2e:primary-runtime-feed` only after supplying the same signed staging

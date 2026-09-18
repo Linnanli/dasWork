@@ -24,6 +24,15 @@ this service on a loopback HTTPS origin, and starts Electron with only the signe
 product-config settings. It deliberately removes `DASCOWORK_PRIMARY_RUNTIME_ROOT`
 and all direct archive/manifest overrides from the Electron environment.
 
+During development, `npm --prefix desktop-app run dev:primary-runtime` prepares those
+inputs automatically from the four immutable staging artifacts of a successful final
+workflow for the current commit. It caches the source artifacts locally, creates
+ephemeral loopback TLS, signs new local metadata with a persistent ignored development
+key, validates the resulting feed tree, and then invokes the launcher above. It does
+not change production feed configuration or make the client trust a local Runtime root.
+The downloader and local feed assembler live in the repository-level
+`scripts/dev-primary-runtime.mjs`, outside the desktop client source tree.
+
 For the deterministic signed-Feed E2E, run
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 npm --prefix desktop-app run test:e2e:primary-runtime-feed`
 with exactly those same inputs. The dedicated runner atomically publishes the staging
