@@ -1,5 +1,127 @@
+diff --git a/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a6998ff8964965068621ac3e1ce5e28a69cbbfea
+--- /dev/null
++++ b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
+@@ -0,0 +1,28 @@
++{
++  "name": "presentation-skill",
++  "version": "0.8.0",
++  "description": "Runtime-owned, offline PPTX creation with automated QA and workspace preview.",
++  "author": {
++    "name": "dasCowork Runtime"
++  },
++  "license": "MIT",
++  "skills": "./skills/",
++  "interface": {
++    "displayName": "presentation-skill",
++    "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
++    "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
++    "developerName": "dasCowork Runtime",
++    "category": "Productivity",
++    "capabilities": [
++      "Write",
++      "Files",
++      "Presentations",
++      "Quality assurance"
++    ],
++    "defaultPrompt": [
++      "Create a new PowerPoint deck from the supplied workspace inputs.",
++      "Run the Runtime presentation QA and preview the generated deck."
++    ],
++    "brandColor": "#2563EB"
++  }
++}
+diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b467bd38d9b0412d0a5878ba84424962b602e79
+--- /dev/null
++++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
+@@ -0,0 +1,29 @@
++# dasCowork Runtime allowlist
++
++The v0.8.0 upstream snapshot is a source input, not a blanket runtime payload.
++The builder copies only the patched skill instructions and the generation/QA
++files named in the Runtime bundle manifest. It excludes all network clients,
++OpenAI-key readers, installer/bootstrap code, web crawlers, existing-PPTX
++editing workflows, and React/sharp icon rendering.
++
++## Allowed product operation
++
++1. Generate a new PPTX from non-PPTX workspace inputs.
++2. Run offline structural and render QA with Runtime-owned dependencies.
++3. Return the new artifact and preview it in the workspace.
++
++## Required execution boundary
++
++- `load_workspace_dependencies` is the only dependency-discovery interface.
++- Runtime scripts execute with the ordinary app-server command facility.
++- Model and image generation stay in the application-host handoff; the Runtime
++  receives only supplied image files and never a credential or network target.
++- Missing Runtime paths are terminal for this operation; no host fallback or
++  online install is permitted.
++
++## Disallowed source areas
++
++- `generate_openai_image.py`, `fetch_wikimedia_cc.py`, and other network code.
++- setup, bootstrap, virtual-environment, npm, and pip installers.
++- Existing PPTX inspection, editing, redesign, or round-trip workflows.
++- React-icon slugs and the React/sharp icon renderer.
+diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9574fecb1b07f70c9dc75700fac345847d68cbc8
+--- /dev/null
++++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
+@@ -0,0 +1,47 @@
++---
++name: presentation-skill
++description: "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported."
++---
++
++# Runtime presentation skill
++
++This Runtime-owned distribution creates a **new** PPTX, runs automated QA,
++and returns a workspace preview. It does not inspect, edit, rebuild, or
++round-trip an existing PPTX.
++
++## Required dependency boundary
++
++1. Call `load_workspace_dependencies` before invoking a script.
++2. Use only the returned Runtime-owned Node, Node modules, Python, Python
++   packages, native binaries, and font paths.
++3. Run the locked scripts through the ordinary app-server command path; normal
++   sandbox and approval rules continue to apply.
++4. If a returned Runtime path is unavailable, report the failure. Do not fall
++   back to a system tool or install anything.
++
++Never run `npm`, `npx`, `pip`, `uv`, `conda`, a bootstrap/setup script, or
++create a virtual environment. Never request a model API key, call a model HTTP
++endpoint, download an image, scrape a URL, or make another network request.
++Images must be supplied workspace files or application-host image-generation
++handoff outputs.
++
++## New-deck workflow
++
++1. Create an `outline.json` from the non-PPTX workspace inputs. The final deck
++   must contain a cover, agenda, summary, data table, data chart, and image
++   page when the request calls for the standard six-page delivery.
++2. Run `scripts/build_deck_pptxgenjs.js` with the Runtime Node executable.
++   Set both `PPTX_NODE_MODULES` and `NODE_PATH` to the returned Runtime Node
++   modules path. Do not supply React-icon slugs such as `fa6:`; use shapes,
++   charts, tables, text, or supplied images instead.
++3. Run `scripts/layout_lint.py` with the Runtime Python executable and
++   packages path to create the structural QA receipt.
++4. Run `scripts/render_slides.py` with the Runtime Python executable. Set
++   `PPTX_RUNTIME_SOFFICE` and `PPTX_RUNTIME_PDFTOPPM` to the returned Runtime
++   native binary paths for render QA.
++5. Return the generated `.pptx`, the QA receipt, and the workspace preview.
++
++The packaged plugin contains only these three scripts, their required
++PptxGenJS templates, and this policy. Network clients, image-generation
++scripts, installers, existing-PPTX workflows, and React/sharp icon rendering
++are intentionally absent.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/SKILL.md b/plugins/presentation-skill/skills/presentation-skill/SKILL.md
-index b476174..32ebd59 100644
+index b4761743210ef6ce4f1a6884bddaae423281111f..32ebd59693ea7efc60e59de6b5e8dec0ba7b098f 100644
 --- a/plugins/presentation-skill/skills/presentation-skill/SKILL.md
 +++ b/plugins/presentation-skill/skills/presentation-skill/SKILL.md
 @@ -3,6 +3,31 @@ name: presentation-skill
@@ -35,7 +157,7 @@ index b476174..32ebd59 100644
  
  Repo-native PowerPoint skill for editable, aligned, QA-checked `.pptx`
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
-index ffb73d9..12fcffa 100755
+index ffb73d91e3b592be9b5f373bd00b30d70ba4f9d7..12fcffa300c4a69c70cbdb5ee7153b1eda37c0a9 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js
 @@ -26,7 +26,6 @@
@@ -198,10 +320,10 @@ index ffb73d9..12fcffa 100755
        } else {
          // Plain filename — resolve against outline dir.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65..ef1100c 100755
+index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa48dc1a2c 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,75 +45,114 @@ def _run(command: list[str]) -> None:
+@@ -45,76 +45,114 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -231,14 +353,11 @@ index f26dc65..ef1100c 100755
 +    compatibility fallback; on volumes without 8.3 names the long path is
 +    retained and the normal command path remains unchanged.
      """
--    out_dir.mkdir(parents=True, exist_ok=True)
--    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
 +    if os.name != "nt":
 +        return str(path)
 +    try:
 +        import ctypes
- 
--    if shutil.which("unoconvert"):
++
 +        buffer = ctypes.create_unicode_buffer(32768)
 +        length = ctypes.windll.kernel32.GetShortPathNameW(
 +            str(path), buffer, len(buffer)
@@ -262,8 +381,10 @@ index f26dc65..ef1100c 100755
 +
 +def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
 +    """Convert a .pptx using only the supplied Runtime soffice binary."""
-+    out_dir.mkdir(parents=True, exist_ok=True)
-+    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
+     out_dir.mkdir(parents=True, exist_ok=True)
+     expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
+-
+-    if shutil.which("unoconvert"):
 +    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
 +    user_installation = _runtime_user_installation()
 +    base_args = [
@@ -363,6 +484,7 @@ index f26dc65..ef1100c 100755
 -            "install unoserver for ~15x speedup "
 -            "(`pip install unoserver && unoserver &`)",
 -            file=sys.stderr,
+-        )
 -    else:
 -        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
 -    if not expected_pdf.exists():
@@ -371,7 +493,7 @@ index f26dc65..ef1100c 100755
  
  
  def _args() -> argparse.Namespace:
-@@ -179,12 +218,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +217,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -384,7 +506,7 @@ index f26dc65..ef1100c 100755
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,26 +234,22 @@ def main() -> int:
+@@ -201,23 +233,19 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
@@ -400,29 +522,20 @@ index f26dc65..ef1100c 100755
          tmp_path = Path(tmp)
 -        pdf_path = _render_with_daemon_or_fallback(input_path, tmp_path)
 -
--        render_prefix = tmp_path / "slide"
--        if args.format == "png":
--            _run(["pdftoppm", "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
--            extension = ".png"
 +        pdf_path = _render_with_runtime_soffice(input_path, tmp_path)
-+        render_prefix = tmp_path / "slide"
-+        if args.format == "png":
+         render_prefix = tmp_path / "slide"
+         if args.format == "png":
+-            _run(["pdftoppm", "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
 +            _run([pdftoppm, "-png", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            extension = ".png"
+             extension = ".png"
          else:
 -            _run(["pdftoppm", "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
--            extension = ".jpg"
--
--        generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
 +            _run([pdftoppm, "-jpeg", "-r", str(args.dpi), str(pdf_path), str(render_prefix)])
-+            extension = ".jpg"
-+
-+        generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
-         if not generated:
-             raise RuntimeError("No slide images were generated.")
+             extension = ".jpg"
  
+         generated = sorted(tmp_path.glob(f"slide-*{extension}"), key=lambda p: _sort_key(p, "slide"))
 diff --git a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
-index 18efabc..4c9cd71 100644
+index 18efabc8071c24ae0716b6a082cdcb6c3e8a7a0d..4c9cd71ab61c94947748e4887936246e4d30bfa0 100644
 --- a/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
 +++ b/plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js
 @@ -4359,7 +4359,8 @@ function renderImageSidebar(pptx, slide, slideData, preset) {
@@ -435,125 +548,3 @@ index 18efabc..4c9cd71 100644
    }
  
    const sectionGap = 0.10;
-diff --git a/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
-new file mode 100644
-index 0000000..a6998ff
---- /dev/null
-+++ b/plugins/presentation-skill/.codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json
-@@ -0,0 +1,28 @@
-+{
-+  "name": "presentation-skill",
-+  "version": "0.8.0",
-+  "description": "Runtime-owned, offline PPTX creation with automated QA and workspace preview.",
-+  "author": {
-+    "name": "dasCowork Runtime"
-+  },
-+  "license": "MIT",
-+  "skills": "./skills/",
-+  "interface": {
-+    "displayName": "presentation-skill",
-+    "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
-+    "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
-+    "developerName": "dasCowork Runtime",
-+    "category": "Productivity",
-+    "capabilities": [
-+      "Write",
-+      "Files",
-+      "Presentations",
-+      "Quality assurance"
-+    ],
-+    "defaultPrompt": [
-+      "Create a new PowerPoint deck from the supplied workspace inputs.",
-+      "Run the Runtime presentation QA and preview the generated deck."
-+    ],
-+    "brandColor": "#2563EB"
-+  }
-+}
-diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
-new file mode 100644
-index 0000000..4b467bd
---- /dev/null
-+++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md
-@@ -0,0 +1,29 @@
-+# dasCowork Runtime allowlist
-+
-+The v0.8.0 upstream snapshot is a source input, not a blanket runtime payload.
-+The builder copies only the patched skill instructions and the generation/QA
-+files named in the Runtime bundle manifest. It excludes all network clients,
-+OpenAI-key readers, installer/bootstrap code, web crawlers, existing-PPTX
-+editing workflows, and React/sharp icon rendering.
-+
-+## Allowed product operation
-+
-+1. Generate a new PPTX from non-PPTX workspace inputs.
-+2. Run offline structural and render QA with Runtime-owned dependencies.
-+3. Return the new artifact and preview it in the workspace.
-+
-+## Required execution boundary
-+
-+- `load_workspace_dependencies` is the only dependency-discovery interface.
-+- Runtime scripts execute with the ordinary app-server command facility.
-+- Model and image generation stay in the application-host handoff; the Runtime
-+  receives only supplied image files and never a credential or network target.
-+- Missing Runtime paths are terminal for this operation; no host fallback or
-+  online install is permitted.
-+
-+## Disallowed source areas
-+
-+- `generate_openai_image.py`, `fetch_wikimedia_cc.py`, and other network code.
-+- setup, bootstrap, virtual-environment, npm, and pip installers.
-+- Existing PPTX inspection, editing, redesign, or round-trip workflows.
-+- React-icon slugs and the React/sharp icon renderer.
-diff --git a/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
-new file mode 100644
-index 0000000..9574fec
---- /dev/null
-+++ b/plugins/presentation-skill/skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md
-@@ -0,0 +1,47 @@
-+---
-+name: presentation-skill
-+description: "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported."
-+---
-+
-+# Runtime presentation skill
-+
-+This Runtime-owned distribution creates a **new** PPTX, runs automated QA,
-+and returns a workspace preview. It does not inspect, edit, rebuild, or
-+round-trip an existing PPTX.
-+
-+## Required dependency boundary
-+
-+1. Call `load_workspace_dependencies` before invoking a script.
-+2. Use only the returned Runtime-owned Node, Node modules, Python, Python
-+   packages, native binaries, and font paths.
-+3. Run the locked scripts through the ordinary app-server command path; normal
-+   sandbox and approval rules continue to apply.
-+4. If a returned Runtime path is unavailable, report the failure. Do not fall
-+   back to a system tool or install anything.
-+
-+Never run `npm`, `npx`, `pip`, `uv`, `conda`, a bootstrap/setup script, or
-+create a virtual environment. Never request a model API key, call a model HTTP
-+endpoint, download an image, scrape a URL, or make another network request.
-+Images must be supplied workspace files or application-host image-generation
-+handoff outputs.
-+
-+## New-deck workflow
-+
-+1. Create an `outline.json` from the non-PPTX workspace inputs. The final deck
-+   must contain a cover, agenda, summary, data table, data chart, and image
-+   page when the request calls for the standard six-page delivery.
-+2. Run `scripts/build_deck_pptxgenjs.js` with the Runtime Node executable.
-+   Set both `PPTX_NODE_MODULES` and `NODE_PATH` to the returned Runtime Node
-+   modules path. Do not supply React-icon slugs such as `fa6:`; use shapes,
-+   charts, tables, text, or supplied images instead.
-+3. Run `scripts/layout_lint.py` with the Runtime Python executable and
-+   packages path to create the structural QA receipt.
-+4. Run `scripts/render_slides.py` with the Runtime Python executable. Set
-+   `PPTX_RUNTIME_SOFFICE` and `PPTX_RUNTIME_PDFTOPPM` to the returned Runtime
-+   native binary paths for render QA.
-+5. Return the generated `.pptx`, the QA receipt, and the workspace preview.
-+
-+The packaged plugin contains only these three scripts, their required
-+PptxGenJS templates, and this policy. Network clients, image-generation
-+scripts, installers, existing-PPTX workflows, and React/sharp icon rendering
-+are intentionally absent.
