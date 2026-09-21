@@ -473,8 +473,7 @@ function isInstallingRuntimeState(state: string): boolean {
 
 async function startMainEventLoopProbe(app: ElectronApplication): Promise<string> {
   return app.evaluate(() => {
-    const requireFromMain = Function('return require')() as NodeRequire
-    const { monitorEventLoopDelay, performance } = requireFromMain(
+    const { monitorEventLoopDelay, performance } = process.getBuiltinModule(
       'node:perf_hooks'
     ) as typeof import('node:perf_hooks')
     const probes = ((
@@ -507,8 +506,9 @@ async function stopMainEventLoopProbe(
   maxMs: number
 }> {
   return app.evaluate((_, probeId) => {
-    const requireFromMain = Function('return require')() as NodeRequire
-    const { performance } = requireFromMain('node:perf_hooks') as typeof import('node:perf_hooks')
+    const { performance } = process.getBuiltinModule(
+      'node:perf_hooks'
+    ) as typeof import('node:perf_hooks')
     const probes = (
       globalThis as typeof globalThis & {
         __dascoworkPrimaryRuntimeP3bProbes?: Map<
@@ -542,8 +542,9 @@ async function stopMainEventLoopProbe(
 
 async function startMainDiskProbe(app: ElectronApplication): Promise<string> {
   return app.evaluate(async ({ app: electronApp }) => {
-    const requireFromMain = Function('return require')() as NodeRequire
-    const { statfs } = requireFromMain('node:fs/promises') as typeof import('node:fs/promises')
+    const { statfs } = process.getBuiltinModule(
+      'node:fs/promises'
+    ) as typeof import('node:fs/promises')
     const probes = ((
       globalThis as typeof globalThis & {
         __dascoworkPrimaryRuntimeP3bDiskProbes?: Map<
@@ -598,8 +599,9 @@ async function stopMainDiskProbe(
   sampleCount: number
 }> {
   return app.evaluate(async (_, probeId) => {
-    const requireFromMain = Function('return require')() as NodeRequire
-    const { statfs } = requireFromMain('node:fs/promises') as typeof import('node:fs/promises')
+    const { statfs } = process.getBuiltinModule(
+      'node:fs/promises'
+    ) as typeof import('node:fs/promises')
     const probes = (
       globalThis as typeof globalThis & {
         __dascoworkPrimaryRuntimeP3bDiskProbes?: Map<
