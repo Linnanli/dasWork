@@ -571,6 +571,32 @@ describe('PrimaryRuntimeService', () => {
     })
   })
 
+  it('freezes every file when a Runtime tree spans multiple filesystem batches', async () => {
+    const cacheRoot = await fixtureDirectory()
+    const extraFiles = Array.from({ length: 32 }, (_, index) => ({
+      path: `data/batch-${index}.txt`,
+      content: `fixture-${index}\n`
+    }))
+    const archive = await releaseArchive({
+      bundleVersion: 'immutable-batches',
+      extraFiles
+    })
+    const service = runtimeServiceWithRelease(cacheRoot, archive)
+
+    await expect(service.install()).resolves.toMatchObject({
+      status: 'installed',
+      version: 'immutable-batches'
+    })
+    const versionRoot = releaseRoot(cacheRoot, archive.descriptor)
+    await Promise.all(
+      extraFiles.map(({ path }) =>
+        expect(writeFile(join(versionRoot, path), 'changed')).rejects.toMatchObject({
+          code: expect.stringMatching(/EACCES|EPERM/u)
+        })
+      )
+    )
+  })
+
   it('restores an audited executable mode outside a bin directory', async () => {
     const cacheRoot = await fixtureDirectory()
     const archive = await releaseArchive({

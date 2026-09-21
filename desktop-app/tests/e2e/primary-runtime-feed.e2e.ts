@@ -657,7 +657,7 @@ async function expectRuntimePresentationSkill(
   await expect
     .poll(
       async () => {
-        runtimeSkill = await page.evaluate(async () => {
+        runtimeSkill = await page.evaluate(async (skillSuffix) => {
           const result = await window.desktopApp.plugins.getSnapshot({
             version: 1,
             sections: ['skills']
@@ -666,7 +666,7 @@ async function expectRuntimePresentationSkill(
             (candidate) =>
               candidate.enabled &&
               candidate.name === 'presentation-skill' &&
-              candidate.id.replaceAll('\\', '/').endsWith(runtimePresentationSkillSuffix)
+              candidate.id.replaceAll('\\', '/').endsWith(skillSuffix)
           )
           if (!skill) return null
           return {
@@ -678,7 +678,7 @@ async function expectRuntimePresentationSkill(
             enabled: skill.enabled,
             installed: skill.installed
           }
-        })
+        }, runtimePresentationSkillSuffix)
         return runtimeSkill
       },
       { timeout: 120_000 }

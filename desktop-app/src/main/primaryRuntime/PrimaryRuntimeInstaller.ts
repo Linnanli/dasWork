@@ -62,6 +62,7 @@ const DEFAULT_MAX_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
 const MINIMUM_INSTALL_HEADROOM_BYTES = 2 * 1024 * 1024 * 1024
 const MAX_UNPACKED_RUNTIME_BYTES = 8 * 1024 * 1024 * 1024
 const MAX_ARCHIVE_ENTRIES = 200_000
+const RUNTIME_TREE_FS_CONCURRENCY = 16
 
 /**
  * Installs Primary Runtime archives without ever materialising an archive in
@@ -110,10 +111,7 @@ export class PrimaryRuntimeInstaller {
     assertSupportedDescriptor(resolvedDescriptor, budget.maxArchiveBytes)
     await assertDiskCapacity(
       this.input.cacheRoot,
-      Math.max(
-        budget.minimumFreeDiskBytes,
-        resolvedDescriptor.archiveSizeBytes * 8
-      ),
+      Math.max(budget.minimumFreeDiskBytes, resolvedDescriptor.archiveSizeBytes * 8),
       this.availableDiskBytes
     )
 
@@ -461,36 +459,65 @@ function isSymlinkEntry(entry: yauzl.Entry): boolean {
 }
 
 async function freezeRuntimeTree(root: string): Promise<void> {
-  const entries = await readdir(root, { withFileTypes: true })
-  for (const entry of entries) {
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) {
-      await freezeRuntimeTree(path)
-      await chmod(path, 0o555)
-      continue
-    }
-    if (entry.isFile()) {
-      const mode = (await stat(path)).mode
-      await chmod(path, mode & 0o111 ? 0o555 : 0o444)
-      continue
-    }
-    throw new Error('Primary Runtime extraction created an unsupported filesystem entry.')
-  }
-  await chmod(root, 0o555)
+  const tree = await inspectRuntimeTree(root)
+  // A Runtime can contain hundreds of thousands of package files. Keep the
+  // libuv filesystem queue busy without issuing an unbounded chmod burst.
+  await forEachRuntimePath(tree.files, async (path) => {
+    const mode = (await stat(path)).mode
+    await chmod(path, mode & 0o111 ? 0o555 : 0o444)
+  })
+  await forEachRuntimePath(tree.directories, (path) => chmod(path, 0o555))
 }
 
 async function makeRuntimeTreeWritable(root: string): Promise<void> {
-  const entries = await readdir(root, { withFileTypes: true })
-  for (const entry of entries) {
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) {
-      await makeRuntimeTreeWritable(path)
-      await chmod(path, 0o700)
-      continue
+  const tree = await inspectRuntimeTree(root)
+  await forEachRuntimePath(tree.directories, (path) => chmod(path, 0o700))
+  await forEachRuntimePath(tree.files, (path) => chmod(path, 0o600))
+}
+
+async function inspectRuntimeTree(
+  root: string
+): Promise<{ directories: string[]; files: string[] }> {
+  const pendingDirectories = [root]
+  const directories: string[] = []
+  const files: string[] = []
+  while (pendingDirectories.length > 0) {
+    const directory = pendingDirectories.pop()
+    if (directory === undefined) break
+    directories.push(directory)
+    const entries = await readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) pendingDirectories.push(path)
+      else if (entry.isFile()) files.push(path)
+      else {
+        throw new Error('Primary Runtime extraction created an unsupported filesystem entry.')
+      }
     }
-    if (entry.isFile()) await chmod(path, 0o600)
   }
-  await chmod(root, 0o700)
+  return { directories, files }
+}
+
+async function forEachRuntimePath(
+  paths: readonly string[],
+  action: (path: string) => Promise<void>
+): Promise<void> {
+  let nextIndex = 0
+  const workerCount = Math.min(RUNTIME_TREE_FS_CONCURRENCY, paths.length)
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < paths.length) {
+      const path = paths[nextIndex]
+      nextIndex += 1
+      if (path === undefined) return
+      await action(path)
+    }
+  })
+  // Do not return while another worker can still mutate a tree that the caller
+  // may immediately remove after an error.
+  const results = await Promise.allSettled(workers)
+  for (const result of results) {
+    if (result.status === 'rejected') throw result.reason
+  }
 }
 
 async function readAvailableDiskBytes(path: string): Promise<number> {
