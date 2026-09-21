@@ -183,16 +183,16 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /Stage restartable target-native build artifacts/u)
   assert.match(buildWorkflow, /primary-runtime-\$\{\{ matrix\.target \}\}-build-artifacts/u)
   assert.match(buildWorkflow, /validate-target/u)
-  assert.match(buildWorkflow, /Download the same-run target-native build artifact for P3 validation/u)
+  assert.match(
+    buildWorkflow,
+    /Download the same-run target-native build artifact for P3 validation/u
+  )
   assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1/u)
   assert.match(
     buildWorkflow,
     /validate-target:[\s\S]*?if: \$\{\{ !cancelled\(\) && needs\.build-target\.result != 'skipped'[\s\S]*?needs: build-target[\s\S]*?Download the same-run target-native build artifact for P3 validation[\s\S]*?name: primary-runtime-\$\{\{ matrix\.target \}\}-build-artifacts/u
   )
-  assert.match(
-    buildWorkflow,
-    /aggregate-engineering-feed:[\s\S]*?needs: validate-target/u
-  )
+  assert.match(buildWorkflow, /aggregate-engineering-feed:[\s\S]*?needs: validate-target/u)
   assert.doesNotMatch(buildWorkflow, /^ {2}PRIMARY_RUNTIME_ZIP_COMPRESSION_LEVEL:/mu)
   assert.match(
     buildWorkflow,
@@ -203,15 +203,22 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /P3b measure ten cold installs and Main event-loop delay/u)
   assert.match(
     buildWorkflow,
-    /P3b run ordinary app-server chat through the signed local calibration feed/u
+    /P3b collect Main overlap performance and dev R07 through the signed local calibration feed/u
   )
   assert.match(buildWorkflow, /test:e2e:primary-runtime-calibration-feed/u)
   assert.match(buildWorkflow, /matrix\.target \}\}" == "linux-x64"/u)
-  assert.match(buildWorkflow, /xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed/u)
-  assert.match(buildWorkflow, /--normal-chat-receipt/u)
+  assert.match(
+    buildWorkflow,
+    /xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed/u
+  )
+  assert.match(buildWorkflow, /--main-overlap-receipt/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime:performance/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run assemble:performance/u)
   assert.match(buildWorkflow, /npm --prefix primary-runtime run verify:budgets/u)
+  assert.match(buildWorkflow, /npm --prefix desktop-app run test:codex-verifiers/u)
+  assert.match(buildWorkflow, /--hard-limits runtime-hard-limits\.json/u)
+  assert.match(buildWorkflow, /--source-lock runtime-sources\.lock\.json/u)
+  assert.match(buildWorkflow, /--toolchains-lock runtime-toolchains\.lock\.json/u)
   assert.match(buildWorkflow, /Rebuild final candidate from reviewed calibration evidence/u)
   assert.match(buildWorkflow, /aggregate-engineering-feed/u)
   assert.match(buildWorkflow, /primary-runtime-engineering-feed/u)
@@ -220,8 +227,40 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /Run packaged R07 from the same-run engineering feed and an empty cache/u
   )
+  assert.match(
+    buildWorkflow,
+    /Run dev R07 from the same-run engineering feed and record live evidence/u
+  )
   assert.match(buildWorkflow, /test:e2e:primary-runtime-feed:packaged/u)
+  assert.match(buildWorkflow, /DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT/u)
+  assert.match(buildWorkflow, /r07-dev-live-trace\.json/u)
+  assert.match(buildWorkflow, /r07-packaged-live-trace\.json/u)
+  assert.match(buildWorkflow, /Produce and verify App Tools R07 release-gate evidence/u)
+  assert.match(buildWorkflow, /feed-repository\/evidence\/app-tools-release/u)
+  assert.match(buildWorkflow, /write-app-tools-release-evidence\.mjs/u)
+  assert.match(buildWorkflow, /--feedRoot "\$RUNNER_TEMP\/feed-repository\/current"/u)
+  assert.match(buildWorkflow, /verify:app-tools-release-gates/u)
+  assert.match(buildWorkflow, /--gateId AT-E2E-01/u)
+  assert.match(buildWorkflow, /--gateId AT-LIVE-01/u)
+  assert.match(buildWorkflow, /--gateId AT-LIVE-PKG-01/u)
+  assert.match(buildWorkflow, /--asset-sha256 "\$asset_sha"/u)
+  assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_ASSET_RECEIPT/u)
+  assert.match(
+    buildWorkflow,
+    /feed-repository\/evidence\/app-tools-release\/reports\/packaged-app-assets\.json/u
+  )
+  assert.match(buildWorkflow, /desktop-app\/scripts\/packaged-app-assets\.mjs/u)
+  assert.doesNotMatch(buildWorkflow, /asset_sha=.*at-live-pkg-01\.json/u)
+  assert.match(buildWorkflow, /--ids AT-E2E-01,AT-LIVE-01,AT-LIVE-PKG-01/u)
   assert.match(buildWorkflow, /desktop-app\/scripts\/run-primary-runtime-packaged-feed-e2e\.mjs/u)
+  assert.match(buildWorkflow, /desktop-app\/src\/main\/appTools\/\*\*/u)
+  assert.match(buildWorkflow, /desktop-app\/scripts\/verify-app-tools-release-gates\.mjs/u)
+  assert.match(buildWorkflow, /desktop-app\/scripts\/write-app-tools-release-evidence\.mjs/u)
+  assert.match(
+    buildWorkflow,
+    /desktop-app\/scripts\/tests\/verify-app-tools-release-gates\.node-test\.mjs/u
+  )
+  assert.match(buildWorkflow, /desktop-app\/tests\/app-tools-release-gates\.json/u)
   assert.match(buildWorkflow, /desktop-app\/tests\/e2e\/primary-runtime-feed\.e2e\.ts/u)
   assert.match(buildWorkflow, /desktop-app\/tests\/e2e\/support\/r07Presentation\.ts/u)
   assert.match(buildWorkflow, /Create an ephemeral loopback CA for the packaged engineering feed/u)
@@ -249,14 +288,17 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     buildWorkflow,
     /Install desktop dependencies for P3a\/P3b installer gates\n {8}run: npm --prefix desktop-app ci$/mu
   )
-  assert.match(buildWorkflow, /Use locked Codex CLI for P3b normal-chat validation/u)
+  assert.match(buildWorkflow, /Use locked Codex CLI for P3b Main-overlap validation/u)
   assert.match(
     buildWorkflow,
     /echo "\$GITHUB_WORKSPACE\/desktop-app\/node_modules\/\.bin" >> "\$GITHUB_PATH"/u
   )
   assert.match(buildWorkflow, /node desktop-app\/scripts\/verify-pinned-codex-cli\.mjs/u)
   assert.match(buildWorkflow, /Build desktop test host once for P3b/u)
-  assert.match(buildWorkflow, /Build AI-free Codex app-server client for final P3a installer gates/u)
+  assert.match(
+    buildWorkflow,
+    /Build AI-free Codex app-server client for final P3a installer gates/u
+  )
   assert.match(buildWorkflow, /npm --prefix desktop-app run build:codex-app-server-client/u)
   assert.match(
     buildWorkflow,
@@ -279,10 +321,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.ok(
     buildWorkflow.indexOf('Install desktop dependencies for P3a/P3b installer gates') <
-      buildWorkflow.indexOf('Use locked Codex CLI for P3b normal-chat validation')
+      buildWorkflow.indexOf('Use locked Codex CLI for P3b Main-overlap validation')
   )
   assert.ok(
-    buildWorkflow.indexOf('Use locked Codex CLI for P3b normal-chat validation') <
+    buildWorkflow.indexOf('Use locked Codex CLI for P3b Main-overlap validation') <
       buildWorkflow.indexOf('Build desktop test host once for P3b')
   )
   assert.ok(
@@ -292,12 +334,12 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.ok(
     buildWorkflow.indexOf('P3a install the downloaded archive through the real desktop installer') <
       buildWorkflow.indexOf(
-        'P3b run ordinary app-server chat through the signed local calibration feed'
+        'P3b collect Main overlap performance and dev R07 through the signed local calibration feed'
       )
   )
   assert.ok(
     buildWorkflow.indexOf(
-      'P3b run ordinary app-server chat through the signed local calibration feed'
+      'P3b collect Main overlap performance and dev R07 through the signed local calibration feed'
     ) < buildWorkflow.indexOf('P3b measure ten cold installs and Main event-loop delay')
   )
   assert.doesNotMatch(buildWorkflow, /DASCOWORK_REAL_PRIMARY_RUNTIME_ROOT/u)

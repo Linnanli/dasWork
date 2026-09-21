@@ -32,6 +32,7 @@ import {
   expectedBuilderImageIdentity,
   writeRuntimeInputsManifest,
 } from "../scripts/runtime-inputs.mjs";
+import { measurementFingerprint } from "../scripts/runtime-budgets.mjs";
 
 const executeFile = promisify(execFile);
 const provenanceScript = resolve(
@@ -61,6 +62,10 @@ const sourceLockPath = resolve(
 const toolchainsLockPath = resolve(
   import.meta.dirname,
   "../runtime-toolchains.lock.json",
+);
+const hardLimitsPath = resolve(
+  import.meta.dirname,
+  "../runtime-hard-limits.json",
 );
 const releaseTargets = ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"];
 
@@ -604,6 +609,53 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
   }
 });
 
+test("final Runtime build rejects reviewed budget evidence from stale checkout files", async () => {
+  const directory = await mkdtemp(
+    join(tmpdir(), "primary-runtime-build-budget-"),
+  );
+  const target = currentRuntimeTarget();
+  const inputRoot = join(directory, "input");
+  const outputRoot = join(directory, "dist");
+  const performancePath = join(directory, "performance-target-report.json");
+  const budgetPath = join(directory, "runtime-budgets.json");
+  try {
+    const validationPath = await createOfflineRuntimeInputs({
+      inputRoot,
+      target,
+    });
+    const performance = await validReleaseMeasurements();
+    const staleBudget = validReleaseBudgets(performance, {
+      sourceLockSha256: "0".repeat(64),
+    });
+    await writeJson(performancePath, performance);
+    await writeJson(budgetPath, staleBudget);
+
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          buildScript,
+          "--target",
+          target,
+          "--input-root",
+          inputRoot,
+          "--output-root",
+          outputRoot,
+          "--version",
+          "1.2.3-final-test",
+          "--input-validation",
+          validationPath,
+          "--release-budget",
+          budgetPath,
+          "--performance-report",
+          performancePath,
+        ]),
+      /does not match current sourceLockSha256/u,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 function validApprovedLock({ patchSha256 = "e".repeat(64) } = {}) {
   return {
     schemaVersion: "dascowork-primary-runtime-sources.v2",
@@ -860,6 +912,88 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
     )}\n`,
   );
   return validationPath;
+}
+
+async function validReleaseMeasurements() {
+  const evidence = await currentCheckoutEvidence();
+  const sample = {
+    archiveBytes: [1000, 1000, 1000, 1000, 1000],
+    unpackedBytes: [2000, 2000, 2000, 2000, 2000],
+    coldInstallMs: [1000, 950, 900, 850, 800, 750, 700, 650, 600, 550],
+    mainEventLoopDelayP99Ms: [20, 19, 18, 17, 16, 15, 14, 13, 12, 11],
+    mainEventLoopDelayMaxMs: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55],
+    minimumAvailableDiskBytes: [
+      12_000_000, 11_990_000, 11_980_000, 11_970_000, 11_960_000,
+      11_950_000, 11_940_000, 11_930_000, 11_920_000, 11_910_000,
+    ],
+    chatInstallOverlapMs: [500, 490, 480, 470, 460, 450, 440, 430, 420, 410],
+  };
+  return {
+    schemaVersion: "dascowork-primary-runtime-budget-measurements.v1",
+    evidence: {
+      sourceRunId: "123456",
+      sourceCommit: "a".repeat(40),
+      installerCommit: "b".repeat(40),
+      ...evidence,
+    },
+    targets: Object.fromEntries(
+      releaseTargets.map((releaseTarget, index) => {
+        const character = String.fromCharCode(97 + index);
+        return [
+          releaseTarget,
+          {
+            ...sample,
+            runner: `${releaseTarget}-runner`,
+            candidateArchiveSha256: character.repeat(64),
+            p1aBuildUnpackReceiptSha256: "f".repeat(64),
+          },
+        ];
+      }),
+    ),
+  };
+}
+
+function validReleaseBudgets(performance, evidenceOverrides = {}) {
+  return {
+    schemaVersion: "dascowork-primary-runtime-budgets.v1",
+    evidence: {
+      ...performance.evidence,
+      ...evidenceOverrides,
+      reviewed: true,
+      measurementsFingerprint: measurementFingerprint(performance),
+      candidateArchiveSha256: Object.fromEntries(
+        releaseTargets.map((releaseTarget) => [
+          releaseTarget,
+          performance.targets[releaseTarget].candidateArchiveSha256,
+        ]),
+      ),
+    },
+    targets: Object.fromEntries(
+      releaseTargets.map((releaseTarget) => [
+        releaseTarget,
+        {
+          maxArchiveBytes: 1200,
+          maxUnpackedBytes: 2300,
+          minimumFreeDiskBytes: 7000,
+          maxColdInstallMs: 1200,
+          maxMainEventLoopDelayP99Ms: 25,
+          maxMainEventLoopDelayMaxMs: 125,
+        },
+      ]),
+    ),
+  };
+}
+
+async function currentCheckoutEvidence() {
+  return {
+    hardLimitsSha256: await sha256File(hardLimitsPath),
+    sourceLockSha256: await sha256File(sourceLockPath),
+    toolchainsLockSha256: await sha256File(toolchainsLockPath),
+  };
+}
+
+async function sha256File(path) {
+  return sha256(await readFile(path));
 }
 
 async function writeExecutable(path, value) {

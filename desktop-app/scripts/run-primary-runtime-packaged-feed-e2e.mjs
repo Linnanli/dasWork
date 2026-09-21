@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 
 import {
   PACKAGED_PRODUCT_CONFIG_FILE,
-  engineeringTestPackagedProductConfigFromEnvironment,
+  packagedProductConfigFromEnvironment,
   writePackagedProductConfig
 } from './write-primary-runtime-product-config.mjs'
 import {
@@ -18,6 +18,7 @@ import {
   startPrimaryRuntimeFeed
 } from './dev-with-primary-runtime-feed.mjs'
 import { requirePrimaryRuntimeFeedE2eEnvironment } from './run-primary-runtime-feed-e2e.mjs'
+import { writePackagedAppAssetReceipt } from './packaged-app-assets.mjs'
 
 const appRoot = resolve(import.meta.dirname, '..')
 
@@ -34,24 +35,37 @@ async function main() {
   const originalProductConfig = await readFile(PACKAGED_PRODUCT_CONFIG_FILE)
   const server = await startPrimaryRuntimeFeed(configuration)
   try {
+    const packagedResourceEnvironment = {
+      ...environment,
+      DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: undefined
+    }
     await writePackagedProductConfig(
-      engineeringTestPackagedProductConfigFromEnvironment(environment)
+      packagedProductConfigFromEnvironment(packagedResourceEnvironment)
     )
-    const packageStatus = await run('npm', ['run', 'build:unpack'], environment)
+    const packageStatus = await run('npm', ['run', 'build:unpack'], packagedResourceEnvironment)
     if (packageStatus !== 0) return packageStatus
 
-    const executable = await packagedExecutable(join(appRoot, 'dist'))
-    if (!executable) {
+    const packagedApplication = await findPackagedApplication(join(appRoot, 'dist'))
+    if (!packagedApplication) {
       throw new Error(
         `Could not find a packaged application for ${process.platform}/${process.arch}.`
       )
     }
+    const assetReceiptPath = process.env.DASCOWORK_PRIMARY_RUNTIME_PACKAGED_ASSET_RECEIPT?.trim()
+    if (!assetReceiptPath) {
+      throw new Error('Packaged Primary Runtime E2E requires an independent asset receipt path.')
+    }
+    await writePackagedAppAssetReceipt({
+      root: packagedApplication.root,
+      output: assetReceiptPath
+    })
     return await run(
       'npx',
       ['playwright', 'test', 'tests/e2e/primary-runtime-feed.e2e.ts', '--reporter=line'],
       {
         ...environment,
-        DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE: executable
+        DASCOWORK_PRIMARY_RUNTIME_PACKAGED_E2E_LOCAL_CA_PATH: configuration.tlsCaPath,
+        DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE: packagedApplication.executable
       }
     )
   } finally {
@@ -76,9 +90,15 @@ function run(command, args, environment) {
   })
 }
 
-async function packagedExecutable(distRoot) {
-  if (process.platform === 'win32') return join(distRoot, 'win-unpacked', 'desktop-app.exe')
-  if (process.platform === 'linux') return join(distRoot, 'linux-unpacked', 'desktop-app')
+async function findPackagedApplication(distRoot) {
+  if (process.platform === 'win32') {
+    const root = join(distRoot, 'win-unpacked')
+    return { root, executable: join(root, 'desktop-app.exe') }
+  }
+  if (process.platform === 'linux') {
+    const root = join(distRoot, 'linux-unpacked')
+    return { root, executable: join(root, 'desktop-app') }
+  }
 
   const macDirectory = (await readdir(distRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory() && entry.name.startsWith('mac'))
@@ -87,7 +107,7 @@ async function packagedExecutable(distRoot) {
       const preferred = process.arch === 'arm64' ? 'mac-arm64' : 'mac'
       return Number(right === preferred) - Number(left === preferred)
     })[0]
-  return macDirectory
-    ? join(distRoot, macDirectory, 'desktop-app.app', 'Contents', 'MacOS', 'desktop-app')
-    : undefined
+  if (!macDirectory) return undefined
+  const root = join(distRoot, macDirectory, 'desktop-app.app')
+  return { root, executable: join(root, 'Contents', 'MacOS', 'desktop-app') }
 }

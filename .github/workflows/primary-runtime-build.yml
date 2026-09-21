@@ -5,6 +5,7 @@ on:
     paths:
       - "primary-runtime/**"
       - "services/primary-runtime-feed/**"
+      - "desktop-app/src/main/appTools/**"
       - "desktop-app/src/main/primaryRuntime/**"
       - "desktop-app/src/main/index.ts"
       - "desktop-app/src/main/runtimeConfig.ts"
@@ -12,13 +13,18 @@ on:
       - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/packaged-app-assets.mjs"
       - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/verify-app-tools-release-gates.node-test.mjs"
       - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/verify-app-tools-release-gates.mjs"
+      - "desktop-app/scripts/write-app-tools-release-evidence.mjs"
       - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
       - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/app-tools-release-gates.json"
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
@@ -27,6 +33,7 @@ on:
     paths:
       - "primary-runtime/**"
       - "services/primary-runtime-feed/**"
+      - "desktop-app/src/main/appTools/**"
       - "desktop-app/src/main/primaryRuntime/**"
       - "desktop-app/src/main/index.ts"
       - "desktop-app/src/main/runtimeConfig.ts"
@@ -34,13 +41,18 @@ on:
       - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/packaged-app-assets.mjs"
       - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-real-smoke.node-test.mjs"
+      - "desktop-app/scripts/tests/verify-app-tools-release-gates.node-test.mjs"
       - "desktop-app/scripts/tests/write-primary-runtime-product-config.node-test.mjs"
+      - "desktop-app/scripts/verify-app-tools-release-gates.mjs"
+      - "desktop-app/scripts/write-app-tools-release-evidence.mjs"
       - "desktop-app/scripts/write-primary-runtime-product-config.mjs"
       - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
+      - "desktop-app/tests/app-tools-release-gates.json"
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
@@ -105,6 +117,9 @@ jobs:
 
       - name: Verify desktop release/workflow contracts
         run: npm --prefix desktop-app run test:release-contract
+
+      - name: Verify desktop Codex/App Tools verifiers
+        run: npm --prefix desktop-app run test:codex-verifiers
 
       - name: Require authorized immutable Runtime sources
         run: npm --prefix primary-runtime run create-provenance
@@ -194,7 +209,10 @@ jobs:
             --report "linux-x64=$RUNNER_TEMP/calibration/linux-x64/performance-target-report.json"
           npm --prefix primary-runtime run verify:budgets -- \
             --budget runtime-budgets.json \
-            --measurements "$report"
+            --measurements "$report" \
+            --hard-limits runtime-hard-limits.json \
+            --source-lock runtime-sources.lock.json \
+            --toolchains-lock runtime-toolchains.lock.json
           cp primary-runtime/runtime-budgets.json "$RUNNER_TEMP/reviewed-calibration/runtime-budgets.json"
 
       - name: Upload reviewed calibration for target-native final rebuilds
@@ -493,7 +511,7 @@ jobs:
       - name: Install desktop dependencies for P3a/P3b installer gates
         run: npm --prefix desktop-app ci
 
-      - name: Use locked Codex CLI for P3b normal-chat validation
+      - name: Use locked Codex CLI for P3b Main-overlap validation
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
         shell: bash
         run: |
@@ -534,7 +552,7 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256="$sha256" \
           npm --prefix desktop-app run test:primary-runtime:stress
 
-      - name: P3b run ordinary app-server chat through the signed local calibration feed
+      - name: P3b collect Main overlap performance and dev R07 through the signed local calibration feed
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
         shell: bash
         run: |
@@ -552,7 +570,7 @@ jobs:
               --sha256 "$sha256" \
               --provenance "$target_root/provenance.json" \
               --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
-              --output "$target_root/normal-chat-smoke.json"
+              --output "$target_root/main-overlap-performance.json"
           else
             npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
               --target "${{ matrix.target }}" \
@@ -561,7 +579,7 @@ jobs:
               --sha256 "$sha256" \
               --provenance "$target_root/provenance.json" \
               --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
-              --output "$target_root/normal-chat-smoke.json"
+              --output "$target_root/main-overlap-performance.json"
           fi
 
       - name: P3b measure ten cold installs and Main event-loop delay
@@ -580,7 +598,7 @@ jobs:
             --sha256 "$sha256" \
             --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
             --p1a-measurement-directory "$target_root/measurements" \
-            --normal-chat-receipt "$target_root/normal-chat-smoke.json" \
+            --main-overlap-receipt "$target_root/main-overlap-performance.json" \
             --source-run-id "${GITHUB_RUN_ID}" \
             --source-commit "${GITHUB_SHA}" \
             --installer-commit "${GITHUB_SHA}" \
@@ -602,7 +620,7 @@ jobs:
           cp "$target_root/SBOM.json" "$staging_root/"
           cp "$target_root/component-smoke.json" "$staging_root/"
           cp "$target_root/build-unpack-measurement.json" "$staging_root/"
-          cp "$target_root/normal-chat-smoke.json" "$staging_root/"
+          cp "$target_root/main-overlap-performance.json" "$staging_root/"
           cp "$target_root/performance-target-report.json" "$staging_root/"
           cp "$target_root/platform-validation.json" "$staging_root/"
           cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
@@ -781,6 +799,25 @@ jobs:
             -extfile <(printf 'subjectAltName=IP:127.0.0.1\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth\\n')
           rm -f "$tls/ca-key.pem" "$tls/server.csr" "$tls/ca-cert.srl"
 
+      - name: Run dev R07 from the same-run engineering feed and record live evidence
+        shell: bash
+        run: |
+          tls="$RUNNER_TEMP/packaged-r07-tls"
+          keyring="$(cat "$RUNNER_TEMP/engineering-key/public-keyring.json")"
+          DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_REPOSITORY_ROOT="$RUNNER_TEMP/feed-repository" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_STAGED_ROOT="$RUNNER_TEMP/feed-repository/staged" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_KEY="$tls/server-key.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CERT="$tls/server-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_TLS_CA="$tls/ca-cert.pem" \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_HOST=127.0.0.1 \
+          DASCOWORK_PRIMARY_RUNTIME_FEED_PORT="${ENGINEERING_FEED_ORIGIN##*:}" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
+          DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
+          DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT="$RUNNER_TEMP/r07-dev-live-trace.json" \
+          xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-feed
+
       - name: Run packaged R07 from the same-run engineering feed and an empty cache
         shell: bash
         run: |
@@ -797,7 +834,51 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
+          DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT="$RUNNER_TEMP/r07-packaged-live-trace.json" \
+          DASCOWORK_PRIMARY_RUNTIME_PACKAGED_ASSET_RECEIPT="$RUNNER_TEMP/feed-repository/evidence/app-tools-release/reports/packaged-app-assets.json" \
           xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
+
+      - name: Produce and verify App Tools R07 release-gate evidence
+        shell: bash
+        run: |
+          evidence="$RUNNER_TEMP/feed-repository/evidence/app-tools-release"
+          asset_sha="$(node -e "const fs=require('node:fs'); const receipt=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const positive=(value)=>Number.isSafeInteger(value)&&value>0; if (receipt.schemaVersion !== 'dascowork-packaged-app-assets.v1' || !/^[a-f0-9]{64}$/.test(receipt.assetSha256) || !positive(receipt.entryCount) || !positive(receipt.fileCount) || receipt.entryCount < receipt.fileCount || !positive(receipt.totalBytes)) process.exit(1); process.stdout.write(receipt.assetSha256)" "$evidence/reports/packaged-app-assets.json")"
+          node desktop-app/scripts/write-app-tools-release-evidence.mjs \
+            --gateId AT-E2E-01 \
+            --producer primary-runtime-feed-e2e \
+            --commit "$GITHUB_SHA" \
+            --target linux-x64 \
+            --targetRoot "$RUNNER_TEMP/targets/linux-x64" \
+            --feedRoot "$RUNNER_TEMP/feed-repository/current" \
+            --channel engineering \
+            --liveReport "$RUNNER_TEMP/r07-dev-live-trace.json" \
+            --outputDir "$evidence"
+          node desktop-app/scripts/write-app-tools-release-evidence.mjs \
+            --gateId AT-LIVE-01 \
+            --producer live-presentation-skill-dev \
+            --commit "$GITHUB_SHA" \
+            --target linux-x64 \
+            --targetRoot "$RUNNER_TEMP/targets/linux-x64" \
+            --feedRoot "$RUNNER_TEMP/feed-repository/current" \
+            --channel engineering \
+            --liveReport "$RUNNER_TEMP/r07-dev-live-trace.json" \
+            --outputDir "$evidence"
+          node desktop-app/scripts/write-app-tools-release-evidence.mjs \
+            --gateId AT-LIVE-PKG-01 \
+            --producer live-presentation-skill-packaged \
+            --commit "$GITHUB_SHA" \
+            --target linux-x64 \
+            --targetRoot "$RUNNER_TEMP/targets/linux-x64" \
+            --feedRoot "$RUNNER_TEMP/feed-repository/current" \
+            --channel engineering \
+            --liveReport "$RUNNER_TEMP/r07-packaged-live-trace.json" \
+            --assetSha256 "$asset_sha" \
+            --outputDir "$evidence"
+          npm --prefix desktop-app run verify:app-tools-release-gates -- \
+            --evidence-dir "$evidence" \
+            --commit "$GITHUB_SHA" \
+            --asset-sha256 "$asset_sha" \
+            --ids AT-E2E-01,AT-LIVE-01,AT-LIVE-PKG-01
 
       - name: Verify no private key entered the artifact
         shell: bash

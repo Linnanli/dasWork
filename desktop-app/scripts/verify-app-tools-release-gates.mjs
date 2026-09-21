@@ -214,7 +214,9 @@ function isActivationBinding(value) {
     typeof value.operationId === 'string' &&
     value.operationId.length > 0 &&
     typeof value.activeVersion === 'string' &&
-    value.activeVersion.length > 0
+    value.activeVersion.length > 0 &&
+    Number.isSafeInteger(value.manifestSequence) &&
+    value.manifestSequence > 0
   )
 }
 
@@ -244,8 +246,11 @@ function parseLiveEvidence(value, filename) {
     !isEventBinding(value.command, 'commandItemId') ||
     !isSha256(value.command.outputSha256) ||
     !isEventBinding(value.artifact, 'artifactSourceId') ||
+    !Number.isSafeInteger(value.artifact.generation) ||
+    value.artifact.generation <= 0 ||
     !isSha256(value.artifact.presentationSha256) ||
     !isEventBinding(value.preview, 'receiptId') ||
+    value.preview.visible !== true ||
     !isSha256(value.preview.presentationSha256) ||
     !isSha256(value.renderReportSha256) ||
     value.loader.sequence >= value.command.sequence ||

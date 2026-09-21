@@ -31,7 +31,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   )
   assert.match(runnerSource, /allowCalibrationCandidate: true/u)
   assert.match(runnerSource, /createP1aCalibrationFeedFixture/u)
-  assert.match(runnerSource, /P3b normal-chat feed target .*native runner/u)
+  assert.match(runnerSource, /P3b Main-overlap feed target .*native runner/u)
   assert.match(runnerSource, /tests\/e2e\/primary-runtime-feed\.e2e\.ts/u)
   assert.match(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY/u)
   assert.match(runnerSource, /node_modules\/@playwright\/test\/cli\.js/u)
@@ -57,7 +57,20 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.doesNotMatch(runnerSource, /NODE_TLS_REJECT_UNAUTHORIZED/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
-  assert.match(e2eSource, /ordinary app-server chat stayed responsive/u)
+  assert.match(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_OUTPUT/u)
+  assert.match(runnerSource, /p3b-main-overlap-sample-\$\{sampleIndex\}\.json/u)
+  assert.match(runnerSource, /dascowork-primary-runtime-main-overlap-performance\.v1/u)
+  assert.match(runnerSource, /'AT-P3B-MAIN-OVERLAP'/u)
+  assert.match(runnerSource, /'AT-E2E-01\/PRESENTATION-SKILL-RUNTIME'/u)
+  assert.ok(
+    runnerSource.indexOf("'AT-P3B-MAIN-OVERLAP'") <
+      runnerSource.indexOf("'AT-E2E-01/PRESENTATION-SKILL-RUNTIME'")
+  )
+  assert.match(e2eSource, /AT-P3B-MAIN-OVERLAP/u)
+  assert.match(e2eSource, /startMainDiskProbe/u)
+  assert.match(e2eSource, /stopMainDiskProbe/u)
+  assert.match(e2eSource, /minimumAvailableDiskBytes/u)
+  assert.doesNotMatch(e2eSource, /test\.skip/u)
   assert.match(e2eSource, /const primaryRuntimeE2eTimeoutMs = 600_000/u)
   assert.match(e2eSource, /test\.setTimeout\(primaryRuntimeE2eTimeoutMs\)/u)
   assert.match(e2eSource, /const primaryRuntimeReadinessTimeoutMs = 300_000/u)
@@ -76,7 +89,10 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
     /shellCommandResponse\('response-runtime-command', runtimeCommandCallId, \{[\s\S]*?timeout_ms: 60_000/u
   )
   assert.match(e2eSource, /data:text\/javascript;base64/u)
-  assert.match(e2eSource, /process\.platform === 'win32'[\s\S]*?& \$\{shellQuote\(dependencies\.node\)\}/u)
+  assert.match(
+    e2eSource,
+    /process\.platform === 'win32'[\s\S]*?& \$\{shellQuote\(dependencies\.node\)\}/u
+  )
   assert.match(e2eSource, /invalid `,;` separators/u)
   assert.match(e2eSource, /runtimeSystemPaths/u)
   assert.match(
@@ -90,9 +106,12 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /\.filter\(\{\s*hasText:/u)
   assert.match(e2eSource, /toHaveCount\(1, \{ timeout: 120_000 \}\)/u)
   assert.match(e2eSource, /retain earlier tool outputs as context/u)
-  assert.match(e2eSource, /functionCallOutputCount\(providerBodies, loaderCallId\)\)\.toBeGreaterThanOrEqual\(1\)/u)
-  assert.match(e2eSource, /functionCallOutputCount\(providerBodies, runtimeCommandCallId\)\)\.toBeGreaterThanOrEqual\(1\)/u)
+  assert.match(
+    e2eSource,
+    /functionCallOutputCount\(providerBodies, loaderCallId\)\)\.toBeGreaterThanOrEqual\(1\)/u
+  )
   assert.match(e2eSource, /runtimeCommandOutput/u)
+  assert.match(e2eSource, /expect\(runtimeCommandOutput\)\.toBeTruthy\(\)/u)
   assert.match(e2eSource, /presentation-skill:created:6/u)
   assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)

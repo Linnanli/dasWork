@@ -698,9 +698,13 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(patch, /\+\s+\*user_installation,/u);
   assert.match(patch, /pdf:impress_pdf_Export/u);
   assert.match(patch, /Runtime LibreOffice did not produce the expected PDF after/u);
-  assert.match(patch, /non-ASCII image descriptions/u);
-  assert.match(patch, /pptx\.slides\/|ppt\/slides\//u);
-  assert.match(patch, /zipfile/u);
+  assert.match(patch, /str\(pptx_path\)/u);
+  assert.doesNotMatch(patch, /_windows_render_input/u);
+  assert.doesNotMatch(patch, /_windows_placeholder_render/u);
+  assert.doesNotMatch(patch, /non-ASCII image descriptions/u);
+  assert.doesNotMatch(patch, /ppt\/charts\/|ppt\/embeddings\/|ppt\/slides\//u);
+  assert.doesNotMatch(patch, /<p:graphicFrame|<p:pic|ImageDraw|zipfile/u);
+  assert.doesNotMatch(patch, /except RuntimeError:[\s\S]*os\.name != "nt"[\s\S]*generated =/u);
 });
 
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {

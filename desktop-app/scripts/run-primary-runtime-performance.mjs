@@ -4,7 +4,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { access, mkdir, readFile, readdir, stat } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 
 const repositoryRoot = resolve(import.meta.dirname, '../..')
@@ -45,7 +45,11 @@ async function runCalibration(input) {
   ) {
     throw new Error('P3b performance archive is not bound to the selected P1a measurement receipt.')
   }
-  await readNormalChatReceipt(input.normalChatReceipt, input.target, archiveSha256)
+  const installSamples = await readMainOverlapReceipt(
+    input.mainOverlapReceipt,
+    input.target,
+    archiveSha256
+  )
   const evidence = {
     sourceRunId: input.sourceRunId,
     sourceCommit: input.sourceCommit,
@@ -62,45 +66,28 @@ async function runCalibration(input) {
     runner: input.runner
   }
   await mkdir(dirname(input.output), { recursive: true })
-  const npm = npmInvocation()
-  await run(
-    npm.command,
-    [
-      ...npm.args,
-      'exec',
-      '--',
-      'vitest',
-      'run',
-      'src/main/primaryRuntime/PrimaryRuntimePerformance.test.ts'
-    ],
-    {
-      cwd: resolve(repositoryRoot, 'desktop-app'),
-      env: {
-        ...process.env,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE: '1',
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_ARCHIVE: input.archive,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_VERSION: input.version,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_SHA256: archiveSha256,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_TARGET: input.target,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_UNPACKED_BYTES: String(selectedReceipt.unpackedBytes),
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_OUTPUT: input.output,
-        DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_EVIDENCE: JSON.stringify(evidence),
-      DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_RECEIPT_SHA256: await sha256File(
-        input.p1aReceipt
-      ),
-      DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_P1A_MEASUREMENTS: JSON.stringify(measurements),
-      DASCOWORK_PRIMARY_RUNTIME_PERFORMANCE_NORMAL_CHAT_PASSED: '1'
-      }
-    }
+  await writeFile(
+    input.output,
+    `${JSON.stringify(
+      {
+        schemaVersion: 'dascowork-primary-runtime-performance-target.v1',
+        target: input.target,
+        evidence,
+        runner: evidence.runner,
+        candidateArchiveSha256: archiveSha256,
+        p1aBuildUnpackReceiptSha256: (await sha256File(input.p1aReceipt)).toLowerCase(),
+        archiveBytes: measurements.map((measurement) => measurement.archiveBytes),
+        unpackedBytes: measurements.map((measurement) => measurement.unpackedBytes),
+        minimumAvailableDiskBytes: installSamples.map((sample) => sample.minimumAvailableDiskBytes),
+        coldInstallMs: installSamples.map((sample) => sample.coldInstallMs),
+        mainEventLoopDelayP99Ms: installSamples.map((sample) => sample.mainEventLoopDelayP99Ms),
+        mainEventLoopDelayMaxMs: installSamples.map((sample) => sample.mainEventLoopDelayMaxMs),
+        chatInstallOverlapMs: installSamples.map((sample) => sample.chatInstallOverlapMs)
+      },
+      null,
+      2
+    )}\n`
   )
-}
-
-function npmInvocation() {
-  const npmCli = process.env.npm_execpath
-  if (npmCli) {
-    return { command: process.execPath, args: [npmCli] }
-  }
-  return { command: process.platform === 'win32' ? 'npm.cmd' : 'npm', args: [] }
 }
 
 async function readP1aMeasurements(directory, target) {
@@ -133,16 +120,44 @@ async function readP1aReceipt(path, target) {
   }
 }
 
-async function readNormalChatReceipt(path, target, archiveSha256) {
+async function readMainOverlapReceipt(path, target, archiveSha256) {
   const value = JSON.parse(await readFile(path, 'utf8'))
   if (
-    value?.schemaVersion !== 'dascowork-primary-runtime-normal-chat-smoke.v1' ||
+    value?.schemaVersion !== 'dascowork-primary-runtime-main-overlap-performance.v1' ||
     value.target !== target ||
     value.candidateArchiveSha256 !== archiveSha256 ||
-    value.normalChatPassed !== true
+    !Array.isArray(value.installAttempts) ||
+    value.installAttempts.length !== 10
   ) {
-    throw new Error('P3b performance requires a real app-server normal-chat smoke receipt.')
+    throw new Error('P3b performance requires ten real Electron Main overlap samples.')
   }
+  return value.installAttempts.map((sample, index) => {
+    if (
+      sample?.sampleIndex !== index + 1 ||
+      sample.mainEventLoop?.source !== 'electron-main' ||
+      sample.diskProbe?.source !== 'electron-main' ||
+      sample.diskProbe.minimumAvailableDiskBytes !== sample.minimumAvailableDiskBytes ||
+      !positiveInteger(sample.diskProbe.sampleCount) ||
+      sample.diskProbe.sampleCount < 2 ||
+      !positiveInteger(sample.coldInstallMs) ||
+      !positiveInteger(sample.minimumAvailableDiskBytes) ||
+      !positiveInteger(sample.chatInstallOverlapMs) ||
+      !positiveInteger(sample.mainEventLoop.p99Ms) ||
+      !positiveInteger(sample.mainEventLoop.maxMs) ||
+      sample.normalChat?.passed !== true ||
+      !positiveInteger(sample.normalChat.responseMs) ||
+      sample.normalChat.completedDuringInstall !== true
+    ) {
+      throw new Error(`P3b performance sample ${index + 1} is not bound to Main overlap evidence.`)
+    }
+    return {
+      coldInstallMs: sample.coldInstallMs,
+      minimumAvailableDiskBytes: sample.minimumAvailableDiskBytes,
+      chatInstallOverlapMs: sample.chatInstallOverlapMs,
+      mainEventLoopDelayP99Ms: sample.mainEventLoop.p99Ms,
+      mainEventLoopDelayMaxMs: sample.mainEventLoop.maxMs
+    }
+  })
 }
 
 function parseOptions(argv, env) {
@@ -193,7 +208,7 @@ function parseOptions(argv, env) {
     sha256,
     p1aReceipt: resolve(required('--p1a-receipt')),
     p1aMeasurementDirectory: resolve(required('--p1a-measurement-directory')),
-    normalChatReceipt: resolve(required('--normal-chat-receipt')),
+    mainOverlapReceipt: resolve(required('--main-overlap-receipt')),
     sourceRunId: required('--source-run-id'),
     sourceCommit: required('--source-commit').toLowerCase(),
     installerCommit: required('--installer-commit').toLowerCase(),

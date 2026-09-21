@@ -27,9 +27,9 @@ const timingMultiplier = 1.25;
 export function calibrateRuntimeBudgets(measurements) {
   const normalized = normalizeMeasurements(measurements);
   for (const target of runtimeBudgetTargets) {
-    if (!normalized.targets[target].normalChatPassed) {
+    if (normalized.targets[target].chatInstallOverlapMs.length < 10) {
       throw new Error(
-        `Primary Runtime ${target} calibration cannot proceed without a real normal chat smoke receipt.`,
+        `Primary Runtime ${target} calibration cannot proceed without ten Main-overlap chat/install samples.`,
       );
     }
   }
@@ -52,6 +52,7 @@ export function calibrateRuntimeBudgets(measurements) {
 export function verifyRuntimeBudgets({
   budgets,
   measurements,
+  currentEvidence,
   installerLimits = installerAbuseLimits,
 } = {}) {
   if (!isPlainObject(budgets)) {
@@ -69,6 +70,15 @@ export function verifyRuntimeBudgets({
   const normalizedMeasurements = measurements
     ? normalizeMeasurements(measurements)
     : undefined;
+  if (currentEvidence) {
+    assertEvidenceMatchesCurrentCheckout(budgets.evidence, currentEvidence);
+    if (normalizedMeasurements) {
+      assertEvidenceMatchesCurrentCheckout(
+        normalizedMeasurements.evidence,
+        currentEvidence,
+      );
+    }
+  }
   if (normalizedMeasurements) {
     assertBudgetEvidenceMatchesMeasurements(
       budgets.evidence,
@@ -184,6 +194,12 @@ function normalizeTargetMeasurements(target, value) {
     "unpackedBytes",
     5,
   );
+  const minimumAvailableDiskBytes = readPositiveIntegerArray(
+    target,
+    value,
+    "minimumAvailableDiskBytes",
+    10,
+  );
   return {
     runner: readRunner(target, value.runner),
     candidateArchiveSha256: readSha256(target, value.candidateArchiveSha256),
@@ -191,9 +207,15 @@ function normalizeTargetMeasurements(target, value) {
       target,
       value.p1aBuildUnpackReceiptSha256,
     ),
-    normalChatPassed: value.normalChatPassed === true,
+    chatInstallOverlapMs: readPositiveIntegerArray(
+      target,
+      value,
+      "chatInstallOverlapMs",
+      10,
+    ),
     archiveBytes,
     unpackedBytes,
+    minimumAvailableDiskBytes,
     coldInstallMs: readPositiveIntegerArray(target, value, "coldInstallMs", 10),
     mainEventLoopDelayP99Ms: readPositiveIntegerArray(
       target,
@@ -279,25 +301,59 @@ function assertBudgetEvidenceMatchesMeasurements(evidence, measurements) {
     if (
       evidence.candidateArchiveSha256[target] !==
         targetMeasurement.candidateArchiveSha256 ||
-      !targetMeasurement.normalChatPassed
+      targetMeasurement.chatInstallOverlapMs.length < 10
     ) {
       throw new Error(
-        `Primary Runtime budget evidence does not bind ${target} candidate or normal chat smoke.`,
+        `Primary Runtime budget evidence does not bind ${target} candidate or normal chat/install overlap.`,
       );
     }
   }
+}
+
+function assertEvidenceMatchesCurrentCheckout(evidence, currentEvidence) {
+  if (!isCurrentEvidence(currentEvidence)) {
+    throw new Error("Primary Runtime current checkout evidence is invalid.");
+  }
+  for (const field of [
+    "hardLimitsSha256",
+    "sourceLockSha256",
+    "toolchainsLockSha256",
+  ]) {
+    if (evidence[field] !== currentEvidence[field]) {
+      throw new Error(
+        `Primary Runtime budget evidence does not match current ${field}.`,
+      );
+    }
+  }
+}
+
+function isCurrentEvidence(value) {
+  return (
+    isPlainObject(value) &&
+    isSha256(value.hardLimitsSha256) &&
+    isSha256(value.sourceLockSha256) &&
+    isSha256(value.toolchainsLockSha256)
+  );
 }
 
 function assertMeasurementsWithinBudget({ target, budget, measurements }) {
   const observed = {
     maxArchiveBytes: max(measurements.archiveBytes),
     maxUnpackedBytes: max(measurements.unpackedBytes),
+    minAvailableDiskBytes: min(measurements.minimumAvailableDiskBytes),
     maxColdInstallMs: max(measurements.coldInstallMs),
     maxMainEventLoopDelayP99Ms: max(measurements.mainEventLoopDelayP99Ms),
     maxMainEventLoopDelayMaxMs: max(measurements.mainEventLoopDelayMaxMs),
   };
   for (const field of runtimeBudgetFields) {
-    if (field === "minimumFreeDiskBytes") continue;
+    if (field === "minimumFreeDiskBytes") {
+      if (observed.minAvailableDiskBytes < budget[field]) {
+        throw new Error(
+          `Primary Runtime ${target} lacks measured available disk for ${field}.`,
+        );
+      }
+      continue;
+    }
     if (observed[field] > budget[field]) {
       throw new Error(`Primary Runtime ${target} exceeds ${field}.`);
     }
@@ -340,6 +396,10 @@ function ceilScaled(value, multiplier) {
 
 function max(values) {
   return Math.max(...values);
+}
+
+function min(values) {
+  return Math.min(...values);
 }
 
 function percentile95(values) {

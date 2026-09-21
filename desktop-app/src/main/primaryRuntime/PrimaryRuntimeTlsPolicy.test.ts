@@ -34,7 +34,7 @@ describe('PrimaryRuntimeTlsPolicy', () => {
     ).rejects.toThrow('Request aborted')
   })
 
-  it('rejects non-loopback, relative, malformed, and packaged configuration before requesting', async () => {
+  it('rejects packaged, relative, and non-loopback configuration before requesting', async () => {
     const certificatePath = await testCertificatePath()
     await expect(
       PrimaryRuntimeTlsPolicy.create({
@@ -57,6 +57,26 @@ describe('PrimaryRuntimeTlsPolicy', () => {
         allowedOrigins: ['https://feed.example.test']
       })
     ).rejects.toThrow('loopback')
+  })
+
+  it('keeps production mode while allowing the packaged engineering feed transport', async () => {
+    const certificatePath = await testCertificatePath()
+    const policy = await PrimaryRuntimeTlsPolicy.create({
+      production: true,
+      allowPackagedLoopbackTestCa: true,
+      localTestCaPath: certificatePath,
+      allowedOrigins: ['https://127.0.0.1:9443']
+    })
+
+    expect(policy).toBeDefined()
+    await expect(
+      policy!.fetchImpl('https://127.0.0.1:9443/v1/runtime/config.json', {
+        method: 'POST'
+      })
+    ).rejects.toThrow('GET and HEAD')
+    await expect(policy!.fetchImpl('https://example.test/v1/runtime/config.json')).rejects.toThrow(
+      'loopback'
+    )
   })
 })
 

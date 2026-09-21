@@ -4,7 +4,7 @@ import { DesktopHostCapabilityRuntime } from './DesktopHostCapabilityRuntime'
 import { PrimaryRuntimeCapabilityPolicy } from '../primaryRuntime'
 
 describe('DesktopHostCapabilityRuntime', () => {
-  it('publishes the workspace-dependency loader only after the Runtime is ready', async () => {
+  it('publishes the workspace-dependency loader before the Runtime is ready', async () => {
     let status: 'ready' | 'missing' = 'missing'
     let diagnoseCount = 0
     const runtime = new DesktopHostCapabilityRuntime({
@@ -14,7 +14,10 @@ describe('DesktopHostCapabilityRuntime', () => {
           diagnoseCount += 1
           return { status }
         },
-        loadDependencies: async () => ({ node: '/runtime/node' })
+        loadDependencies: async () => {
+          if (status !== 'ready') throw new Error('runtime missing')
+          return { node: '/runtime/node' }
+        }
       }
     })
 
@@ -24,17 +27,33 @@ describe('DesktopHostCapabilityRuntime', () => {
     expect(missing.nativeTools).toBe('degraded')
     expect(missing.codexAppMcp).toBe('unavailable')
     expect(missing.bundledPlugins).toBe('unavailable')
+    expect(missing.workspaceInstructionsEnabled).toBe(false)
+    expect(missing.presentationsEligible).toBe(false)
     expect(missing.degraded).toBe(true)
-    expect(missing.availableToolNames).toEqual(['read_thread_terminal'])
+    expect(missing.availableToolNames).toEqual([
+      'read_thread_terminal',
+      'load_workspace_dependencies'
+    ])
     expect(missing.dynamicTools[0]).toMatchObject({
       type: 'namespace',
-      tools: [{ name: 'read_thread_terminal' }]
+      tools: [{ name: 'read_thread_terminal' }, { name: 'load_workspace_dependencies' }]
     })
+    await expect(
+      runtime.dispatch({
+        namespace: 'codex_app',
+        tool: 'load_workspace_dependencies',
+        arguments: {}
+      })
+    ).resolves.toMatchObject({
+      success: false,
+      contentItems: [{ text: expect.stringContaining('"status":"missing"') }]
+    })
+    expect(diagnoseCount).toBe(2)
 
     status = 'ready'
     runtime.refresh()
     const ready = await runtime.snapshot()
-    expect(diagnoseCount).toBe(2)
+    expect(diagnoseCount).toBe(3)
     expect(ready.revision).toBe('desktop-capabilities-1')
     expect(ready.primaryRuntime).toBe('ready')
     expect(ready.nativeTools).toBe('degraded')

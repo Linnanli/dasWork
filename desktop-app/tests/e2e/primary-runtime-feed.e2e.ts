@@ -1,5 +1,6 @@
-import { access, readFile, readdir } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { access, mkdir, readFile, readdir, utimes, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
@@ -16,7 +17,9 @@ import { createLocalProject, sendComposerMessage } from './support/chatActions'
 import {
   openR07PresentationInWorkspace,
   verifyR07Presentation,
+  verifyR07RenderedSlides,
   withR07PresentationWorkspace,
+  type R07RenderQaReceipt,
   type R07PresentationWorkspace
 } from './support/r07Presentation'
 import {
@@ -34,6 +37,9 @@ import {
 const loaderCallId = 'call-primary-runtime-loader'
 const runtimeCommandCallId = 'call-primary-runtime-presentation-command'
 const packagedExecutable = process.env['DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE']?.trim()
+const p3bSampleOutput = process.env['DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_OUTPUT']?.trim()
+const p3bSampleIndex = Number(process.env['DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_INDEX'] ?? '0')
+const appToolsLiveTraceReportPath = process.env['DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT']?.trim()
 const primaryRuntimeE2eTimeoutMs = 600_000
 const primaryRuntimeReadinessTimeoutMs = 300_000
 
@@ -47,6 +53,140 @@ type WorkspaceDependencies = {
   font: string
 }
 
+type RuntimePresentationSkillSnapshot = {
+  id: string
+  normalizedId: string
+  name: string
+  scope: string | null
+  sourceKind: string | null
+  enabled: boolean
+  installed: boolean
+}
+
+type RuntimePresentationSkillContract = {
+  id: string
+  name: string
+  localPath: string
+  normalizedLocalPath: string
+  skillRoot: string
+  instructionsSha256: string
+  scripts: {
+    build: string
+    layout: string
+    render: string
+  }
+}
+
+type R07ArtifactPreviewTrace = {
+  sourceId: string
+  receiptId: string
+  generation: number
+  checksum: string
+}
+
+type RuntimeActivationTrace = {
+  operationId?: string
+  activeVersion?: string
+  manifestSequence?: number
+}
+
+const runtimePresentationSkillSuffix =
+  '/skills/dascowork-primary-runtime/presentation-skill/SKILL.md'
+const runtimePresentationSkillScriptRefs = {
+  build: 'scripts/build_deck_pptxgenjs.js',
+  layout: 'scripts/layout_lint.py',
+  render: 'scripts/render_slides.py'
+} as const
+
+if (p3bSampleOutput) {
+  test('AT-P3B-MAIN-OVERLAP records normal chat and Main event-loop evidence during a cold Runtime install', async ({
+    browserName
+  }, testInfo) => {
+    test.setTimeout(primaryRuntimeE2eTimeoutMs)
+    expect(browserName).toBe('chromium')
+    expect(p3bSampleIndex).toBeGreaterThanOrEqual(1)
+
+    await withR07PresentationWorkspace(async (workspace) => {
+      const backend = await startMockBackend({
+        responses: [
+          assistantMessageResponse(
+            `response-p3b-chat-${p3bSampleIndex}`,
+            `message-p3b-chat-${p3bSampleIndex}`,
+            'The ordinary app-server chat completed while the Runtime install was still active.'
+          )
+        ]
+      })
+      const logs: string[] = []
+      let app: ElectronApplication | undefined
+      const launchStartedAtMs = Date.now()
+      try {
+        app = await launchApp(backend, logs, {
+          cwd: workspace.root,
+          launchTimeoutMs: 90_000,
+          ...(packagedExecutable
+            ? { executablePath: packagedExecutable, args: [] }
+            : { args: [appRoot] }),
+          environment: {
+            CODEX_APP_SERVER_BIN: undefined
+          }
+        })
+        const page = await app.firstWindow()
+        collectRendererLogs(page, logs)
+        const mainProbeId = await startMainEventLoopProbe(app)
+        const diskProbeId = await startMainDiskProbe(app)
+        await createLocalProject(page, `Primary Runtime P3b ${p3bSampleIndex}`, workspace.root)
+
+        const firstInstallingAtMs = await waitForPrimaryRuntimeInstalling(page)
+        const chatStartedAtMs = Date.now()
+        await sendComposerMessage(
+          page,
+          `P3b sample ${p3bSampleIndex}: confirm ordinary chat during Runtime setup.`
+        )
+        await expect(page.locator('[data-role="assistant"]')).toContainText(
+          'The ordinary app-server chat completed while the Runtime install was still active.'
+        )
+        const chatCompletedAtMs = Date.now()
+        const stateAfterChat = await primaryRuntimeState(page)
+        expect(stateAfterChat).not.toBe('ready')
+        const readyAtMs = await waitForPrimaryRuntimeReady(page)
+        const mainEventLoop = await stopMainEventLoopProbe(app, mainProbeId)
+        const diskProbe = await stopMainDiskProbe(app, diskProbeId)
+        const sample = {
+          sampleIndex: p3bSampleIndex,
+          minimumAvailableDiskBytes: diskProbe.minimumAvailableDiskBytes,
+          diskProbe,
+          coldInstallMs: positiveDuration(readyAtMs - launchStartedAtMs),
+          chatInstallOverlapMs: positiveDuration(
+            Math.min(chatCompletedAtMs, readyAtMs) - Math.max(chatStartedAtMs, firstInstallingAtMs)
+          ),
+          installWindow: {
+            launchStartedAtMs,
+            firstObservedInstallingAtMs: firstInstallingAtMs,
+            readyAtMs
+          },
+          normalChat: {
+            passed: true,
+            requestedAtMs: chatStartedAtMs,
+            completedAtMs: chatCompletedAtMs,
+            responseMs: positiveDuration(chatCompletedAtMs - chatStartedAtMs),
+            completedDuringInstall: chatCompletedAtMs < readyAtMs
+          },
+          mainEventLoop
+        }
+        expect(sample.normalChat.completedDuringInstall).toBe(true)
+        await mkdir(dirname(p3bSampleOutput), { recursive: true })
+        await writeFile(p3bSampleOutput, `${JSON.stringify(sample, null, 2)}\n`, {
+          mode: 0o600
+        })
+      } finally {
+        await attachDiagnostics(testInfo, logs, backend, app)
+        await closeApp(app)
+        await backend.close()
+      }
+    })
+  })
+}
+
 test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command', async ({
   browserName
 }, testInfo) => {
@@ -58,6 +198,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
   expect(browserName).toBe('chromium')
 
   await withR07PresentationWorkspace(async (workspace) => {
+    let runtimePresentationSkillContract: RuntimePresentationSkillContract | undefined
     const backend = await startMockBackend({
       responses: [
         assistantMessageResponse(
@@ -72,7 +213,8 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
           {},
           { namespace: 'codex_app' }
         ),
-        (request) => runtimePresentationCommandResponse(request, workspace),
+        (request) =>
+          runtimePresentationCommandResponse(request, workspace, runtimePresentationSkillContract),
         assistantMessageResponse(
           'response-runtime-final',
           'message-runtime-final',
@@ -119,8 +261,8 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       await expect(page.locator('[data-role="assistant"]')).toContainText(
         'The ordinary app-server chat stayed responsive while the Runtime installation ran.'
       )
-      await expectPrimaryRuntimeReady(page, logs)
-      await expectRuntimePresentationSkill(page)
+      const runtimeActivation = await expectPrimaryRuntimeReady(page, logs)
+      runtimePresentationSkillContract = await expectRuntimePresentationSkill(page)
       await sendComposerMessage(
         page,
         'Read the workspace HTML, load the verified Runtime dependencies, then create and QA the six-page presentation.'
@@ -143,12 +285,10 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       )
       await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
 
-      const runtimeSuccessMessage = page
-        .locator('[data-role="assistant"]')
-        .filter({
-          hasText:
-            'The signed Primary Runtime created, rendered, checked, and previewed the six-page presentation through the native desktop command path.'
-        })
+      const runtimeSuccessMessage = page.locator('[data-role="assistant"]').filter({
+        hasText:
+          'The signed Primary Runtime created, rendered, checked, and previewed the six-page presentation through the native desktop command path.'
+      })
       await expect(runtimeSuccessMessage).toHaveCount(1, { timeout: 120_000 })
 
       const providerBodies = providerResponseBodies(backend)
@@ -156,11 +296,14 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       // Presence proves each desktop tool ran; counting replayed provider input
       // as a second invocation would make this product gate flaky.
       expect(functionCallOutputCount(providerBodies, loaderCallId)).toBeGreaterThanOrEqual(1)
-      expect(functionCallOutputCount(providerBodies, runtimeCommandCallId)).toBeGreaterThanOrEqual(1)
+      expect(functionCallOutputCount(providerBodies, runtimeCommandCallId)).toBeGreaterThanOrEqual(
+        1
+      )
 
       const runtimeCommandOutput = providerBodies
         .map((body) => functionCallOutputText(body, runtimeCommandCallId))
         .find((output): output is string => Boolean(output))
+      expect(runtimeCommandOutput).toBeTruthy()
       expect(serializeDiagnosticData({ runtimeCommandOutput })).toContain(
         'presentation-skill:created:6'
       )
@@ -203,8 +346,21 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         )
         .toBe(true)
       await verifyR07Presentation(join(workspace.root, workspace.outputFile))
-      await expectR07QaOutputs(workspace)
-      await openR07PresentationInWorkspace(page, workspace.outputFile)
+      const renderQaReceipt = await expectR07QaOutputs(workspace)
+      const previewTrace = await openR07PresentationPreviewAndReadArtifact(page, workspace)
+      if (appToolsLiveTraceReportPath) {
+        await writeR07LiveTraceReport({
+          path: appToolsLiveTraceReportPath,
+          logs,
+          workspace,
+          skillContract: runtimePresentationSkillContract,
+          activation: runtimeActivation,
+          loaderOutput: loaderOutput!,
+          runtimeCommandOutput: runtimeCommandOutput!,
+          previewTrace,
+          renderQaReceipt
+        })
+      }
     } finally {
       await attachDiagnostics(testInfo, logs, backend, app)
       await closeApp(app)
@@ -213,9 +369,13 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
   })
 })
 
-async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): Promise<void> {
+async function expectPrimaryRuntimeReady(
+  page: Page,
+  logs: readonly string[]
+): Promise<RuntimeActivationTrace> {
   let latestStatus: unknown
   let pollError: unknown
+  const activation: RuntimeActivationTrace = {}
   try {
     await expect
       .poll(
@@ -224,6 +384,17 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
             const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
             return result.runtime
           })
+          if (isRecord(latestStatus)) {
+            if (typeof latestStatus.operationId === 'string') {
+              activation.operationId = latestStatus.operationId
+            }
+            if (typeof latestStatus.currentVersion === 'string') {
+              activation.activeVersion = latestStatus.currentVersion
+            }
+            if (typeof latestStatus.manifestSequence === 'number') {
+              activation.manifestSequence = latestStatus.manifestSequence
+            }
+          }
           const state = (latestStatus as { state?: unknown }).state
           return typeof state === 'string' ? state : 'unknown'
         },
@@ -234,7 +405,7 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
     pollError = error
   }
 
-  if ((latestStatus as { state?: unknown }).state === 'ready') return
+  if ((latestStatus as { state?: unknown }).state === 'ready') return activation
 
   // A verified Runtime whose post-install plugin synchronization failed is a
   // terminal state for this exact candidate. Retrying its update would only
@@ -256,15 +427,220 @@ async function expectPrimaryRuntimeReady(page: Page, logs: readonly string[]): P
   )
 }
 
+async function waitForPrimaryRuntimeInstalling(page: Page): Promise<number> {
+  let observedAtMs = 0
+  await expect
+    .poll(
+      async () => {
+        const state = await primaryRuntimeState(page)
+        if (isInstallingRuntimeState(state) && observedAtMs === 0) observedAtMs = Date.now()
+        return isInstallingRuntimeState(state)
+      },
+      { timeout: primaryRuntimeReadinessTimeoutMs }
+    )
+    .toBe(true)
+  return observedAtMs || Date.now()
+}
+
+async function waitForPrimaryRuntimeReady(page: Page): Promise<number> {
+  let readyAtMs = 0
+  await expect
+    .poll(
+      async () => {
+        const state = await primaryRuntimeState(page)
+        if (state === 'ready' && readyAtMs === 0) readyAtMs = Date.now()
+        return state
+      },
+      { timeout: primaryRuntimeReadinessTimeoutMs }
+    )
+    .toBe('ready')
+  return readyAtMs || Date.now()
+}
+
+async function primaryRuntimeState(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const result = await window.desktopApp.plugins.getPrimaryRuntimeStatus({ version: 1 })
+    const state = result.runtime.state
+    return typeof state === 'string' ? state : 'unknown'
+  })
+}
+
+function isInstallingRuntimeState(state: string): boolean {
+  return /^(?:resolving|checking|downloading|verifying|extracting|validating|installing|activating|configuring|committing)$/u.test(
+    state
+  )
+}
+
+async function startMainEventLoopProbe(app: ElectronApplication): Promise<string> {
+  return app.evaluate(() => {
+    const requireFromMain = Function('return require')() as NodeRequire
+    const { monitorEventLoopDelay, performance } = requireFromMain(
+      'node:perf_hooks'
+    ) as typeof import('node:perf_hooks')
+    const probes = ((
+      globalThis as typeof globalThis & {
+        __dascoworkPrimaryRuntimeP3bProbes?: Map<
+          string,
+          {
+            startedAtMs: number
+            monitor: ReturnType<typeof monitorEventLoopDelay>
+          }
+        >
+      }
+    ).__dascoworkPrimaryRuntimeP3bProbes ??= new Map())
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    const monitor = monitorEventLoopDelay({ resolution: 1 })
+    monitor.enable()
+    probes.set(id, { startedAtMs: performance.now(), monitor })
+    return id
+  })
+}
+
+async function stopMainEventLoopProbe(
+  app: ElectronApplication,
+  id: string
+): Promise<{
+  source: 'electron-main'
+  startedAtMs: number
+  stoppedAtMs: number
+  p99Ms: number
+  maxMs: number
+}> {
+  return app.evaluate((_, probeId) => {
+    const requireFromMain = Function('return require')() as NodeRequire
+    const { performance } = requireFromMain('node:perf_hooks') as typeof import('node:perf_hooks')
+    const probes = (
+      globalThis as typeof globalThis & {
+        __dascoworkPrimaryRuntimeP3bProbes?: Map<
+          string,
+          {
+            startedAtMs: number
+            monitor: {
+              disable(): void
+              percentile(percentile: number): number
+              max: number
+            }
+          }
+        >
+      }
+    ).__dascoworkPrimaryRuntimeP3bProbes
+    const probe = probes?.get(probeId)
+    if (!probe) throw new Error('Missing Primary Runtime P3b Main event-loop probe.')
+    probe.monitor.disable()
+    probes?.delete(probeId)
+    const positiveMainDuration = (value: number): number =>
+      Math.max(1, Math.ceil(Number.isFinite(value) ? value : 1))
+    return {
+      source: 'electron-main' as const,
+      startedAtMs: positiveMainDuration(probe.startedAtMs),
+      stoppedAtMs: positiveMainDuration(performance.now()),
+      p99Ms: positiveMainDuration(probe.monitor.percentile(99) / 1_000_000),
+      maxMs: positiveMainDuration(probe.monitor.max / 1_000_000)
+    }
+  }, id)
+}
+
+async function startMainDiskProbe(app: ElectronApplication): Promise<string> {
+  return app.evaluate(async ({ app: electronApp }) => {
+    const requireFromMain = Function('return require')() as NodeRequire
+    const { statfs } = requireFromMain('node:fs/promises') as typeof import('node:fs/promises')
+    const probes = ((
+      globalThis as typeof globalThis & {
+        __dascoworkPrimaryRuntimeP3bDiskProbes?: Map<
+          string,
+          {
+            path: string
+            sampleCount: number
+            minimumAvailableDiskBytes: number
+            timer: ReturnType<typeof setInterval>
+            sampling: boolean
+          }
+        >
+      }
+    ).__dascoworkPrimaryRuntimeP3bDiskProbes ??= new Map())
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    const path = electronApp.getPath('userData')
+    const probe = {
+      path,
+      sampleCount: 0,
+      minimumAvailableDiskBytes: Number.MAX_SAFE_INTEGER,
+      timer: undefined as unknown as ReturnType<typeof setInterval>,
+      sampling: false
+    }
+    const sample = async (): Promise<void> => {
+      if (probe.sampling) return
+      probe.sampling = true
+      try {
+        const filesystem = await statfs(path)
+        const available = Math.max(1, Math.floor(filesystem.bavail * filesystem.bsize))
+        probe.minimumAvailableDiskBytes = Math.min(probe.minimumAvailableDiskBytes, available)
+        probe.sampleCount += 1
+      } finally {
+        probe.sampling = false
+      }
+    }
+    await sample()
+    probe.timer = setInterval(() => {
+      void sample()
+    }, 250)
+    probes.set(id, probe)
+    return id
+  })
+}
+
+async function stopMainDiskProbe(
+  app: ElectronApplication,
+  id: string
+): Promise<{
+  source: 'electron-main'
+  pathKind: 'userData'
+  minimumAvailableDiskBytes: number
+  sampleCount: number
+}> {
+  return app.evaluate(async (_, probeId) => {
+    const requireFromMain = Function('return require')() as NodeRequire
+    const { statfs } = requireFromMain('node:fs/promises') as typeof import('node:fs/promises')
+    const probes = (
+      globalThis as typeof globalThis & {
+        __dascoworkPrimaryRuntimeP3bDiskProbes?: Map<
+          string,
+          {
+            path: string
+            sampleCount: number
+            minimumAvailableDiskBytes: number
+            timer: ReturnType<typeof setInterval>
+          }
+        >
+      }
+    ).__dascoworkPrimaryRuntimeP3bDiskProbes
+    const probe = probes?.get(probeId)
+    if (!probe) throw new Error('Missing Primary Runtime P3b Main disk probe.')
+    clearInterval(probe.timer)
+    const filesystem = await statfs(probe.path)
+    const available = Math.max(1, Math.floor(filesystem.bavail * filesystem.bsize))
+    probe.minimumAvailableDiskBytes = Math.min(probe.minimumAvailableDiskBytes, available)
+    probe.sampleCount += 1
+    probes?.delete(probeId)
+    return {
+      source: 'electron-main' as const,
+      pathKind: 'userData' as const,
+      minimumAvailableDiskBytes: Math.max(1, Math.floor(probe.minimumAvailableDiskBytes)),
+      sampleCount: probe.sampleCount
+    }
+  }, id)
+}
+
+function positiveDuration(value: number): number {
+  return Math.max(1, Math.ceil(Number.isFinite(value) ? value : 1))
+}
+
 function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
   try {
     // Keep the failure surface to Main's Primary Runtime and its direct
     // post-install plugin reconciliation diagnostics, then apply the shared
     // serializer before exposing any test attachment output.
     const runtimeAndPluginLogs = logs
-      .filter(
-        (log) => log.includes('[primary-runtime]') || log.includes('[bundled-plugins]')
-      )
+      .filter((log) => log.includes('[primary-runtime]') || log.includes('[bundled-plugins]'))
       .slice(-8)
     return serializeDiagnosticData({ runtimeAndPluginLogs }).slice(-8_000)
   } catch {
@@ -272,34 +648,79 @@ function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
   }
 }
 
-async function expectRuntimePresentationSkill(page: Page): Promise<void> {
+async function expectRuntimePresentationSkill(
+  page: Page
+): Promise<RuntimePresentationSkillContract> {
+  let runtimeSkill: RuntimePresentationSkillSnapshot | null = null
   await expect
     .poll(
-      () =>
-        page.evaluate(async () => {
+      async () => {
+        runtimeSkill = await page.evaluate(async () => {
           const result = await window.desktopApp.plugins.getSnapshot({
             version: 1,
             sections: ['skills']
           })
-          return result.snapshot.skills.some(
-            (skill) => skill.enabled && /presentation/i.test(skill.name)
+          const skill = result.snapshot.skills.find(
+            (candidate) =>
+              candidate.enabled &&
+              candidate.name === 'presentation-skill' &&
+              candidate.id.replaceAll('\\', '/').endsWith(runtimePresentationSkillSuffix)
           )
-        }),
+          if (!skill) return null
+          return {
+            id: skill.id,
+            normalizedId: skill.id.replaceAll('\\', '/'),
+            name: skill.name,
+            scope: skill.scope ?? null,
+            sourceKind: skill.sourceKind ?? null,
+            enabled: skill.enabled,
+            installed: skill.installed
+          }
+        })
+        return runtimeSkill
+      },
       { timeout: 120_000 }
     )
-    .toBe(true)
+    .toMatchObject({
+      name: 'presentation-skill',
+      scope: 'personal',
+      sourceKind: 'personal',
+      enabled: true,
+      installed: true
+    })
+  if (!runtimeSkill) throw new Error('Runtime-owned presentation skill was not listed.')
+
+  const contents = await page.evaluate(async (skill) => {
+    return window.desktopApp.plugins.getSkillContents({
+      version: 1,
+      skill: { id: skill.id, name: skill.name },
+      forceRefresh: true
+    })
+  }, runtimeSkill)
+  if (contents.status !== 'ready') {
+    throw new Error(
+      `Runtime-owned presentation skill contents were unavailable: ${contents.status}`
+    )
+  }
+  return runtimePresentationSkillContractFromContents(runtimeSkill, contents)
 }
 
 function runtimePresentationCommandResponse(
   request: MockRequest,
-  workspace: R07PresentationWorkspace
+  workspace: R07PresentationWorkspace,
+  skillContract: RuntimePresentationSkillContract | undefined
 ): ResponsesStep {
+  if (!skillContract) {
+    throw new Error(
+      'The Runtime presentation command was requested before skill contents were verified.'
+    )
+  }
   const loaderOutput = functionCallOutputText(JSON.parse(request.body) as unknown, loaderCallId)
   if (!loaderOutput) {
     throw new Error('The Runtime Node command was requested before loader output was returned.')
   }
   const dependencies = parseWorkspaceDependencies(loaderOutput)
-  const source = runtimePresentationCommandSource(dependencies, workspace)
+  const source = runtimePresentationCommandSource(dependencies, workspace, skillContract)
   // Passing a base64 payload prevents shell quoting from changing the command
   // source on Windows. The only executable remains the Runtime Node path from
   // load_workspace_dependencies; this is still one ordinary command item.
@@ -328,21 +749,24 @@ function runtimePresentationCommandResponse(
     // P3b still measures and enforces the cold-install performance budget.
     timeout_ms: 60_000,
     sandbox_permissions: 'require_escalated',
-    justification: 'The signed Primary Runtime presentation command needs its one-time approved execution path.'
+    justification:
+      'The signed Primary Runtime presentation command needs its one-time approved execution path.'
   })
 }
 
 function runtimePresentationCommandSource(
   dependencies: WorkspaceDependencies,
-  workspace: R07PresentationWorkspace
+  workspace: R07PresentationWorkspace,
+  skillContract: RuntimePresentationSkillContract
 ): string {
   const facts = workspace.facts.map((fact) => fact.value)
   return [
     "import { execFileSync } from 'node:child_process'",
     "import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'",
-    "import { dirname, join, delimiter } from 'node:path'",
+    "import { dirname, join, delimiter, resolve, sep } from 'node:path'",
     "import { pathToFileURL } from 'node:url'",
     `const dependencies = ${JSON.stringify(dependencies)}`,
+    `const skillContract = ${JSON.stringify(skillContract)}`,
     `const workspace = ${JSON.stringify({
       root: workspace.root,
       inputFile: workspace.inputFile,
@@ -354,10 +778,10 @@ function runtimePresentationCommandSource(
       requiredImageAltText: workspace.requiredImageAltText,
       facts
     })}`,
-    "const skillRoot = join(process.env.CODEX_HOME || '', 'skills', 'dascowork-primary-runtime', 'presentation-skill')",
-    "if (!process.env.CODEX_HOME || !existsSync(skillRoot)) throw new Error('Runtime-owned presentation skill is unavailable.')",
-    "const scripts = { build: join(skillRoot, 'scripts', 'build_deck_pptxgenjs.js'), layout: join(skillRoot, 'scripts', 'layout_lint.py'), render: join(skillRoot, 'scripts', 'render_slides.py') }",
-    "if (Object.values(scripts).some((path) => !existsSync(path))) throw new Error('Locked presentation skill scripts are incomplete.')",
+    'const skillRoot = skillContract.skillRoot',
+    "if (!skillRoot || !existsSync(skillRoot) || !existsSync(skillContract.localPath)) throw new Error('Verified Runtime-owned presentation skill is unavailable.')",
+    'const resolveSkillScript = (relativePath) => { const resolved = resolve(skillRoot, relativePath); const boundary = `${resolve(skillRoot)}${sep}`; if (!resolved.startsWith(boundary)) throw new Error(`Runtime presentation script escapes skill root: ${relativePath}`); if (!existsSync(resolved)) throw new Error(`Runtime presentation script is missing: ${relativePath}`); return resolved }',
+    'const scripts = { build: resolveSkillScript(skillContract.scripts.build), layout: resolveSkillScript(skillContract.scripts.layout), render: resolveSkillScript(skillContract.scripts.render) }',
     "const inputHtml = readFileSync(join(workspace.root, workspace.inputFile), 'utf8')",
     'for (const fact of workspace.facts) if (!inputHtml.includes(fact)) throw new Error(`Workspace HTML is missing required fact: ${fact}`)',
     "const outlinePath = join(workspace.root, 'r07-outline.json')",
@@ -382,7 +806,7 @@ function runtimePresentationCommandSource(
     'const commonEnv = { ...process.env, PPTX_NODE_MODULES: dependencies.nodeModules, NODE_PATH: dependencies.nodeModules }',
     "execFileSync(dependencies.node, [scripts.build, '--outline', outlinePath, '--output', outputPath, '--asset-root', workspace.root], { cwd: workspace.root, env: commonEnv, stdio: 'inherit' })",
     "const pythonEnv = { ...process.env, PYTHONPATH: [join(skillRoot, 'scripts'), ...dependencies.pythonPackages].join(delimiter), PYTHONNOUSERSITE: '1' }",
-    "mkdirSync(libreOfficeProfile, { recursive: true })",
+    'mkdirSync(libreOfficeProfile, { recursive: true })',
     "execFileSync(dependencies.python, [scripts.layout, '--input', outputPath, '--outline', outlinePath, '--output', layoutPath, '--fail-on-error'], { cwd: workspace.root, env: pythonEnv, stdio: 'inherit' })",
     // Keep runtime-native tools ahead of the host while retaining the system
     // utilities that the bundled LibreOffice launcher invokes internally.
@@ -394,10 +818,52 @@ function runtimePresentationCommandSource(
     'const rendered = readdirSync(renderedSlides).filter((name) => /^slide-\\d+\\.png$/u.test(name))',
     "if (rendered.length < 6 || !existsSync(contactSheet) || !existsSync(layoutPath) || !existsSync(outputPath) || !existsSync(imagePath)) throw new Error('Runtime presentation QA outputs are incomplete.')",
     'process.stdout.write(`presentation-skill:created:${rendered.length}`)'
-  // Source rows already carry the commas needed by the outline's slide array.
-  // Newlines preserve that syntax, whereas semicolon joining would inject
-  // invalid `,;` separators between array elements.
+    // Source rows already carry the commas needed by the outline's slide array.
+    // Newlines preserve that syntax, whereas semicolon joining would inject
+    // invalid `,;` separators between array elements.
   ].join('\n')
+}
+
+function runtimePresentationSkillContractFromContents(
+  skill: RuntimePresentationSkillSnapshot,
+  result: {
+    status: 'ready'
+    contents: string
+    localPath?: string
+  }
+): RuntimePresentationSkillContract {
+  if (!result.localPath) {
+    throw new Error('Runtime-owned presentation skill contents did not include a localPath.')
+  }
+  const normalizedLocalPath = result.localPath.replaceAll('\\', '/')
+  if (
+    skill.normalizedId !== normalizedLocalPath ||
+    !normalizedLocalPath.endsWith(runtimePresentationSkillSuffix)
+  ) {
+    throw new Error(
+      `Runtime presentation skill contents were not loaded from the exact Runtime-owned SKILL.md: ${normalizedLocalPath}`
+    )
+  }
+  if (!/\bload_workspace_dependencies\b/u.test(result.contents)) {
+    throw new Error(
+      'Runtime presentation skill instructions do not require load_workspace_dependencies.'
+    )
+  }
+  for (const relativePath of Object.values(runtimePresentationSkillScriptRefs)) {
+    if (!result.contents.includes(relativePath)) {
+      throw new Error(`Runtime presentation skill instructions are missing ${relativePath}.`)
+    }
+  }
+  const skillRoot = result.localPath.slice(0, -'/SKILL.md'.length)
+  return {
+    id: skill.id,
+    name: skill.name,
+    localPath: result.localPath,
+    normalizedLocalPath,
+    skillRoot,
+    instructionsSha256: createHash('sha256').update(result.contents).digest('hex'),
+    scripts: { ...runtimePresentationSkillScriptRefs }
+  }
 }
 
 function parseWorkspaceDependencies(value: string): WorkspaceDependencies {
@@ -458,7 +924,9 @@ function readNamedInstructionPath(
     ?.slice(prefix.length)
 }
 
-async function expectR07QaOutputs(workspace: R07PresentationWorkspace): Promise<void> {
+async function expectR07QaOutputs(
+  workspace: R07PresentationWorkspace
+): Promise<R07RenderQaReceipt> {
   const [layoutSource, renderedSlides] = await Promise.all([
     readFile(join(workspace.root, workspace.layoutReceiptFile), 'utf8'),
     readdir(join(workspace.root, workspace.renderedSlidesDirectory))
@@ -466,7 +934,225 @@ async function expectR07QaOutputs(workspace: R07PresentationWorkspace): Promise<
   const layout = JSON.parse(layoutSource) as { summary?: { slide_count?: number } }
   expect(layout.summary?.slide_count).toBeGreaterThanOrEqual(6)
   expect(renderedSlides.filter((name) => /^slide-\d+\.png$/u.test(name))).toHaveLength(6)
+  const renderQaReceipt = await verifyR07RenderedSlides(workspace)
   await expect(access(join(workspace.root, workspace.contactSheetFile))).resolves.toBeUndefined()
+  return renderQaReceipt
+}
+
+async function openR07PresentationPreviewAndReadArtifact(
+  page: Page,
+  workspace: R07PresentationWorkspace
+): Promise<R07ArtifactPreviewTrace> {
+  const sourceEvent = page.evaluate(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          unsubscribe()
+          reject(new Error('Timed out waiting for the workspace artifact preview source event.'))
+        }, 20_000)
+        const unsubscribe = window.desktopApp.workspace.artifacts.onEvent((event) => {
+          window.clearTimeout(timeout)
+          unsubscribe()
+          resolve(event.sourceId)
+        })
+      })
+  )
+  await openR07PresentationInWorkspace(page, workspace.outputFile)
+  const receiptId = await page
+    .locator('[data-slot="right-workspace-shell"]')
+    .locator(`[role="tab"][data-workspace-tab-id="artifact:workspace:${workspace.outputFile}"]`)
+    .getAttribute('data-workspace-tab-id')
+  if (!receiptId) throw new Error('Workspace presentation preview tab did not expose a receipt id.')
+  const presentationPath = join(workspace.root, workspace.outputFile)
+  await triggerArtifactPreviewChangeRoundTrip(presentationPath)
+  const sourceId = await sourceEvent
+  const binary = await page.evaluate(async (artifactSourceId) => {
+    return window.desktopApp.workspace.artifacts.readBinary({
+      version: 1,
+      sourceId: artifactSourceId
+    })
+  }, sourceId)
+  if ('unavailable' in binary) {
+    throw new Error(`Workspace artifact source became unavailable: ${binary.unavailable}`)
+  }
+  if (binary.content.kind !== 'binary') {
+    throw new Error('Workspace artifact source was too large to hash through readBinary.')
+  }
+  const workspacePresentationSha256 = await sha256File(presentationPath)
+  expect(binary.content.checksum).toBe(workspacePresentationSha256)
+  return {
+    sourceId,
+    receiptId,
+    generation: binary.content.generation,
+    checksum: binary.content.checksum
+  }
+}
+
+async function triggerArtifactPreviewChangeRoundTrip(path: string): Promise<void> {
+  const now = new Date()
+  await utimes(path, now, now)
+}
+
+async function writeR07LiveTraceReport(input: {
+  path: string
+  logs: readonly string[]
+  workspace: R07PresentationWorkspace
+  skillContract: RuntimePresentationSkillContract
+  activation: RuntimeActivationTrace
+  loaderOutput: string
+  runtimeCommandOutput: string
+  previewTrace: R07ArtifactPreviewTrace
+  renderQaReceipt: R07RenderQaReceipt
+}): Promise<void> {
+  const appServerTrace = parseR07AppServerTrace(input.logs)
+  if (!input.activation.operationId || !input.activation.activeVersion) {
+    throw new Error(
+      'R07 live trace requires a real Runtime activation operationId and activeVersion.'
+    )
+  }
+  const renderReportSha256 = sha256Text(JSON.stringify(input.renderQaReceipt))
+  const report = {
+    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v1',
+    capturedAt: new Date().toISOString(),
+    threadId: appServerTrace.threadId,
+    turnId: appServerTrace.turnId,
+    skill: {
+      id: input.skillContract.id,
+      name: input.skillContract.name,
+      localPath: input.skillContract.normalizedLocalPath,
+      instructionsSha256: input.skillContract.instructionsSha256
+    },
+    activation: {
+      operationId: input.activation.operationId,
+      activeVersion: input.activation.activeVersion,
+      manifestSequence: input.activation.manifestSequence
+    },
+    loader: {
+      loaderCallId: appServerTrace.loader.callId,
+      sequence: 1,
+      outputSha256: sha256Text(input.loaderOutput)
+    },
+    command: {
+      commandItemId: appServerTrace.command.itemId,
+      sequence: 2,
+      outputSha256: sha256Text(input.runtimeCommandOutput)
+    },
+    artifact: {
+      artifactSourceId: input.previewTrace.sourceId,
+      sequence: 3,
+      generation: input.previewTrace.generation,
+      presentationSha256: input.previewTrace.checksum
+    },
+    preview: {
+      receiptId: input.previewTrace.receiptId,
+      sequence: 4,
+      visible: true,
+      presentationSha256: input.previewTrace.checksum
+    },
+    renderReport: input.renderQaReceipt,
+    renderReportSha256
+  }
+  await mkdir(dirname(input.path), { recursive: true })
+  await writeFile(input.path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 })
+}
+
+function parseR07AppServerTrace(logs: readonly string[]): {
+  threadId: string
+  turnId: string
+  loader: { callId: string; sequence: number }
+  command: { itemId: string; sequence: number }
+} {
+  let loader: { threadId: string; turnId: string; callId: string; sequence: number } | undefined
+  let command: { threadId: string; turnId: string; itemId: string; sequence: number } | undefined
+
+  for (const [index, line] of logs.entries()) {
+    const packet = codexPacketFromLog(line)
+    if (!packet || packet.direction !== 'inbound') continue
+    const method = packet.message.method
+    const params = packet.message.params
+    if (!isRecord(params)) continue
+    if (
+      method === 'item/tool/call' &&
+      params.tool === 'load_workspace_dependencies' &&
+      typeof params.threadId === 'string' &&
+      typeof params.turnId === 'string' &&
+      typeof params.callId === 'string'
+    ) {
+      loader = {
+        threadId: params.threadId,
+        turnId: params.turnId,
+        callId: params.callId,
+        sequence: index + 1
+      }
+    } else if (
+      method === 'item/commandExecution/requestApproval' &&
+      typeof params.threadId === 'string' &&
+      typeof params.turnId === 'string' &&
+      typeof params.itemId === 'string'
+    ) {
+      command = {
+        threadId: params.threadId,
+        turnId: params.turnId,
+        itemId: params.itemId,
+        sequence: index + 1
+      }
+    }
+  }
+
+  if (!loader) throw new Error('R07 live trace did not include the app-server loader call.')
+  if (!command) throw new Error('R07 live trace did not include the app-server command approval.')
+  if (loader.threadId !== command.threadId || loader.turnId !== command.turnId) {
+    throw new Error('R07 live trace loader and command belong to different turns.')
+  }
+  if (loader.sequence >= command.sequence) {
+    throw new Error('R07 live trace command was not observed after the loader call.')
+  }
+  return {
+    threadId: loader.threadId,
+    turnId: loader.turnId,
+    loader: { callId: loader.callId, sequence: loader.sequence },
+    command: { itemId: command.itemId, sequence: command.sequence }
+  }
+}
+
+function codexPacketFromLog(line: string):
+  | {
+      direction?: unknown
+      message: { method?: unknown; params?: unknown }
+    }
+  | undefined {
+  const marker = '[codex packet] '
+  const index = line.indexOf(marker)
+  if (index < 0) return undefined
+  try {
+    const packet = JSON.parse(line.slice(index + marker.length)) as unknown
+    if (isRecord(packet) && isRecord(packet.message) && typeof packet.message.method === 'string') {
+      return {
+        direction: packet.direction,
+        message: {
+          method: packet.message.method,
+          params: packet.message.params
+        }
+      }
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+async function sha256File(path: string): Promise<string> {
+  return createHash('sha256')
+    .update(await readFile(path))
+    .digest('hex')
+}
+
+function sha256Text(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function shellQuote(value: string): string {

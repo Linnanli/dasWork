@@ -5,8 +5,10 @@ import { isAbsolute } from 'node:path'
 import { Readable } from 'node:stream'
 
 export type PrimaryRuntimeTlsPolicyInput = {
-  /** Packaged builds must never trust a development CA. */
+  /** Packaged builds reject local CAs unless a loopback-only E2E transport opted in. */
   production: boolean
+  /** Narrow packaged E2E exception for loopback-only release feed verification. */
+  allowPackagedLoopbackTestCa?: boolean
   /** Absolute path to a public CA certificate used by a local development feed. */
   localTestCaPath?: string
   /** Every origin this client may contact while the local CA is active. */
@@ -32,7 +34,7 @@ export class PrimaryRuntimeTlsPolicy {
   ): Promise<PrimaryRuntimeTlsPolicy | undefined> {
     const certificatePath = input.localTestCaPath?.trim()
     if (!certificatePath) return undefined
-    if (input.production) {
+    if (input.production && input.allowPackagedLoopbackTestCa !== true) {
       throw new Error('Production Primary Runtime downloads cannot use a local test CA.')
     }
     if (!isAbsolute(certificatePath)) {

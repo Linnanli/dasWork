@@ -1,9 +1,10 @@
 import { execFile as execFileCallback } from 'node:child_process'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { expect, type Page } from '@playwright/test'
+import { createCanvas, loadImage } from '@napi-rs/canvas'
 import JSZip from 'jszip'
 
 import { appRoot, e2eTempRoot } from './app'
@@ -39,6 +40,19 @@ export type R07PresentationWorkspace = R07PresentationFixture & {
   layoutReceiptFile: string
   renderedSlidesDirectory: string
   contactSheetFile: string
+}
+
+export type R07RenderedSlideMetric = {
+  file: string
+  width: number
+  height: number
+  nonWhiteRatio: number
+  colorBucketCount: number
+}
+
+export type R07RenderQaReceipt = {
+  schemaVersion: 'dascowork-r07-render-qa.v1'
+  slides: R07RenderedSlideMetric[]
 }
 
 export async function withR07PresentationWorkspace(
@@ -157,6 +171,65 @@ export async function verifyR07Presentation(path: string): Promise<void> {
   }
 }
 
+export async function verifyR07RenderedSlides(
+  workspace: R07PresentationWorkspace
+): Promise<R07RenderQaReceipt> {
+  const renderedRoot = join(workspace.root, workspace.renderedSlidesDirectory)
+  const slideFiles = (await readdir(renderedRoot))
+    .filter((name) => /^slide-\d+\.png$/u.test(name))
+    .sort((left, right) => left.localeCompare(right, 'en'))
+  expect(slideFiles).toHaveLength(6)
+
+  const metrics = await Promise.all(
+    slideFiles.map(async (file) => ({
+      file,
+      ...(await renderedSlideMetrics(join(renderedRoot, file)))
+    }))
+  )
+  for (const [index, metric] of metrics.entries()) {
+    expect(metric, `slide-${index + 1} render should not be a blank placeholder`).toMatchObject({
+      width: expect.any(Number),
+      height: expect.any(Number)
+    })
+    expect(metric.width).toBeGreaterThanOrEqual(900)
+    expect(metric.height).toBeGreaterThanOrEqual(500)
+    expect(metric.nonWhiteRatio).toBeGreaterThan(0.01)
+    expect(metric.colorBucketCount).toBeGreaterThan(12)
+  }
+  return {
+    schemaVersion: 'dascowork-r07-render-qa.v1',
+    slides: metrics
+  }
+}
+
+async function renderedSlideMetrics(path: string): Promise<{
+  width: number
+  height: number
+  nonWhiteRatio: number
+  colorBucketCount: number
+}> {
+  const image = await loadImage(path)
+  const canvas = createCanvas(image.width, image.height)
+  const context = canvas.getContext('2d')
+  context.drawImage(image, 0, 0)
+  const { data } = context.getImageData(0, 0, image.width, image.height)
+  const buckets = new Set<string>()
+  let nonWhite = 0
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const red = data[offset] ?? 0
+    const green = data[offset + 1] ?? 0
+    const blue = data[offset + 2] ?? 0
+    if (red < 245 || green < 245 || blue < 245) nonWhite += 1
+    buckets.add(`${red >> 4}:${green >> 4}:${blue >> 4}`)
+  }
+  return {
+    width: image.width,
+    height: image.height,
+    nonWhiteRatio: nonWhite / (image.width * image.height),
+    colorBucketCount: buckets.size
+  }
+}
+
 async function readPptxRelationshipDiagnostics(path: string): Promise<{
   chartParts: string[]
   mediaParts: string[]
@@ -256,6 +329,7 @@ export async function openR07PresentationInWorkspace(
   ).toBeVisible()
   await expect(rightPanel.locator('[data-slot="artifact-tab-content"]')).toBeVisible()
   await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toBeVisible()
+  await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 6')
 }
 
 function hasR07PageTypes(value: unknown[]): value is R07PageType[] {

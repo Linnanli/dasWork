@@ -52,18 +52,46 @@ try {
   const buildStatus = await ensureDesktopBuild(environment)
   if (buildStatus !== 0) process.exitCode = buildStatus
   else {
-    const e2eStatus = await run(
-      process.execPath,
-      [
-        'node_modules/@playwright/test/cli.js',
-        'test',
-        'tests/e2e/primary-runtime-feed.e2e.ts',
-        '--reporter=line'
-      ],
-      environment
-    )
+    const samplePaths = []
+    let e2eStatus = 0
+    for (let sampleIndex = 1; sampleIndex <= 10; sampleIndex += 1) {
+      const samplePath = join(root, `p3b-main-overlap-sample-${sampleIndex}.json`)
+      samplePaths.push(samplePath)
+      e2eStatus = await run(
+        process.execPath,
+        [
+          'node_modules/@playwright/test/cli.js',
+          'test',
+          'tests/e2e/primary-runtime-feed.e2e.ts',
+          '--grep',
+          'AT-P3B-MAIN-OVERLAP',
+          '--reporter=line'
+        ],
+        {
+          ...environment,
+          DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_INDEX: String(sampleIndex),
+          DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_OUTPUT: samplePath
+        }
+      )
+      if (e2eStatus !== 0) break
+    }
     if (e2eStatus !== 0) process.exitCode = e2eStatus
-    else await writeReceipt(options.output, fixture)
+    else {
+      const r07Status = await run(
+        process.execPath,
+        [
+          'node_modules/@playwright/test/cli.js',
+          'test',
+          'tests/e2e/primary-runtime-feed.e2e.ts',
+          '--grep',
+          'AT-E2E-01/PRESENTATION-SKILL-RUNTIME',
+          '--reporter=line'
+        ],
+        environment
+      )
+      if (r07Status !== 0) process.exitCode = r07Status
+      else await writeReceipt(options.output, fixture, samplePaths)
+    }
   }
 } finally {
   if (server?.listening) {
@@ -77,7 +105,7 @@ async function createP1aCalibrationFeedFixture(root, input) {
   const archive = await stat(input.archive)
   const archiveSha256 = await sha256File(input.archive)
   if (archiveSha256 !== input.sha256) {
-    throw new Error('P3b normal-chat feed archive digest does not match --sha256.')
+    throw new Error('P3b Main-overlap feed archive digest does not match --sha256.')
   }
   const provenance = JSON.parse(await readFile(input.provenance, 'utf8'))
   if (
@@ -89,7 +117,7 @@ async function createP1aCalibrationFeedFixture(root, input) {
     provenance.releaseClass !== 'engineering-candidate' ||
     provenance.productionTrust !== false
   ) {
-    throw new Error('P3b normal-chat feed requires the exact verified P1a candidate provenance.')
+    throw new Error('P3b Main-overlap feed requires the exact verified P1a candidate provenance.')
   }
   const measurement = JSON.parse(await readFile(input.p1aReceipt, 'utf8'))
   if (
@@ -98,7 +126,7 @@ async function createP1aCalibrationFeedFixture(root, input) {
     measurement.archiveSha256 !== archiveSha256 ||
     !positiveInteger(measurement.unpackedBytes)
   ) {
-    throw new Error('P3b normal-chat feed requires a P1a receipt bound to the archive.')
+    throw new Error('P3b Main-overlap feed requires a P1a receipt bound to the archive.')
   }
 
   const host = '127.0.0.1'
@@ -194,16 +222,20 @@ function withPinnedCodexCliOnPath(environment) {
   }
 }
 
-async function writeReceipt(path, fixture) {
+async function writeReceipt(path, fixture, samplePaths) {
+  const installAttempts = []
+  for (const samplePath of samplePaths) {
+    installAttempts.push(JSON.parse(await readFile(samplePath, 'utf8')))
+  }
   await mkdir(dirname(path), { recursive: true })
   await writeFile(
     path,
     `${JSON.stringify(
       {
-        schemaVersion: 'dascowork-primary-runtime-normal-chat-smoke.v1',
+        schemaVersion: 'dascowork-primary-runtime-main-overlap-performance.v1',
         target: options.target,
         candidateArchiveSha256: fixture.archiveSha256,
-        normalChatPassed: true
+        installAttempts
       },
       null,
       2
@@ -229,10 +261,10 @@ function parseOptions(argv) {
   }
   const target = required('--target')
   if (target !== `${process.platform}-${process.arch}`) {
-    throw new Error(`P3b normal-chat feed target ${target} must run on its native runner.`)
+    throw new Error(`P3b Main-overlap feed target ${target} must run on its native runner.`)
   }
   const sha256 = required('--sha256').toLowerCase()
-  if (!/^[a-f0-9]{64}$/u.test(sha256)) throw new Error('P3b normal-chat feed SHA256 is invalid.')
+  if (!/^[a-f0-9]{64}$/u.test(sha256)) throw new Error('P3b Main-overlap feed SHA256 is invalid.')
   return {
     target,
     archive: resolve(required('--archive')),

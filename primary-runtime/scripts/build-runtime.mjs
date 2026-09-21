@@ -47,12 +47,14 @@ if (!argumentsValue.target || !argumentsValue.inputRootWasExplicit) {
 const target = assertNativeRuntimeTarget(argumentsValue.target);
 const [platform, arch] = target.split("-");
 const sourceLockBytes = await readFile(argumentsValue.lock);
-const [lock, toolchains, hardLimits, toolchainsLockBytes] = await Promise.all([
-  readRuntimeSourcesLock(argumentsValue.lock),
-  readRuntimeToolchainsLock(argumentsValue.toolchainsLock),
-  readRuntimeHardLimits(argumentsValue.hardLimitsPath),
-  readFile(argumentsValue.toolchainsLock),
-]);
+const [lock, toolchains, hardLimits, toolchainsLockBytes, hardLimitsBytes] =
+  await Promise.all([
+    readRuntimeSourcesLock(argumentsValue.lock),
+    readRuntimeToolchainsLock(argumentsValue.toolchainsLock),
+    readRuntimeHardLimits(argumentsValue.hardLimitsPath),
+    readFile(argumentsValue.toolchainsLock),
+    readFile(argumentsValue.hardLimitsPath),
+  ]);
 assertApprovedSources(lock);
 await assertRepositoryPatchMatchesLock({
   lockPath: argumentsValue.lock,
@@ -81,6 +83,11 @@ const reviewedReleaseEvidence = await readReviewedReleaseEvidence({
   budgetPath: argumentsValue.releaseBudgetPath,
   performancePath: argumentsValue.performanceReportPath,
   hardLimits,
+  currentEvidence: {
+    hardLimitsSha256: sha256(hardLimitsBytes),
+    sourceLockSha256: sha256(sourceLockBytes),
+    toolchainsLockSha256: sha256(toolchainsLockBytes),
+  },
 });
 const outputRoot = join(argumentsValue.outputRoot, target);
 await rm(outputRoot, { recursive: true, force: true });
@@ -602,6 +609,7 @@ async function readReviewedReleaseEvidence({
   budgetPath,
   performancePath,
   hardLimits,
+  currentEvidence,
 }) {
   if (Boolean(budgetPath) !== Boolean(performancePath)) {
     throw new Error(
@@ -615,7 +623,11 @@ async function readReviewedReleaseEvidence({
   ]);
   const budget = JSON.parse(budgetBytes.toString("utf8"));
   const performance = JSON.parse(performanceBytes.toString("utf8"));
-  verifyRuntimeBudgets({ budgets: budget, measurements: performance });
+  verifyRuntimeBudgets({
+    budgets: budget,
+    measurements: performance,
+    currentEvidence,
+  });
   assertBudgetWithinHardLimits({
     target,
     budget: budget.targets[target],

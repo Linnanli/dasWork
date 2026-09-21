@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
@@ -11,11 +11,13 @@ import {
   loadAppToolsReleaseGates,
   verifyAppToolsReleaseGates
 } from '../verify-app-tools-release-gates.mjs'
+import { writeAppToolsReleaseEvidence } from '../write-app-tools-release-evidence.mjs'
 
 const appRoot = resolve(import.meta.dirname, '../..')
 const specPath = join(appRoot, 'tests/app-tools-release-gates.json')
 const commit = 'a'.repeat(40)
 const assetSha256 = 'b'.repeat(64)
+const packagedAssetSha256 = '9'.repeat(64)
 const now = Date.parse('2026-09-07T00:00:00.000Z')
 
 test('release-gate specification has immutable coverage definitions', async () => {
@@ -69,6 +71,7 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
     })
 
     await rm(join(directory, 'evidence.json'))
+    const invalidLiveRuntime = runtimeBinding(true)
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
       producer: 'live-presentation-skill-dev',
@@ -85,6 +88,331 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
         now
       }),
       /Invalid live Runtime trace/u
+    )
+    await rm(join(directory, 'evidence.json'))
+    await writeEvidence(directory, {
+      gateId: 'AT-LIVE-01',
+      producer: 'live-presentation-skill-dev',
+      commit,
+      capturedAt: new Date(now).toISOString(),
+      extra: {
+        runtime: {
+          ...invalidLiveRuntime,
+          live: {
+            ...invalidLiveRuntime.live,
+            artifact: { ...invalidLiveRuntime.live.artifact, generation: 0 },
+            preview: { ...invalidLiveRuntime.live.preview, visible: false }
+          }
+        }
+      }
+    })
+    await assert.rejects(
+      verifyAppToolsReleaseGates({
+        specPath,
+        evidenceDirectory: directory,
+        commit,
+        ids: ['AT-LIVE-01'],
+        now
+      }),
+      /Invalid live Runtime trace/u
+    )
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('produces verifier-consumable AT-E2E evidence from a real R07 live trace report', async () => {
+  const directory = await fixtureDirectory()
+  try {
+    const fixture = await writeAppToolsProducerFixture(directory)
+    assert.equal(fixture.feedRoot, join(fixture.feedRepositoryRoot, 'current'))
+    const { evidencePath } = await writeAppToolsReleaseEvidence({
+      gateId: 'AT-E2E-01',
+      producer: 'primary-runtime-feed-e2e',
+      commit,
+      target: fixture.target,
+      targetRoot: fixture.targetRoot,
+      feedRoot: fixture.feedRoot,
+      channel: 'engineering',
+      liveReport: fixture.liveReport,
+      outputDir: fixture.outputDir,
+      sourceLock: fixture.sourceLock,
+      toolchainsLock: fixture.toolchainsLock,
+      hardLimits: fixture.hardLimits
+    })
+    assert.equal(evidencePath, join(fixture.outputDir, 'at-e2e-01.json'))
+    const result = await verifyAppToolsReleaseGates({
+      specPath,
+      evidenceDirectory: fixture.outputDir,
+      commit,
+      ids: ['AT-E2E-01'],
+      now
+    })
+    assert.deepEqual(
+      result.verified.map((entry) => entry.id),
+      ['AT-E2E-01']
+    )
+
+    const packagedResult = await writeAppToolsReleaseEvidence({
+      gateId: 'AT-LIVE-PKG-01',
+      producer: 'live-presentation-skill-packaged',
+      commit,
+      target: fixture.target,
+      targetRoot: fixture.targetRoot,
+      feedRoot: fixture.feedRoot,
+      channel: 'engineering',
+      liveReport: fixture.liveReport,
+      outputDir: fixture.outputDir,
+      sourceLock: fixture.sourceLock,
+      toolchainsLock: fixture.toolchainsLock,
+      hardLimits: fixture.hardLimits,
+      assetSha256: packagedAssetSha256
+    })
+    const packagedEvidence = JSON.parse(await readFile(packagedResult.evidencePath, 'utf8'))
+    assert.equal(packagedEvidence.assetSha256, packagedAssetSha256)
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-LIVE-PKG-01',
+        producer: 'live-presentation-skill-packaged',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits,
+        assetSha256: undefined
+      }),
+      /independent assetSha256/u
+    )
+    await assert.rejects(
+      verifyAppToolsReleaseGates({
+        specPath,
+        evidenceDirectory: fixture.outputDir,
+        commit,
+        ids: ['AT-LIVE-PKG-01'],
+        now
+      }),
+      /Asset-bound/u
+    )
+    await verifyAppToolsReleaseGates({
+      specPath,
+      evidenceDirectory: fixture.outputDir,
+      commit,
+      assetSha256: packagedAssetSha256,
+      ids: ['AT-LIVE-PKG-01'],
+      now
+    })
+    await assert.rejects(
+      verifyAppToolsReleaseGates({
+        specPath,
+        evidenceDirectory: fixture.outputDir,
+        commit,
+        assetSha256: '0'.repeat(64),
+        ids: ['AT-LIVE-PKG-01'],
+        now
+      }),
+      /does not bind to the release asset set/u
+    )
+
+    const badLiveReport = join(directory, 'bad-live-report.json')
+    await writeFile(
+      badLiveReport,
+      `${JSON.stringify({ ...fixture.liveTrace, skill: { localPath: '/tmp/SKILL.md' } })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: badLiveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace/u
+    )
+    const badPreviewReport = join(directory, 'bad-preview-report.json')
+    await writeFile(
+      badPreviewReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        preview: { ...fixture.liveTrace.preview, visible: false }
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: badPreviewReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace/u
+    )
+    const badGenerationReport = join(directory, 'bad-generation-report.json')
+    await writeFile(
+      badGenerationReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        artifact: { ...fixture.liveTrace.artifact, generation: 0 }
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: badGenerationReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace/u
+    )
+    const badRenderReport = join(directory, 'bad-render-report.json')
+    await writeFile(
+      badRenderReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: {
+          ...fixture.liveTrace.renderReport,
+          slides: fixture.liveTrace.renderReport.slides.map((slide, index) =>
+            index === 0 ? { ...slide, nonWhiteRatio: 0 } : slide
+          )
+        }
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: badRenderReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace/u
+    )
+    const badManifestSequenceReport = join(directory, 'bad-manifest-sequence-report.json')
+    await writeFile(
+      badManifestSequenceReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        activation: { ...fixture.liveTrace.activation, manifestSequence: 2 }
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: badManifestSequenceReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    const manifestPath = join(fixture.feedRoot, 'channels', 'engineering', 'manifest.json')
+    const manifestText = await readFile(manifestPath, 'utf8')
+    const manifest = JSON.parse(manifestText)
+    manifest.releases[0].budget.maxColdInstallMs += 1
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`)
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    await writeFile(manifestPath, manifestText)
+    await writeFile(join(fixture.targetRoot, 'runtime-budgets.json'), '{"tampered":true}\n')
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    await writeFile(join(fixture.targetRoot, 'runtime-budgets.json'), fixture.budgetText)
+    await writeFile(
+      fixture.sourceLock,
+      `${JSON.stringify({ candidate: fixture.sourceLockCandidate })}\n`
+    )
+    const staleBudget = JSON.parse(fixture.budgetText)
+    staleBudget.evidence.sourceLockSha256 = '0'.repeat(64)
+    await writeFile(
+      join(fixture.targetRoot, 'runtime-budgets.json'),
+      `${JSON.stringify(staleBudget)}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
     )
   } finally {
     await rm(directory, { recursive: true, force: true })
@@ -286,7 +614,8 @@ function runtimeBinding(includeLive = false) {
     },
     activation: {
       operationId: 'activate-1',
-      activeVersion: '2026.9.12-presentation-skill'
+      activeVersion: '2026.9.12-presentation-skill',
+      manifestSequence: 2
     },
     ...(includeLive
       ? {
@@ -298,12 +627,189 @@ function runtimeBinding(includeLive = false) {
             artifact: {
               artifactSourceId: 'artifact-1',
               sequence: 3,
+              generation: 1,
               presentationSha256
             },
-            preview: { receiptId: 'preview-1', sequence: 4, presentationSha256 },
+            preview: { receiptId: 'preview-1', sequence: 4, visible: true, presentationSha256 },
             renderReportSha256: 'd'.repeat(64)
           }
         }
       : {})
   }
+}
+
+async function writeAppToolsProducerFixture(directory) {
+  const target = 'linux-x64'
+  const targetRoot = join(directory, 'target')
+  const feedRepositoryRoot = join(directory, 'feed-repository')
+  const feedRoot = join(feedRepositoryRoot, 'current')
+  const outputDir = join(directory, 'evidence')
+  const sourceLock = join(directory, 'runtime-sources.lock.json')
+  const toolchainsLock = join(directory, 'runtime-toolchains.lock.json')
+  const hardLimits = join(directory, 'runtime-hard-limits.json')
+  const liveReport = join(directory, 'r07-live-trace.json')
+  const activeVersion = '2026.9.21-r07'
+  const archiveText = 'runtime archive\n'
+  const runtimeText = `${JSON.stringify({ bundleVersion: activeVersion })}\n`
+  const performanceText = '{"ok":"performance"}\n'
+  const sourceLockCandidate = {
+    commit: 'a'.repeat(40),
+    sourceArchive: { sha256: '1'.repeat(64) },
+    patch: { sha256: '2'.repeat(64) }
+  }
+  const sourceLockText = `${JSON.stringify({
+    candidate: sourceLockCandidate
+  })}\n`
+  const toolchainsLockText = '{"toolchains":"locked"}\n'
+  const hardLimitsText = '{"limits":"locked"}\n'
+  const targetBudget = {
+    maxArchiveBytes: 1024,
+    maxUnpackedBytes: 4096,
+    minimumFreeDiskBytes: 9216,
+    maxColdInstallMs: 30000,
+    maxMainEventLoopDelayP99Ms: 40,
+    maxMainEventLoopDelayMaxMs: 120
+  }
+  const budgetText = `${JSON.stringify({
+    schemaVersion: 'dascowork-primary-runtime-budgets.v1',
+    evidence: {
+      reviewed: true,
+      sourceRunId: '123',
+      sourceCommit: 'a'.repeat(40),
+      installerCommit: 'a'.repeat(40),
+      hardLimitsSha256: sha256Text(hardLimitsText),
+      sourceLockSha256: sha256Text(sourceLockText),
+      toolchainsLockSha256: sha256Text(toolchainsLockText),
+      measurementsFingerprint: '3'.repeat(64),
+      candidateArchiveSha256: {
+        'darwin-x64': '4'.repeat(64),
+        'darwin-arm64': '5'.repeat(64),
+        'win32-x64': '6'.repeat(64),
+        'linux-x64': sha256Text(archiveText)
+      }
+    },
+    targets: { [target]: targetBudget }
+  })}\n`
+  const renderReport = {
+    schemaVersion: 'dascowork-r07-render-qa.v1',
+    slides: Array.from({ length: 6 }, (_, index) => ({
+      file: `slide-${index + 1}.png`,
+      width: 960,
+      height: 540,
+      nonWhiteRatio: 0.2,
+      colorBucketCount: 24
+    }))
+  }
+  const liveTrace = {
+    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v1',
+    capturedAt: new Date(now).toISOString(),
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    skill: {
+      localPath: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+      instructionsSha256: '5'.repeat(64)
+    },
+    activation: {
+      operationId: 'operation-1',
+      activeVersion,
+      manifestSequence: 1
+    },
+    loader: { loaderCallId: 'loader-1', sequence: 1, outputSha256: '6'.repeat(64) },
+    command: { commandItemId: 'command-1', sequence: 2, outputSha256: '7'.repeat(64) },
+    artifact: {
+      artifactSourceId: 'artifact-1',
+      sequence: 3,
+      generation: 1,
+      presentationSha256: '8'.repeat(64)
+    },
+    preview: {
+      receiptId: 'workspace-preview:artifact-1:1',
+      sequence: 4,
+      visible: true,
+      presentationSha256: '8'.repeat(64)
+    },
+    renderReport,
+    renderReportSha256: sha256Text(JSON.stringify(renderReport))
+  }
+  await mkdir(join(feedRoot, 'channels', 'engineering'), { recursive: true })
+  await mkdir(targetRoot, { recursive: true })
+  await Promise.all([
+    writeFile(
+      join(targetRoot, 'provenance.json'),
+      `${JSON.stringify({
+        schemaVersion: 'dascowork-primary-runtime-provenance.v1',
+        target,
+        bundleVersion: activeVersion,
+        archiveSha256: sha256Text(archiveText),
+        reviewedBudgetSha256: sha256Text(budgetText),
+        performanceReportSha256: sha256Text(performanceText),
+        runtimeManifestSha256: sha256Text(runtimeText),
+        sourceLockSha256: sha256Text(sourceLockText),
+        toolchainsLockSha256: sha256Text(toolchainsLockText),
+        hardLimitsSha256: sha256Text(hardLimitsText),
+        patchSha256: '2'.repeat(64)
+      })}\n`
+    ),
+    writeFile(join(targetRoot, 'primary-runtime.zip'), archiveText),
+    writeFile(join(targetRoot, 'runtime.json'), runtimeText),
+    writeFile(join(targetRoot, 'runtime-budgets.json'), budgetText),
+    writeFile(join(targetRoot, 'performance-report.json'), performanceText),
+    writeFile(
+      join(feedRoot, 'config.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        sequence: 1,
+        channel: 'engineering',
+        manifestUrl: 'https://127.0.0.1/v1/runtime/channels/engineering/manifest.json',
+        pollIntervalMs: 3600000,
+        issuedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 1000).toISOString(),
+        keyId: 'config-test',
+        signature: 'test-signature'
+      })}\n`
+    ),
+    writeFile(
+      join(feedRoot, 'channels', 'engineering', 'manifest.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        sequence: 1,
+        channel: 'engineering',
+        issuedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 1000).toISOString(),
+        keyId: 'manifest-test',
+        releases: [
+          {
+            platform: 'linux',
+            arch: 'x64',
+            version: activeVersion,
+            archiveSha256: sha256Text(archiveText),
+            budget: targetBudget
+          }
+        ],
+        signature: 'test-signature'
+      })}\n`
+    ),
+    writeFile(sourceLock, sourceLockText),
+    writeFile(toolchainsLock, toolchainsLockText),
+    writeFile(hardLimits, hardLimitsText),
+    writeFile(liveReport, `${JSON.stringify(liveTrace)}\n`)
+  ])
+  return {
+    target,
+    targetRoot,
+    feedRepositoryRoot,
+    feedRoot,
+    outputDir,
+    sourceLock,
+    toolchainsLock,
+    hardLimits,
+    sourceLockCandidate,
+    budgetText,
+    liveReport,
+    liveTrace
+  }
+}
+
+function sha256Text(value) {
+  return createHash('sha256').update(value).digest('hex')
 }

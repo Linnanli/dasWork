@@ -39,9 +39,10 @@ const measurements = {
         candidateArchiveSha256: reports[target].candidateArchiveSha256,
         p1aBuildUnpackReceiptSha256:
           reports[target].p1aBuildUnpackReceiptSha256,
-        normalChatPassed: reports[target].normalChatPassed,
+        chatInstallOverlapMs: reports[target].chatInstallOverlapMs,
         archiveBytes: reports[target].archiveBytes,
         unpackedBytes: reports[target].unpackedBytes,
+        minimumAvailableDiskBytes: reports[target].minimumAvailableDiskBytes,
         coldInstallMs: reports[target].coldInstallMs,
         mainEventLoopDelayP99Ms: reports[target].mainEventLoopDelayP99Ms,
         mainEventLoopDelayMaxMs: reports[target].mainEventLoopDelayMaxMs,

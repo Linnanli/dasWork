@@ -540,15 +540,17 @@ async function createPrimaryRuntimeProductReleaseProvider(
   cacheRoot: string
 ): Promise<PrimaryRuntimeProductReleaseProvider> {
   const trustState = new FilePrimaryRuntimeTrustStateStore(join(cacheRoot, 'trust-state.json'))
-  const engineeringTestOnly = config.engineeringTestOnly === true
+  const packagedLoopbackTestCaPath = resolvePackagedLoopbackTestCaPath(config)
+  const localTestCaPath = app.isPackaged ? packagedLoopbackTestCaPath : config.localTestCaPath
   const tlsPolicy = await PrimaryRuntimeTlsPolicy.create({
-    production: app.isPackaged && !engineeringTestOnly,
-    localTestCaPath: config.localTestCaPath,
+    production: app.isPackaged,
+    allowPackagedLoopbackTestCa: packagedLoopbackTestCaPath !== undefined,
+    localTestCaPath,
     allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins]
   })
   const httpClient = new PrimaryRuntimeHttpClient({
     allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins],
-    production: app.isPackaged && !engineeringTestOnly,
+    production: app.isPackaged,
     ...(tlsPolicy ? { fetchImpl: tlsPolicy.fetchImpl } : {})
   })
   return new PrimaryRuntimeProductReleaseProvider({
@@ -574,6 +576,41 @@ async function createPrimaryRuntimeProductReleaseProvider(
         trustState
       })
   })
+}
+
+function resolvePackagedLoopbackTestCaPath(
+  config: NonNullable<DesktopRuntimeConfig['primaryRuntimeProductConfig']>
+): string | undefined {
+  if (!app.isPackaged) return undefined
+
+  const certificatePath = process.env.DASCOWORK_PRIMARY_RUNTIME_PACKAGED_E2E_LOCAL_CA_PATH?.trim()
+  if (!certificatePath) return undefined
+  if (process.env.DASCOWORK_PRIMARY_RUNTIME_FEED_E2E !== '1') {
+    throw new Error('Packaged Primary Runtime test CA requires the feed E2E opt-in.')
+  }
+  if (
+    ![config.configUrl, ...config.allowedConfigOrigins, ...config.allowedManifestOrigins].every(
+      isLoopbackHttpsUrl
+    )
+  ) {
+    throw new Error('Packaged Primary Runtime test CA requires a loopback HTTPS feed.')
+  }
+  return certificatePath
+}
+
+function isLoopbackHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase()
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      (hostname === '127.0.0.1' || hostname === '::1' || hostname === 'localhost')
+    )
+  } catch {
+    return false
+  }
 }
 
 async function reconcileBundledPlugins(input: {

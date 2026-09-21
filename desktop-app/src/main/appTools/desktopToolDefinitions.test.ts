@@ -73,23 +73,35 @@ describe('desktop tool definitions', () => {
     expect(loadDependencies).not.toHaveBeenCalled()
   })
 
-  it('does not publish the loader while still returning structured recovery on direct failed calls', async () => {
-    const tool = createLoadWorkspaceDependenciesTool({
-      loadDependencies: async () => {
-        throw new Error('runtime missing')
-      },
-      diagnoseDependencies: async () => ({
-        status: 'broken',
-        activeVersion: '1.2.3',
-        operationId: 'operation-1',
-        issues: [{ code: 'missing-package', message: 'pptxgenjs is missing.', path: '/private' }]
+  it('publishes the loader while returning structured recovery through registry dispatch when the Runtime is broken', async () => {
+    const registry = new DynamicAppToolRegistry()
+    registry.register(
+      createLoadWorkspaceDependenciesTool({
+        loadDependencies: async () => {
+          throw new Error('runtime missing')
+        },
+        diagnoseDependencies: async () => ({
+          status: 'broken',
+          activeVersion: '1.2.3',
+          operationId: 'operation-1',
+          issues: [{ code: 'missing-package', message: 'pptxgenjs is missing.', path: '/private' }]
+        })
       })
-    })
+    )
 
-    await expect(tool.availability({ hostId: 'local' })).resolves.toMatchObject({
-      state: 'unavailable'
-    })
-    await expect(tool.execute(context, {})).resolves.toEqual({
+    await expect(registry.availableToolNames({ hostId: 'local' })).resolves.toContain(
+      'load_workspace_dependencies'
+    )
+    await expect(registry.pipeProjection({ hostId: 'local' })).resolves.toMatchObject([
+      { namespace: 'codex_app', name: 'load_workspace_dependencies' }
+    ])
+    await expect(
+      registry.dispatch({
+        namespace: 'codex_app',
+        tool: 'load_workspace_dependencies',
+        arguments: {}
+      })
+    ).resolves.toEqual({
       success: false,
       contentItems: [
         {
@@ -107,7 +119,7 @@ describe('desktop tool definitions', () => {
     })
   })
 
-  it('publishes the loader for pipe projections when diagnose confirms a ready Runtime', async () => {
+  it('does not call diagnostics to decide loader publication', async () => {
     const diagnoseDependencies = vi.fn(async () => ({ status: 'ready' as const }))
     const tool = createLoadWorkspaceDependenciesTool({
       loadDependencies: async () => ({ text: 'Runtime paths' }),
@@ -115,7 +127,7 @@ describe('desktop tool definitions', () => {
     })
 
     await expect(tool.availability({ hostId: 'local' })).resolves.toEqual({ state: 'available' })
-    expect(diagnoseDependencies).toHaveBeenCalledOnce()
+    expect(diagnoseDependencies).not.toHaveBeenCalled()
   })
 
   it('does not publish the loader when Main resolves the product or app-server feature as disabled', async () => {

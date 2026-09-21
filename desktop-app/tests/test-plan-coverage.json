@@ -3694,12 +3694,15 @@
       "requiredAssertions": [
         "engineering test-signed Runtime feed",
         "native loader 调用",
+        "Runtime-owned presentation-skill 精确路径、来源和启用状态",
+        "实际 SKILL.md 指令读取后再执行命令",
         "HTML 数据事实",
         "六类独立页面、PPTX 结构、关系图和页面边界",
         "表格、图表、图像关系、中文字体与 alt text",
+        "渲染 PNG 非空白且不是 Slide N 占位图",
         "工作区可见产物"
       ],
-      "status": "partial",
+      "status": "covered",
       "evidence": [
         {
           "file": "tests/e2e/primary-runtime-feed.e2e.ts",
@@ -3708,9 +3711,12 @@
           "assertions": [
             "engineering test-signed Runtime feed",
             "native loader 调用",
+            "Runtime-owned presentation-skill 精确路径、来源和启用状态",
+            "实际 SKILL.md 指令读取后再执行命令",
             "HTML 数据事实",
             "六类独立页面、PPTX 结构、关系图和页面边界",
             "表格、图表、图像关系、中文字体与 alt text",
+            "渲染 PNG 非空白且不是 Slide N 占位图",
             "工作区可见产物"
           ]
         }
@@ -4335,7 +4341,7 @@
       "title": "Primary Runtime presentation-skill",
       "scenarioIds": ["PRESENTATION-SKILL-RUNTIME"],
       "owner": "desktop-e2e",
-      "status": "partial",
+      "status": "covered",
       "evidence": [
         {
           "file": "tests/e2e/primary-runtime-feed.e2e.ts",
@@ -4344,9 +4350,12 @@
           "assertions": [
             "engineering test-signed Runtime feed",
             "native loader 调用",
+            "Runtime-owned presentation-skill 精确路径、来源和启用状态",
+            "实际 SKILL.md 指令读取后再执行命令",
             "HTML 数据事实",
             "六类独立页面、PPTX 结构、关系图和页面边界",
             "表格、图表、图像关系、中文字体与 alt text",
+            "渲染 PNG 非空白且不是 Slide N 占位图",
             "工作区可见产物"
           ]
         }
@@ -4354,9 +4363,12 @@
       "requiredAssertions": [
         "engineering test-signed Runtime feed",
         "native loader 调用",
+        "Runtime-owned presentation-skill 精确路径、来源和启用状态",
+        "实际 SKILL.md 指令读取后再执行命令",
         "HTML 数据事实",
         "六类独立页面、PPTX 结构、关系图和页面边界",
         "表格、图表、图像关系、中文字体与 alt text",
+        "渲染 PNG 非空白且不是 Slide N 占位图",
         "工作区可见产物"
       ]
     }

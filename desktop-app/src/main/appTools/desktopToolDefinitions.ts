@@ -105,14 +105,6 @@ export function createLoadWorkspaceDependenciesTool(
           reason: 'Workspace dependencies are not enabled for this host.'
         }
       }
-      const runtimeStatus =
-        context.primaryRuntimeStatus ?? (await runtime.diagnoseDependencies?.())?.status
-      if (runtimeStatus !== 'ready') {
-        return {
-          state: 'unavailable',
-          reason: 'Workspace dependencies are unavailable until the Primary Runtime is ready.'
-        }
-      }
       return { state: 'available' }
     },
     async execute(context, argumentsValue) {

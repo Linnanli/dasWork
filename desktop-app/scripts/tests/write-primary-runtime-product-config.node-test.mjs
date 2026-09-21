@@ -7,7 +7,6 @@ import test from 'node:test'
 import {
   PACKAGED_PRODUCT_CONFIG_SCHEMA,
   disabledPackagedProductConfig,
-  engineeringTestPackagedProductConfigFromEnvironment,
   packagedProductConfigFromEnvironment,
   writePackagedProductConfig
 } from '../write-primary-runtime-product-config.mjs'
@@ -74,36 +73,6 @@ test('fails closed for missing or malformed public inputs', () => {
         DASCOWORK_PRIMARY_RUNTIME_CONFIG_POLL_INTERVAL_MS: '1'
       }),
     /at least 30000/u
-  )
-})
-
-test('allows an ephemeral CA only for a loopback packaged engineering test', () => {
-  const engineeringEnvironment = {
-    ...releaseEnvironment,
-    DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: 'https://127.0.0.1:9443/v1/runtime/config.json',
-    DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: 'https://127.0.0.1:9443',
-    DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: 'https://127.0.0.1:9443',
-    DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: '/private/tmp/engineering-test-ca.pem'
-  }
-  assert.deepEqual(engineeringTestPackagedProductConfigFromEnvironment(engineeringEnvironment), {
-    ...packagedProductConfigFromEnvironment({
-      ...engineeringEnvironment,
-      DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: undefined
-    }),
-    engineeringTestLocalCaPath: '/private/tmp/engineering-test-ca.pem'
-  })
-  assert.throws(
-    () =>
-      engineeringTestPackagedProductConfigFromEnvironment({
-        ...engineeringEnvironment,
-        DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL:
-          releaseEnvironment.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL,
-        DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS:
-          releaseEnvironment.DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS,
-        DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS:
-          releaseEnvironment.DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS
-      }),
-    /loopback HTTPS/u
   )
 })
 

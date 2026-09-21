@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -26,6 +27,12 @@ const assemblePerformanceScript = resolve(
   import.meta.dirname,
   "../scripts/assemble-runtime-performance-report.mjs",
 );
+const hardLimitsPath = resolve(import.meta.dirname, "../runtime-hard-limits.json");
+const sourceLockPath = resolve(import.meta.dirname, "../runtime-sources.lock.json");
+const toolchainsLockPath = resolve(
+  import.meta.dirname,
+  "../runtime-toolchains.lock.json",
+);
 
 test("calibrates reviewable budgets from clean-runner measurements", () => {
   const report = calibrateRuntimeBudgets(validMeasurements());
@@ -50,6 +57,18 @@ test("calibrates reviewable budgets from clean-runner measurements", () => {
 test("verifies review-bound budgets and rejects missing or malformed targets", () => {
   const budgets = validBudgets();
   assert.equal(verifyRuntimeBudgets({ budgets }), budgets);
+  assert.throws(
+    () =>
+      verifyRuntimeBudgets({
+        budgets,
+        currentEvidence: {
+          hardLimitsSha256: "c".repeat(64),
+          sourceLockSha256: "0".repeat(64),
+          toolchainsLockSha256: "e".repeat(64),
+        },
+      }),
+    /does not match current sourceLockSha256/u,
+  );
   assert.throws(
     () =>
       verifyRuntimeBudgets({
@@ -105,6 +124,18 @@ test("rejects budgets below formula, hard limit, or actual measurements", () => 
     /archive budget exceeds installer hard limit/u,
   );
   assert.throws(
+    () => {
+      const lowDiskMeasurements = validMeasurements({
+        minimumAvailableDiskBytes: Array(10).fill(1_000),
+      });
+      return verifyRuntimeBudgets({
+        budgets: validBudgets(lowDiskMeasurements),
+        measurements: lowDiskMeasurements,
+      });
+    },
+    /lacks measured available disk/u,
+  );
+  assert.throws(
     () =>
       verifyRuntimeBudgets({
         budgets: validBudgets(
@@ -132,13 +163,22 @@ test("rejects measurement reports without required sample counts", () => {
       ),
     /at least 10 coldInstallMs samples/u,
   );
-});
-
-test("rejects calibration without a real normal chat smoke receipt", () => {
   assert.throws(
     () =>
-      calibrateRuntimeBudgets(validMeasurements({ normalChatPassed: false })),
-    /without a real normal chat smoke receipt/u,
+      calibrateRuntimeBudgets(
+        validMeasurements({
+          minimumAvailableDiskBytes: [10_000],
+        }),
+      ),
+    /at least 10 minimumAvailableDiskBytes samples/u,
+  );
+});
+
+test("rejects calibration without ten real Main-overlap chat/install samples", () => {
+  assert.throws(
+    () =>
+      calibrateRuntimeBudgets(validMeasurements({ chatInstallOverlapMs: [25] })),
+    /at least 10 chatInstallOverlapMs samples/u,
   );
 });
 
@@ -146,8 +186,11 @@ test("budget CLIs read files and fail closed", async () => {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-budgets-"));
   const measurementsPath = join(directory, "measurements.json");
   const budgetPath = join(directory, "runtime-budgets.json");
+  const staleSourceLockPath = join(directory, "stale-runtime-sources.lock.json");
   try {
-    const measurements = validMeasurements();
+    const measurements = validMeasurements({
+      evidence: await currentCheckoutEvidence(),
+    });
     await writeFile(
       measurementsPath,
       `${JSON.stringify(measurements, null, 2)}\n`,
@@ -171,8 +214,32 @@ test("budget CLIs read files and fail closed", async () => {
       budgetPath,
       "--measurements",
       measurementsPath,
+      "--hard-limits",
+      hardLimitsPath,
+      "--source-lock",
+      sourceLockPath,
+      "--toolchains-lock",
+      toolchainsLockPath,
     ]);
     assert.match(verifyStdout, /budgets verified/u);
+    await writeFile(staleSourceLockPath, '{"stale":true}\n');
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          verifyScript,
+          "--budget",
+          budgetPath,
+          "--measurements",
+          measurementsPath,
+          "--hard-limits",
+          hardLimitsPath,
+          "--source-lock",
+          staleSourceLockPath,
+          "--toolchains-lock",
+          toolchainsLockPath,
+        ]),
+      /does not match current sourceLockSha256/u,
+    );
     const awaitingReviewBudget = JSON.parse(
       await readFile(
         resolve(import.meta.dirname, "../runtime-budgets.json"),
@@ -276,6 +343,13 @@ function validMeasurements(overrides = {}) {
     mainEventLoopDelayMaxMs: overrides.mainEventLoopDelayMaxMs ?? [
       100, 90, 95, 97, 92, 87, 82, 80, 75, 70,
     ],
+    minimumAvailableDiskBytes: overrides.minimumAvailableDiskBytes ?? [
+      6_000_000, 5_990_000, 5_980_000, 5_970_000, 5_960_000, 5_950_000,
+      5_940_000, 5_930_000, 5_920_000, 5_910_000,
+    ],
+    chatInstallOverlapMs: overrides.chatInstallOverlapMs ?? [
+      500, 450, 475, 425, 400, 390, 380, 370, 360, 350,
+    ],
   };
   return {
     schemaVersion: "dascowork-primary-runtime-budget-measurements.v1",
@@ -286,6 +360,7 @@ function validMeasurements(overrides = {}) {
       hardLimitsSha256: "c".repeat(64),
       sourceLockSha256: "d".repeat(64),
       toolchainsLockSha256: "e".repeat(64),
+      ...(overrides.evidence ?? {}),
     },
     targets: Object.fromEntries(
       runtimeBudgetTargets.map((target) => [
@@ -297,9 +372,20 @@ function validMeasurements(overrides = {}) {
             .repeat(64)
             .slice(0, 64),
           p1aBuildUnpackReceiptSha256: "f".repeat(64),
-          normalChatPassed: overrides.normalChatPassed ?? true,
         },
       ]),
     ),
   };
+}
+
+async function currentCheckoutEvidence() {
+  return {
+    hardLimitsSha256: await sha256File(hardLimitsPath),
+    sourceLockSha256: await sha256File(sourceLockPath),
+    toolchainsLockSha256: await sha256File(toolchainsLockPath),
+  };
+}
+
+async function sha256File(path) {
+  return createHash("sha256").update(await readFile(path)).digest("hex");
 }
