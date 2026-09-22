@@ -34,9 +34,17 @@ afterEach(async () => {
   )
 })
 
-test('recognizes the dedicated R07 Primary Runtime presentation-skill release scenario', () => {
-  assert.ok(expectedScenarioIds.includes('PRESENTATION-SKILL-RUNTIME'))
-  assert.ok(expectedReleaseIds.includes('R07'))
+test('routes Primary Runtime presentation evidence through the dedicated release-gate catalog', async () => {
+  assert.equal(expectedScenarioIds.includes('PRESENTATION-SKILL-RUNTIME'), false)
+  assert.equal(expectedReleaseIds.includes('R07'), false)
+
+  const releaseGates = JSON.parse(
+    await readFile(new URL('../../tests/app-tools-release-gates.json', import.meta.url), 'utf8')
+  )
+  const releaseGateIds = new Set(releaseGates.gates.map((gate) => gate.id))
+  assert.ok(releaseGateIds.has('AT-E2E-01'))
+  assert.ok(releaseGateIds.has('AT-LIVE-01'))
+  assert.ok(releaseGateIds.has('AT-LIVE-PKG-01'))
 })
 
 test('normalizes Playwright reporter files from its configured test root', () => {
