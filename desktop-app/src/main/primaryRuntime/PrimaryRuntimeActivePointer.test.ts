@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   PrimaryRuntimeActivePointer,
-  parsePrimaryRuntimeActivePointer
+  parsePrimaryRuntimeActivePointer,
+  versionDirectoryForArchive
 } from './PrimaryRuntimeActivePointer'
 
 const directories: string[] = []
@@ -16,6 +17,14 @@ afterEach(async () => {
 })
 
 describe('PrimaryRuntimeActivePointer', () => {
+  it('uses the full archive digest as the immutable release directory identity', () => {
+    const archiveSha256 = 'a'.repeat(64)
+    const versionDirectory = versionDirectoryForArchive(archiveSha256)
+
+    expect(versionDirectory).toBe(join('versions', archiveSha256))
+    expect(versionDirectory.length).toBeLessThanOrEqual('versions/'.length + 64)
+  })
+
   it('only exposes complete old or new version roots while swapping generations', async () => {
     const cacheRoot = await fixtureDirectory()
     const oldDirectory = 'versions/old-generation'

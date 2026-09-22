@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PrimaryRuntimeActivePointer,
   sha256File,
-  versionDirectoryForRelease
+  versionDirectoryForArchive
 } from './PrimaryRuntimeActivePointer'
 import { PrimaryRuntimeDiagnostics } from './PrimaryRuntimeDiagnostics'
 import { PrimaryRuntimeLocator } from './PrimaryRuntimeLocator'
@@ -555,10 +555,7 @@ describe('PrimaryRuntimeService', () => {
     expect(pointer).toMatchObject({
       version: '2026.9.7-fixture',
       archiveSha256: archive.descriptor.archiveSha256,
-      directory: versionDirectoryForRelease(
-        archive.descriptor.version,
-        archive.descriptor.archiveSha256
-      )
+      directory: versionDirectoryForArchive(archive.descriptor.archiveSha256)
     })
     await expect(service.loadDependencies()).resolves.toMatchObject({
       bundleVersion: '2026.9.7-fixture',
@@ -569,6 +566,18 @@ describe('PrimaryRuntimeService', () => {
     await expect(writeFile(join(versionRoot, 'runtime.json'), '{}')).rejects.toMatchObject({
       code: expect.stringMatching(/EACCES|EPERM/u)
     })
+  })
+
+  it('does not copy long release versions into the installed Runtime path', async () => {
+    const cacheRoot = await fixtureDirectory()
+    const bundleVersion = `${'c'.repeat(40)}-win32-x64-p1a-5`
+    const archive = await releaseArchive({ bundleVersion })
+    const service = runtimeServiceWithRelease(cacheRoot, archive)
+
+    const result = await service.install()
+
+    expect(result.activeRoot).toBe(join(cacheRoot, 'versions', archive.descriptor.archiveSha256))
+    expect(result.activeRoot).not.toContain(bundleVersion)
   })
 
   it('freezes every file when a Runtime tree spans multiple filesystem batches', async () => {
@@ -1130,7 +1139,7 @@ function manifest(overrides: Partial<PrimaryRuntimeManifest> = {}): PrimaryRunti
 
 async function publishFixtureRuntime(cacheRoot: string, bundleVersion: string): Promise<string> {
   const archiveSha256 = createHash('sha256').update(bundleVersion).digest('hex')
-  const directory = versionDirectoryForRelease(bundleVersion, archiveSha256)
+  const directory = versionDirectoryForArchive(archiveSha256)
   const root = await fixtureRuntime(join(cacheRoot, directory), { bundleVersion })
   await new PrimaryRuntimeActivePointer(cacheRoot).publish({
     version: bundleVersion,
@@ -1142,7 +1151,7 @@ async function publishFixtureRuntime(cacheRoot: string, bundleVersion: string): 
 }
 
 function releaseRoot(cacheRoot: string, descriptor: PrimaryRuntimeReleaseDescriptor): string {
-  return join(cacheRoot, versionDirectoryForRelease(descriptor.version, descriptor.archiveSha256))
+  return join(cacheRoot, versionDirectoryForArchive(descriptor.archiveSha256))
 }
 
 function runtimeServiceWithRelease(

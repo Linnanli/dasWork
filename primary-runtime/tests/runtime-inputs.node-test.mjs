@@ -699,7 +699,10 @@ test("Windows Runtime input verification isolates LibreOffice and bounds child c
   assert.match(patch, /Runtime LibreOffice conversion failed/u);
   assert.match(patch, /\+    command = \[soffice, \*user_installation, \*base_args\]/u);
   assert.match(patch, /str\(pptx_path\)/u);
-  assert.doesNotMatch(patch, /command_cwd|soffice_command|retry_profile|sibling_command/u);
+  assert.doesNotMatch(
+    patch,
+    /command_cwd|soffice_command|retry_profile|sibling_command|_windows_short_path|GetShortPathNameW/u,
+  );
   assert.doesNotMatch(patch, /_windows_render_input/u);
   assert.doesNotMatch(patch, /_windows_placeholder_render/u);
   assert.doesNotMatch(patch, /non-ASCII image descriptions/u);

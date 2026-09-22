@@ -8,7 +8,7 @@ import * as yauzl from 'yauzl'
 import {
   PrimaryRuntimeActivePointer,
   sha256File,
-  versionDirectoryForRelease
+  versionDirectoryForArchive
 } from './PrimaryRuntimeActivePointer'
 import { PrimaryRuntimeDiagnostics } from './PrimaryRuntimeDiagnostics'
 import type { PrimaryRuntimeReleaseProvider } from './PrimaryRuntimeReleaseProvider'
@@ -134,10 +134,7 @@ export class PrimaryRuntimeInstaller {
     })
     throwIfAborted(signal)
 
-    const stagingRoot = join(
-      this.input.cacheRoot,
-      `${STAGING_PREFIX}${safePathSegment(resolvedDescriptor.version)}-${randomUUID()}`
-    )
+    const stagingRoot = join(this.input.cacheRoot, `${STAGING_PREFIX}${randomUUID()}`)
     const extractedRoot = join(stagingRoot, 'runtime')
     try {
       this.reportProgress({ phase: 'installing' })
@@ -157,10 +154,7 @@ export class PrimaryRuntimeInstaller {
         throw new PrimaryRuntimeInstallValidationError(diagnostic)
       }
 
-      const versionDirectory = versionDirectoryForRelease(
-        resolvedDescriptor.version,
-        resolvedDescriptor.archiveSha256
-      )
+      const versionDirectory = versionDirectoryForArchive(resolvedDescriptor.archiveSha256)
       const versionRoot = join(this.input.cacheRoot, versionDirectory)
       await publishImmutableRuntime(extractedRoot, versionRoot, this.diagnostics)
       this.reportProgress({ phase: 'verifying' })
@@ -627,14 +621,6 @@ async function cleanupPartialDownloads(downloadsRoot: string): Promise<void> {
       .filter((entry) => entry.isFile() && entry.name.includes('.part-'))
       .map((entry) => rm(join(downloadsRoot, entry.name), { force: true }))
   )
-}
-
-function safePathSegment(value: string): string {
-  const segment = value.replace(/[^A-Za-z0-9._-]/gu, '_')
-  if (!segment || segment === '.' || segment === '..') {
-    throw new Error('Primary Runtime version cannot be represented as a safe directory name.')
-  }
-  return segment
 }
 
 function throwIfAborted(signal: AbortSignal): void {

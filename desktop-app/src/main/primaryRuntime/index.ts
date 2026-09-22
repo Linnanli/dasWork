@@ -2,7 +2,7 @@ export { PrimaryRuntimeDiagnostics } from './PrimaryRuntimeDiagnostics'
 export {
   PrimaryRuntimeActivePointer,
   parsePrimaryRuntimeActivePointer,
-  versionDirectoryForRelease
+  versionDirectoryForArchive
 } from './PrimaryRuntimeActivePointer'
 export {
   PrimaryRuntimeInstaller,

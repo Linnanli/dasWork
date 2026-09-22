@@ -320,15 +320,19 @@ index ffb73d91e3b592be9b5f373bd00b30d70ba4f9d7..12fcffa300c4a69c70cbdb5ee7153b1e
        } else {
          // Plain filename — resolve against outline dir.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea7c868c42 100755
+index f26dc65b164526140ad924028ab89dde80f3cfde..7edda1e41473a0fbcd0eed5f06a9c244bd730b7e 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,75 +45,86 @@ def _run(command: list[str]) -> None:
+@@ -45,75 +45,64 @@ def _run(command: list[str]) -> None:
          )
  
  
 -def _render_with_daemon_or_fallback(pptx_path: Path, out_dir: Path) -> Path:
 -    """Convert a .pptx to PDF using unoserver (if available) or soffice.
+-
+-    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
+-    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
+-    (~10-15s per call due to LibreOffice startup cost).
 +def _runtime_binary(variable: str) -> str:
 +    value = os.environ.get(variable, "").strip()
 +    candidate = Path(value).expanduser().resolve() if value else None
@@ -337,28 +341,13 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
 +            f"{variable} must name the Runtime-owned binary returned by "
 +            "load_workspace_dependencies."
 +        )
-+    return _windows_short_path(candidate)
- 
--    Tries ``unoconvert`` first (talks to a persistent LibreOffice daemon via
--    ``unoserver``, ~1s per call). Falls back to ``soffice --headless --convert-to``
--    (~10-15s per call due to LibreOffice startup cost).
-+def _windows_short_path(path: Path) -> str:
-+    """Use an 8.3 path for Runtime binaries when Windows exposes one.
++    return str(candidate)
  
 -    Returns the path to the resulting PDF inside ``out_dir``.
 -    Logs the chosen path and timing to stderr.
-+    Feed-installed Runtime versions contain immutable commit and archive
-+    digests, so their LibreOffice paths can approach Windows legacy path
-+    limits even though the archive itself is valid.  GetShortPathNameW is a
-+    compatibility fallback; on volumes without 8.3 names the long path is
-+    retained and the normal command path remains unchanged.
-     """
+-    """
 -    out_dir.mkdir(parents=True, exist_ok=True)
 -    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
-+    if os.name != "nt":
-+        return str(path)
-+    try:
-+        import ctypes
  
 -    if shutil.which("unoconvert"):
 -        t0 = time.perf_counter()
@@ -374,10 +363,7 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
 -            stderr=subprocess.PIPE,
 -            text=True,
 -            env=_soffice_env(),
-+        buffer = ctypes.create_unicode_buffer(32768)
-+        length = ctypes.windll.kernel32.GetShortPathNameW(
-+            str(path), buffer, len(buffer)
-         )
+-        )
 -        elapsed = time.perf_counter() - t0
 -        if result.returncode == 0 and expected_pdf.exists():
 -            # Quiet — one-liner with timing only. Daemon path is the
@@ -390,12 +376,6 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
 -            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
 -            "falling back to soffice",
 -            file=sys.stderr,
-+        if length:
-+            return buffer.value
-+    except (AttributeError, OSError, TypeError):
-+        pass
-+    return str(path)
-+
 +def _runtime_user_installation() -> list[str]:
 +    value = os.environ.get("PPTX_RUNTIME_SOFFICE_USER_INSTALLATION", "").strip()
 +    if not value:
@@ -406,6 +386,7 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
 +            "Runtime LibreOffice profile."
          )
 +    return [value]
++
  
 +def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
 +    """Convert a .pptx using only the supplied Runtime soffice binary."""
@@ -467,7 +448,7 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
      return expected_pdf
  
  
-@@ -179,12 +190,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +168,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -480,7 +461,7 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +206,19 @@ def main() -> int:
+@@ -201,23 +184,19 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  

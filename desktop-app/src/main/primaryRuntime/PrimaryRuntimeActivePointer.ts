@@ -149,7 +149,7 @@ export class PrimaryRuntimeActivePointer {
     if (diagnostic.status !== 'ready' || !diagnostic.manifest || !diagnostic.root) return
 
     const manifestSha256 = await sha256File(join(diagnostic.root, 'runtime.json'))
-    const directory = `legacy-${safePathSegment(diagnostic.manifest.bundleVersion)}-${manifestSha256}`
+    const directory = `legacy-${manifestSha256}`
     const destination = join(this.versionsRoot, directory)
     await mkdir(this.versionsRoot, { recursive: true })
     if (await pathExists(destination)) {
@@ -229,11 +229,11 @@ export function parsePrimaryRuntimeActivePointer(input: string): PrimaryRuntimeA
   return pointer
 }
 
-export function versionDirectoryForRelease(version: string, archiveSha256: string): string {
+export function versionDirectoryForArchive(archiveSha256: string): string {
   if (!/^[a-f0-9]{64}$/u.test(archiveSha256)) {
     throw new Error('Primary Runtime archive SHA256 must be lowercase hexadecimal.')
   }
-  return join(VERSIONS_DIRECTORY, `${safePathSegment(version)}-${archiveSha256}`)
+  return join(VERSIONS_DIRECTORY, archiveSha256)
 }
 
 export async function sha256File(path: string): Promise<string> {
@@ -257,14 +257,6 @@ function normalizedVersionDirectory(directory: string): string {
     throw new Error('Primary Runtime active pointer contains an invalid version directory.')
   }
   return normalized
-}
-
-function safePathSegment(value: string): string {
-  const segment = value.replace(/[^A-Za-z0-9._-]/gu, '_')
-  if (!segment || segment === '.' || segment === '..') {
-    throw new Error('Primary Runtime version cannot be represented as a safe directory name.')
-  }
-  return segment
 }
 
 function isPathInside(root: string, path: string): boolean {
