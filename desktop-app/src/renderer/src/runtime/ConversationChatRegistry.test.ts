@@ -642,7 +642,8 @@ describe('ConversationChatRegistry', () => {
   })
 
   it('clears a failed fallback only after a later turn settles successfully', async () => {
-    const { bridge, callbacks, registry, recoveryStorage } = registryFixture()
+    const { bridge, callbacks, registry, recoveryStorage, transcriptRecoveryStore } =
+      registryFixture()
     const entry = registry.getSnapshot().activeEntry
     const failedSend = entry.controller.sendMessage({
       id: 'failed-user',
@@ -661,6 +662,13 @@ describe('ConversationChatRegistry', () => {
     failedStream?.onError('network disconnect')
     await expect(failedSend).rejects.toThrow('network disconnect')
     expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).toContain('failed-turn')
+    transcriptRecoveryStore.saveActiveTextFallback('thread-recovery', [
+      {
+        id: 'assistant:failed-turn:message',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Visible before failure.' }]
+      }
+    ])
 
     const recoveredSend = entry.controller.sendMessage({
       id: 'recovered-user',
@@ -692,6 +700,9 @@ describe('ConversationChatRegistry', () => {
     expect(entry.status).toBe('ready')
     expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).toContain(
       '"recoveries":{}'
+    )
+    expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).not.toContain(
+      'Visible before failure.'
     )
   })
 

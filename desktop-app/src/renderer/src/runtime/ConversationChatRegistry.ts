@@ -28,7 +28,7 @@ import {
 } from './ConversationTranscriptController'
 import {
   ConversationTranscriptRecoveryStore,
-  hasFailedOrInterruptedTurn
+  latestAssistantTurnFailedOrInterrupted
 } from './ConversationTranscriptRecoveryStore'
 import { classifyConversationRecoveryError } from './classifyConversationRecoveryError'
 
@@ -689,7 +689,7 @@ export class ConversationChatRegistry {
         isRunningStatus(previousControllerStatus) &&
         snapshot.status === 'ready' &&
         !snapshot.error &&
-        !hasFailedOrInterruptedTurn(snapshot.messages)
+        !latestAssistantTurnFailedOrInterrupted(snapshot.messages)
       const semanticStatusChanged =
         previousControllerStatus !== snapshot.status || previousControllerError !== snapshot.error
       previousControllerStatus = snapshot.status

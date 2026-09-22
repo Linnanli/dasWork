@@ -124,12 +124,11 @@ type PendingActiveTextFallback = {
   baseRevision?: string | null
 }
 
-export function hasFailedOrInterruptedTurn(
+export function latestAssistantTurnFailedOrInterrupted(
   messages: readonly Pick<UIMessage, 'role' | 'metadata'>[]
 ): boolean {
-  return messages.some(
-    (message) => message.role === 'assistant' && Boolean(terminalFromMetadata(message.metadata))
-  )
+  const latestAssistant = messages.findLast((message) => message.role === 'assistant')
+  return latestAssistant ? Boolean(terminalFromMetadata(latestAssistant.metadata)) : false
 }
 
 /**
@@ -408,7 +407,11 @@ export class ConversationTranscriptRecoveryStore {
         remainingTerminals,
         remainingTools
       )
-      return mergeActiveTextIntoCanonicalTerminal(messageWithTerminalFallback, remainingActiveText)
+      return mergeActiveTextIntoCanonicalTerminal(
+        messageWithTerminalFallback,
+        remainingActiveText,
+        clonedHistory
+      )
     })
 
     const historyMessageIds = new Set(merged.map((message) => message.id))
@@ -1157,7 +1160,8 @@ function mergeTerminalFallbackIntoMessage(
 
 function mergeActiveTextIntoCanonicalTerminal(
   message: UIMessage,
-  remainingActiveText: Record<string, string>
+  remainingActiveText: Record<string, string>,
+  canonicalHistory: readonly UIMessage[]
 ): UIMessage {
   const terminal = terminalFromMetadata(message.metadata)
   if (!terminal) return message
@@ -1165,7 +1169,15 @@ function mergeActiveTextIntoCanonicalTerminal(
   const recoveredTexts = Object.entries(remainingActiveText).flatMap(([messageId, text]) => {
     if (turnIdFromAssistantSourceMessageId(messageId) !== terminal.turnId) return []
     delete remainingActiveText[messageId]
-    return message.parts.some((part) => part.type === 'text' && part.text.includes(text))
+    const textIsCanonical = canonicalHistory.some(
+      (candidate) =>
+        candidate.role === 'assistant' &&
+        (canonicalTurnId(candidate.metadata) === terminal.turnId ||
+          turnIdFromAssistantSourceMessageId(candidate.id) === terminal.turnId) &&
+        candidate.parts.some((part) => part.type === 'text' && part.text.includes(text))
+    )
+    return textIsCanonical ||
+      message.parts.some((part) => part.type === 'text' && part.text.includes(text))
       ? []
       : [text]
   })

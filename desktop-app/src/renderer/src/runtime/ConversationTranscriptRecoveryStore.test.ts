@@ -159,6 +159,39 @@ describe('ConversationTranscriptRecoveryStore', () => {
     expect(recoveriesFrom(storage)).toEqual({})
   })
 
+  it('does not duplicate active text already present in canonical history for the same turn', () => {
+    const storage = new MemoryStorage()
+    const store = new ConversationTranscriptRecoveryStore(storage)
+    store.saveActiveTextFallback('thread-1', [
+      {
+        id: 'assistant:turn-1:provider-message-1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Visible partial response.' }]
+      }
+    ])
+    const canonicalText: UIMessage = {
+      id: 'assistant:turn-1:provider-message-1',
+      role: 'assistant',
+      parts: [{ type: 'text', text: 'Visible partial response.' }],
+      metadata: { codexSource: { turnId: 'turn-1' } }
+    }
+    const canonicalTerminal: UIMessage = {
+      id: 'assistant:turn-1:terminal',
+      role: 'assistant',
+      parts: [],
+      metadata: { codexTurn: { turnId: 'turn-1', status: 'failed' } }
+    }
+
+    expect(
+      new ConversationTranscriptRecoveryStore(storage).mergeWithHistory('thread-1', [
+        serverUser,
+        canonicalText,
+        canonicalTerminal
+      ])
+    ).toEqual([serverUser, canonicalText, canonicalTerminal])
+    expect(recoveriesFrom(storage)).toEqual({})
+  })
+
   it('batches stream recovery writes and flushes the latest visible text on teardown', () => {
     vi.useFakeTimers()
     try {
