@@ -320,10 +320,10 @@ index ffb73d91e3b592be9b5f373bd00b30d70ba4f9d7..12fcffa300c4a69c70cbdb5ee7153b1e
        } else {
          // Plain filename — resolve against outline dir.
 diff --git a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa48dc1a2c 100755
+index f26dc65b164526140ad924028ab89dde80f3cfde..151170152135c6c859060ce09b0373ea7c868c42 100755
 --- a/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
 +++ b/plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py
-@@ -45,76 +45,114 @@ def _run(command: list[str]) -> None:
+@@ -45,75 +45,86 @@ def _run(command: list[str]) -> None:
          )
  
  
@@ -353,15 +353,43 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
 +    compatibility fallback; on volumes without 8.3 names the long path is
 +    retained and the normal command path remains unchanged.
      """
+-    out_dir.mkdir(parents=True, exist_ok=True)
+-    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
 +    if os.name != "nt":
 +        return str(path)
 +    try:
 +        import ctypes
-+
+ 
+-    if shutil.which("unoconvert"):
+-        t0 = time.perf_counter()
+-        result = subprocess.run(
+-            [
+-                "unoconvert",
+-                "--convert-to",
+-                "pdf",
+-                str(pptx_path),
+-                str(expected_pdf),
+-            ],
+-            stdout=subprocess.PIPE,
+-            stderr=subprocess.PIPE,
+-            text=True,
+-            env=_soffice_env(),
 +        buffer = ctypes.create_unicode_buffer(32768)
 +        length = ctypes.windll.kernel32.GetShortPathNameW(
 +            str(path), buffer, len(buffer)
-+        )
+         )
+-        elapsed = time.perf_counter() - t0
+-        if result.returncode == 0 and expected_pdf.exists():
+-            # Quiet — one-liner with timing only. Daemon path is the
+-            # expected fast path; no nagging banner.
+-            print(f"[render] PDF via unoserver in {elapsed:.2f}s", file=sys.stderr)
+-            return expected_pdf
+-        # Non-zero exit or missing artifact: log and fall through to soffice.
+-        err = (result.stderr.strip() or result.stdout.strip() or "no output")
+-        print(
+-            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
+-            "falling back to soffice",
+-            file=sys.stderr,
 +        if length:
 +            return buffer.value
 +    except (AttributeError, OSError, TypeError):
@@ -376,15 +404,13 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
 +        raise RuntimeError(
 +            "PPTX_RUNTIME_SOFFICE_USER_INSTALLATION must name an isolated "
 +            "Runtime LibreOffice profile."
-+        )
+         )
 +    return [value]
-+
+ 
 +def _render_with_runtime_soffice(pptx_path: Path, out_dir: Path) -> Path:
 +    """Convert a .pptx using only the supplied Runtime soffice binary."""
-     out_dir.mkdir(parents=True, exist_ok=True)
-     expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
--
--    if shutil.which("unoconvert"):
++    out_dir.mkdir(parents=True, exist_ok=True)
++    expected_pdf = out_dir / f"{pptx_path.stem}.pdf"
 +    soffice = _runtime_binary("PPTX_RUNTIME_SOFFICE")
 +    user_installation = _runtime_user_installation()
 +    base_args = [
@@ -395,63 +421,8 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
 +        str(out_dir),
 +        str(pptx_path),
 +    ]
-+    executable = Path(soffice)
-+    command_cwd = str(executable.parent) if os.name == "nt" else None
-+    soffice_command = executable.name if os.name == "nt" else soffice
-+    sibling = executable.with_suffix(".exe")
-+    commands = [
-+        [
-+            soffice_command,
-+            *user_installation,
-+            *base_args,
-+        ]
-+    ]
-+    if executable.suffix.lower() == ".com" and sibling.is_file():
-+        sibling_command = sibling.name if os.name == "nt" else str(sibling)
-+        commands.append([sibling_command, *user_installation, *base_args])
-+    retry_profile = out_dir / "libreoffice-retry-profile"
-+    retry_profile.mkdir(parents=True, exist_ok=True)
-+    retry_installation = [f"-env:UserInstallation={retry_profile.as_uri()}"]
-+    if retry_installation != user_installation:
-+        commands.append([soffice_command, *retry_installation, *base_args])
-+        if executable.suffix.lower() == ".com" and sibling.is_file():
-+            commands.append([sibling_command, *retry_installation, *base_args])
-+    attempts = []
-+    for command in commands:
-         t0 = time.perf_counter()
-         result = subprocess.run(
--            [
--                "unoconvert",
--                "--convert-to",
--                "pdf",
--                str(pptx_path),
--                str(expected_pdf),
--            ],
-+            command,
-             stdout=subprocess.PIPE,
-             stderr=subprocess.PIPE,
-             text=True,
-             env=_soffice_env(),
-+            cwd=command_cwd,
-         )
-         elapsed = time.perf_counter() - t0
--        if result.returncode == 0 and expected_pdf.exists():
--            # Quiet — one-liner with timing only. Daemon path is the
--            # expected fast path; no nagging banner.
--            print(f"[render] PDF via unoserver in {elapsed:.2f}s", file=sys.stderr)
--            return expected_pdf
--        # Non-zero exit or missing artifact: log and fall through to soffice.
--        err = (result.stderr.strip() or result.stdout.strip() or "no output")
--        print(
--            f"[render] unoconvert failed ({elapsed:.2f}s): {err}; "
--            "falling back to soffice",
--            file=sys.stderr,
-+        output = result.stderr.strip() or result.stdout.strip() or "No error output."
-+        attempts.append(
-+            f"exit={result.returncode} elapsed={elapsed:.2f}s {' '.join(command)}: {output}"
-         )
--
--    t0 = time.perf_counter()
++    command = [soffice, *user_installation, *base_args]
+     t0 = time.perf_counter()
 -    _run(
 -        [
 -            "soffice",
@@ -462,19 +433,14 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
 -            str(out_dir),
 -            str(pptx_path),
 -        ]
-+        if expected_pdf.exists():
-+            if result.returncode != 0:
-+                print(
-+                    f"[render] Runtime soffice returned {result.returncode} after writing the PDF: {output}",
-+                    file=sys.stderr,
-+                )
-+            print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
-+            return expected_pdf
-+    raise RuntimeError(
-+        "Runtime LibreOffice did not produce the expected PDF after "
-+        f"{len(attempts)} attempts:\n" + "\n".join(attempts)
++    result = subprocess.run(
++        command,
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++        text=True,
++        env=_soffice_env(),
      )
--    elapsed = time.perf_counter() - t0
+     elapsed = time.perf_counter() - t0
 -    # Terse by default. Emit the "install unoserver" hint only on a truly
 -    # cold start (≥8s) — the usual case on first build after a reboot —
 -    # so repeated rapid rebuilds don't nag with the same line every run.
@@ -484,16 +450,24 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
 -            "install unoserver for ~15x speedup "
 -            "(`pip install unoserver && unoserver &`)",
 -            file=sys.stderr,
--        )
++    output = result.stderr.strip() or result.stdout.strip() or "No error output."
++    if result.returncode != 0:
++        raise RuntimeError(
++            "Runtime LibreOffice conversion failed:\n"
++            + f"exit={result.returncode} elapsed={elapsed:.2f}s {' '.join(command)}: {output}"
+         )
 -    else:
 -        print(f"[render] PDF via soffice in {elapsed:.2f}s", file=sys.stderr)
--    if not expected_pdf.exists():
+     if not expected_pdf.exists():
 -        raise FileNotFoundError(f"Expected converted PDF not found: {expected_pdf}")
--    return expected_pdf
++        raise FileNotFoundError(
++            "Runtime LibreOffice reported success without producing the expected PDF."
++        )
++    print(f"[render] PDF via Runtime soffice in {elapsed:.2f}s", file=sys.stderr)
+     return expected_pdf
  
  
- def _args() -> argparse.Namespace:
-@@ -179,12 +217,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
+@@ -179,12 +190,6 @@ def _emit_visual_prompt(jpg_paths: list[Path]) -> None:
      print("=" * 72)
  
  
@@ -506,7 +480,7 @@ index f26dc65b164526140ad924028ab89dde80f3cfde..263741b04df09b53bdf7687e83a206aa
  def _sort_key(path: Path, prefix: str) -> int:
      suffix = path.stem.replace(prefix, "").lstrip("-")
      try:
-@@ -201,23 +233,19 @@ def main() -> int:
+@@ -201,23 +206,19 @@ def main() -> int:
      if not input_path.exists():
          raise FileNotFoundError(f"Input file not found: {input_path}")
  
