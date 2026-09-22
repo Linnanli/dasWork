@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -14,6 +14,8 @@ import { PLUGIN_CENTER_API_VERSION } from '../../../../shared/pluginCenterApi'
 import { PluginCenterPage, type PluginCenterSurface } from './PluginCenterPage'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const roots: Root[] = []
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -31,7 +33,11 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await act(async () => {
+    for (const root of roots.splice(0)) root.unmount()
+  })
+  document.body.replaceChildren()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -272,6 +278,7 @@ async function renderPluginCenter(
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   const root = createRoot(container)
+  roots.push(root)
   const page = (
     <PluginCenterPage
       surface={surface}
