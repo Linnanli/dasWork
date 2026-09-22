@@ -151,7 +151,7 @@ function ReadyReviewDiffStack({
   return (
     <div
       ref={scrollContainerRef}
-      className="min-h-0 flex-1 overflow-auto [overflow-anchor:none]"
+      className="min-h-0 min-w-0 flex-1 overflow-auto [overflow-anchor:none]"
       data-review-diff-scroll-height={Math.ceil(totalHeight)}
     >
       <div className="flex flex-col">

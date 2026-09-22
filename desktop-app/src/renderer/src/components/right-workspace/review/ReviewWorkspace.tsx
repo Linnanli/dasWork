@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 
 import { useLocalGitReview } from '@/components/local-git-review/LocalGitReviewProvider'
 import { ReviewDiffStack } from './ReviewDiffStack'
@@ -13,6 +13,7 @@ export function ReviewWorkspace(): React.JSX.Element {
   const {
     acknowledgeReviewOpenIntent,
     getGitWorkflow,
+    isGitWorkflowActive,
     lastTurn,
     notifyGitOperation,
     reviewOpenIntent,
@@ -21,9 +22,14 @@ export function ReviewWorkspace(): React.JSX.Element {
     target
   } = useLocalGitReview()
   const workflowActive = Boolean(target && getGitWorkflow(target))
+  const isWorkflowActive = useCallback(
+    () => Boolean(target && isGitWorkflowActive(target)),
+    [isGitWorkflowActive, target]
+  )
   const controller = useReviewWorkspaceController({
     target,
     workflowActive,
+    isWorkflowActive,
     source,
     lastTurn,
     reviewOpenIntent,
@@ -49,7 +55,7 @@ export function ReviewWorkspace(): React.JSX.Element {
           审阅快照已过期，写操作已暂停，刷新成功后会自动恢复。
         </div>
       ) : null}
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1">
         <ReviewDiffWorkerPool lineDiffType={controller.preferences.lineDiffType}>
           <ReviewDiffStack controller={controller} />
         </ReviewDiffWorkerPool>

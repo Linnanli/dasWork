@@ -235,6 +235,7 @@ import type { ConversationDraftAttachment } from './runtime/ConversationDraftSto
 import { captureConversationScroll, restoreConversationScroll } from './runtime/conversationScroll'
 import {
   countConversationStreamPerformance,
+  isConversationStreamPerformanceEnabled,
   markConversationStreamCommit,
   markConversationStreamEvent,
   scheduleConversationStreamNextFrame
@@ -2303,28 +2304,51 @@ function useConversationScrollRestoration(
 
 function useViewportIdentityProbe(viewportRef: React.RefObject<HTMLDivElement | null>): void {
   const previousNodeRef = useRef<HTMLDivElement | null>(null)
+  const collectionActiveRef = useRef(false)
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
-    if (!viewport || viewport === previousNodeRef.current) return
+    if (!isConversationStreamPerformanceEnabled()) {
+      collectionActiveRef.current = false
+      previousNodeRef.current = viewport
+      return
+    }
+
+    if (!collectionActiveRef.current) {
+      collectionActiveRef.current = true
+      previousNodeRef.current = viewport
+      if (viewport) {
+        countConversationStreamPerformance('forwardedRefAttachCount')
+        markConversationStreamEvent('viewport-ref-attach')
+      }
+      return
+    }
+
+    if (viewport === previousNodeRef.current) return
 
     if (previousNodeRef.current) {
       countConversationStreamPerformance('forwardedRefDetachCount')
       markConversationStreamEvent('viewport-ref-detach')
-      countConversationStreamPerformance('nodeReplacementCount')
-      markConversationStreamEvent('viewport-node-replaced')
+      if (viewport) {
+        countConversationStreamPerformance('nodeReplacementCount')
+        markConversationStreamEvent('viewport-node-replaced')
+      }
     }
 
-    countConversationStreamPerformance('forwardedRefAttachCount')
-    markConversationStreamEvent('viewport-ref-attach')
+    if (viewport) {
+      countConversationStreamPerformance('forwardedRefAttachCount')
+      markConversationStreamEvent('viewport-ref-attach')
+    }
     previousNodeRef.current = viewport
   })
 
   useEffect(
     () => () => {
-      if (!previousNodeRef.current) return
-      countConversationStreamPerformance('forwardedRefDetachCount')
-      markConversationStreamEvent('viewport-ref-detach')
+      if (collectionActiveRef.current && previousNodeRef.current) {
+        countConversationStreamPerformance('forwardedRefDetachCount')
+        markConversationStreamEvent('viewport-ref-detach')
+      }
+      collectionActiveRef.current = false
       previousNodeRef.current = null
     },
     []

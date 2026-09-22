@@ -45,6 +45,10 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
+      - name: Prepare Codex workspace sandbox on Linux
+        shell: bash
+        run: bash desktop-app/scripts/prepare-codex-linux-sandbox.sh
+
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
         working-directory: desktop-app

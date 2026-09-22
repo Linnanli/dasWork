@@ -51,7 +51,8 @@ export function useReviewWorkspaceController({
   reviewOpenIntent,
   source,
   target,
-  workflowActive = false
+  workflowActive = false,
+  isWorkflowActive
 }: ReviewWorkspaceControllerInput): ReviewWorkspaceController {
   const initialDisplaySource = useMemo<ReviewDisplaySource>(
     () => (reviewOpenIntent ? { type: 'uncommitted' } : defaultDisplaySource(source)),
@@ -340,14 +341,14 @@ export function useReviewWorkspaceController({
         event.target.cwd === target.cwd &&
         event.target.gitRoot === target.gitRoot
       ) {
-        if (workflowActive || loadStateRef.current.status === 'loading') {
+        if (isWorkflowActive?.() || loadStateRef.current.status === 'loading') {
           pendingGitChangeRefreshRef.current = true
           return
         }
         void load(displaySource)
       }
     })
-  }, [displaySource, load, target, workflowActive])
+  }, [displaySource, isWorkflowActive, load, target])
 
   useEffect(() => {
     if (workflowActive || !pendingGitChangeRefreshRef.current || loadState.status === 'loading') {

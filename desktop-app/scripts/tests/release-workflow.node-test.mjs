@@ -28,6 +28,10 @@ const pinnedCodexCliVerifierPath = resolve(
   repositoryRoot,
   'desktop-app/scripts/verify-pinned-codex-cli.mjs'
 )
+const linuxSandboxSetupPath = resolve(
+  repositoryRoot,
+  'desktop-app/scripts/prepare-codex-linux-sandbox.sh'
+)
 
 test('locked Codex CLI verification executes the installed package entrypoint directly', async () => {
   const verifierSource = await readFile(pinnedCodexCliVerifierPath, 'utf8')
@@ -99,6 +103,32 @@ test('release workflows use the locked Codex CLI without remote script execution
     assert.match(workflow, /Upload native runtime boundary report/u)
     assert.match(workflow, /native-runtime-boundaries\.json/u)
     assert.doesNotMatch(workflow, /codex:generate-types/u)
+  }
+})
+
+test('Linux desktop gates provision and preflight the supported Codex sandbox', async () => {
+  const [releaseWorkflow, testPlanWorkflow, sandboxSetup] = await Promise.all([
+    readFile(releaseWorkflowPath, 'utf8'),
+    readFile(testPlanWorkflowPath, 'utf8'),
+    readFile(linuxSandboxSetupPath, 'utf8')
+  ])
+
+  assert.match(sandboxSetup, /apt-get install --yes bubblewrap apparmor-profiles apparmor-utils/u)
+  assert.match(sandboxSetup, /bwrap-userns-restrict/u)
+  assert.match(sandboxSetup, /apparmor_parser -r/u)
+  assert.match(sandboxSetup, /codex sandbox -- \/bin\/true/u)
+  assert.doesNotMatch(sandboxSetup, /apparmor_restrict_unprivileged_userns=0/u)
+  assert.doesNotMatch(sandboxSetup, /unprivileged_userns_clone=1/u)
+
+  for (const workflow of [releaseWorkflow, testPlanWorkflow]) {
+    assert.match(workflow, /Prepare Codex workspace sandbox on Linux/u)
+    assert.match(workflow, /bash desktop-app\/scripts\/prepare-codex-linux-sandbox\.sh/u)
+    assert.ok(
+      workflow.indexOf('Prepare Codex workspace sandbox on Linux') <
+        workflow.indexOf('Run Mock E2E')
+    )
+    assert.doesNotMatch(workflow, /apparmor_restrict_unprivileged_userns=0/u)
+    assert.doesNotMatch(workflow, /unprivileged_userns_clone=1/u)
   }
 })
 

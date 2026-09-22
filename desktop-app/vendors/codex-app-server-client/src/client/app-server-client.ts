@@ -293,6 +293,16 @@ export class AppServerClient {
   }
 
   /**
+   * Wait until notifications already received from the ordered transport have
+   * finished dispatching to consumers. Responses intentionally bypass the
+   * notification queue, so streaming clients use this before finalizing state
+   * that is assembled from notifications sent ahead of a response.
+   */
+  async waitForQueuedNotifications(): Promise<void> {
+    await this.notificationDispatch
+  }
+
+  /**
    * Receives the first unexpected transport error or close for this client.
    * Explicit disconnect removes the underlying listeners before closing, so it
    * never calls these handlers.

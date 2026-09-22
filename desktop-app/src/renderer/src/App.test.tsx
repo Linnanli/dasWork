@@ -2488,6 +2488,32 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="local-branch-switcher"]')).toBeNull()
   })
 
+  it('records the mounted viewport when performance collection starts after initial render', async () => {
+    const performanceTarget = globalThis as typeof globalThis & {
+      __DASCOWORK_CONVERSATION_PERF_COUNTS__?: Record<string, number>
+    }
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = false
+    delete performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__
+
+    await renderApp()
+
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = true
+    performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__ = {}
+    await renderApp()
+
+    expect(performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__).toMatchObject({
+      forwardedRefAttachCount: 1
+    })
+
+    await renderApp()
+    expect(performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__).toMatchObject({
+      forwardedRefAttachCount: 1
+    })
+
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = false
+    delete performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__
+  })
+
   it('hides the Git branch control and does not render a duplicate Review action', async () => {
     runtimeState.activeConversation = {
       conversationId: 'conversation-remote-git',

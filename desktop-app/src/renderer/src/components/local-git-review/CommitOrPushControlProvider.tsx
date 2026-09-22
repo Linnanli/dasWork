@@ -49,15 +49,19 @@ export function CommitOrPushControlProvider({
   children: ReactNode
 }): React.JSX.Element {
   const repository = useGitRepository()
-  const { finishGitWorkflow, notifyGitOperation, startGitWorkflow, updateGitWorkflow } =
-    useLocalGitReview()
+  const {
+    finishGitWorkflow,
+    isGitWorkflowActive,
+    notifyGitOperation,
+    startGitWorkflow,
+    updateGitWorkflow
+  } = useLocalGitReview()
   const target = repository.status === 'ready' ? repository.target : undefined
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<CommitOrPushDialogStatus>()
   const [branches, setBranches] = useState<LocalBranchSummary>()
   const [pending, setPending] = useState(false)
   const [refreshVersion, setRefreshVersion] = useState(0)
-  const dialogOpenRef = useRef(open)
   const dialogOriginRef = useRef<CommitOrPushControlOrigin>('summary-panel')
   const triggerRefs = useRef<Partial<Record<CommitOrPushControlOrigin, HTMLElement | null>>>({})
   const targetKey = gitTargetKey(target)
@@ -69,7 +73,6 @@ export function CommitOrPushControlProvider({
     activeTargetKeyRef.current = targetKey
     statusRequestRef.current += 1
     branchesRequestRef.current += 1
-    dialogOpenRef.current = false
     setOpen(false)
     setStatus(undefined)
     setBranches(undefined)
@@ -87,7 +90,6 @@ export function CommitOrPushControlProvider({
   )
 
   const setDialogOpen = useCallback((nextOpen: boolean): void => {
-    dialogOpenRef.current = nextOpen
     setOpen(nextOpen)
     if (!nextOpen) {
       window.requestAnimationFrame(() => triggerRefs.current[dialogOriginRef.current]?.focus())
@@ -158,10 +160,11 @@ export function CommitOrPushControlProvider({
       ) {
         return
       }
+      if (isGitWorkflowActive(target)) return
       bumpRefreshVersion()
-      if (dialogOpenRef.current) void refreshStatus()
+      void refreshStatus()
     })
-  }, [bumpRefreshVersion, refreshStatus, target])
+  }, [bumpRefreshVersion, isGitWorkflowActive, refreshStatus, target])
 
   const openDialog = useCallback(
     async (origin: CommitOrPushControlOrigin = 'summary-panel'): Promise<void> => {

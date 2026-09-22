@@ -36,6 +36,10 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
+      - name: Prepare Codex workspace sandbox on Linux
+        shell: bash
+        run: bash desktop-app/scripts/prepare-codex-linux-sandbox.sh
+
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
         working-directory: desktop-app
@@ -83,16 +87,6 @@ jobs:
           npm run lint
           npm run typecheck
           npm test
-
-      - name: Enable Codex workspace sandbox on Linux
-        shell: bash
-        run: |
-          if sysctl -a 2>/dev/null | grep -q '^kernel.apparmor_restrict_unprivileged_userns'; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          if sysctl -a 2>/dev/null | grep -q '^kernel.unprivileged_userns_clone'; then
-            sudo sysctl -w kernel.unprivileged_userns_clone=1
-          fi
 
       - name: Verify test-plan coverage contract
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:plan-coverage
@@ -185,6 +179,11 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
+      - name: Prepare Codex workspace sandbox on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash desktop-app/scripts/prepare-codex-linux-sandbox.sh
+
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
         working-directory: desktop-app
@@ -197,18 +196,10 @@ jobs:
         run: npm run ${{ matrix.command }} -- --${{ matrix.arch }}
         working-directory: desktop-app
 
-      - name: Enable Codex workspace sandbox on Linux
+      - name: Install Linux installer smoke dependencies
         if: runner.os == 'Linux'
         shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes squashfs-tools
-          if sysctl -a 2>/dev/null | grep -q '^kernel.apparmor_restrict_unprivileged_userns'; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          if sysctl -a 2>/dev/null | grep -q '^kernel.unprivileged_userns_clone'; then
-            sudo sysctl -w kernel.unprivileged_userns_clone=1
-          fi
+        run: sudo apt-get install --yes squashfs-tools
 
       - name: Smoke-test Linux installer
         if: runner.os == 'Linux'
