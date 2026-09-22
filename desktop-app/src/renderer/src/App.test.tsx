@@ -1770,6 +1770,24 @@ describe('App composer', () => {
     expect(runtimeState.setActiveDraftAttachments).toHaveBeenLastCalledWith([])
   })
 
+  it('keeps the composer mounted when a new conversation receives its durable thread id', async () => {
+    await renderApp()
+
+    const composer = container.querySelector('[data-testid="lexical-composer-input"]')
+    expect(composer).not.toBeNull()
+
+    runtimeState.activeEntry.context = {
+      ...runtimeState.activeEntry.context,
+      threadId: 'thread-after-send'
+    }
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="lexical-composer-input"]')).toBe(composer)
+  })
+
   it('loads the unified context catalog for the selected project', async () => {
     const listContext = vi.mocked(window.desktopApp.composerContext.list)
 

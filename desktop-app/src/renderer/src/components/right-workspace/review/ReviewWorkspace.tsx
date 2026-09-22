@@ -12,6 +12,7 @@ import { markReviewPerformance } from './reviewPerformance'
 export function ReviewWorkspace(): React.JSX.Element {
   const {
     acknowledgeReviewOpenIntent,
+    getGitWorkflow,
     lastTurn,
     notifyGitOperation,
     reviewOpenIntent,
@@ -19,8 +20,10 @@ export function ReviewWorkspace(): React.JSX.Element {
     source,
     target
   } = useLocalGitReview()
+  const workflowActive = Boolean(target && getGitWorkflow(target))
   const controller = useReviewWorkspaceController({
     target,
+    workflowActive,
     source,
     lastTurn,
     reviewOpenIntent,

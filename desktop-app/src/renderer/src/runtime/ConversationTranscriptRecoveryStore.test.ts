@@ -130,6 +130,35 @@ describe('ConversationTranscriptRecoveryStore', () => {
     expect(restored[1]?.metadata).toBeUndefined()
   })
 
+  it('merges already-rendered active text into canonical failed history for the same turn', () => {
+    const storage = new MemoryStorage()
+    const store = new ConversationTranscriptRecoveryStore(storage)
+    store.saveActiveTextFallback('thread-1', [
+      {
+        id: 'assistant:turn-1:provider-message-1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Visible partial response.' }]
+      }
+    ])
+
+    const restored = new ConversationTranscriptRecoveryStore(storage).mergeWithHistory('thread-1', [
+      serverUser,
+      {
+        id: 'assistant:turn-1:terminal',
+        role: 'assistant',
+        parts: [],
+        metadata: { codexTurn: { turnId: 'turn-1', status: 'failed' } }
+      }
+    ])
+
+    expect(restored[1]).toEqual(
+      expect.objectContaining({
+        parts: [{ type: 'text', text: 'Visible partial response.' }]
+      })
+    )
+    expect(recoveriesFrom(storage)).toEqual({})
+  })
+
   it('batches stream recovery writes and flushes the latest visible text on teardown', () => {
     vi.useFakeTimers()
     try {

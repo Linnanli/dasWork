@@ -172,6 +172,7 @@ export type ReviewWorkspacePreferences = {
 
 export type ReviewWorkspaceControllerInput = {
   target?: LocalGitTarget
+  workflowActive?: boolean
   source: LocalGitReviewSource
   lastTurn?: LocalGitReviewLastTurn
   reviewOpenIntent?: ReviewOpenIntent

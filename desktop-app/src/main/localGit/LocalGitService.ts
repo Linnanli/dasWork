@@ -573,31 +573,24 @@ export class LocalGitService {
   async getWatchState(target: LocalGitTarget): Promise<LocalGitWatchState> {
     const { repository } = await this.resolveTrustedRepository(target)
     const gitRoot = repository.root
-    const [
-      config,
-      head,
-      index,
-      remoteRefs,
-      syncedBranch,
-      worktreeTopology,
-      worktreeDiff,
-      status,
-      stateHash
-    ] = await Promise.all([
-      readWatchOutput(repository, ['config', '--local', '--list', '--show-origin']),
-      readWatchOutput(repository, ['rev-parse', 'HEAD']),
-      readWatchOutput(repository, ['diff', '--cached', '--raw', '-z']),
-      readWatchOutput(repository, [
-        'for-each-ref',
-        '--format=%(refname)%00%(objectname)',
-        'refs/remotes'
-      ]),
-      readWatchOutput(repository, ['status', '--branch', '--porcelain=v1', '-z']),
-      readWatchOutput(repository, ['worktree', 'list', '--porcelain']),
-      readWatchOutput(repository, ['diff', '--raw', '-z']),
-      readWatchOutput(repository, ['status', '--porcelain=v1', '-z']),
-      computeWorkspaceStateHash(repository)
-    ])
+    const [config, head, index, remoteRefs, branchStatus, worktreeTopology, worktreeDiff] =
+      await Promise.all([
+        readWatchOutput(repository, ['config', '--local', '--list', '--show-origin']),
+        readWatchOutput(repository, ['rev-parse', 'HEAD']),
+        readWatchOutput(repository, ['diff', '--cached', '--raw', '-z']),
+        readWatchOutput(repository, [
+          'for-each-ref',
+          '--format=%(refname)%00%(objectname)',
+          'refs/remotes'
+        ]),
+        readWatchOutput(repository, ['status', '--branch', '--porcelain=v1', '-z']),
+        readWatchOutput(repository, ['worktree', 'list', '--porcelain']),
+        readWatchOutput(repository, ['diff', '--raw', '-z'])
+      ])
+    const { branch: syncedBranch, status } = splitBranchStatus(branchStatus)
+    const stateHash = sha256(
+      [untrackedPathsFromPorcelain(status).join('\0'), worktreeDiff, index, head].join('\0')
+    )
     const snapshotGeneration = randomUUID()
     this.snapshots.rememberState(snapshotGeneration, gitRoot, stateHash)
     return {
@@ -1116,7 +1109,7 @@ async function readWatchOutput(
   args: readonly string[]
 ): Promise<string> {
   try {
-    return (await runGit(repository, args)).stdout
+    return (await runGit(repository, args, { priority: 'background' })).stdout
   } catch {
     // Some repositories have no HEAD, upstream, or remotes. A missing optional
     // fingerprint is still a stable observable state for the watcher.
@@ -1139,6 +1132,22 @@ function pathsFromPorcelain(output: string): string[] {
     }
   }
   return [...paths]
+}
+
+function splitBranchStatus(output: string): { branch: string; status: string } {
+  const separator = output.indexOf('\0')
+  if (separator < 0) return { branch: output, status: '' }
+  return {
+    branch: output.slice(0, separator),
+    status: output.slice(separator + 1)
+  }
+}
+
+function untrackedPathsFromPorcelain(output: string): string[] {
+  return output
+    .split('\0')
+    .filter((entry) => entry.startsWith('?? '))
+    .map((entry) => entry.slice(3))
 }
 
 function staleSnapshotResult(): LocalGitMutationResult {

@@ -159,7 +159,7 @@ export function CommitOrPushControlProvider({
         return
       }
       bumpRefreshVersion()
-      void refreshStatus()
+      if (dialogOpenRef.current) void refreshStatus()
     })
   }, [bumpRefreshVersion, refreshStatus, target])
 

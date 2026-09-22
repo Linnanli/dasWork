@@ -416,6 +416,69 @@ describe('NativeCodexRunDriver turn activity', () => {
 })
 
 describe('NativeCodexRunDriver Goal lifecycle', () => {
+  it('does not finish Goal control on the stale goal snapshot emitted by thread/resume', async () => {
+    const goalResponse = deferred<{
+      goal: {
+        threadId: string
+        objective: string
+        status: 'active'
+        tokenBudget: null
+        tokensUsed: number
+        timeUsedSeconds: number
+        createdAt: number
+        updatedAt: number
+      }
+    }>()
+    const goal = {
+      threadId: 'thread-existing',
+      objective: '继续现有任务',
+      status: 'active' as const,
+      tokenBudget: null,
+      tokensUsed: 0,
+      timeUsedSeconds: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const client = new FakeAppServerClient(async (method) => {
+      if (method === 'thread/resume') return { thread: { id: 'thread-existing' } }
+      if (method === 'thread/goal/set') return goalResponse.promise
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    const observedGoals: unknown[] = []
+    const run = driverWithClient(client).start({
+      messages: [],
+      modelId: 'test-model',
+      resumeThreadId: 'thread-existing',
+      goalControl: true,
+      goalContinuous: true,
+      signal: new AbortController().signal,
+      onThreadGoalUpdated: ({ goal: nextGoal }) => {
+        observedGoals.push(nextGoal)
+      },
+      onSessionCreated: async (session) => {
+        await session.setThreadGoal({ objective: goal.objective, status: 'active' })
+      }
+    })
+    let streamReleased = false
+    const draining = drain(run.events).then(() => {
+      streamReleased = true
+    })
+
+    await vi.waitFor(() =>
+      expect(client.request.mock.calls.some(([method]) => method === 'thread/goal/set')).toBe(true)
+    )
+    await client.emitNotification('thread/goal/cleared', { threadId: 'thread-existing' })
+    expect(streamReleased).toBe(false)
+
+    goalResponse.resolve({ goal })
+    await run.session
+    await client.emitNotification('thread/goal/cleared', { threadId: 'thread-existing' })
+    await draining
+
+    expect(observedGoals).toEqual([null, null])
+    expect(streamReleased).toBe(true)
+  })
+
   it('starts the framed first turn before setting a fresh Goal and unwraps the response', async () => {
     const methods: string[] = []
     const turnInputs: unknown[] = []

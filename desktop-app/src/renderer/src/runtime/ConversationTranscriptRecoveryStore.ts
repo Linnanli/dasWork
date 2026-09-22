@@ -124,6 +124,14 @@ type PendingActiveTextFallback = {
   baseRevision?: string | null
 }
 
+export function hasFailedOrInterruptedTurn(
+  messages: readonly Pick<UIMessage, 'role' | 'metadata'>[]
+): boolean {
+  return messages.some(
+    (message) => message.role === 'assistant' && Boolean(terminalFromMetadata(message.metadata))
+  )
+}
+
 /**
  * Stores renderer-owned local attachment metadata and a short-lived terminal
  * fallback. The fallback keeps text already rendered to the user, but tool
@@ -365,6 +373,7 @@ export class ConversationTranscriptRecoveryStore {
     const remainingAttachments = { ...recovery.attachmentsByMessageId }
     const remainingTerminals = { ...recovery.terminalByMessageId }
     const remainingTools = { ...recovery.toolsByMessageId }
+    const remainingActiveText = { ...recovery.activeTextByMessageId }
     for (const messageId of terminalMessageIdsSupersededByCanonicalHistory(
       remainingTerminals,
       clonedHistory
@@ -388,7 +397,7 @@ export class ConversationTranscriptRecoveryStore {
       if (attachments && missingAttachments.length === 0) delete remainingAttachments[message.id]
       else if (attachments) remainingAttachments[message.id] = missingAttachments
 
-      return mergeTerminalFallbackIntoMessage(
+      const messageWithTerminalFallback = mergeTerminalFallbackIntoMessage(
         missingAttachments.length === 0
           ? message
           : {
@@ -399,6 +408,7 @@ export class ConversationTranscriptRecoveryStore {
         remainingTerminals,
         remainingTools
       )
+      return mergeActiveTextIntoCanonicalTerminal(messageWithTerminalFallback, remainingActiveText)
     })
 
     const historyMessageIds = new Set(merged.map((message) => message.id))
@@ -415,14 +425,15 @@ export class ConversationTranscriptRecoveryStore {
     if (
       resolvedRecoveryOverlay ||
       revisionChanged ||
-      !sameRecoveryKeys(recovery, remainingTerminals, remainingTools)
+      !sameRecoveryKeys(recovery, remainingTerminals, remainingTools) ||
+      !sameKeys(recovery.activeTextByMessageId, remainingActiveText)
     ) {
       const next = { ...this.recoveries }
       if (
         Object.keys(remainingAttachments).length === 0 &&
         Object.keys(remainingTerminals).length === 0 &&
         Object.keys(remainingTools).length === 0 &&
-        Object.keys(recovery.activeTextByMessageId).length === 0
+        Object.keys(remainingActiveText).length === 0
       ) {
         delete next[identity]
       } else {
@@ -432,7 +443,7 @@ export class ConversationTranscriptRecoveryStore {
           attachmentsByMessageId: remainingAttachments,
           terminalByMessageId: remainingTerminals,
           toolsByMessageId: remainingTools,
-          activeTextByMessageId: recovery.activeTextByMessageId
+          activeTextByMessageId: remainingActiveText
         }
       }
       this.recoveries = next
@@ -1142,6 +1153,33 @@ function mergeTerminalFallbackIntoMessage(
         }
       : {})
   }
+}
+
+function mergeActiveTextIntoCanonicalTerminal(
+  message: UIMessage,
+  remainingActiveText: Record<string, string>
+): UIMessage {
+  const terminal = terminalFromMetadata(message.metadata)
+  if (!terminal) return message
+
+  const recoveredTexts = Object.entries(remainingActiveText).flatMap(([messageId, text]) => {
+    if (turnIdFromAssistantSourceMessageId(messageId) !== terminal.turnId) return []
+    delete remainingActiveText[messageId]
+    return message.parts.some((part) => part.type === 'text' && part.text.includes(text))
+      ? []
+      : [text]
+  })
+  return recoveredTexts.length === 0
+    ? message
+    : {
+        ...message,
+        parts: [...message.parts, { type: 'text' as const, text: recoveredTexts.join('') }]
+      }
+}
+
+function turnIdFromAssistantSourceMessageId(messageId: string): string | undefined {
+  const match = /^assistant:([^:]+):/u.exec(messageId)
+  return match?.[1]
 }
 
 function recoveryFallbackMessage(

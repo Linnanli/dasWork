@@ -877,7 +877,6 @@ function App(): React.JSX.Element {
         </section>
       ) : (
         <RightWorkspaceProvider
-          key={workspaceProjectScope}
           projectScope={workspaceProjectScope}
           fallbackProjectScopes={fallbackWorkspaceProjectScopes}
         >
@@ -2147,9 +2146,7 @@ function ConversationDraftBridge({
       hydrated.current = true
     }
     void Promise.all(
-      initialDraftAttachments.current.map((attachment) =>
-        addDraftAttachment(aui, attachment)
-      )
+      initialDraftAttachments.current.map((attachment) => addDraftAttachment(aui, attachment))
     ).then(markHydrated, markHydrated)
   }, [aui])
 
@@ -2198,9 +2195,7 @@ function ConversationDraftBridge({
       onDraftAttachmentsChange(snapshot.attachments)
     }
     void Promise.all(
-      snapshot.attachments.map((attachment) =>
-        addDraftAttachment(aui, attachment)
-      )
+      snapshot.attachments.map((attachment) => addDraftAttachment(aui, attachment))
     ).then(restoreDraft, restoreDraft)
   }, [
     aui,

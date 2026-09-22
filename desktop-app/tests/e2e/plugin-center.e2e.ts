@@ -480,7 +480,7 @@ test('writes and reloads MCP config through the Plugin Center app-server RPC pat
     await page.getByRole('button', { name: '添加服务器' }).click()
     const editor = page.locator('[data-slot="mcp-server-editor"]')
     await expect(editor).toBeVisible()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.getByRole('dialog', { name: '连接至自定义 MCP' })).toBeVisible()
     await editor.getByPlaceholder('例如：本地工具').fill('New Tools')
     await editor.getByPlaceholder('npx').fill('node')
     await editor.getByPlaceholder('参数').fill('new-tools-server.js')
@@ -526,7 +526,9 @@ test('writes and reloads MCP config through the Plugin Center app-server RPC pat
   })
 })
 
-test('edits and uninstalls a user MCP server through the inline editor', async ({ browserName }, testInfo) => {
+test('edits and uninstalls a user MCP server through the inline editor', async ({
+  browserName
+}, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
 
   await withPluginCenterServer(testInfo, async ({ page, rpcLogPath }) => {
@@ -539,8 +541,8 @@ test('edits and uninstalls a user MCP server through the inline editor', async (
 
     const editor = page.locator('[data-slot="mcp-server-editor"]')
     await expect(editor).toBeVisible()
-    await expect(page.locator('[data-slot="plugin-center-list-header"]')).toHaveCount(0)
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.locator('[data-slot="plugin-center-list-header"]')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: '更新 Local_tools MCP' })).toBeVisible()
     await expect(editor.getByRole('heading', { name: '更新 Local_tools MCP' })).toBeVisible()
     await expect(editor.getByText('如需切换 MCP 服务器类型，请先卸载当前配置。')).toBeVisible()
     await expect(editor.getByRole('button', { name: '卸载' })).toBeVisible()
@@ -607,16 +609,21 @@ test('keeps HTTP secrets redacted and readonly MCP servers unavailable for editi
     await expect(editor.getByText('从环境变量读取的请求头')).toBeVisible()
     await expect(editor.locator('input[value="REMOTE_MCP_TOKEN"]')).toBeVisible()
     await expect(editor.locator('input[value="secret"]')).toHaveCount(0)
-    await editor.getByRole('button', { name: '返回' }).click()
+    await editor.getByRole('button', { name: '取消' }).click()
+    await expect(editor).toBeHidden()
 
     const readonlyServer = page.locator('article').filter({ hasText: 'managed_tools' })
-    const readonlySettings = readonlyServer.getByRole('button', { name: '打开 managed_tools MCP 设置' })
+    const readonlySettings = readonlyServer.getByRole('button', {
+      name: '打开 managed_tools MCP 设置'
+    })
     await expect(readonlySettings).toBeDisabled()
     await expect(readonlyServer.getByRole('switch')).toBeDisabled()
   })
 })
 
-test('keeps inline MCP input after a failed write and allows one retry', async ({ browserName }, testInfo) => {
+test('keeps inline MCP input after a failed write and allows one retry', async ({
+  browserName
+}, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
 
   await withPluginCenterServer(
