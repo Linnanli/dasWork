@@ -204,10 +204,21 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /cache-dependency-path: desktop-app\/package-lock\.json/u)
   assert.match(buildWorkflow, /actions\/cache@v4/u)
   assert.match(buildWorkflow, /primary-runtime-source-cache-\$\{\{ matrix\.target \}\}/u)
+  const sourceCacheStep = buildWorkflow
+    .split('Restore immutable Runtime source object cache')[1]
+    ?.split('Fetch only immutable Runtime source objects')[0]
+  assert.match(
+    sourceCacheStep ?? '',
+    /restore-keys: \|\s+primary-runtime-source-cache-\$\{\{ matrix\.target \}\}-/u
+  )
   assert.match(buildWorkflow, /Capture immutable GitHub-hosted builder image identity/u)
   assert.match(buildWorkflow, /Restore verified Windows Runtime inputs/u)
   assert.match(buildWorkflow, /Save verified Windows Runtime inputs/u)
   assert.match(buildWorkflow, /primary-runtime-windows-inputs-v1-/u)
+  const windowsInputCacheStep = buildWorkflow
+    .split('Restore verified Windows Runtime inputs')[1]
+    ?.split('Materialize target-native offline Runtime inputs')[0]
+  assert.doesNotMatch(windowsInputCacheStep ?? '', /restore-keys:/u)
   assert.match(buildWorkflow, /actions\/cache\/restore@v4/u)
   assert.match(buildWorkflow, /actions\/cache\/save@v4/u)
   assert.match(buildWorkflow, /Stage restartable target-native build artifacts/u)

@@ -286,6 +286,8 @@ jobs:
         with:
           path: ${{ runner.temp }}/primary-runtime-source-cache
           key: primary-runtime-source-cache-${{ matrix.target }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json') }}
+          restore-keys: |
+            primary-runtime-source-cache-${{ matrix.target }}-
 
       - name: Fetch only immutable Runtime source objects
         shell: bash
