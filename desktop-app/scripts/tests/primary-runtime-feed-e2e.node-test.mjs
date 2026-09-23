@@ -114,7 +114,22 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     /writeFile\(presentationPath,\s*await readFile\(presentationPath\)\)/u
   )
   assert.match(e2eSource, /data-workspace-tab-id/u)
-  assert.match(e2eSource, /dascowork-primary-runtime-r07-live-trace\.v1/u)
+  assert.match(e2eSource, /dascowork-primary-runtime-r07-live-trace\.v2/u)
+  assert.match(e2eSource, /createR07EvidenceRecorder/u)
+  assert.match(e2eSource, /evidenceRecorder\.observe\('loader'\)/u)
+  assert.match(e2eSource, /evidenceRecorder\.observe\('command'\)/u)
+  assert.match(e2eSource, /evidenceRecorder\.observe\('artifact'\)/u)
+  assert.match(e2eSource, /evidenceRecorder\.observe\('preview'\)/u)
+  assert.match(e2eSource, /appServerLogIndex/u)
+  assert.match(e2eSource, /scripted-external-model/u)
+  assert.match(e2eSource, /doesNotProve: 'live-model-skill-compliance'/u)
+  const liveTraceWriterStart = e2eSource.indexOf('async function writeR07LiveTraceReport')
+  const liveTraceWriterEnd = e2eSource.indexOf('function parseR07AppServerTrace')
+  assert.ok(liveTraceWriterStart >= 0 && liveTraceWriterEnd > liveTraceWriterStart)
+  assert.doesNotMatch(
+    e2eSource.slice(liveTraceWriterStart, liveTraceWriterEnd),
+    /sequence:\s*[1-4]\b/u
+  )
   assert.match(e2eSource, /renderQaReceipt/u)
   assert.match(
     e2eSource,

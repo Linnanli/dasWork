@@ -116,6 +116,36 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
       }),
       /Invalid live Runtime trace/u
     )
+    await rm(join(directory, 'evidence.json'))
+    const outOfOrderRuntime = runtimeBinding(true)
+    await writeEvidence(directory, {
+      gateId: 'AT-LIVE-01',
+      producer: 'live-presentation-skill-dev',
+      commit,
+      capturedAt: new Date(now).toISOString(),
+      extra: {
+        runtime: {
+          ...outOfOrderRuntime,
+          live: {
+            ...outOfOrderRuntime.live,
+            preview: {
+              ...outOfOrderRuntime.live.preview,
+              monotonicNs: outOfOrderRuntime.live.artifact.monotonicNs
+            }
+          }
+        }
+      }
+    })
+    await assert.rejects(
+      verifyAppToolsReleaseGates({
+        specPath,
+        evidenceDirectory: directory,
+        commit,
+        ids: ['AT-LIVE-01'],
+        now
+      }),
+      /Invalid live Runtime trace/u
+    )
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -622,15 +652,37 @@ function runtimeBinding(includeLive = false) {
           live: {
             threadId: 'thread-1',
             turnId: 'turn-1',
-            loader: { loaderCallId: 'loader-1', sequence: 1, outputSha256: 'b'.repeat(64) },
-            command: { commandItemId: 'command-1', sequence: 2, outputSha256: 'c'.repeat(64) },
+            skill: {
+              id: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+              name: 'presentation-skill',
+              localPath: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+              instructionsSha256: '5'.repeat(64)
+            },
+            modelEvidence: deterministicModelEvidence(),
+            loader: {
+              loaderCallId: 'loader-1',
+              appServerLogIndex: 10,
+              ...evidenceObservation(1),
+              outputSha256: 'b'.repeat(64)
+            },
+            command: {
+              commandItemId: 'command-1',
+              appServerLogIndex: 20,
+              ...evidenceObservation(2),
+              outputSha256: 'c'.repeat(64)
+            },
             artifact: {
               artifactSourceId: 'artifact-1',
-              sequence: 3,
+              ...evidenceObservation(3),
               generation: 1,
               presentationSha256
             },
-            preview: { receiptId: 'preview-1', sequence: 4, visible: true, presentationSha256 },
+            preview: {
+              receiptId: 'preview-1',
+              ...evidenceObservation(4),
+              visible: true,
+              presentationSha256
+            },
             renderReportSha256: 'd'.repeat(64)
           }
         }
@@ -701,30 +753,43 @@ async function writeAppToolsProducerFixture(directory) {
     }))
   }
   const liveTrace = {
-    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v1',
+    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v2',
     capturedAt: new Date(now).toISOString(),
     threadId: 'thread-1',
     turnId: 'turn-1',
     skill: {
+      id: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+      name: 'presentation-skill',
       localPath: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
       instructionsSha256: '5'.repeat(64)
     },
+    modelEvidence: deterministicModelEvidence(),
     activation: {
       operationId: 'operation-1',
       activeVersion,
       manifestSequence: 1
     },
-    loader: { loaderCallId: 'loader-1', sequence: 1, outputSha256: '6'.repeat(64) },
-    command: { commandItemId: 'command-1', sequence: 2, outputSha256: '7'.repeat(64) },
+    loader: {
+      loaderCallId: 'loader-1',
+      appServerLogIndex: 10,
+      ...evidenceObservation(1),
+      outputSha256: '6'.repeat(64)
+    },
+    command: {
+      commandItemId: 'command-1',
+      appServerLogIndex: 20,
+      ...evidenceObservation(2),
+      outputSha256: '7'.repeat(64)
+    },
     artifact: {
       artifactSourceId: 'artifact-1',
-      sequence: 3,
+      ...evidenceObservation(3),
       generation: 1,
       presentationSha256: '8'.repeat(64)
     },
     preview: {
       receiptId: 'workspace-preview:artifact-1:1',
-      sequence: 4,
+      ...evidenceObservation(4),
       visible: true,
       presentationSha256: '8'.repeat(64)
     },
@@ -807,6 +872,21 @@ async function writeAppToolsProducerFixture(directory) {
     budgetText,
     liveReport,
     liveTrace
+  }
+}
+
+function evidenceObservation(index) {
+  return {
+    observedAt: new Date(now - (5 - index) * 1_000).toISOString(),
+    monotonicNs: String(index * 1_000)
+  }
+}
+
+function deterministicModelEvidence() {
+  return {
+    kind: 'scripted-external-model',
+    proves: 'deterministic-desktop-runtime-command-path',
+    doesNotProve: 'live-model-skill-compliance'
   }
 }
 

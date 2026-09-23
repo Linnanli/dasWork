@@ -73,6 +73,8 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /process\.getBuiltinModule\(\s*'node:fs\/promises'/u)
   assert.doesNotMatch(e2eSource, /Function\('return require'\)|requireFromMain/u)
   assert.match(e2eSource, /minimumAvailableDiskBytes/u)
+  assert.match(e2eSource, /requirePositiveDuration/u)
+  assert.doesNotMatch(e2eSource, /function positiveDuration/u)
   assert.doesNotMatch(e2eSource, /test\.skip/u)
   assert.match(e2eSource, /const primaryRuntimeE2eTimeoutMs = 600_000/u)
   assert.match(e2eSource, /test\.setTimeout\(primaryRuntimeE2eTimeoutMs\)/u)

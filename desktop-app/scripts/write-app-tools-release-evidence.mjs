@@ -20,7 +20,7 @@ const defaultToolchainsLock = resolve(
 )
 const defaultHardLimits = resolve(repositoryRoot, 'primary-runtime/runtime-hard-limits.json')
 const evidenceSchema = 'dascowork-app-tools-evidence.v1'
-const liveTraceSchema = 'dascowork-primary-runtime-r07-live-trace.v1'
+const liveTraceSchema = 'dascowork-primary-runtime-r07-live-trace.v2'
 
 export async function writeAppToolsReleaseEvidence(options) {
   const input = normalizeOptions(options)
@@ -113,6 +113,8 @@ export async function writeAppToolsReleaseEvidence(options) {
       live: {
         threadId: liveTrace.threadId,
         turnId: liveTrace.turnId,
+        skill: liveTrace.skill,
+        modelEvidence: liveTrace.modelEvidence,
         loader: liveTrace.loader,
         command: liveTrace.command,
         artifact: liveTrace.artifact,
@@ -192,15 +194,21 @@ function assertLiveTrace(value) {
     value.threadId.length === 0 ||
     typeof value.turnId !== 'string' ||
     value.turnId.length === 0 ||
-    !isEventBinding(value.loader, 'loaderCallId', 'outputSha256') ||
-    !isEventBinding(value.command, 'commandItemId', 'outputSha256') ||
-    !isEventBinding(value.artifact, 'artifactSourceId', 'presentationSha256') ||
+    !isModelEvidence(value.modelEvidence) ||
+    !isObservedEventBinding(value.loader, 'loaderCallId', 'outputSha256') ||
+    !isObservedEventBinding(value.command, 'commandItemId', 'outputSha256') ||
+    !isObservedEventBinding(value.artifact, 'artifactSourceId', 'presentationSha256') ||
     !Number.isSafeInteger(value.artifact.generation) ||
     value.artifact.generation <= 0 ||
-    !isEventBinding(value.preview, 'receiptId', 'presentationSha256') ||
-    value.loader.sequence >= value.command.sequence ||
-    value.command.sequence >= value.artifact.sequence ||
-    value.artifact.sequence >= value.preview.sequence ||
+    !isObservedEventBinding(value.preview, 'receiptId', 'presentationSha256') ||
+    !Number.isSafeInteger(value.loader.appServerLogIndex) ||
+    value.loader.appServerLogIndex <= 0 ||
+    !Number.isSafeInteger(value.command.appServerLogIndex) ||
+    value.command.appServerLogIndex <= value.loader.appServerLogIndex ||
+    !strictlyOrderedObservations([value.loader, value.command, value.artifact, value.preview]) ||
+    [value.loader, value.command, value.artifact, value.preview].some(
+      (event) => Date.parse(event.observedAt) > Date.parse(value.capturedAt)
+    ) ||
     value.artifact.presentationSha256 !== value.preview.presentationSha256 ||
     value.preview.visible !== true ||
     !isRenderReport(value.renderReport) ||
@@ -216,6 +224,9 @@ function assertLiveTrace(value) {
     !value.skill.localPath.endsWith(
       '/skills/dascowork-primary-runtime/presentation-skill/SKILL.md'
     ) ||
+    typeof value.skill.id !== 'string' ||
+    value.skill.id.length === 0 ||
+    value.skill.name !== 'presentation-skill' ||
     !isSha256(value.skill.instructionsSha256)
   ) {
     throw new Error('Invalid R07 live trace report for App Tools release evidence.')
@@ -244,14 +255,32 @@ function isRenderReport(value) {
   )
 }
 
-function isEventBinding(value, idKey, hashKey) {
+function isObservedEventBinding(value, idKey, hashKey) {
   return (
     isRecord(value) &&
     typeof value[idKey] === 'string' &&
     value[idKey].length > 0 &&
-    Number.isSafeInteger(value.sequence) &&
-    value.sequence > 0 &&
+    typeof value.observedAt === 'string' &&
+    Number.isFinite(Date.parse(value.observedAt)) &&
+    typeof value.monotonicNs === 'string' &&
+    /^[1-9][0-9]*$/u.test(value.monotonicNs) &&
     isSha256(value[hashKey])
+  )
+}
+
+function strictlyOrderedObservations(events) {
+  return events.every(
+    (event, index) =>
+      index === 0 || BigInt(events[index - 1].monotonicNs) < BigInt(event.monotonicNs)
+  )
+}
+
+function isModelEvidence(value) {
+  return (
+    isRecord(value) &&
+    value.kind === 'scripted-external-model' &&
+    value.proves === 'deterministic-desktop-runtime-command-path' &&
+    value.doesNotProve === 'live-model-skill-compliance'
   )
 }
 

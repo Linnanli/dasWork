@@ -23,6 +23,11 @@ import {
   type R07PresentationWorkspace
 } from './support/r07Presentation'
 import {
+  createR07EvidenceRecorder,
+  requirePositiveDuration,
+  type R07EvidenceObservations
+} from './support/primaryRuntimeEvidence'
+import {
   assistantMessageResponse,
   dynamicFunctionCallResponse,
   functionCallOutputCount,
@@ -155,9 +160,10 @@ if (p3bSampleOutput) {
           sampleIndex: p3bSampleIndex,
           minimumAvailableDiskBytes: diskProbe.minimumAvailableDiskBytes,
           diskProbe,
-          coldInstallMs: positiveDuration(readyAtMs - launchStartedAtMs),
-          chatInstallOverlapMs: positiveDuration(
-            Math.min(chatCompletedAtMs, readyAtMs) - Math.max(chatStartedAtMs, firstInstallingAtMs)
+          coldInstallMs: requirePositiveDuration(readyAtMs - launchStartedAtMs, 'P3b cold install'),
+          chatInstallOverlapMs: requirePositiveDuration(
+            Math.min(chatCompletedAtMs, readyAtMs) - Math.max(chatStartedAtMs, firstInstallingAtMs),
+            'P3b chat/install overlap'
           ),
           installWindow: {
             launchStartedAtMs,
@@ -168,7 +174,10 @@ if (p3bSampleOutput) {
             passed: true,
             requestedAtMs: chatStartedAtMs,
             completedAtMs: chatCompletedAtMs,
-            responseMs: positiveDuration(chatCompletedAtMs - chatStartedAtMs),
+            responseMs: requirePositiveDuration(
+              chatCompletedAtMs - chatStartedAtMs,
+              'P3b normal chat response'
+            ),
             completedDuringInstall: chatCompletedAtMs < readyAtMs
           },
           mainEventLoop
@@ -199,6 +208,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
 
   await withR07PresentationWorkspace(async (workspace) => {
     let runtimePresentationSkillContract: RuntimePresentationSkillContract | undefined
+    const evidenceRecorder = createR07EvidenceRecorder()
     const backend = await startMockBackend({
       responses: [
         assistantMessageResponse(
@@ -213,8 +223,15 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
           {},
           { namespace: 'codex_app' }
         ),
-        (request) =>
-          runtimePresentationCommandResponse(request, workspace, runtimePresentationSkillContract),
+        (request) => {
+          const response = runtimePresentationCommandResponse(
+            request,
+            workspace,
+            runtimePresentationSkillContract
+          )
+          evidenceRecorder.observe('loader')
+          return response
+        },
         assistantMessageResponse(
           'response-runtime-final',
           'message-runtime-final',
@@ -283,6 +300,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
       await expect(approvalPanel).toContainText(
         'The signed Primary Runtime presentation command needs its one-time approved execution path.'
       )
+      evidenceRecorder.observe('command')
       await approvalPanel.getByRole('button', { name: '允许一次', exact: true }).click()
 
       const runtimeSuccessMessage = page.locator('[data-role="assistant"]').filter({
@@ -347,7 +365,9 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         .toBe(true)
       await verifyR07Presentation(join(workspace.root, workspace.outputFile))
       const renderQaReceipt = await expectR07QaOutputs(workspace)
+      evidenceRecorder.observe('artifact')
       const previewTrace = await openR07PresentationPreviewAndReadArtifact(page, workspace)
+      evidenceRecorder.observe('preview')
       if (appToolsLiveTraceReportPath) {
         await writeR07LiveTraceReport({
           path: appToolsLiveTraceReportPath,
@@ -358,7 +378,8 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
           loaderOutput: loaderOutput!,
           runtimeCommandOutput: runtimeCommandOutput!,
           previewTrace,
-          renderQaReceipt
+          renderQaReceipt,
+          observations: evidenceRecorder.snapshot()
         })
       }
     } finally {
@@ -505,7 +526,7 @@ async function stopMainEventLoopProbe(
   p99Ms: number
   maxMs: number
 }> {
-  return app.evaluate((_, probeId) => {
+  const measurement = await app.evaluate((_, probeId) => {
     const { performance } = process.getBuiltinModule(
       'node:perf_hooks'
     ) as typeof import('node:perf_hooks')
@@ -528,16 +549,24 @@ async function stopMainEventLoopProbe(
     if (!probe) throw new Error('Missing Primary Runtime P3b Main event-loop probe.')
     probe.monitor.disable()
     probes?.delete(probeId)
-    const positiveMainDuration = (value: number): number =>
-      Math.max(1, Math.ceil(Number.isFinite(value) ? value : 1))
     return {
       source: 'electron-main' as const,
-      startedAtMs: positiveMainDuration(probe.startedAtMs),
-      stoppedAtMs: positiveMainDuration(performance.now()),
-      p99Ms: positiveMainDuration(probe.monitor.percentile(99) / 1_000_000),
-      maxMs: positiveMainDuration(probe.monitor.max / 1_000_000)
+      startedAtMs: probe.startedAtMs,
+      stoppedAtMs: performance.now(),
+      p99Ms: probe.monitor.percentile(99) / 1_000_000,
+      maxMs: probe.monitor.max / 1_000_000
     }
   }, id)
+  if (measurement.stoppedAtMs <= measurement.startedAtMs || measurement.p99Ms > measurement.maxMs) {
+    throw new Error('P3b Main event-loop probe returned inconsistent measurements.')
+  }
+  return {
+    source: measurement.source,
+    startedAtMs: requirePositiveDuration(measurement.startedAtMs, 'P3b Main probe start'),
+    stoppedAtMs: requirePositiveDuration(measurement.stoppedAtMs, 'P3b Main probe stop'),
+    p99Ms: requirePositiveDuration(measurement.p99Ms, 'P3b Main event-loop p99'),
+    maxMs: requirePositiveDuration(measurement.maxMs, 'P3b Main event-loop max')
+  }
 }
 
 async function startMainDiskProbe(app: ElectronApplication): Promise<string> {
@@ -573,7 +602,7 @@ async function startMainDiskProbe(app: ElectronApplication): Promise<string> {
       probe.sampling = true
       try {
         const filesystem = await statfs(path)
-        const available = Math.max(1, Math.floor(filesystem.bavail * filesystem.bsize))
+        const available = Math.floor(filesystem.bavail * filesystem.bsize)
         probe.minimumAvailableDiskBytes = Math.min(probe.minimumAvailableDiskBytes, available)
         probe.sampleCount += 1
       } finally {
@@ -598,7 +627,7 @@ async function stopMainDiskProbe(
   minimumAvailableDiskBytes: number
   sampleCount: number
 }> {
-  return app.evaluate(async (_, probeId) => {
+  const measurement = await app.evaluate(async (_, probeId) => {
     const { statfs } = process.getBuiltinModule(
       'node:fs/promises'
     ) as typeof import('node:fs/promises')
@@ -619,21 +648,26 @@ async function stopMainDiskProbe(
     if (!probe) throw new Error('Missing Primary Runtime P3b Main disk probe.')
     clearInterval(probe.timer)
     const filesystem = await statfs(probe.path)
-    const available = Math.max(1, Math.floor(filesystem.bavail * filesystem.bsize))
+    const available = Math.floor(filesystem.bavail * filesystem.bsize)
     probe.minimumAvailableDiskBytes = Math.min(probe.minimumAvailableDiskBytes, available)
     probe.sampleCount += 1
     probes?.delete(probeId)
     return {
       source: 'electron-main' as const,
       pathKind: 'userData' as const,
-      minimumAvailableDiskBytes: Math.max(1, Math.floor(probe.minimumAvailableDiskBytes)),
+      minimumAvailableDiskBytes: probe.minimumAvailableDiskBytes,
       sampleCount: probe.sampleCount
     }
   }, id)
-}
-
-function positiveDuration(value: number): number {
-  return Math.max(1, Math.ceil(Number.isFinite(value) ? value : 1))
+  if (
+    !Number.isSafeInteger(measurement.minimumAvailableDiskBytes) ||
+    measurement.minimumAvailableDiskBytes <= 0 ||
+    !Number.isSafeInteger(measurement.sampleCount) ||
+    measurement.sampleCount < 2
+  ) {
+    throw new Error('P3b Main disk probe returned invalid measurements.')
+  }
+  return measurement
 }
 
 function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
@@ -1005,6 +1039,7 @@ async function writeR07LiveTraceReport(input: {
   runtimeCommandOutput: string
   previewTrace: R07ArtifactPreviewTrace
   renderQaReceipt: R07RenderQaReceipt
+  observations: R07EvidenceObservations
 }): Promise<void> {
   const appServerTrace = parseR07AppServerTrace(input.logs)
   if (!input.activation.operationId || !input.activation.activeVersion) {
@@ -1014,10 +1049,15 @@ async function writeR07LiveTraceReport(input: {
   }
   const renderReportSha256 = sha256Text(JSON.stringify(input.renderQaReceipt))
   const report = {
-    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v1',
+    schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v2',
     capturedAt: new Date().toISOString(),
     threadId: appServerTrace.threadId,
     turnId: appServerTrace.turnId,
+    modelEvidence: {
+      kind: 'scripted-external-model',
+      proves: 'deterministic-desktop-runtime-command-path',
+      doesNotProve: 'live-model-skill-compliance'
+    },
     skill: {
       id: input.skillContract.id,
       name: input.skillContract.name,
@@ -1031,23 +1071,25 @@ async function writeR07LiveTraceReport(input: {
     },
     loader: {
       loaderCallId: appServerTrace.loader.callId,
-      sequence: 1,
+      appServerLogIndex: appServerTrace.loader.logIndex,
+      ...input.observations.loader,
       outputSha256: sha256Text(input.loaderOutput)
     },
     command: {
       commandItemId: appServerTrace.command.itemId,
-      sequence: 2,
+      appServerLogIndex: appServerTrace.command.logIndex,
+      ...input.observations.command,
       outputSha256: sha256Text(input.runtimeCommandOutput)
     },
     artifact: {
       artifactSourceId: input.previewTrace.sourceId,
-      sequence: 3,
+      ...input.observations.artifact,
       generation: input.previewTrace.generation,
       presentationSha256: input.previewTrace.checksum
     },
     preview: {
       receiptId: input.previewTrace.receiptId,
-      sequence: 4,
+      ...input.observations.preview,
       visible: true,
       presentationSha256: input.previewTrace.checksum
     },
@@ -1061,11 +1103,11 @@ async function writeR07LiveTraceReport(input: {
 function parseR07AppServerTrace(logs: readonly string[]): {
   threadId: string
   turnId: string
-  loader: { callId: string; sequence: number }
-  command: { itemId: string; sequence: number }
+  loader: { callId: string; logIndex: number }
+  command: { itemId: string; logIndex: number }
 } {
-  let loader: { threadId: string; turnId: string; callId: string; sequence: number } | undefined
-  let command: { threadId: string; turnId: string; itemId: string; sequence: number } | undefined
+  let loader: { threadId: string; turnId: string; callId: string; logIndex: number } | undefined
+  let command: { threadId: string; turnId: string; itemId: string; logIndex: number } | undefined
 
   for (const [index, line] of logs.entries()) {
     const packet = codexPacketFromLog(line)
@@ -1084,7 +1126,7 @@ function parseR07AppServerTrace(logs: readonly string[]): {
         threadId: params.threadId,
         turnId: params.turnId,
         callId: params.callId,
-        sequence: index + 1
+        logIndex: index + 1
       }
     } else if (
       method === 'item/commandExecution/requestApproval' &&
@@ -1096,7 +1138,7 @@ function parseR07AppServerTrace(logs: readonly string[]): {
         threadId: params.threadId,
         turnId: params.turnId,
         itemId: params.itemId,
-        sequence: index + 1
+        logIndex: index + 1
       }
     }
   }
@@ -1106,14 +1148,14 @@ function parseR07AppServerTrace(logs: readonly string[]): {
   if (loader.threadId !== command.threadId || loader.turnId !== command.turnId) {
     throw new Error('R07 live trace loader and command belong to different turns.')
   }
-  if (loader.sequence >= command.sequence) {
+  if (loader.logIndex >= command.logIndex) {
     throw new Error('R07 live trace command was not observed after the loader call.')
   }
   return {
     threadId: loader.threadId,
     turnId: loader.turnId,
-    loader: { callId: loader.callId, sequence: loader.sequence },
-    command: { itemId: command.itemId, sequence: command.sequence }
+    loader: { callId: loader.callId, logIndex: loader.logIndex },
+    command: { itemId: command.itemId, logIndex: command.logIndex }
   }
 }
 

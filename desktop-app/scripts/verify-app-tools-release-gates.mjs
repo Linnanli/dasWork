@@ -241,21 +241,25 @@ function parseLiveEvidence(value, filename) {
     value.threadId.length === 0 ||
     typeof value.turnId !== 'string' ||
     value.turnId.length === 0 ||
-    !isEventBinding(value.loader, 'loaderCallId') ||
+    !isSkillBinding(value.skill) ||
+    !isModelEvidence(value.modelEvidence) ||
+    !isObservedEventBinding(value.loader, 'loaderCallId') ||
     !isSha256(value.loader.outputSha256) ||
-    !isEventBinding(value.command, 'commandItemId') ||
+    !isObservedEventBinding(value.command, 'commandItemId') ||
     !isSha256(value.command.outputSha256) ||
-    !isEventBinding(value.artifact, 'artifactSourceId') ||
+    !isObservedEventBinding(value.artifact, 'artifactSourceId') ||
     !Number.isSafeInteger(value.artifact.generation) ||
     value.artifact.generation <= 0 ||
     !isSha256(value.artifact.presentationSha256) ||
-    !isEventBinding(value.preview, 'receiptId') ||
+    !isObservedEventBinding(value.preview, 'receiptId') ||
     value.preview.visible !== true ||
     !isSha256(value.preview.presentationSha256) ||
     !isSha256(value.renderReportSha256) ||
-    value.loader.sequence >= value.command.sequence ||
-    value.command.sequence >= value.artifact.sequence ||
-    value.artifact.sequence >= value.preview.sequence ||
+    !Number.isSafeInteger(value.loader.appServerLogIndex) ||
+    value.loader.appServerLogIndex <= 0 ||
+    !Number.isSafeInteger(value.command.appServerLogIndex) ||
+    value.command.appServerLogIndex <= value.loader.appServerLogIndex ||
+    !strictlyOrderedObservations([value.loader, value.command, value.artifact, value.preview]) ||
     value.artifact.presentationSha256 !== value.preview.presentationSha256
   ) {
     throw new Error(`Invalid live Runtime trace in App Tools release-gate evidence: ${filename}`)
@@ -263,13 +267,43 @@ function parseLiveEvidence(value, filename) {
   return value
 }
 
-function isEventBinding(value, id) {
+function isObservedEventBinding(value, id) {
   return (
     isRecord(value) &&
     typeof value[id] === 'string' &&
     value[id].length > 0 &&
-    Number.isSafeInteger(value.sequence) &&
-    value.sequence > 0
+    typeof value.observedAt === 'string' &&
+    Number.isFinite(Date.parse(value.observedAt)) &&
+    typeof value.monotonicNs === 'string' &&
+    /^[1-9][0-9]*$/u.test(value.monotonicNs)
+  )
+}
+
+function strictlyOrderedObservations(events) {
+  return events.every(
+    (event, index) =>
+      index === 0 || BigInt(events[index - 1].monotonicNs) < BigInt(event.monotonicNs)
+  )
+}
+
+function isSkillBinding(value) {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    value.name === 'presentation-skill' &&
+    typeof value.localPath === 'string' &&
+    value.localPath.endsWith('/skills/dascowork-primary-runtime/presentation-skill/SKILL.md') &&
+    isSha256(value.instructionsSha256)
+  )
+}
+
+function isModelEvidence(value) {
+  return (
+    isRecord(value) &&
+    value.kind === 'scripted-external-model' &&
+    value.proves === 'deterministic-desktop-runtime-command-path' &&
+    value.doesNotProve === 'live-model-skill-compliance'
   )
 }
 
@@ -278,6 +312,17 @@ function verifyRuntimeEvidence(record, id) {
     throw new Error(`Evidence for ${id} is missing its Runtime bundle and feed binding.`)
   if (tracedRuntimeGateIds.has(id) && !record.runtime.live) {
     throw new Error(`Evidence for ${id} is missing its ordered live Runtime trace.`)
+  }
+  if (
+    record.runtime.live &&
+    [
+      record.runtime.live.loader,
+      record.runtime.live.command,
+      record.runtime.live.artifact,
+      record.runtime.live.preview
+    ].some((event) => Date.parse(event.observedAt) > record.capturedAtMs)
+  ) {
+    throw new Error(`Evidence for ${id} was captured before its live Runtime observations.`)
   }
 }
 
