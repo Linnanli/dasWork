@@ -477,6 +477,20 @@ test("the source-lock-bound Runtime patch preserves its exact bytes on Windows c
   );
 });
 
+test("hash-bound Runtime metadata keeps LF bytes on Windows checkouts", async () => {
+  const attributes = (await readFile(repositoryAttributesPath, "utf8")).split(/\r?\n/u);
+  for (const filename of [
+    "runtime-hard-limits.json",
+    "runtime-sources.lock.json",
+    "runtime-toolchains.lock.json",
+  ]) {
+    assert.ok(
+      attributes.includes(`primary-runtime/${filename} text eol=lf`),
+      `${filename} must retain the bytes bound by cross-target calibration evidence`,
+    );
+  }
+});
+
 test("the locked presentation-plugin archive strips only its GitHub tag wrapper", async () => {
   const [sourceLock, toolchainsLock] = await Promise.all([
     readRuntimeSourcesLock(sourceLockPath),

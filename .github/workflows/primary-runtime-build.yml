@@ -251,16 +251,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Keep hash-bound Runtime metadata byte-stable
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          git config core.autocrlf false
-          git restore --source=HEAD --worktree -- \
-            primary-runtime/runtime-hard-limits.json \
-            primary-runtime/runtime-sources.lock.json \
-            primary-runtime/runtime-toolchains.lock.json
-
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -480,16 +470,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - name: Keep hash-bound Runtime metadata byte-stable
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          git config core.autocrlf false
-          git restore --source=HEAD --worktree -- \
-            primary-runtime/runtime-hard-limits.json \
-            primary-runtime/runtime-sources.lock.json \
-            primary-runtime/runtime-toolchains.lock.json
 
       - uses: actions/setup-node@v6
         with:
