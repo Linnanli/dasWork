@@ -28,6 +28,7 @@ on:
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-calibration-review.yml"
       - ".github/workflows/primary-runtime-publish.yml"
   push:
     paths:
@@ -56,22 +57,24 @@ on:
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
       - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-calibration-review.yml"
       - ".github/workflows/primary-runtime-publish.yml"
   schedule:
     - cron: "17 18 * * *"
   workflow_dispatch:
     inputs:
       mode:
-        description: Run fast contracts, P1a/P3b calibration, or a budget-bound final rebuild.
+        description: Run fast contracts, P1a/P3b calibration, budget review extraction, or a budget-bound final rebuild.
         required: true
         default: calibrate
         type: choice
         options:
           - fast
           - calibrate
+          - review
           - final
       calibration_run_id:
-        description: Required by final mode; successful P3b calibration run with reviewed evidence.
+        description: Required by review/final mode; successful P3b calibration run (independently reviewed before final).
         required: false
         type: string
 
@@ -90,8 +93,16 @@ env:
   PRIMARY_RUNTIME_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }}
 
 jobs:
+  review-calibration:
+    name: Extract small P3b budget review evidence
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'review' }}
+    uses: ./.github/workflows/primary-runtime-calibration-review.yml
+    with:
+      calibration_run_id: ${{ inputs.calibration_run_id }}
+
   source-and-contract:
     name: Validate source authority and stage order
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'review' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -135,7 +146,7 @@ jobs:
 
   prepare-final-calibration:
     name: Verify independently reviewed P3b evidence before final rebuild
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'calibrate' || inputs.mode == 'final') || github.event_name == 'schedule' }}
     needs: source-and-contract
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -225,7 +236,7 @@ jobs:
 
   build-target:
     name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }} native Runtime ${{ matrix.target }}
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'fast' || github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'calibrate' || inputs.mode == 'final') || github.event_name == 'schedule' }}
     needs:
       - source-and-contract
       - prepare-final-calibration

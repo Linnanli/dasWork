@@ -1,6 +1,11 @@
 name: Primary Runtime calibration review
 
 on:
+  workflow_call:
+    inputs:
+      calibration_run_id:
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       calibration_run_id:
@@ -68,6 +73,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CALIBRATION_RUN_ID: ${{ inputs.calibration_run_id }}
         run: |
+          if [[ ! "$CALIBRATION_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "calibration_run_id must be numeric" >&2
+            exit 1
+          fi
           report="$RUNNER_TEMP/calibration-review/performance-report.json"
           mkdir -p "$RUNNER_TEMP/calibration-review"
           npm --prefix primary-runtime run assemble:performance -- \

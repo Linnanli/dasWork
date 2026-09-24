@@ -10,6 +10,10 @@ const primaryRuntimeBuildWorkflowPath = resolve(
   repositoryRoot,
   '.github/workflows/primary-runtime-build.yml'
 )
+const primaryRuntimeCalibrationReviewWorkflowPath = resolve(
+  repositoryRoot,
+  '.github/workflows/primary-runtime-calibration-review.yml'
+)
 const primaryRuntimePublishWorkflowPath = resolve(
   repositoryRoot,
   '.github/workflows/primary-runtime-publish.yml'
@@ -154,14 +158,24 @@ test('internal build workflow smoke-tests built installers without publishing th
 })
 
 test('Primary Runtime CI has only the reviewed engineering artifact path', async () => {
-  const [buildWorkflow, publishWorkflow, testPlanWorkflow] = await Promise.all([
+  const [buildWorkflow, reviewWorkflow, publishWorkflow, testPlanWorkflow] = await Promise.all([
     readFile(primaryRuntimeBuildWorkflowPath, 'utf8'),
+    readFile(primaryRuntimeCalibrationReviewWorkflowPath, 'utf8'),
     readFile(primaryRuntimePublishWorkflowPath, 'utf8'),
     readFile(testPlanWorkflowPath, 'utf8')
   ])
 
   assert.match(testPlanWorkflow, /- "\.github\/workflows\/primary-runtime-build\.yml"/u)
+  assert.match(testPlanWorkflow, /- "\.github\/workflows\/primary-runtime-calibration-review\.yml"/u)
   assert.match(testPlanWorkflow, /- "\.github\/workflows\/primary-runtime-publish\.yml"/u)
+  assert.match(buildWorkflow, /review-calibration:[\s\S]*?inputs\.mode == 'review'[\s\S]*?uses: \.\/\.github\/workflows\/primary-runtime-calibration-review\.yml/u)
+  assert.match(buildWorkflow, /build-target:[\s\S]*?inputs\.mode == 'calibrate' \|\| inputs\.mode == 'final'/u)
+  assert.match(reviewWorkflow, /workflow_call:[\s\S]*?calibration_run_id:/u)
+  assert.match(reviewWorkflow, /run\.conclusion !== 'success'/u)
+  assert.match(reviewWorkflow, /report\.evidence\.sourceCommit !== run\.head_sha/u)
+  assert.match(reviewWorkflow, /report\.evidence\[field\] !== actual/u)
+  assert.match(reviewWorkflow, /calibrate:budgets/u)
+  assert.doesNotMatch(reviewWorkflow, /runtime-budgets\.json|reviewed:\s*true/u)
   assert.match(buildWorkflow, /^permissions:\n {2}contents: read\n {2}actions: read$/mu)
   assert.match(
     buildWorkflow,

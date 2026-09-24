@@ -12,6 +12,7 @@ on:
       - ".github/workflows/desktop-release.yml"
       - ".github/workflows/desktop-test-plan.yml"
       - ".github/workflows/primary-runtime-build.yml"
+      - ".github/workflows/primary-runtime-calibration-review.yml"
       - ".github/workflows/primary-runtime-publish.yml"
   workflow_dispatch:
 
