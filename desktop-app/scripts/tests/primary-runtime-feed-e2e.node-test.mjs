@@ -125,6 +125,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(e2eSource, /workspace\.artifacts\.onEvent/u)
   assert.match(e2eSource, /workspace\.artifacts\.readBinary/u)
   assert.match(e2eSource, /workspacePresentationSha256/u)
+  assert.match(e2eSource, /expect\(binary\.content\.generation\)\.toBeGreaterThan\(0\)/u)
   assert.match(e2eSource, /triggerArtifactPreviewChangeRoundTrip/u)
   assert.match(e2eSource, /utimes\(path, now, now\)/u)
   assert.doesNotMatch(

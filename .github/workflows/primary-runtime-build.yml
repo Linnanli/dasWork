@@ -862,6 +862,17 @@ jobs:
             --asset-sha256 "$asset_sha" \
             --ids AT-E2E-01,AT-LIVE-01,AT-LIVE-PKG-01
 
+      - name: Preserve R07 traces when the final evidence gate fails
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-r07-failure-traces
+          if-no-files-found: ignore
+          retention-days: 1
+          path: |
+            ${{ runner.temp }}/r07-dev-live-trace.json
+            ${{ runner.temp }}/r07-packaged-live-trace.json
+
       - name: Verify no private key entered the artifact
         shell: bash
         run: |

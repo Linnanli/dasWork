@@ -185,52 +185,60 @@ function normalizeOptions(options) {
 }
 
 function assertLiveTrace(value) {
-  if (
-    !isRecord(value) ||
-    value.schemaVersion !== liveTraceSchema ||
-    typeof value.capturedAt !== 'string' ||
-    !Number.isFinite(Date.parse(value.capturedAt)) ||
-    typeof value.threadId !== 'string' ||
-    value.threadId.length === 0 ||
-    typeof value.turnId !== 'string' ||
-    value.turnId.length === 0 ||
-    !isModelEvidence(value.modelEvidence) ||
-    !isObservedEventBinding(value.loader, 'loaderCallId', 'outputSha256') ||
-    !isObservedEventBinding(value.command, 'commandItemId', 'outputSha256') ||
-    !isObservedEventBinding(value.artifact, 'artifactSourceId', 'presentationSha256') ||
-    !Number.isSafeInteger(value.artifact.generation) ||
-    value.artifact.generation <= 0 ||
-    !isObservedEventBinding(value.preview, 'receiptId', 'presentationSha256') ||
-    !Number.isSafeInteger(value.loader.appServerLogIndex) ||
-    value.loader.appServerLogIndex <= 0 ||
-    !Number.isSafeInteger(value.command.appServerLogIndex) ||
-    value.command.appServerLogIndex <= value.loader.appServerLogIndex ||
-    !strictlyOrderedObservations([value.loader, value.command, value.artifact, value.preview]) ||
-    [value.loader, value.command, value.artifact, value.preview].some(
-      (event) => Date.parse(event.observedAt) > Date.parse(value.capturedAt)
-    ) ||
-    value.artifact.presentationSha256 !== value.preview.presentationSha256 ||
-    value.preview.visible !== true ||
-    !isRenderReport(value.renderReport) ||
-    !isSha256(value.renderReportSha256) ||
-    value.renderReportSha256 !== sha256Text(JSON.stringify(value.renderReport)) ||
-    !isRecord(value.activation) ||
-    typeof value.activation.operationId !== 'string' ||
-    value.activation.operationId.length === 0 ||
-    typeof value.activation.activeVersion !== 'string' ||
-    value.activation.activeVersion.length === 0 ||
-    !isRecord(value.skill) ||
-    typeof value.skill.localPath !== 'string' ||
-    !value.skill.localPath.endsWith(
-      '/skills/dascowork-primary-runtime/presentation-skill/SKILL.md'
-    ) ||
-    typeof value.skill.id !== 'string' ||
-    value.skill.id.length === 0 ||
-    value.skill.name !== 'presentation-skill' ||
-    !isSha256(value.skill.instructionsSha256)
-  ) {
-    throw new Error('Invalid R07 live trace report for App Tools release evidence.')
+  const invalid = (field) => {
+    throw new Error(`Invalid R07 live trace report for App Tools release evidence: ${field}.`)
   }
+  if (!isRecord(value)) invalid('root')
+  if (value.schemaVersion !== liveTraceSchema) invalid('schemaVersion')
+  if (typeof value.capturedAt !== 'string' || !Number.isFinite(Date.parse(value.capturedAt)))
+    invalid('capturedAt')
+  if (typeof value.threadId !== 'string' || value.threadId.length === 0) invalid('threadId')
+  if (typeof value.turnId !== 'string' || value.turnId.length === 0) invalid('turnId')
+  if (!isModelEvidence(value.modelEvidence)) invalid('modelEvidence')
+  if (!isObservedEventBinding(value.loader, 'loaderCallId', 'outputSha256')) invalid('loader')
+  if (!isObservedEventBinding(value.command, 'commandItemId', 'outputSha256')) invalid('command')
+  if (!isObservedEventBinding(value.artifact, 'artifactSourceId', 'presentationSha256'))
+    invalid('artifact')
+  if (!Number.isSafeInteger(value.artifact.generation) || value.artifact.generation <= 0)
+    invalid('artifact.generation')
+  if (!isObservedEventBinding(value.preview, 'receiptId', 'presentationSha256')) invalid('preview')
+  if (!Number.isSafeInteger(value.loader.appServerLogIndex) || value.loader.appServerLogIndex <= 0)
+    invalid('loader.appServerLogIndex')
+  if (
+    !Number.isSafeInteger(value.command.appServerLogIndex) ||
+    value.command.appServerLogIndex <= value.loader.appServerLogIndex
+  )
+    invalid('command.appServerLogIndex')
+  const observations = [value.loader, value.command, value.artifact, value.preview]
+  if (!strictlyOrderedObservations(observations)) invalid('observations.monotonicNs')
+  if (observations.some((event) => Date.parse(event.observedAt) > Date.parse(value.capturedAt)))
+    invalid('observations.observedAt')
+  if (value.artifact.presentationSha256 !== value.preview.presentationSha256)
+    invalid('preview.presentationSha256')
+  if (value.preview.visible !== true) invalid('preview.visible')
+  if (!isRenderReport(value.renderReport)) invalid('renderReport')
+  if (
+    !isSha256(value.renderReportSha256) ||
+    value.renderReportSha256 !== sha256Text(JSON.stringify(value.renderReport))
+  )
+    invalid('renderReportSha256')
+  if (!isRecord(value.activation)) invalid('activation')
+  if (typeof value.activation.operationId !== 'string' || value.activation.operationId.length === 0)
+    invalid('activation.operationId')
+  if (
+    typeof value.activation.activeVersion !== 'string' ||
+    value.activation.activeVersion.length === 0
+  )
+    invalid('activation.activeVersion')
+  if (!isRecord(value.skill)) invalid('skill')
+  if (
+    typeof value.skill.localPath !== 'string' ||
+    !value.skill.localPath.endsWith('/skills/dascowork-primary-runtime/presentation-skill/SKILL.md')
+  )
+    invalid('skill.localPath')
+  if (typeof value.skill.id !== 'string' || value.skill.id.length === 0) invalid('skill.id')
+  if (value.skill.name !== 'presentation-skill') invalid('skill.name')
+  if (!isSha256(value.skill.instructionsSha256)) invalid('skill.instructionsSha256')
 }
 
 function isRenderReport(value) {

@@ -1016,6 +1016,7 @@ async function openR07PresentationPreviewAndReadArtifact(
   }
   const workspacePresentationSha256 = await sha256File(presentationPath)
   expect(binary.content.checksum).toBe(workspacePresentationSha256)
+  expect(binary.content.generation).toBeGreaterThan(0)
   return {
     sourceId,
     receiptId,

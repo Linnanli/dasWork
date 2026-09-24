@@ -268,7 +268,7 @@ test('produces verifier-consumable AT-E2E evidence from a real R07 live trace re
         toolchainsLock: fixture.toolchainsLock,
         hardLimits: fixture.hardLimits
       }),
-      /Invalid R07 live trace/u
+      /Invalid R07 live trace report.*skill\.localPath/u
     )
     const badPreviewReport = join(directory, 'bad-preview-report.json')
     await writeFile(
@@ -293,7 +293,7 @@ test('produces verifier-consumable AT-E2E evidence from a real R07 live trace re
         toolchainsLock: fixture.toolchainsLock,
         hardLimits: fixture.hardLimits
       }),
-      /Invalid R07 live trace/u
+      /Invalid R07 live trace report.*preview\.visible/u
     )
     const badGenerationReport = join(directory, 'bad-generation-report.json')
     await writeFile(
@@ -318,7 +318,7 @@ test('produces verifier-consumable AT-E2E evidence from a real R07 live trace re
         toolchainsLock: fixture.toolchainsLock,
         hardLimits: fixture.hardLimits
       }),
-      /Invalid R07 live trace/u
+      /Invalid R07 live trace report.*artifact\.generation/u
     )
     const badRenderReport = join(directory, 'bad-render-report.json')
     await writeFile(
@@ -348,7 +348,7 @@ test('produces verifier-consumable AT-E2E evidence from a real R07 live trace re
         toolchainsLock: fixture.toolchainsLock,
         hardLimits: fixture.hardLimits
       }),
-      /Invalid R07 live trace/u
+      /Invalid R07 live trace report.*renderReport/u
     )
     const badManifestSequenceReport = join(directory, 'bad-manifest-sequence-report.json')
     await writeFile(
