@@ -29,7 +29,6 @@ import {
   parseRuntimeTargetOption,
 } from "../scripts/runtime-target.mjs";
 import {
-  expectedBuilderImageIdentity,
   writeRuntimeInputsManifest,
 } from "../scripts/runtime-inputs.mjs";
 import { measurementFingerprint } from "../scripts/runtime-budgets.mjs";
@@ -864,7 +863,7 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
   );
   const toolchainsLock = JSON.parse(await readFile(toolchainsLockPath, "utf8"));
   const targetToolchain = toolchainsLock.targets[target];
-  const observedImage = expectedBuilderImageIdentity(targetToolchain.builder);
+  const observedImage = `${targetToolchain.builder.identity}:20260920.314.1`;
   await writeRuntimeInputsManifest({
     inputRoot,
     target,

@@ -28,7 +28,7 @@ import {
   artifactsForTarget,
   assertCachedArtifact,
   contentAddressedCachePath,
-  expectedBuilderImageIdentity,
+  isObservedBuilderImageIdentity,
   readRuntimeToolchainsLock,
   writeRuntimeInputsManifest,
 } from "./runtime-inputs.mjs";
@@ -148,16 +148,14 @@ const componentsByName = new Map(
     .map((component) => [component.name, component]),
 );
 
-const observedBuilderImage = expectedBuilderImageIdentity(
-  targetToolchain.builder,
-);
-if (process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE !== observedBuilderImage) {
+const observedBuilderImage = process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE;
+if (!isObservedBuilderImageIdentity(targetToolchain.builder, observedBuilderImage)) {
   throw new Error(
-    `AT-RT-INPUT-01 blocked: ${target} must use locked builder image ${observedBuilderImage}.`,
+    `AT-RT-INPUT-01 blocked: ${target} must report a valid hosted builder image for ${targetToolchain.builder.identity}.`,
   );
 }
 
-const builderTools = await verifyLockedBuilderToolchain({
+const builderTools = await inspectRequiredBuilderToolchain({
   target,
   builder: targetToolchain.builder,
 });
@@ -296,7 +294,7 @@ async function extractLockedArtifact({ artifact, output, cacheRoot, python }) {
   });
 }
 
-async function verifyLockedBuilderToolchain({ target, builder }) {
+async function inspectRequiredBuilderToolchain({ target, builder }) {
   const tools = [];
   for (const command of builder.tools) {
     const executable = resolveLockedBuilderCommand(command);
@@ -310,7 +308,7 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
         tools.push({ command, versionSha256: sha256(contents) });
       } catch (error) {
         throw new Error(
-          `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,
+          `AT-RT-INPUT-01 blocked: ${target} requires declared builder tool ${command}: ${String(error.message ?? error)}`,
         );
       }
       continue;
@@ -328,7 +326,7 @@ async function verifyLockedBuilderToolchain({ target, builder }) {
       result = await run(executable, versionArgs, { env: process.env });
     } catch (error) {
       throw new Error(
-        `AT-RT-INPUT-01 blocked: ${target} requires locked builder tool ${command}: ${String(error.message ?? error)}`,
+        `AT-RT-INPUT-01 blocked: ${target} requires declared builder tool ${command}: ${String(error.message ?? error)}`,
       );
     }
     const output = `${result.stdout}${result.stderr}`.trim();

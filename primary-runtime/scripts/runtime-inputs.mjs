@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -9,7 +8,7 @@ import {
 } from "./source-lock.mjs";
 
 export const runtimeToolchainsSchema =
-  "dascowork-primary-runtime-toolchains.v1";
+  "dascowork-primary-runtime-toolchains.v2";
 export const runtimeInputsManifestSchema =
   "dascowork-primary-runtime-inputs.v1";
 
@@ -22,13 +21,7 @@ const targetKeys = new Set([
   "pythonWheels",
   "nativeRecipes",
 ]);
-const builderKeys = new Set(["identity", "image", "tools"]);
-const builderImageKeys = new Set([
-  "version",
-  "releaseUrl",
-  "sourceCommit",
-  "imageDigestSha256",
-]);
+const builderKeys = new Set(["identity", "tools"]);
 const artifactKeys = new Set([
   "name",
   "version",
@@ -253,6 +246,7 @@ export async function assertRuntimeInputsManifest({
   target,
   sourceLockPath,
   toolchainsLockPath,
+  expectedObservedBuilderImage,
 }) {
   const root = resolve(inputRoot);
   const manifestPath = join(root, "runtime-inputs.manifest.json");
@@ -331,12 +325,12 @@ export async function assertRuntimeInputsManifest({
     JSON.stringify(manifest.artifacts) !== JSON.stringify(expectedArtifacts) ||
     manifest.builder.runner !== toolchainsLock.targets[target].runner ||
     manifest.builder.identity !== toolchainsLock.targets[target].builder.identity ||
-    manifest.builder.observedImage !==
-      expectedBuilderImageIdentity(toolchainsLock.targets[target].builder) ||
-    manifest.builder.observedImageSha256 !==
-      sha256FileContents(
-        expectedBuilderImageIdentity(toolchainsLock.targets[target].builder),
-      ) ||
+    !isObservedBuilderImageIdentity(
+      toolchainsLock.targets[target].builder,
+      manifest.builder.observedImage,
+    ) ||
+    (expectedObservedBuilderImage !== undefined &&
+      manifest.builder.observedImage !== expectedObservedBuilderImage) ||
     JSON.stringify(manifest.builder.tools.map((tool) => tool.command)) !==
       JSON.stringify(toolchainsLock.targets[target].builder.tools) ||
     manifest.patches.length !== 1 ||
@@ -385,16 +379,13 @@ export function archiveFormatForUrl(url) {
   );
 }
 
-export function sha256FileContents(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
 function isTargetToolchain(value) {
   return (
     isPlainObject(value) &&
     !hasUnexpectedKeys(value, targetKeys) &&
     isNonEmptyString(value.runner) &&
     isBuilder(value.builder) &&
+    value.builder.identity === `github-hosted:${value.runner}` &&
     isArtifact(value.node) &&
     isArtifact(value.python) &&
     Array.isArray(value.pythonWheels) &&
@@ -425,7 +416,6 @@ function isBuilder(value) {
     isPlainObject(value) &&
     !hasUnexpectedKeys(value, builderKeys) &&
     isNonEmptyString(value.identity) &&
-    isBuilderImage(value.image) &&
     Array.isArray(value.tools) &&
     value.tools.length > 0 &&
     value.tools.every(isBuilderTool) &&
@@ -433,24 +423,18 @@ function isBuilder(value) {
   );
 }
 
-function isBuilderImage(value) {
-  return (
-    isPlainObject(value) &&
-    !hasUnexpectedKeys(value, builderImageKeys) &&
-    isExactVersion(value.version) &&
-    !/^(?:latest|stable|current)$/iu.test(value.version) &&
-    isHttpsUrl(value.releaseUrl) &&
-    /^[a-f0-9]{40}$/u.test(value.sourceCommit) &&
-    isSha256(value.imageDigestSha256) &&
-    value.imageDigestSha256 ===
-      sha256FileContents(
-        `${value.releaseUrl}\n${value.version}\n${value.sourceCommit}\n`,
-      )
-  );
-}
-
-export function expectedBuilderImageIdentity(builder) {
-  return `${builder.identity}:${builder.image.version}`;
+/** Hosted runner labels select an OS family, not a particular weekly VM image. */
+export function isObservedBuilderImageIdentity(builder, observedImage) {
+  if (
+    !isPlainObject(builder) ||
+    !isNonEmptyString(builder.identity) ||
+    typeof observedImage !== "string" ||
+    !observedImage.startsWith(`${builder.identity}:`)
+  ) {
+    return false;
+  }
+  const version = observedImage.slice(builder.identity.length + 1);
+  return /^\d{8}\.\d+\.\d+$/u.test(version);
 }
 
 function isBuilderTool(value) {

@@ -1,17 +1,11 @@
 {
-  "schemaVersion": "dascowork-primary-runtime-toolchains.v1",
-  "materializerVersion": "1.2.0",
+  "schemaVersion": "dascowork-primary-runtime-toolchains.v2",
+  "materializerVersion": "1.3.0",
   "targets": {
     "darwin-x64": {
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "image": {
-          "version": "20260824.0482.1",
-          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15%2F20260824.0482",
-          "sourceCommit": "f10516542b8f2fef89b652a8d5f5de63aa543b77",
-          "imageDigestSha256": "a876bf325c645f85a3184e0ef2414c972de2e7b601f834cc60ea5ad1f0e9a16a"
-        },
         "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
       },
       "node": {
@@ -211,12 +205,6 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "image": {
-          "version": "20260907.0337.1",
-          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20260907.0337",
-          "sourceCommit": "9312c564c4df0b842ce00a6c202dccb519b8dfdd",
-          "imageDigestSha256": "a56806e89d54145f181c278f55fdb80f08e959b6161070bdd608bfcd907700b2"
-        },
         "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
       },
       "node": {
@@ -416,12 +404,6 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
-        "image": {
-          "version": "20260907.229.1",
-          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260907.229",
-          "sourceCommit": "c240f76fa0dd523af7376dbe8480964a3cb0af47",
-          "imageDigestSha256": "40a6ee9a9d9abcb58105c6fd3ed117f3ece7ae4c6ff80ccd8eb607006f056b15"
-        },
         "tools": ["git", "tar", "msiexec", "cmake", "ninja", "cl"]
       },
       "node": {
@@ -621,12 +603,6 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "image": {
-          "version": "20260920.314.1",
-          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260920.314",
-          "sourceCommit": "e75633902841aa5479c759492b73409e6d317f12",
-          "imageDigestSha256": "01ce32bdac993f7850d5f972c633e3945f67cd51dbbd21ae9b69cfba584e04fc"
-        },
         "tools": ["tar", "dpkg-deb", "cmake", "ninja", "gcc", "g++"]
       },
       "node": {

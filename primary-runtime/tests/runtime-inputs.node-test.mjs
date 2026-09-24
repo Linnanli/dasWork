@@ -9,7 +9,7 @@ import test from "node:test";
 import {
   artifactsForTarget,
   assertRuntimeInputsManifest,
-  expectedBuilderImageIdentity,
+  isObservedBuilderImageIdentity,
   readRuntimeToolchainsLock,
   validateRuntimeToolchainsLock,
   writeRuntimeInputsManifest,
@@ -121,6 +121,45 @@ test("input manifest rejects runner drift, lock drift, and symbolic-link escape"
   }
 });
 
+test("hosted image revisions are recorded without pinning a rolling runner", async () => {
+  const fixture = await createInputFixture();
+  try {
+    const manifestPath = join(fixture.inputRoot, "runtime-inputs.manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    const differentRevision = `${manifest.builder.identity}:20261004.123.1`;
+    manifest.builder.observedImage = differentRevision;
+    manifest.builder.observedImageSha256 = sha256(differentRevision);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assertRuntimeInputsManifest(fixture);
+    await assert.rejects(
+      () =>
+        assertRuntimeInputsManifest({
+          ...fixture,
+          expectedObservedBuilderImage: `${manifest.builder.identity}:20260920.314.1`,
+        }),
+      /source binding is invalid/u,
+    );
+
+    manifest.builder.observedImage = "github-hosted:wrong-runner:20261004.123.1";
+    manifest.builder.observedImageSha256 = sha256(manifest.builder.observedImage);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+
+    manifest.builder.observedImage = `${manifest.builder.identity}:latest`;
+    manifest.builder.observedImageSha256 = sha256(manifest.builder.observedImage);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
   const target = currentRuntimeTarget();
@@ -138,18 +177,33 @@ test("toolchain lock rejects mutable, incomplete target recipes", async () => {
   assert.throws(() => validateRuntimeToolchainsLock(missingBuilder), /invalid/u);
 
   const mutableBuilderImage = structuredClone(lock);
-  mutableBuilderImage.targets[target].builder.image.version = "latest";
+  mutableBuilderImage.targets[target].builder.image = { version: "latest" };
   assert.throws(
     () => validateRuntimeToolchainsLock(mutableBuilderImage),
     /invalid/u,
   );
 
-  const mismatchedBuilderDigest = structuredClone(lock);
-  mismatchedBuilderDigest.targets[target].builder.image.imageDigestSha256 =
-    "0".repeat(64);
+  const mismatchedBuilderIdentity = structuredClone(lock);
+  mismatchedBuilderIdentity.targets[target].builder.identity =
+    "github-hosted:other-runner";
   assert.throws(
-    () => validateRuntimeToolchainsLock(mismatchedBuilderDigest),
+    () => validateRuntimeToolchainsLock(mismatchedBuilderIdentity),
     /invalid/u,
+  );
+
+  assert.equal(
+    isObservedBuilderImageIdentity(
+      lock.targets[target].builder,
+      `${lock.targets[target].builder.identity}:20261004.123.1`,
+    ),
+    true,
+  );
+  assert.equal(
+    isObservedBuilderImageIdentity(
+      lock.targets[target].builder,
+      `${lock.targets[target].builder.identity}:latest`,
+    ),
+    false,
   );
 
   const missingClosure = structuredClone(lock);
@@ -614,7 +668,27 @@ test("P1 command line tools accept the documented equals-form arguments", async 
           `--source-cache=${join(root, "cache")}`,
           `--output=${join(root, "inputs")}`,
         ]),
-      /must use locked builder image|requires locked builder tool|cache is missing locked/u,
+      /must report a valid hosted builder image|requires declared builder tool|cache is missing locked/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(
+          process.execPath,
+          [
+            materializeScript,
+            `--target=${target}`,
+            `--source-cache=${join(root, "cache")}`,
+            `--output=${join(root, "inputs")}`,
+          ],
+          {
+            env: {
+              ...process.env,
+              DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE:
+                "github-hosted:wrong-runner:20261004.123.1",
+            },
+          },
+        ),
+      /must report a valid hosted builder image/u,
     );
     await assert.rejects(
       () =>
@@ -789,9 +863,7 @@ async function createFixtureManifest(fixture) {
     readRuntimeSourcesLock(sourceLockPath),
     readRuntimeToolchainsLock(toolchainsLockPath),
   ]);
-  const observedImage = expectedBuilderImageIdentity(
-    toolchainsLock.targets[fixture.target].builder,
-  );
+  const observedImage = `${toolchainsLock.targets[fixture.target].builder.identity}:20260920.314.1`;
   await writeRuntimeInputsManifest({
     inputRoot: fixture.inputRoot,
     target: fixture.target,

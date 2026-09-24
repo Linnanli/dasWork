@@ -257,12 +257,23 @@ jobs:
           cache: npm
           cache-dependency-path: desktop-app/package-lock.json
 
-      - name: Capture immutable GitHub-hosted builder image identity
+      - name: Capture observed GitHub-hosted builder image identity
         id: builder-image
         shell: bash
         run: |
+          # Keep the real image revision in provenance and cache keys; runs-on
+          # cannot select a fixed GitHub-hosted image revision.
+          if [[ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]]; then
+            echo "Runtime builds require a GitHub-hosted runner" >&2
+            exit 1
+          fi
           : "${ImageVersion:?GitHub-hosted runner image version is required}"
+          if [[ ! "$ImageVersion" =~ ^[0-9]{8}\.[0-9]+\.[0-9]+$ ]]; then
+            echo "GitHub-hosted runner image version is malformed" >&2
+            exit 1
+          fi
           printf 'image_version=%s\n' "$ImageVersion" >> "$GITHUB_OUTPUT"
+          printf 'DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE=github-hosted:${{ matrix.runner }}:%s\n' "$ImageVersion" >> "$GITHUB_ENV"
 
       - name: Download independently reviewed P3b calibration
         if: env.PRIMARY_RUNTIME_MODE == 'final'
@@ -306,7 +317,6 @@ jobs:
         if: matrix.target != 'win32-x64' || steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          export DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE="github-hosted:${{ matrix.runner }}:${ImageVersion}"
           npm --prefix primary-runtime run materialize:inputs -- \
             --target=${{ matrix.target }} \
             --source-cache "$RUNNER_TEMP/primary-runtime-source-cache" \

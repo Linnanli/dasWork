@@ -24,6 +24,8 @@ const { manifest } = await assertRuntimeInputsManifest({
   target,
   sourceLockPath: options.sourceLock,
   toolchainsLockPath: options.toolchainsLock,
+  expectedObservedBuilderImage:
+    process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE,
 });
 const sourceLock = await readRuntimeSourcesLock(options.sourceLock);
 const commands = [];

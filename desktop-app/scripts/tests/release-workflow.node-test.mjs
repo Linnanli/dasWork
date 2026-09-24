@@ -211,7 +211,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
     sourceCacheStep ?? '',
     /restore-keys: \|\s+primary-runtime-source-cache-\$\{\{ matrix\.target \}\}-/u
   )
-  assert.match(buildWorkflow, /Capture immutable GitHub-hosted builder image identity/u)
+  assert.match(buildWorkflow, /Capture observed GitHub-hosted builder image identity/u)
+  assert.match(buildWorkflow, /RUNNER_ENVIRONMENT:-/u)
+  assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE=github-hosted:/u)
+  assert.match(buildWorkflow, /"\$GITHUB_ENV"/u)
   assert.match(buildWorkflow, /Restore verified Windows Runtime inputs/u)
   assert.match(buildWorkflow, /Save verified Windows Runtime inputs/u)
   assert.match(buildWorkflow, /primary-runtime-windows-inputs-v1-/u)

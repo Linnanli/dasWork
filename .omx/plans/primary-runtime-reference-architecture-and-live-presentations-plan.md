@@ -155,7 +155,7 @@ Runtime 安装成功后，参考项目先同步 runtime manifest 声明的 bundl
 4. `verified final target staging`：预算 diff 提交后重新构建的四目标制品，除上述证据外还绑定 `runtime-budgets.json` SHA 与 P3b performance report SHA。最终 file/archive hash 必须在 archive 完成后生成，不能沿用 P1a candidate hash。
 5. `engineering feed artifact`：协调 job 根据四个 final target staging 生成的 config/manifest、不可变 archive 路径和汇总 receipt。metadata 可由本次 run 的临时测试密钥签署以覆盖验签代码；artifact 只包含公钥与签名结果，不包含私钥，并必须带 `releaseClass=engineering`、`publiclyDeployable=false`。
 
-`runtime-sources.lock.json` 不能只锁 npm/Python 源包和 LibreOffice/Poppler 源码 URL。Node runtime、CPython runtime、每个 target 的 native dependency、字体和构建工具链都必须选择一种可审计方式：要么锁定官方 immutable binary 的 URL/SHA/license；要么锁定源码、builder image/toolchain、compiler flags、patch 和产出校验。不能用一个通用源码 URL 代替四平台构建配方，也不能把“CI runner 上碰巧装着”当 Runtime 输入。
+`runtime-sources.lock.json` 不能只锁 npm/Python 源包和 LibreOffice/Poppler 源码 URL。Node runtime、CPython runtime、每个 target 的 native dependency、字体和构建工具链都必须选择一种可审计方式：要么锁定官方 immutable binary 的 URL/SHA/license；要么锁定源码、原生 runner 操作系统标签、必需构建工具、compiler flags、patch 和产出校验，并在每次构建的 input manifest/provenance 中记录实际 runner image 修订版及工具版本哈希。标准 GitHub-hosted `runs-on` 不能指定镜像修订版，因此不得把发布页 URL、版本和 commit 的文本哈希冒称为可选择的 VM image digest，也不得因无关的每周镜像滚动让已审核预算自动失效。构建工具缺失、目标/镜像标签不符、输入/产物闭包异常仍 fail-closed；这项工程门禁不声称字节级可复现构建，若以后需要该保证，须采用真正固定的构建镜像或自管 runner。不能用一个通用源码 URL 代替四平台构建配方，也不能把“CI runner 上碰巧装着”的 Node/Python/Office 当 Runtime 输入。
 
 ### 2.8 生产门禁关闭后的语义
 
@@ -310,7 +310,7 @@ PPTX → render / QA / workspace preview
 
 工作项：
 
-1. 扩充 source/toolchain lock。除 plugin 和 npm/Python 包外，必须锁定 Node runtime、CPython runtime、LibreOffice、Poppler、字体及 native modules 的每目标 immutable binary URL/SHA/license，或锁定可复现源码构建配方、builder image digest、编译器/SDK 版本、flags 和 patch SHA。任何“使用 runner 预装版本”、floating package index、未锁定 wheel/npm install 或通用源码 URL 都 fail-closed。
+1. 扩充 source/toolchain lock。除 plugin 和 npm/Python 包外，必须锁定 Node runtime、CPython runtime、LibreOffice、Poppler、字体及 native modules 的每目标 immutable binary URL/SHA/license，或锁定源码构建配方、runner OS 标签、必需构建工具、flags 和 patch SHA；实际 GitHub-hosted image 修订版及构建工具版本哈希进入每次构建的不可变 receipt，不作为无法由 `runs-on` 选择的虚假精确镜像锁。任何“使用 runner 预装版本的 Runtime 组件”、floating package index、未锁定 wheel/npm install 或通用源码 URL 都 fail-closed。
 2. `fetch-runtime-sources.mjs` 只把 lock 声明的对象下载到 SHA 内容寻址 cache；下载完成先核对 digest、size 和许可证 receipt，再允许物化。缓存命中也重新核对 hash；脚本不得执行来自下载包的任意安装 hook，也不得从 lock 外补依赖。
 3. `materialize-runtime-inputs.mjs` 在对应 target 的原生 clean runner 上生成临时 `runtime-inputs/<target>`。它解包/构建解释器和 native binary，以离线方式安装锁定 npm/Python 闭包，复制字体，展开锁定 plugin snapshot 并应用精确 patch；必要 patch 只处理离线路径、宿主 imagegen handoff、禁止直接模型 HTTP、禁止自建 venv/在线安装和系统依赖发现。
 4. 物化阶段生成 `runtime-inputs.manifest.json`：记录 target、source/toolchain lock SHA、builder/version、每个输入组件、每个文件的 path/mode/SHA、patch SHA、许可证和构建 receipt。`verify-runtime-inputs.mjs` 拒绝缺文件、额外未绑定文件、符号链接逃逸、错误目标、错误可执行格式/版本以及目录外依赖；四目标分别执行 Node/Python import、native module load、LibreOffice/Poppler 和中文字体 render smoke。
@@ -603,7 +603,8 @@ npm --prefix desktop-app run test:e2e:release-llm
 | 风险 | 处理 |
 | --- | --- |
 | 构建脚本要求一个没人生产的 `runtime-inputs/<target>` 目录 | GitHub Actions workflow 先从 source/toolchain lock 执行 fetch/materialize/verify，并显式传 `--input-root`；默认目录只允许单测 fixture，clean checkout 重建是 AC-18 |
-| source lock 有源码 URL，但没有可执行解释器/原生工具的目标配方 | Node/CPython/native/fonts 必须锁 immutable binary，或锁 builder image/toolchain/flags/patch；每个目标通过 native format/version/load/render 验证 |
+| source lock 有源码 URL，但没有可执行解释器/原生工具的目标配方 | Node/CPython/native/fonts 必须锁 immutable binary，或锁源码构建配方、runner OS 标签、必需工具、flags/patch；记录实际镜像及工具版本哈希，每个目标通过 native format/version/load/render 验证 |
+| 标准 GitHub-hosted runner 每周更新导致精确 image version 锁失效 | 只锁可选择的 OS 标签，运行时验证 GitHub-hosted 身份和镜像版本格式，将实际版本绑定到 input manifest/provenance；Windows cache 仍按实际版本隔离并在命中后重验输入。此方案不等于固定 VM 镜像，字节级复现另需固定容器或自管 runner |
 | 未做生产签名却被误认为可公开发布 | 所有 staging/feed/receipt 固定写入 `releaseClass=engineering`、`productionTrust=false`、`publiclyDeployable=false`；contract test 禁止出现 `production_ready` |
 | CI 临时 metadata 私钥泄漏到 artifact/cache/log | 只在 `$RUNNER_TEMP` 生成，关闭 command echo，artifact allowlist 只接收公钥/签名输出；上传前递归扫描 PEM/private-key 标记，job 结束删除临时目录 |
 | GitHub artifact 被误当成公开 CDN | workflow 权限只保留 `contents: read`/`actions: read`，不配置 cloud credential 或 deploy environment；artifact 名称固定为 `primary-runtime-engineering-feed`，README 明确仅供测试与后续生产交接 |
@@ -650,7 +651,7 @@ npm --prefix desktop-app run test:e2e:release-llm
 - 将旧私有包/Presentations gate 迁移拆分到 P0 文档/source-lock、P5 host E2E、P6 feed/smoke/app-tools、P7 live/release workflow，并新增 AC-17 全仓扫描门禁。
 - P0 候选审计结论：`v0.11.0`（commit `311e29920c7c7ab37a93c12676bab7baecc0f4a6`，archive SHA256 `b34fcadf960a157b838098608ba64c5e58e5e3c62b51924cb8e4944f199991f4`）因锁定的 `Pillow==12.3.0` 未在 PyPI 发布而标记 `candidate_rejected`。按本节第 5 步显式选择并锁定同一仓库的 `v0.8.0`（commit `a25708686160a13a4cdcb9cc1cc206fa9cb86219`，archive SHA256 `763827964186eeac53ee19d18055b640766ad840839cd35488c32fac9ed95fb7`，plugin tree SHA256 `9cb6bf30c6fa91e80aed59feece84119b63f81aa124f74d97ec871ce17c11fe4`）；本项目 patch 的 SHA256、最小调用闭包和逐项许可证均记录在 `primary-runtime/runtime-sources.lock.json`。此选择只授权“新建 PPTX + QA + 预览”allowlist；P1a 仍须构建并验证四目标实包，不得把 P0 审计记录误报为 release evidence。
 - 补齐此前遗漏的生产端：现有 `build-runtime.mjs` 只读取已存在的 input root，而 build workflow 没有 materialize 步骤；P1a 现在明确 source/toolchain lock、内容寻址 fetch、GitHub Actions 四目标原生物化、input/file manifest、archive/provenance、platform validation 和目标 staging 的完整交接。
-- 明确 Node/CPython runtime 与四目标 native binary 不能由 runner 预装环境补位；必须锁定 immutable binary，或提供 builder image/toolchain/flags/patch 的可审计构建配方。
+- 明确 Node/CPython runtime 与四目标 native binary 不能由 runner 预装环境补位；必须锁定 immutable binary，或提供源码、可选择的 runner OS 标签、必需工具、flags/patch 和实测镜像/工具 receipt 的可审计构建配方。标准 GitHub-hosted runner 的每周修订版不是可固定输入。
 - 将 feed 元数据生产收敛为同一 GitHub run 的 engineering aggregate job：临时测试密钥覆盖 config/manifest 验签与篡改/回滚拒绝，artifact 只含公钥并标记不可公开部署。
 - 关闭真实签名、平台/发布信任回执和公开 origin/CDN 生产门禁；`primary-runtime-publish.yml` 只负责 GitHub artifact 复核/组装，本轮不新增 signing/deploy workflow，完成状态限定为 `engineering_complete`。
 - 固定四平台 GitHub Actions runner 映射为 `macos-15-intel`、`macos-15`、`windows-2025`、`ubuntu-24.04`，并要求协调 job 只消费四个固定名 target staging。

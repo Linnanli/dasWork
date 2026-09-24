@@ -68,6 +68,8 @@ const { manifest: inputManifest } = await assertRuntimeInputsManifest({
   target,
   sourceLockPath: argumentsValue.lock,
   toolchainsLockPath: argumentsValue.toolchainsLock,
+  expectedObservedBuilderImage:
+    process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE,
 });
 const inputManifestBytes = await readFile(
   join(inputRoot, "runtime-inputs.manifest.json"),
