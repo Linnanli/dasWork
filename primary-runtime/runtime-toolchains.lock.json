@@ -622,10 +622,10 @@
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
         "image": {
-          "version": "20260920.314.1",
-          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260920.314",
-          "sourceCommit": "e75633902841aa5479c759492b73409e6d317f12",
-          "imageDigestSha256": "01ce32bdac993f7850d5f972c633e3945f67cd51dbbd21ae9b69cfba584e04fc"
+          "version": "20260907.300.1",
+          "releaseUrl": "https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300",
+          "sourceCommit": "fc63e1b4dbfacf7e2449bf0706226f9f6eea583e",
+          "imageDigestSha256": "f204fd2ffb287b4612bdfabe9f5f0e42ad3ef17c674878b4bba2283b018cda7c"
         },
         "tools": ["tar", "dpkg-deb", "cmake", "ninja", "gcc", "g++"]
       },
