@@ -31,9 +31,9 @@ async function main() {
   const configuration = resolvePrimaryRuntimeFeedDevelopmentConfiguration()
   const server = await startPrimaryRuntimeFeed(configuration)
   try {
-    const buildStatus = await run('npm', ['run', 'build'])
+    const buildStatus = await runPrimaryRuntimeFeedE2eCommand('npm', ['run', 'build'])
     if (buildStatus !== 0) return buildStatus
-    return await run(
+    return await runPrimaryRuntimeFeedE2eCommand(
       'npx',
       ['playwright', 'test', 'tests/e2e/primary-runtime-feed.e2e.ts', '--reporter=line'],
       primaryRuntimeFeedChildEnvironment(configuration, {
@@ -49,8 +49,8 @@ async function main() {
   }
 }
 
-function run(command, args, extraEnv = {}) {
-  const environment = { ...extraEnv }
+export function runPrimaryRuntimeFeedE2eCommand(command, args, childEnv = process.env) {
+  const environment = { ...childEnv }
   // The real app-server executable is the only supported runtime for this
   // gate. A test-only JSON-RPC stand-in would invalidate the result.
   delete environment.CODEX_APP_SERVER_BIN

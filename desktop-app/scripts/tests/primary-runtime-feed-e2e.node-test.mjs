@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 
-import { requirePrimaryRuntimeFeedE2eEnvironment } from '../run-primary-runtime-feed-e2e.mjs'
+import {
+  requirePrimaryRuntimeFeedE2eEnvironment,
+  runPrimaryRuntimeFeedE2eCommand
+} from '../run-primary-runtime-feed-e2e.mjs'
 import { writePackagedAppAssetReceipt } from '../packaged-app-assets.mjs'
 
 const appRoot = resolve(import.meta.dirname, '../..')
@@ -23,6 +26,21 @@ test('signed Feed E2E requires an explicit real-Runtime opt-in', () => {
   )
   assert.doesNotThrow(() =>
     requirePrimaryRuntimeFeedE2eEnvironment({ DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1' })
+  )
+})
+
+test('Feed E2E commands inherit the host PATH and reject an app-server stand-in', async () => {
+  const checkEnvironment = [
+    'const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path")',
+    'if (!pathKey || !process.env[pathKey] || process.env.CODEX_APP_SERVER_BIN) process.exit(1)'
+  ].join('; ')
+  assert.equal(await runPrimaryRuntimeFeedE2eCommand(process.execPath, ['-e', checkEnvironment]), 0)
+  assert.equal(
+    await runPrimaryRuntimeFeedE2eCommand(process.execPath, ['-e', checkEnvironment], {
+      ...process.env,
+      CODEX_APP_SERVER_BIN: 'test-stand-in'
+    }),
+    0
   )
 })
 
