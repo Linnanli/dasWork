@@ -174,7 +174,9 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(reviewWorkflow, /run\.conclusion !== 'success'/u)
   assert.match(reviewWorkflow, /report\.evidence\.sourceCommit !== run\.head_sha/u)
   assert.match(reviewWorkflow, /report\.evidence\[field\] !== actual/u)
-  assert.match(reviewWorkflow, /calibrate:budgets/u)
+  assert.match(reviewWorkflow, /node primary-runtime\/scripts\/calibrate-runtime-budgets\.mjs/u)
+  assert.match(reviewWorkflow, /JSON\.parse\(require\("node:fs"\)\.readFileSync/u)
+  assert.doesNotMatch(reviewWorkflow, /npm --prefix primary-runtime run calibrate:budgets/u)
   assert.doesNotMatch(reviewWorkflow, /runtime-budgets\.json|reviewed:\s*true/u)
   assert.match(buildWorkflow, /^permissions:\n {2}contents: read\n {2}actions: read$/mu)
   assert.match(
