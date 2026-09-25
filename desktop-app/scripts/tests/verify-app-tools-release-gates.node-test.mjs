@@ -151,7 +151,7 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
   }
 })
 
-test('produces verifier-consumable AT-E2E evidence from a real R07 live trace report', async () => {
+test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fixture', async () => {
   const directory = await fixtureDirectory()
   try {
     const fixture = await writeAppToolsProducerFixture(directory)
@@ -343,6 +343,38 @@ test('produces verifier-consumable AT-E2E evidence from a real R07 live trace re
         feedRoot: fixture.feedRoot,
         channel: 'engineering',
         liveReport: badRenderReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace report.*renderReport/u
+    )
+    const unpaddedSlideReport = join(directory, 'unpadded-slide-report.json')
+    const unpaddedRenderReport = {
+      ...fixture.liveTrace.renderReport,
+      slides: fixture.liveTrace.renderReport.slides.map((slide, index) =>
+        index === 0 ? { ...slide, file: 'slide-1.png' } : slide
+      )
+    }
+    await writeFile(
+      unpaddedSlideReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: unpaddedRenderReport,
+        renderReportSha256: sha256Text(JSON.stringify(unpaddedRenderReport))
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: unpaddedSlideReport,
         outputDir: fixture.outputDir,
         sourceLock: fixture.sourceLock,
         toolchainsLock: fixture.toolchainsLock,
@@ -744,8 +776,8 @@ async function writeAppToolsProducerFixture(directory) {
   })}\n`
   const renderReport = {
     schemaVersion: 'dascowork-r07-render-qa.v1',
-    slides: Array.from({ length: 6 }, (_, index) => ({
-      file: `slide-${index + 1}.png`,
+    slides: ['01', '02', '03', '04', '05', '06'].map((number) => ({
+      file: `slide-${number}.png`,
       width: 960,
       height: 540,
       nonWhiteRatio: 0.2,

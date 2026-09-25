@@ -250,7 +250,7 @@ function isRenderReport(value) {
     value.slides.every(
       (slide, index) =>
         isRecord(slide) &&
-        slide.file === `slide-${index + 1}.png` &&
+        slide.file === `slide-${String(index + 1).padStart(2, '0')}.png` &&
         typeof slide.width === 'number' &&
         slide.width >= 900 &&
         typeof slide.height === 'number' &&

@@ -178,7 +178,9 @@ export async function verifyR07RenderedSlides(
   const slideFiles = (await readdir(renderedRoot))
     .filter((name) => /^slide-\d+\.png$/u.test(name))
     .sort((left, right) => left.localeCompare(right, 'en'))
-  expect(slideFiles).toHaveLength(6)
+  expect(slideFiles).toEqual(
+    Array.from({ length: 6 }, (_, index) => `slide-${String(index + 1).padStart(2, '0')}.png`)
+  )
 
   const metrics = await Promise.all(
     slideFiles.map(async (file) => ({
