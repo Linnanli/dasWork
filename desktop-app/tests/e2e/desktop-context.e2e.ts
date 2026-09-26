@@ -1,6 +1,10 @@
 import { expect, test, type ElectronApplication } from '@playwright/test'
 
 import { attachDiagnostics, closeApp, launchApp } from './support/app'
+import {
+  createAppServerRequestCapture,
+  type AppServerRequestCapture
+} from './support/appServerRequestCapture'
 import { ensureLocalProjectSelected, sendComposerMessage } from './support/chatActions'
 import { assistantMessageResponse, startMockBackend } from './support/mockBackend'
 
@@ -23,18 +27,23 @@ test('injects one gated desktop app-context into normal and projectless app-serv
       )
     ]
   })
+  const appServerCapture = await createAppServerRequestCapture()
   const logs: string[] = []
   let app: ElectronApplication | undefined
 
   try {
-    app = await launchApp(backend, logs)
+    app = await launchApp(backend, logs, { environment: appServerCapture.environment })
     const page = await app.firstWindow()
     await ensureLocalProjectSelected(page)
     await sendComposerMessage(page, 'Create a normal local thread.')
     await expect(page.locator('[data-role="assistant"]')).toContainText('Local reply')
 
-    await expect.poll(() => outboundDeveloperInstructions(logs).length, { timeout: 10_000 }).toBe(1)
-    const localInstructions = outboundDeveloperInstructions(logs)[0]
+    await expect
+      .poll(async () => (await outboundDeveloperInstructions(appServerCapture)).length, {
+        timeout: 10_000
+      })
+      .toBe(1)
+    const localInstructions = (await outboundDeveloperInstructions(appServerCapture))[0]
     expect(localInstructions).toBeDefined()
     assertNormalDesktopContext(localInstructions ?? '')
 
@@ -45,88 +54,28 @@ test('injects one gated desktop app-context into normal and projectless app-serv
     await sendComposerMessage(page, 'Create a projectless thread.')
     await expect(page.locator('[data-role="assistant"]')).toContainText('Projectless reply')
 
-    await expect.poll(() => outboundDeveloperInstructions(logs).length, { timeout: 10_000 }).toBe(2)
-    const projectlessInstructions = outboundDeveloperInstructions(logs)[1]
+    await expect
+      .poll(async () => (await outboundDeveloperInstructions(appServerCapture)).length, {
+        timeout: 10_000
+      })
+      .toBe(2)
+    const projectlessInstructions = (await outboundDeveloperInstructions(appServerCapture))[1]
     expect(projectlessInstructions).toBeDefined()
     assertProjectlessDesktopContext(projectlessInstructions ?? '')
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)
+    await appServerCapture.cleanup()
     await backend.close()
   }
 })
 
-function outboundDeveloperInstructions(logs: readonly string[]): string[] {
-  return logs.flatMap(parseCodexAspPackets).flatMap(({ message }) => {
-    if (message.debug !== 'thread/start') return []
-
-    const developerInstructions = message.data?.developerInstructions
+async function outboundDeveloperInstructions(capture: AppServerRequestCapture): Promise<string[]> {
+  const requests = await capture.requestParams('thread/start')
+  return requests.flatMap((params) => {
+    const developerInstructions = params.developerInstructions
     return typeof developerInstructions === 'string' ? [developerInstructions] : []
   })
-}
-
-function parseCodexAspPackets(
-  line: string
-): Array<{ message: { debug?: string; data?: { developerInstructions?: unknown } } }> {
-  const marker = '[codex-asp] '
-  const packets = [] as Array<{
-    message: { debug?: string; data?: { developerInstructions?: unknown } }
-  }>
-  let searchFrom = 0
-
-  while (true) {
-    const payloadStart = line.indexOf(marker, searchFrom)
-    if (payloadStart < 0) return packets
-
-    const packet = parseJsonObjectPrefix(line.slice(payloadStart + marker.length))
-    if (packet && typeof packet === 'object' && 'message' in packet) {
-      const { message } = packet
-      if (message && typeof message === 'object') {
-        packets.push({
-          message: message as { debug?: string; data?: { developerInstructions?: unknown } }
-        })
-      }
-    }
-
-    searchFrom = payloadStart + marker.length
-  }
-}
-
-function parseJsonObjectPrefix(input: string): unknown {
-  let depth = 0
-  let escaped = false
-  let inString = false
-
-  for (let index = 0; index < input.length; index += 1) {
-    const character = input[index]
-    if (inString) {
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (character === '"') {
-      inString = true
-    } else if (character === '{') {
-      depth += 1
-    } else if (character === '}') {
-      depth -= 1
-      if (depth === 0) {
-        try {
-          return JSON.parse(input.slice(0, index + 1)) as unknown
-        } catch {
-          return undefined
-        }
-      }
-    }
-  }
-
-  return undefined
 }
 
 function assertNormalDesktopContext(instructions: string): void {

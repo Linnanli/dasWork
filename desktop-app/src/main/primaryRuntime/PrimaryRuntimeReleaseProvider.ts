@@ -2,20 +2,28 @@ import { createHash, randomUUID } from 'node:crypto'
 import { chmod, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import type { PrimaryRuntimeReleaseDescriptor } from './primaryRuntimeTypes'
+import type {
+  PrimaryRuntimeReleaseBudget,
+  PrimaryRuntimeReleaseDescriptor
+} from './primaryRuntimeTypes'
 import {
-  fetchPrimaryRuntimeReleaseManifest,
   parseAndVerifyPrimaryRuntimeReleaseManifest,
   type PrimaryRuntimeManifestPublicKey,
   type PrimaryRuntimeManifestSequenceStore
 } from './PrimaryRuntimeReleaseManifest'
+import { PrimaryRuntimeHttpClient } from './PrimaryRuntimeHttpClient'
+import type {
+  PrimaryRuntimeTrustRecord,
+  PrimaryRuntimeTrustStateStore
+} from './PrimaryRuntimeTrustStateStore'
 
 export type PrimaryRuntimeReleaseProvider = {
   getRelease(): Promise<PrimaryRuntimeReleaseDescriptor | null>
   downloadArchive(
     descriptor: PrimaryRuntimeReleaseDescriptor,
     destinationPath: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    onProgress?: (progress: PrimaryRuntimeDownloadProgress) => void
   ): Promise<PrimaryRuntimeDownloadedArchive>
 }
 
@@ -23,6 +31,11 @@ export type PrimaryRuntimeDownloadedArchive = {
   path: string
   sizeBytes: number
   sha256: string
+}
+
+export type PrimaryRuntimeDownloadProgress = {
+  downloadedBytes: number
+  totalBytes: number
 }
 
 export type TrustedPrimaryRuntimeRelease = PrimaryRuntimeReleaseDescriptor & {
@@ -39,10 +52,11 @@ export type TrustedPrimaryRuntimeRelease = PrimaryRuntimeReleaseDescriptor & {
 export class TrustedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleaseProvider {
   private readonly descriptor: PrimaryRuntimeReleaseDescriptor
   private readonly archiveUrl: URL
+  private readonly httpClient: PrimaryRuntimeHttpClient
 
   constructor(
     release: TrustedPrimaryRuntimeRelease,
-    private readonly fetchImpl: typeof fetch = fetch
+    fetchOrHttpClient: typeof fetch | PrimaryRuntimeHttpClient = fetch
   ) {
     const archiveUrl = new URL(release.archiveUrl)
     if (
@@ -60,11 +74,20 @@ export class TrustedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeRelea
       throw new Error('Primary Runtime release URL origin is not in the trusted allowlist.')
     }
     this.archiveUrl = archiveUrl
+    this.httpClient =
+      typeof fetchOrHttpClient === 'function'
+        ? new PrimaryRuntimeHttpClient({
+            allowedOrigins,
+            fetchImpl: fetchOrHttpClient
+          })
+        : fetchOrHttpClient
     this.descriptor = {
       version: release.version,
       archiveFormat: release.archiveFormat,
       archiveSizeBytes: release.archiveSizeBytes,
-      archiveSha256: release.archiveSha256
+      archiveSha256: release.archiveSha256,
+      ...(release.budget ? { budget: { ...release.budget } } : {}),
+      ...(release.manifestSequence ? { manifestSequence: release.manifestSequence } : {})
     }
   }
 
@@ -75,19 +98,13 @@ export class TrustedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeRelea
   async downloadArchive(
     descriptor: PrimaryRuntimeReleaseDescriptor,
     destinationPath: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    onProgress?: (progress: PrimaryRuntimeDownloadProgress) => void
   ): Promise<PrimaryRuntimeDownloadedArchive> {
     if (!sameDescriptor(descriptor, this.descriptor)) {
       throw new Error('Primary Runtime release descriptor does not match the trusted release.')
     }
-    const response = await this.fetchImpl(this.archiveUrl, {
-      method: 'GET',
-      redirect: 'error',
-      signal
-    })
-    if (!response.ok) {
-      throw new Error(`Primary Runtime archive download failed: HTTP ${response.status}`)
-    }
+    const response = await this.httpClient.request(this.archiveUrl, { signal })
     const advertisedLength = response.headers.get('content-length')
     if (
       advertisedLength !== null &&
@@ -105,6 +122,7 @@ export class TrustedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeRelea
     const reader = response.body.getReader()
     const sha256 = createHash('sha256')
     let bytesWritten = 0
+    onProgress?.({ downloadedBytes: bytesWritten, totalBytes: descriptor.archiveSizeBytes })
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -116,6 +134,7 @@ export class TrustedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeRelea
         await writeAll(handle, value)
         sha256.update(value)
         bytesWritten += value.byteLength
+        onProgress?.({ downloadedBytes: bytesWritten, totalBytes: descriptor.archiveSizeBytes })
       }
       if (bytesWritten !== descriptor.archiveSizeBytes) {
         throw new Error('Primary Runtime archive is shorter than the trusted release size.')
@@ -148,6 +167,19 @@ export type SignedPrimaryRuntimeReleaseProviderInput = {
   arch?: NodeJS.Architecture
   now?: () => Date
   fetchImpl?: typeof fetch
+  httpClient?: PrimaryRuntimeHttpClient
+  /** Persists the exact accepted metadata so equal-sequence equivocation fails closed. */
+  trustState: PrimaryRuntimeTrustStateStore
+}
+
+export type PrimaryRuntimeVerifiedSignedRelease = {
+  descriptor: PrimaryRuntimeReleaseDescriptor
+  archiveUrl: string
+  allowedOrigins: readonly string[]
+  issuedAt: string
+  expiresAt: string
+  trustRecord: PrimaryRuntimeTrustRecord
+  persistHighestSequence(): Promise<void>
 }
 
 /**
@@ -160,6 +192,7 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
   private readonly arch: NodeJS.Architecture
   private readonly now: () => Date
   private readonly fetchImpl: typeof fetch
+  private readonly httpClient: PrimaryRuntimeHttpClient
   private archiveProvider: TrustedPrimaryRuntimeReleaseProvider | undefined
   private descriptor: PrimaryRuntimeReleaseDescriptor | undefined
 
@@ -171,14 +204,29 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
     this.arch = input.arch ?? process.arch
     this.now = input.now ?? (() => new Date())
     this.fetchImpl = input.fetchImpl ?? fetch
+    this.httpClient =
+      input.httpClient ??
+      new PrimaryRuntimeHttpClient({
+        allowedOrigins: input.allowedOrigins,
+        fetchImpl: this.fetchImpl
+      })
   }
 
   async getRelease(): Promise<PrimaryRuntimeReleaseDescriptor> {
-    const manifest = await fetchPrimaryRuntimeReleaseManifest({
-      manifestUrl: this.input.manifestUrl,
-      allowedOrigins: this.input.allowedOrigins,
-      fetchImpl: this.fetchImpl
-    })
+    const verifiedRelease = await this.getVerifiedRelease({ acceptTrust: true })
+    return { ...verifiedRelease.descriptor }
+  }
+
+  async getVerifiedRelease(
+    input: {
+      acceptTrust?: boolean
+      acceptedAt?: Date
+    } = {}
+  ): Promise<PrimaryRuntimeVerifiedSignedRelease> {
+    const acceptedAt = input.acceptedAt ?? this.now()
+    const manifest = await this.httpClient.getJson(this.input.manifestUrl)
+    const existingTrust = await this.input.trustState.read('manifest')
+    const highestSequence = await this.input.sequenceStore.readHighestSequence()
     const verified = parseAndVerifyPrimaryRuntimeReleaseManifest({
       manifest,
       publicKeys: this.input.publicKeys,
@@ -186,37 +234,77 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
       channel: this.input.channel,
       platform: this.platform,
       arch: this.arch,
-      now: this.now(),
-      highestAcceptedSequence: await this.input.sequenceStore.readHighestSequence()
+      now: acceptedAt,
+      highestAcceptedSequence: Math.max(existingTrust?.sequence ?? 0, highestSequence ?? 0)
     })
-    await this.input.sequenceStore.persistHighestSequence(verified.sequence)
+    const trustRecord: PrimaryRuntimeTrustRecord = {
+      sequence: verified.sequence,
+      payloadHash: verified.payloadHash,
+      keyId: verified.keyId,
+      acceptedAt: acceptedAt.toISOString(),
+      origin: new URL(this.input.manifestUrl).origin,
+      channel: verified.channel,
+      role: 'manifest'
+    }
 
-    this.descriptor = {
+    if (!verified.budget) {
+      throw new Error('Primary Runtime signed release manifest is missing its budget.')
+    }
+    const verifiedBudget = verified.budget
+    const budget: PrimaryRuntimeReleaseBudget = {
+      maxArchiveBytes: verifiedBudget.maxArchiveBytes,
+      maxUnpackedBytes: verifiedBudget.maxUnpackedBytes,
+      minimumFreeDiskBytes: verifiedBudget.minimumFreeDiskBytes,
+      maxColdInstallMs: verifiedBudget.maxColdInstallMs,
+      maxMainEventLoopDelayP99Ms: verifiedBudget.maxMainEventLoopDelayP99Ms,
+      maxMainEventLoopDelayMaxMs: verifiedBudget.maxMainEventLoopDelayMaxMs
+    }
+    const descriptor: PrimaryRuntimeReleaseDescriptor = {
       version: verified.version,
       archiveFormat: verified.archiveFormat,
       archiveSizeBytes: verified.archiveSizeBytes,
-      archiveSha256: verified.archiveSha256
+      archiveSha256: verified.archiveSha256,
+      budget,
+      manifestSequence: verified.sequence
     }
+    this.descriptor = descriptor
     this.archiveProvider = new TrustedPrimaryRuntimeReleaseProvider(
       {
-        ...this.descriptor,
+        ...descriptor,
         archiveUrl: verified.archiveUrl,
         allowedOrigins: verified.allowedOrigins
       },
-      this.fetchImpl
+      this.httpClient
     )
-    return { ...this.descriptor }
+    if (input.acceptTrust !== false) {
+      await this.input.trustState.accept(trustRecord)
+      await this.persistHighestSequence(verified.sequence)
+    }
+    return {
+      descriptor: { ...descriptor },
+      archiveUrl: verified.archiveUrl,
+      allowedOrigins: verified.allowedOrigins,
+      issuedAt: verified.issuedAt,
+      expiresAt: verified.expiresAt,
+      trustRecord,
+      persistHighestSequence: () => this.persistHighestSequence(verified.sequence)
+    }
   }
 
   async downloadArchive(
     descriptor: PrimaryRuntimeReleaseDescriptor,
     destinationPath: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    onProgress?: (progress: PrimaryRuntimeDownloadProgress) => void
   ): Promise<PrimaryRuntimeDownloadedArchive> {
     if (!this.archiveProvider || !this.descriptor || !sameDescriptor(descriptor, this.descriptor)) {
       throw new Error('Primary Runtime release descriptor does not match the verified manifest.')
     }
-    return this.archiveProvider.downloadArchive(descriptor, destinationPath, signal)
+    return this.archiveProvider.downloadArchive(descriptor, destinationPath, signal, onProgress)
+  }
+
+  private async persistHighestSequence(sequence: number): Promise<void> {
+    await this.input.sequenceStore.persistHighestSequence(sequence)
   }
 }
 
@@ -268,6 +356,22 @@ function sameDescriptor(
     left.version === right.version &&
     left.archiveFormat === right.archiveFormat &&
     left.archiveSizeBytes === right.archiveSizeBytes &&
-    left.archiveSha256 === right.archiveSha256
+    left.archiveSha256 === right.archiveSha256 &&
+    sameBudget(left.budget, right.budget)
+  )
+}
+
+function sameBudget(
+  left: PrimaryRuntimeReleaseDescriptor['budget'],
+  right: PrimaryRuntimeReleaseDescriptor['budget']
+): boolean {
+  if (!left || !right) return left === right
+  return (
+    left.maxArchiveBytes === right.maxArchiveBytes &&
+    left.maxUnpackedBytes === right.maxUnpackedBytes &&
+    left.minimumFreeDiskBytes === right.minimumFreeDiskBytes &&
+    left.maxColdInstallMs === right.maxColdInstallMs &&
+    left.maxMainEventLoopDelayP99Ms === right.maxMainEventLoopDelayP99Ms &&
+    left.maxMainEventLoopDelayMaxMs === right.maxMainEventLoopDelayMaxMs
   )
 }

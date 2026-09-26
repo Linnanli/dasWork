@@ -1,0 +1,11 @@
+# The Primary Runtime source lock binds this patch by its exact byte digest.
+# Keep Git's platform-specific text conversion from changing that evidence.
+primary-runtime/patches/*.patch -text whitespace=-blank-at-eol
+
+# Calibration evidence hashes these files byte-for-byte across native runners.
+primary-runtime/runtime-hard-limits.json text eol=lf
+primary-runtime/runtime-sources.lock.json text eol=lf
+primary-runtime/runtime-toolchains.lock.json text eol=lf
+
+# Patch-preimage fixtures are byte- and Git-blob-bound across every CI platform.
+primary-runtime/tests/fixtures/presentation-skill-v0.8.0/** -text

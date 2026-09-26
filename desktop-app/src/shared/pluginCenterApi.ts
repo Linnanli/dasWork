@@ -6,6 +6,10 @@ export const PLUGIN_CENTER_SKILL_CONTENTS_MAX_BYTES = 512 * 1024
 
 export const pluginCenterIpcChannels = {
   getSnapshot: 'codex:plugin-center:get-snapshot',
+  getPrimaryRuntimeStatus: 'codex:plugin-center:get-primary-runtime-status',
+  installOrRepairPrimaryRuntime: 'codex:plugin-center:install-or-repair-primary-runtime',
+  runPrimaryRuntimeUpdate: 'codex:plugin-center:run-primary-runtime-update',
+  cancelPrimaryRuntime: 'codex:plugin-center:cancel-primary-runtime',
   getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
   getPluginDetail: 'codex:plugin-center:get-plugin-detail',
   getAppTools: 'codex:plugin-center:get-app-tools',
@@ -23,6 +27,10 @@ export const pluginCenterIpcChannels = {
   upsertMcpServer: 'codex:plugin-center:upsert-mcp-server',
   removeMcpServer: 'codex:plugin-center:remove-mcp-server',
   cancelRequest: 'codex:plugin-center:cancel-request'
+} as const
+
+export const pluginCenterIpcEvents = {
+  primaryRuntimeStatus: 'codex:plugin-center:primary-runtime-status'
 } as const
 
 const nonEmptyStringSchema = z.string().trim().min(1)
@@ -517,6 +525,125 @@ export const pluginCenterSnapshotResultSchema = z
 
 export type PluginCenterSnapshotResult = z.infer<typeof pluginCenterSnapshotResultSchema>
 
+const pluginCenterPrimaryRuntimeStateSchema = z.enum([
+  'disabled',
+  'resolving',
+  'checking',
+  'missing',
+  'downloading',
+  'verifying',
+  'extracting',
+  'validating',
+  'installing',
+  'activating',
+  'configuring',
+  'committing',
+  'rolling-back',
+  'broken',
+  'unsupported',
+  'ready',
+  'update-available',
+  'failed'
+])
+
+export const pluginCenterPrimaryRuntimeStatusSchema = z
+  .object({
+    state: pluginCenterPrimaryRuntimeStateSchema,
+    operationId: z.string().trim().min(1).max(200).optional(),
+    callId: z.string().trim().min(1).max(200).optional(),
+    currentVersion: optionalDisplayStringSchema,
+    targetVersion: optionalDisplayStringSchema,
+    manifestSequence: z.number().int().positive().optional(),
+    downloadedBytes: z.number().int().nonnegative().optional(),
+    downloadSizeBytes: z.number().int().positive().optional(),
+    nextCheckAt: z.string().datetime({ offset: true }).optional(),
+    failureKind: z
+      .enum(['network', 'integrity', 'storage', 'unsupported', 'provenance', 'unavailable'])
+      .optional(),
+    failureCategory: z
+      .enum([
+        'aborted',
+        'unsupported_host',
+        'invalid_manifest',
+        'disk_full',
+        'permission_denied',
+        'network_fetch_failed',
+        'timeout',
+        'checksum_mismatch',
+        'http_client_error',
+        'http_server_error',
+        'archive_processing_failed',
+        'validation_failed',
+        'post_install_failed',
+        'filesystem_error',
+        'unknown'
+      ])
+      .optional(),
+    failureStage: z
+      .enum([
+        'resolve_manifest',
+        'create_staging_directory',
+        'prepare_archive',
+        'download_archive',
+        'verify_checksum',
+        'list_archive',
+        'extract_archive',
+        'validate_payload',
+        'activate_runtime',
+        'validate_cached_runtime',
+        'sync_plugins',
+        'sync_skills',
+        'reload_skills',
+        'cleanup'
+      ])
+      .optional(),
+    failureDomain: z
+      .enum([
+        'metadata',
+        'network',
+        'archive',
+        'payload',
+        'activation',
+        'post_install',
+        'filesystem',
+        'unknown'
+      ])
+      .optional(),
+    errorCode: z.string().trim().min(1).max(120).optional(),
+    retryable: z.boolean().optional(),
+    runtimeActive: z.boolean().optional(),
+    pluginReady: z.boolean().optional(),
+    message: optionalDisplayStringSchema,
+    recovery: optionalDisplayStringSchema,
+    canInstallOrRepair: z.boolean(),
+    canRunUpdate: z.boolean(),
+    canCancel: z.boolean()
+  })
+  .strict()
+
+export type PluginCenterPrimaryRuntimeStatus = z.infer<
+  typeof pluginCenterPrimaryRuntimeStatusSchema
+>
+
+export const pluginCenterPrimaryRuntimeRequestSchema = z
+  .object({ version: z.literal(PLUGIN_CENTER_API_VERSION) })
+  .strict()
+
+export type PluginCenterPrimaryRuntimeRequest = z.infer<
+  typeof pluginCenterPrimaryRuntimeRequestSchema
+>
+
+export const pluginCenterPrimaryRuntimeResultSchema = z
+  .object({
+    version: z.literal(PLUGIN_CENTER_API_VERSION),
+    runtime: pluginCenterPrimaryRuntimeStatusSchema
+  })
+  .strict()
+
+export type PluginCenterPrimaryRuntimeResult = z.infer<
+  typeof pluginCenterPrimaryRuntimeResultSchema
+>
+
 export const pluginCenterInstalledPluginsResultSchema = z
   .object({
     version: z.literal(PLUGIN_CENTER_API_VERSION),
@@ -975,10 +1102,29 @@ export type PluginCenterAddMarketplaceResult = z.infer<
 
 export type DesktopPluginCenterApi = {
   cancelRequest(requestId: string): void
+  subscribePrimaryRuntimeStatus(
+    listener: (status: PluginCenterPrimaryRuntimeStatus) => void
+  ): () => void
   getSnapshot(
     input: PluginCenterSnapshotRequest,
     options?: PluginCenterRequestOptions
   ): Promise<PluginCenterSnapshotResult>
+  getPrimaryRuntimeStatus(
+    input: PluginCenterPrimaryRuntimeRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterPrimaryRuntimeResult>
+  installOrRepairPrimaryRuntime(
+    input: PluginCenterPrimaryRuntimeRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterPrimaryRuntimeResult>
+  runPrimaryRuntimeUpdate(
+    input: PluginCenterPrimaryRuntimeRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterPrimaryRuntimeResult>
+  cancelPrimaryRuntime(
+    input: PluginCenterPrimaryRuntimeRequest,
+    options?: PluginCenterRequestOptions
+  ): Promise<PluginCenterPrimaryRuntimeResult>
   getInstalledPlugins(
     input: PluginCenterInstalledPluginsRequest,
     options?: PluginCenterRequestOptions

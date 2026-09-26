@@ -94,9 +94,7 @@ describe('GitHostRegistry', () => {
         return commandResult({ stdout: 'codex-cli 1.2.3\n', stderr: '', exitCode: 0 })
       }
       return new Promise<CodexCommandExecResult>((resolve) => {
-        deferredResults.push(() =>
-          resolve(commandResult({ stdout: '', stderr: '', exitCode: 0 }))
-        )
+        deferredResults.push(() => resolve(commandResult({ stdout: '', stderr: '', exitCode: 0 })))
       })
     })
     const host = new RemoteGitHost('devbox', client)
@@ -107,6 +105,76 @@ describe('GitHostRegistry', () => {
     await vi.waitFor(() => expect(deferredResults).toHaveLength(2))
     deferredResults.forEach((resolve) => resolve())
     await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ success: true }),
+      expect.objectContaining({ success: true })
+    ])
+  })
+
+  it('runs remote listing and revision counts as read-only commands', async () => {
+    const deferredResults: Array<() => void> = []
+    const client = createCommandClient()
+    client.exec = vi.fn((options) => {
+      if (options.command[0] === 'codex') {
+        return Promise.resolve(
+          commandResult({ stdout: 'codex-cli 1.2.3\n', stderr: '', exitCode: 0 })
+        )
+      }
+      return new Promise<CodexCommandExecResult>((resolve) => {
+        deferredResults.push(() => resolve(commandResult({ stdout: '', stderr: '', exitCode: 0 })))
+      })
+    })
+    const host = new RemoteGitHost('devbox', client)
+
+    const remotes = host.runGit(['remote'], '/srv/repo')
+    const commits = host.runGit(['rev-list', '--count', 'HEAD'], '/srv/repo')
+
+    await vi.waitFor(() => expect(deferredResults).toHaveLength(2))
+    deferredResults.forEach((resolve) => resolve())
+    await expect(Promise.all([remotes, commits])).resolves.toEqual([
+      expect.objectContaining({ success: true }),
+      expect.objectContaining({ success: true })
+    ])
+    expect(client.exec).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sandboxPolicy: { type: 'readOnly', networkAccess: false } })
+    )
+    expect(client.exec).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ sandboxPolicy: { type: 'readOnly', networkAccess: false } })
+    )
+  })
+
+  it('serializes background reads and lets foreground reads run first', async () => {
+    const backgroundResolvers: Array<() => void> = []
+    const client = createCommandClient()
+    client.exec = vi.fn(async (options) => {
+      if (options.command[0] === 'codex') {
+        return commandResult({ stdout: 'codex-cli 1.2.3\n', stderr: '', exitCode: 0 })
+      }
+      if (options.command.some((argument) => argument.startsWith('--background-probe='))) {
+        await new Promise<void>((resolve) => backgroundResolvers.push(resolve))
+      }
+      return commandResult({ stdout: '', stderr: '', exitCode: 0 })
+    })
+    const host = new RemoteGitHost('devbox', client)
+
+    const firstBackground = host.runGit(['diff', '--background-probe=first'], '/srv/repo', {
+      priority: 'background'
+    })
+    const secondBackground = host.runGit(['diff', '--background-probe=second'], '/srv/repo', {
+      priority: 'background'
+    })
+    await vi.waitFor(() => expect(backgroundResolvers).toHaveLength(1))
+
+    await expect(host.runGit(['status', '--porcelain=v1'], '/srv/repo')).resolves.toMatchObject({
+      success: true
+    })
+    expect(backgroundResolvers).toHaveLength(1)
+
+    backgroundResolvers[0]?.()
+    await vi.waitFor(() => expect(backgroundResolvers).toHaveLength(2))
+    backgroundResolvers[1]?.()
+    await expect(Promise.all([firstBackground, secondBackground])).resolves.toEqual([
       expect.objectContaining({ success: true }),
       expect.objectContaining({ success: true })
     ])

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -14,6 +14,8 @@ import { PLUGIN_CENTER_API_VERSION } from '../../../../shared/pluginCenterApi'
 import { PluginCenterPage, type PluginCenterSurface } from './PluginCenterPage'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const roots: Root[] = []
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -31,7 +33,11 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await act(async () => {
+    for (const root of roots.splice(0)) root.unmount()
+  })
+  document.body.replaceChildren()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -90,7 +96,54 @@ function pluginApiMock(snapshot: PluginCenterSnapshot): DesktopPluginCenterApi {
   let installedPlugins = snapshot.plugins.filter((plugin) => plugin.installed)
   return {
     cancelRequest: vi.fn(),
+    subscribePrimaryRuntimeStatus: vi.fn(() => () => undefined),
     getSnapshot: vi.fn(async () => ({ version: PLUGIN_CENTER_API_VERSION, snapshot })),
+    getPrimaryRuntimeStatus: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'missing' as const,
+        message: 'Primary Runtime 尚未安装。',
+        recovery: '可以从插件中心安装或修复 Primary Runtime；普通聊天不受影响。',
+        canInstallOrRepair: true,
+        canRunUpdate: true,
+        canCancel: false
+      }
+    })),
+    installOrRepairPrimaryRuntime: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'ready' as const,
+        currentVersion: '2026.9.10',
+        message: 'Primary Runtime 已就绪。',
+        recovery: '请新建任务。',
+        canInstallOrRepair: true,
+        canRunUpdate: true,
+        canCancel: false
+      }
+    })),
+    runPrimaryRuntimeUpdate: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'ready' as const,
+        currentVersion: '2026.9.10',
+        message: 'Primary Runtime 已就绪。',
+        recovery: '请新建任务。',
+        canInstallOrRepair: true,
+        canRunUpdate: true,
+        canCancel: false
+      }
+    })),
+    cancelPrimaryRuntime: vi.fn(async () => ({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'missing' as const,
+        message: 'Primary Runtime 尚未安装。',
+        recovery: '可以从插件中心安装或修复 Primary Runtime；普通聊天不受影响。',
+        canInstallOrRepair: true,
+        canRunUpdate: true,
+        canCancel: false
+      }
+    })),
     getInstalledPlugins: vi.fn(async () => ({
       version: PLUGIN_CENTER_API_VERSION,
       generatedAt: '2026-08-24T00:00:00.000Z',
@@ -225,6 +278,7 @@ async function renderPluginCenter(
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   const root = createRoot(container)
+  roots.push(root)
   const page = (
     <PluginCenterPage
       surface={surface}
@@ -277,6 +331,48 @@ describe('PluginCenterPage', () => {
 
     expect(page?.className).toContain('flex-1')
     expect(page?.className).toContain('min-w-0')
+  })
+
+  it('shows the Main-owned Primary Runtime state and only its safe recovery actions', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    const container = await renderPluginCenter(api, vi.fn(), { page: 'manage', tab: 'plugins' })
+
+    const status = container.querySelector<HTMLElement>('[data-slot="primary-runtime-status"]')
+    expect(status?.textContent).toContain('Primary Runtime')
+    expect(status?.textContent).toContain('Primary Runtime 尚未安装。')
+    expect(status?.textContent).toContain('安装或修复')
+    expect(status?.textContent).toContain('检查并更新')
+    expect(status?.textContent).not.toContain('https://')
+    expect(status?.textContent).not.toContain('/primary-runtime/')
+    expect(api.getPrimaryRuntimeStatus).toHaveBeenCalledWith({ version: PLUGIN_CENTER_API_VERSION })
+  })
+
+  it('renders Main-provided Runtime download progress without exposing a source path', async () => {
+    const api = pluginApiMock(baseSnapshot)
+    vi.mocked(api.getPrimaryRuntimeStatus).mockResolvedValue({
+      version: PLUGIN_CENTER_API_VERSION,
+      runtime: {
+        state: 'downloading',
+        operationId: '550e8400-e29b-41d4-a716-446655440000',
+        targetVersion: '2026.9.10',
+        downloadedBytes: 5 * 1024 * 1024,
+        downloadSizeBytes: 10 * 1024 * 1024,
+        nextCheckAt: '2026-09-10T06:00:31.500Z',
+        message: '正在下载受信任的 Primary Runtime。',
+        recovery: '完成后请新建任务以使用与此 Runtime 同代的工作区能力。',
+        canInstallOrRepair: false,
+        canRunUpdate: false,
+        canCancel: true
+      }
+    })
+
+    const container = await renderPluginCenter(api, vi.fn(), { page: 'manage', tab: 'plugins' })
+    const status = container.querySelector<HTMLElement>('[data-slot="primary-runtime-status"]')
+
+    expect(status?.textContent).toContain('下载进度 50%（5.0 MB / 10.0 MB）')
+    expect(status?.textContent).toContain('下次检查')
+    expect(status?.textContent).not.toContain('https://')
+    expect(status?.textContent).not.toContain('/primary-runtime/')
   })
 
   it('places the reference-sized browse introduction and full-width search in the scrollable list', async () => {
@@ -419,8 +515,8 @@ describe('PluginCenterPage', () => {
       id: 'plugin:primary-runtime',
       name: 'primary-runtime',
       displayName: 'Primary runtime',
-      marketplaceId: 'openai-primary-runtime',
-      marketplaceName: 'openai-primary-runtime'
+      marketplaceId: 'presentation-skill',
+      marketplaceName: 'presentation-skill'
     }
     const adminDisabled = {
       ...installedPlugin,

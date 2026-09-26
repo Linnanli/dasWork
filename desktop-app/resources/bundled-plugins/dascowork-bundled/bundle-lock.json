@@ -1,7 +1,7 @@
 {
   "bundleFormatVersion": 2,
   "marketplace": {
-    "name": "openai-bundled",
+    "name": "dascowork-bundled",
     "pluginRoot": "plugins"
   },
   "plugins": [
@@ -12,7 +12,7 @@
       "internal": true,
       "provenance": {
         "kind": "repo-owned",
-        "sourcePath": "desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools",
+        "sourcePath": "desktop-app/resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools",
         "licensePath": "LICENSE",
         "reviewStatus": "pending-independent-review"
       },

@@ -111,12 +111,12 @@ describe('buildComposerGlobalSearchResult', () => {
     const plugin = item({
       version: 1,
       kind: 'plugin',
-      canonicalId: 'plugin:spreadsheets@openai-primary-runtime',
+      canonicalId: 'plugin:spreadsheets@presentation-skill',
       label: 'Spreadsheets',
       description: 'Create and edit spreadsheet files',
       presentation: 'mention',
-      pluginId: 'spreadsheets@openai-primary-runtime',
-      uri: 'plugin://spreadsheets@openai-primary-runtime',
+      pluginId: 'spreadsheets@presentation-skill',
+      uri: 'plugin://spreadsheets@presentation-skill',
       mentionName: 'spreadsheets'
     })
     const skill = item({

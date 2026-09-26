@@ -167,6 +167,7 @@ export class NativeCodexRunDriver {
       let lifecycleSequence = 0
       let threadId = input.resumeThreadId
       let turnId: string | undefined
+      let goalControlReady = !input.goalControl
 
       const publishExistingTurnRecoveryState = (): void => {
         input.onExistingTurnRecoveryState?.(normalizer.snapshotExistingTurnRecoveryState())
@@ -226,7 +227,7 @@ export class NativeCodexRunDriver {
             const goal =
               method === 'thread/goal/cleared' ? null : (params.goal as ThreadGoalSummary | null)
             await input.onThreadGoalUpdated?.({ threadId: eventThreadId, goal })
-            if (input.goalContinuous && isTerminalGoal(goal)) completed = true
+            if (input.goalContinuous && goalControlReady && isTerminalGoal(goal)) completed = true
           }
         }
         emit(method, params)
@@ -303,6 +304,9 @@ export class NativeCodexRunDriver {
           turnId = nextTurnId
           normalizer.setTurnId(nextTurnId)
           publishExistingTurnRecoveryState()
+        },
+        onThreadGoalSet: () => {
+          goalControlReady = true
         }
       })
 
@@ -395,12 +399,17 @@ export class NativeCodexRunDriver {
       }
     })
     for (const method of SERVER_REQUEST_METHODS) {
-      client.onRequest(method, async (params, request) =>
-        this.routeServerRequest(
-          { method, id: request.id, params } as ServerRequest,
-          input,
-          fileChangeBatches
-        )
+      client.onRequest(
+        method,
+        async (params, request) =>
+          this.routeServerRequest(
+            { method, id: request.id, params } as ServerRequest,
+            input,
+            fileChangeBatches
+          ),
+        method === 'item/fileChange/requestApproval'
+          ? { waitForQueuedNotifications: true }
+          : undefined
       )
     }
   }
@@ -473,6 +482,7 @@ export class NativeCodexRunSession {
       inputAdapter: CodexRunInputAdapter
       runInput: NativeCodexRunDriverInput
       onTurnId(turnId: string): void
+      onThreadGoalSet(): void
     }
   ) {
     this.currentTurnId = options.turnId
@@ -522,6 +532,7 @@ export class NativeCodexRunSession {
       threadId: this.threadId,
       ...params
     })
+    this.options.onThreadGoalSet()
     return response.goal
   }
 

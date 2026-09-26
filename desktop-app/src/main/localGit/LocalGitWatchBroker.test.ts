@@ -54,6 +54,28 @@ describe('LocalGitWatchBroker', () => {
     broker.dispose()
   })
 
+  it('does not restart an immediate poll when an existing target is observed again', async () => {
+    const getState = vi.fn(async () =>
+      state('generation-1', { head: 'a', index: 'i1', worktree: 'w1' })
+    )
+    const broker = new LocalGitWatchBroker({
+      getState,
+      setInterval: vi.fn(() => 1 as never),
+      clearInterval: vi.fn()
+    })
+
+    broker.subscribe(new FakeWebContents(1))
+    broker.observeTarget({ ...target, hostId: 'devbox' })
+    await flushPromises()
+    expect(getState).toHaveBeenCalledTimes(1)
+
+    broker.observeTarget({ ...target, hostId: 'devbox' })
+    await flushPromises()
+
+    expect(getState).toHaveBeenCalledTimes(1)
+    broker.dispose()
+  })
+
   it('keeps every changed type from one fingerprint sample', () => {
     expect(
       changedTypes(

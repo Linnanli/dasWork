@@ -26,7 +26,10 @@ import {
   ConversationTranscriptController,
   type ConversationTranscriptMessage
 } from './ConversationTranscriptController'
-import { ConversationTranscriptRecoveryStore } from './ConversationTranscriptRecoveryStore'
+import {
+  ConversationTranscriptRecoveryStore,
+  latestAssistantTurnFailedOrInterrupted
+} from './ConversationTranscriptRecoveryStore'
 import { classifyConversationRecoveryError } from './classifyConversationRecoveryError'
 
 export type ConversationScrollSnapshot = {
@@ -202,6 +205,7 @@ export class ConversationChatRegistry {
     if (createdEntry && entry.localId === conversationId && recoverySnapshot?.baseMessages.length) {
       entry.controller.replaceMessages(recoverySnapshot.baseMessages)
     }
+    if (activeRun.runKind === 'single-turn') this.clearDraft(entry)
     entry.context = {
       ...entry.context,
       conversationId,
@@ -682,7 +686,10 @@ export class ConversationChatRegistry {
       const previousEntryDraft = entry.draft
       const previousEntryDraftAttachments = entry.draftAttachments
       const completedSuccessfulTurn =
-        isRunningStatus(previousControllerStatus) && snapshot.status === 'ready' && !snapshot.error
+        isRunningStatus(previousControllerStatus) &&
+        snapshot.status === 'ready' &&
+        !snapshot.error &&
+        !latestAssistantTurnFailedOrInterrupted(snapshot.messages)
       const semanticStatusChanged =
         previousControllerStatus !== snapshot.status || previousControllerError !== snapshot.error
       previousControllerStatus = snapshot.status
@@ -816,6 +823,14 @@ export class ConversationChatRegistry {
           if (!this.destroyed && entry === this.activeEntry) this.resumeEntry(entry)
         }, 750)
       }
+    } catch {
+      if (this.destroyed) return
+      entry.recoveryError = new Error('无法确认后台任务状态，请重试。')
+      if (!hasVisibleAssistantContent(entry.controller.getSnapshot().messages)) {
+        this.restoreRenderedActiveText(entry)
+      }
+      entry.recoveryPhase = 'needs_resume'
+      this.emit()
     } finally {
       this.recoveryHydrations.delete(entry)
     }

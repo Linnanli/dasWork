@@ -1,0 +1,134 @@
+name: Primary Runtime engineering artifact revalidation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Final Primary Runtime build run that produced the fixed four-target staging artifacts.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  revalidate-and-assemble:
+    name: Revalidate fixed final artifacts and assemble engineering feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Download fixed darwin-x64 final staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-x64-staging
+          path: ${{ runner.temp }}/targets/darwin-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Download fixed darwin-arm64 final staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-arm64-staging
+          path: ${{ runner.temp }}/targets/darwin-arm64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Download fixed win32-x64 final staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-win32-x64-staging
+          path: ${{ runner.temp }}/targets/win32-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Download fixed linux-x64 final staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-linux-x64-staging
+          path: ${{ runner.temp }}/targets/linux-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Revalidate candidate source and final target evidence
+        shell: bash
+        run: |
+          npm --prefix primary-runtime test
+          for target in darwin-x64 darwin-arm64 win32-x64 linux-x64; do
+            root="$RUNNER_TEMP/targets/$target"
+            npm --prefix primary-runtime run verify -- \
+              --target="$target" \
+              --archive "$root/primary-runtime.zip" \
+              --provenance "$root/provenance.json" \
+              --release-budget "$root/runtime-budgets.json" \
+              --performance-report "$root/performance-report.json"
+          done
+
+      - name: Generate ephemeral engineering metadata keys
+        shell: bash
+        run: npm --prefix services/primary-runtime-feed run generate:engineering-key -- --output "$RUNNER_TEMP/engineering-key"
+
+      - name: Create and sign only engineering feed metadata
+        shell: bash
+        run: |
+          metadata="$RUNNER_TEMP/metadata"
+          key="$RUNNER_TEMP/engineering-key/private-key.pem"
+          npm --prefix services/primary-runtime-feed run create:metadata -- \
+            --release-class engineering \
+            --output "$metadata" \
+            --target "darwin-x64=$RUNNER_TEMP/targets/darwin-x64" \
+            --target "darwin-arm64=$RUNNER_TEMP/targets/darwin-arm64" \
+            --target "win32-x64=$RUNNER_TEMP/targets/win32-x64" \
+            --target "linux-x64=$RUNNER_TEMP/targets/linux-x64"
+          mkdir -p "$metadata/channels/engineering"
+          npm --prefix services/primary-runtime-feed run sign:config -- --key "$key" --input "$metadata/config.unsigned.json" --output "$metadata/config.json"
+          npm --prefix services/primary-runtime-feed run sign:manifest -- --key "$key" --input "$metadata/manifest.unsigned.json" --output "$metadata/channels/engineering/manifest.json"
+          cp "$RUNNER_TEMP/engineering-key/public-keyring.json" "$metadata/public-keyring.json"
+          rm -f "$key"
+
+      - name: Assemble revalidated engineering feed repository
+        shell: bash
+        run: |
+          keyring="$(cat "$RUNNER_TEMP/metadata/public-keyring.json")"
+          export DASCOWORK_PRIMARY_RUNTIME_CONFIG_PUBLIC_KEYS_JSON="$keyring"
+          export DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring"
+          npm --prefix services/primary-runtime-feed run assemble-release-staging -- \
+            --output "$RUNNER_TEMP/feed-staging" \
+            --metadata "$RUNNER_TEMP/metadata" \
+            --target "darwin-x64=$RUNNER_TEMP/targets/darwin-x64" \
+            --target "darwin-arm64=$RUNNER_TEMP/targets/darwin-arm64" \
+            --target "win32-x64=$RUNNER_TEMP/targets/win32-x64" \
+            --target "linux-x64=$RUNNER_TEMP/targets/linux-x64"
+          mkdir -p "$RUNNER_TEMP/feed-repository/staged"
+          cp -R "$RUNNER_TEMP/feed-staging/." "$RUNNER_TEMP/feed-repository/staged/"
+          npm --prefix services/primary-runtime-feed run publish-release -- \
+            --repository-root "$RUNNER_TEMP/feed-repository" \
+            --staged-root "$RUNNER_TEMP/feed-repository/staged"
+
+      - name: Verify no private key entered the artifact
+        shell: bash
+        run: |
+          if rg -n --hidden --glob '!*.zip' 'BEGIN (?:[A-Z ]+ )?PRIVATE KEY|private-key\.pem' "$RUNNER_TEMP/feed-repository"; then
+            echo "engineering feed artifact contains private signing material" >&2
+            exit 1
+          fi
+
+      - name: Upload revalidated engineering feed artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-engineering-feed-revalidated
+          if-no-files-found: error
+          path: ${{ runner.temp }}/feed-repository

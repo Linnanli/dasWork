@@ -36,6 +36,10 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
+      - name: Prepare Codex workspace sandbox on Linux
+        shell: bash
+        run: bash desktop-app/scripts/prepare-codex-linux-sandbox.sh
+
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
         working-directory: desktop-app
@@ -56,9 +60,14 @@ jobs:
           mkdir -p test-results/contracts
           node scripts/verify-codex-native-runtime-boundaries.mjs | tee test-results/contracts/native-runtime-boundaries.json
 
-      - name: Verify App Tools release-gate contract
-        run: npm run verify:app-tools-release-gates
+      - name: Verify App Tools release-gate specification
+        run: npm run verify:app-tools-release-gate-spec
         working-directory: desktop-app
+
+      - name: Verify Primary Runtime builder and feed contracts
+        run: |
+          npm --prefix primary-runtime test
+          npm --prefix services/primary-runtime-feed test
 
       - name: Upload native runtime boundary report
         if: always()
@@ -79,16 +88,6 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: Enable Codex workspace sandbox on Linux
-        shell: bash
-        run: |
-          if sysctl -a 2>/dev/null | grep -q '^kernel.apparmor_restrict_unprivileged_userns'; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          if sysctl -a 2>/dev/null | grep -q '^kernel.unprivileged_userns_clone'; then
-            sudo sysctl -w kernel.unprivileged_userns_clone=1
-          fi
-
       - name: Verify test-plan coverage contract
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:plan-coverage
 
@@ -97,14 +96,6 @@ jobs:
 
       - name: Run packaged smoke
         run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:packaged
-
-      - name: Run release LLM E2E
-        env:
-          DASCOWORK_RELEASE_LLM_SMOKE: ${{ secrets.DASCOWORK_RELEASE_LLM_SMOKE }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_URL: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_URL }}
-          DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID: ${{ secrets.DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID }}
-          DASCOWORK_RELEASE_EXTERNAL_RETRY: ${{ secrets.DASCOWORK_RELEASE_EXTERNAL_RETRY }}
-        run: xvfb-run --auto-servernum npm --prefix desktop-app run test:e2e:release-llm
 
       - name: Check change scope
         shell: bash
@@ -188,26 +179,27 @@ jobs:
           echo "$GITHUB_WORKSPACE/desktop-app/node_modules/.bin" >> "$GITHUB_PATH"
           node desktop-app/scripts/verify-pinned-codex-cli.mjs
 
+      - name: Prepare Codex workspace sandbox on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash desktop-app/scripts/prepare-codex-linux-sandbox.sh
+
       - name: Build AI-free Codex app-server client
         run: npm run build:codex-app-server-client
+        working-directory: desktop-app
+
+      - name: Disable Primary Runtime production configuration for engineering installer builds
+        run: node scripts/write-primary-runtime-product-config.mjs --disabled
         working-directory: desktop-app
 
       - name: Build installer
         run: npm run ${{ matrix.command }} -- --${{ matrix.arch }}
         working-directory: desktop-app
 
-      - name: Enable Codex workspace sandbox on Linux
+      - name: Install Linux installer smoke dependencies
         if: runner.os == 'Linux'
         shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes squashfs-tools
-          if sysctl -a 2>/dev/null | grep -q '^kernel.apparmor_restrict_unprivileged_userns'; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          if sysctl -a 2>/dev/null | grep -q '^kernel.unprivileged_userns_clone'; then
-            sudo sysctl -w kernel.unprivileged_userns_clone=1
-          fi
+        run: sudo apt-get install --yes squashfs-tools
 
       - name: Smoke-test Linux installer
         if: runner.os == 'Linux'

@@ -34,6 +34,19 @@ afterEach(async () => {
   )
 })
 
+test('routes Primary Runtime presentation evidence through the dedicated release-gate catalog', async () => {
+  assert.equal(expectedScenarioIds.includes('PRESENTATION-SKILL-RUNTIME'), false)
+  assert.equal(expectedReleaseIds.includes('R07'), false)
+
+  const releaseGates = JSON.parse(
+    await readFile(new URL('../../tests/app-tools-release-gates.json', import.meta.url), 'utf8')
+  )
+  const releaseGateIds = new Set(releaseGates.gates.map((gate) => gate.id))
+  assert.ok(releaseGateIds.has('AT-E2E-01'))
+  assert.ok(releaseGateIds.has('AT-LIVE-01'))
+  assert.ok(releaseGateIds.has('AT-LIVE-PKG-01'))
+})
+
 test('normalizes Playwright reporter files from its configured test root', () => {
   assert.equal(
     normalizePlaywrightReporterFile({
@@ -105,11 +118,7 @@ test('selects only manifest-declared Vitest evidence by file and parameterized t
       { file: 'src/main/runtime.test.ts', testName: 'C23 terminates once $phase' }
     ]),
     {
-      files: [
-        'src/main/service.test.ts',
-        'src/main/queue.test.ts',
-        'src/main/runtime.test.ts'
-      ],
+      files: ['src/main/service.test.ts', 'src/main/queue.test.ts', 'src/main/runtime.test.ts'],
       testNamePattern:
         '(?:A01 verifies \\(the\\) behavior|E13 pauses persisted .+ delivery|C23 terminates once .+)'
     }

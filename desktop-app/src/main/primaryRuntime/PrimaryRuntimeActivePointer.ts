@@ -108,6 +108,28 @@ export class PrimaryRuntimeActivePointer {
     return pointer
   }
 
+  /**
+   * Repoints to an already validated version after a later activation phase
+   * fails. The pointer generation still advances, so readers never mistake a
+   * recovery for a stale file replay.
+   */
+  async restore(
+    record: PrimaryRuntimeActivePointerRecord
+  ): Promise<PrimaryRuntimeActivePointerRecord> {
+    const existing = await this.readCurrentPointer()
+    const restored: PrimaryRuntimeActivePointerRecord = {
+      ...record,
+      generation: (existing?.generation ?? 0) + 1
+    }
+    await this.writeAtomically(restored)
+    return restored
+  }
+
+  async clear(): Promise<void> {
+    await rm(this.pendingPointerPath, { force: true })
+    await rm(this.pointerPath, { force: true })
+  }
+
   /** Removes an interrupted, not-yet-published pointer write. */
   async recover(): Promise<void> {
     await rm(this.pendingPointerPath, { force: true })
@@ -127,7 +149,7 @@ export class PrimaryRuntimeActivePointer {
     if (diagnostic.status !== 'ready' || !diagnostic.manifest || !diagnostic.root) return
 
     const manifestSha256 = await sha256File(join(diagnostic.root, 'runtime.json'))
-    const directory = `legacy-${safePathSegment(diagnostic.manifest.bundleVersion)}-${manifestSha256}`
+    const directory = `legacy-${manifestSha256}`
     const destination = join(this.versionsRoot, directory)
     await mkdir(this.versionsRoot, { recursive: true })
     if (await pathExists(destination)) {
@@ -207,11 +229,11 @@ export function parsePrimaryRuntimeActivePointer(input: string): PrimaryRuntimeA
   return pointer
 }
 
-export function versionDirectoryForRelease(version: string, archiveSha256: string): string {
+export function versionDirectoryForArchive(archiveSha256: string): string {
   if (!/^[a-f0-9]{64}$/u.test(archiveSha256)) {
     throw new Error('Primary Runtime archive SHA256 must be lowercase hexadecimal.')
   }
-  return join(VERSIONS_DIRECTORY, `${safePathSegment(version)}-${archiveSha256}`)
+  return join(VERSIONS_DIRECTORY, archiveSha256)
 }
 
 export async function sha256File(path: string): Promise<string> {
@@ -220,27 +242,21 @@ export async function sha256File(path: string): Promise<string> {
 }
 
 function normalizedVersionDirectory(directory: string): string {
+  // `path.join` uses the host separator, so a directory generated on Windows
+  // arrives here as \`versions\\<name>\`. Persist pointers in portable form.
+  const normalized = directory.replace(/\\/gu, '/')
   if (
     isAbsolute(directory) ||
-    directory.split(/[\\/]+/u).includes('..') ||
-    !directory.startsWith(`${VERSIONS_DIRECTORY}/`) ||
-    directory === VERSIONS_DIRECTORY
+    normalized.split('/').includes('..') ||
+    !normalized.startsWith(`${VERSIONS_DIRECTORY}/`) ||
+    normalized === VERSIONS_DIRECTORY
   ) {
     throw new Error('Primary Runtime active pointer contains an unsafe version directory.')
   }
-  const normalized = directory.replace(/\\/gu, '/')
   if (!/^versions\/[A-Za-z0-9._-]+$/u.test(normalized)) {
     throw new Error('Primary Runtime active pointer contains an invalid version directory.')
   }
   return normalized
-}
-
-function safePathSegment(value: string): string {
-  const segment = value.replace(/[^A-Za-z0-9._-]/gu, '_')
-  if (!segment || segment === '.' || segment === '..') {
-    throw new Error('Primary Runtime version cannot be represented as a safe directory name.')
-  }
-  return segment
 }
 
 function isPathInside(root: string, path: string): boolean {

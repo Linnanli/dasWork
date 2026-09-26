@@ -700,7 +700,11 @@ export function mergePluginCatalogWithInstalled(
   return merged
 }
 
-const BUNDLED_PLUGIN_MARKETPLACES = new Set(['openai-bundled', 'openai-primary-runtime'])
+const BUNDLED_PLUGIN_MARKETPLACES = new Set([
+  'dascowork-bundled',
+  'openai-bundled',
+  'presentation-skill'
+])
 
 const BROWSER_EXTENSION_PLUGIN_NAMES = new Set(['chrome', 'chrome-dev', 'chrome-internal'])
 const BROWSER_EXTENSION_UNIFICATION_ENABLED = true
@@ -711,7 +715,12 @@ function pluginMarketplace(plugin: PluginCenterPlugin): string | undefined {
 
 function isVisibleInstalledPlugin(plugin: PluginCenterPlugin): boolean {
   const marketplace = pluginMarketplace(plugin)
-  if (marketplace === 'openai-bundled' && plugin.name === 'codex-app-tools') return false
+  if (
+    plugin.name === 'codex-app-tools' &&
+    (marketplace === 'dascowork-bundled' || marketplace === 'openai-bundled')
+  ) {
+    return false
+  }
   if (BROWSER_EXTENSION_UNIFICATION_ENABLED && BROWSER_EXTENSION_PLUGIN_NAMES.has(plugin.name)) {
     return false
   }

@@ -27,6 +27,18 @@ const MUTATION_RESULT = {
   changedSections: []
 } as const
 
+const PRIMARY_RUNTIME_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  runtime: {
+    state: 'missing',
+    message: 'Primary Runtime 尚未安装。',
+    recovery: '可以安装或修复。',
+    canInstallOrRepair: true,
+    canRunUpdate: true,
+    canCancel: false
+  }
+} as const
+
 const INSTALLED_PLUGINS_RESULT = {
   version: PLUGIN_CENTER_API_VERSION,
   generatedAt: '2026-08-24T00:00:00.000Z',
@@ -334,6 +346,10 @@ describe('createPluginCenterBridge', () => {
   it('uses the fixed plugin center channel map', () => {
     expect(pluginCenterIpcChannels).toEqual({
       getSnapshot: 'codex:plugin-center:get-snapshot',
+      getPrimaryRuntimeStatus: 'codex:plugin-center:get-primary-runtime-status',
+      installOrRepairPrimaryRuntime: 'codex:plugin-center:install-or-repair-primary-runtime',
+      runPrimaryRuntimeUpdate: 'codex:plugin-center:run-primary-runtime-update',
+      cancelPrimaryRuntime: 'codex:plugin-center:cancel-primary-runtime',
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
@@ -352,6 +368,34 @@ describe('createPluginCenterBridge', () => {
       removeMcpServer: 'codex:plugin-center:remove-mcp-server',
       cancelRequest: 'codex:plugin-center:cancel-request'
     })
+  })
+
+  it('forwards only fixed Primary Runtime recovery actions', async () => {
+    const invoke = vi.fn(async (...args: [string, unknown]) => {
+      void args
+      return PRIMARY_RUNTIME_RESULT
+    })
+    const bridge = createPluginCenterBridge(invoke)
+    const input = { version: PLUGIN_CENTER_API_VERSION } as const
+
+    await expect(bridge.getPrimaryRuntimeStatus(input)).resolves.toEqual(PRIMARY_RUNTIME_RESULT)
+    await expect(bridge.installOrRepairPrimaryRuntime(input)).resolves.toEqual(
+      PRIMARY_RUNTIME_RESULT
+    )
+    await expect(bridge.runPrimaryRuntimeUpdate(input)).resolves.toEqual(PRIMARY_RUNTIME_RESULT)
+    await expect(bridge.cancelPrimaryRuntime(input)).resolves.toEqual(PRIMARY_RUNTIME_RESULT)
+    expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+      pluginCenterIpcChannels.getPrimaryRuntimeStatus,
+      pluginCenterIpcChannels.installOrRepairPrimaryRuntime,
+      pluginCenterIpcChannels.runPrimaryRuntimeUpdate,
+      pluginCenterIpcChannels.cancelPrimaryRuntime
+    ])
+    await expect(
+      bridge.getPrimaryRuntimeStatus({
+        version: PLUGIN_CENTER_API_VERSION,
+        path: '/private'
+      } as never)
+    ).rejects.toThrow()
   })
 
   it.each(cases)(

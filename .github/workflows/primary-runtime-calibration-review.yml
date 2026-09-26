@@ -1,0 +1,123 @@
+name: Primary Runtime calibration review
+
+on:
+  workflow_call:
+    inputs:
+      calibration_run_id:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      calibration_run_id:
+        description: Successful four-target Primary Runtime calibration run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract-review-evidence:
+    name: Extract small P3b budget review evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Download darwin-x64 calibration staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/darwin-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download darwin-arm64 calibration staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-darwin-arm64-candidate-staging
+          path: ${{ runner.temp }}/calibration/darwin-arm64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download win32-x64 calibration staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-win32-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/win32-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Download linux-x64 calibration staging
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-linux-x64-candidate-staging
+          path: ${{ runner.temp }}/calibration/linux-x64
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.calibration_run_id }}
+
+      - name: Assemble and validate review report
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CALIBRATION_RUN_ID: ${{ inputs.calibration_run_id }}
+        run: |
+          if [[ ! "$CALIBRATION_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "calibration_run_id must be numeric" >&2
+            exit 1
+          fi
+          report="$RUNNER_TEMP/calibration-review/performance-report.json"
+          mkdir -p "$RUNNER_TEMP/calibration-review"
+          npm --prefix primary-runtime run assemble:performance -- \
+            --output "$report" \
+            --report "darwin-x64=$RUNNER_TEMP/calibration/darwin-x64/performance-target-report.json" \
+            --report "darwin-arm64=$RUNNER_TEMP/calibration/darwin-arm64/performance-target-report.json" \
+            --report "win32-x64=$RUNNER_TEMP/calibration/win32-x64/performance-target-report.json" \
+            --report "linux-x64=$RUNNER_TEMP/calibration/linux-x64/performance-target-report.json"
+          run_metadata="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CALIBRATION_RUN_ID" --jq '{head_sha,conclusion}')"
+          export PRIMARY_RUNTIME_CALIBRATION_RUN_METADATA="$run_metadata"
+          node --input-type=module - "$report" <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { readFileSync } from 'node:fs';
+
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const run = JSON.parse(process.env.PRIMARY_RUNTIME_CALIBRATION_RUN_METADATA);
+          if (run.conclusion !== 'success' ||
+              report.evidence.sourceRunId !== process.env.CALIBRATION_RUN_ID ||
+              report.evidence.sourceCommit !== run.head_sha ||
+              report.evidence.installerCommit !== run.head_sha) {
+            throw new Error('Calibration report does not bind the successful source run.');
+          }
+          for (const [field, path] of [
+            ['hardLimitsSha256', 'primary-runtime/runtime-hard-limits.json'],
+            ['sourceLockSha256', 'primary-runtime/runtime-sources.lock.json'],
+            ['toolchainsLockSha256', 'primary-runtime/runtime-toolchains.lock.json'],
+          ]) {
+            const actual = createHash('sha256').update(readFileSync(path)).digest('hex');
+            if (report.evidence[field] !== actual) {
+              throw new Error(`Calibration report does not match current ${field}.`);
+            }
+          }
+          NODE
+          candidate="$RUNNER_TEMP/calibration-review/runtime-budget-candidate.json"
+          node primary-runtime/scripts/calibrate-runtime-budgets.mjs \
+            --measurements "$report" > "$candidate"
+          node -e 'const candidate = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if (candidate.schemaVersion !== "dascowork-primary-runtime-budget-candidate.v1") process.exit(1)' "$candidate"
+
+      - name: Upload small review evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-calibration-review-${{ inputs.calibration_run_id }}
+          if-no-files-found: error
+          path: ${{ runner.temp }}/calibration-review

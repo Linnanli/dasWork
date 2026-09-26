@@ -1,0 +1,895 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+import test from "node:test";
+
+import {
+  artifactsForTarget,
+  assertRuntimeInputsManifest,
+  isObservedBuilderImageIdentity,
+  readRuntimeToolchainsLock,
+  validateRuntimeToolchainsLock,
+  writeRuntimeInputsManifest,
+} from "../scripts/runtime-inputs.mjs";
+import { currentRuntimeTarget } from "../scripts/runtime-target.mjs";
+import { readRuntimeSourcesLock, sha256 } from "../scripts/source-lock.mjs";
+
+const sourceLockPath = resolve(
+  import.meta.dirname,
+  "../runtime-sources.lock.json",
+);
+const toolchainsLockPath = resolve(
+  import.meta.dirname,
+  "../runtime-toolchains.lock.json",
+);
+const executeFile = promisify(execFile);
+const fetchScript = resolve(
+  import.meta.dirname,
+  "../scripts/fetch-runtime-sources.mjs",
+);
+const materializeScript = resolve(
+  import.meta.dirname,
+  "../scripts/materialize-runtime-inputs.mjs",
+);
+const verifyInputsScript = resolve(
+  import.meta.dirname,
+  "../scripts/verify-runtime-inputs.mjs",
+);
+const verifyPlatformScript = resolve(
+  import.meta.dirname,
+  "../scripts/verify-runtime-platform.mjs",
+);
+const repositoryAttributesPath = resolve(import.meta.dirname, "../../.gitattributes");
+
+test("input manifest binds the immutable source/toolchain lock and every payload file", async () => {
+  const fixture = await createInputFixture();
+  try {
+    const verified = await assertRuntimeInputsManifest(fixture);
+    assert.equal(verified.manifest.target, fixture.target);
+    assert.equal(verified.manifest.builder.runner, fixture.runner);
+    assert.ok(
+      verified.files.some(
+        (entry) => entry.path === "dependencies/node/bin/node",
+      ),
+    );
+
+    await writeFile(join(fixture.inputRoot, "unbound.txt"), "not allowed\n");
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /files differ from the verified manifest/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("input manifest rejects runner drift, lock drift, and symbolic-link escape", async () => {
+  const fixture = await createInputFixture();
+  try {
+    const manifestPath = join(
+      fixture.inputRoot,
+      "runtime-inputs.manifest.json",
+    );
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.builder.runner = "wrong-runner";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+
+    await createFixtureManifest(fixture);
+    const rebuiltManifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    rebuiltManifest.builder.tools.reverse();
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(rebuiltManifest, null, 2)}\n`,
+    );
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+
+    await createFixtureManifest(fixture);
+    const imageDriftManifest = JSON.parse(
+      await readFile(manifestPath, "utf8"),
+    );
+    imageDriftManifest.builder.observedImage = "wrong-hosted-image";
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify(imageDriftManifest, null, 2)}\n`,
+    );
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /does not bind this build/u,
+    );
+
+    await createFixtureManifest(fixture);
+    await symlink(
+      "node",
+      join(fixture.inputRoot, "dependencies/node/bin/node-link"),
+    );
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /symbolic link/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("hosted image revisions are recorded without pinning a rolling runner", async () => {
+  const fixture = await createInputFixture();
+  try {
+    const manifestPath = join(fixture.inputRoot, "runtime-inputs.manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    const differentRevision = `${manifest.builder.identity}:20261004.123.1`;
+    manifest.builder.observedImage = differentRevision;
+    manifest.builder.observedImageSha256 = sha256(differentRevision);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assertRuntimeInputsManifest(fixture);
+    await assert.rejects(
+      () =>
+        assertRuntimeInputsManifest({
+          ...fixture,
+          expectedObservedBuilderImage: `${manifest.builder.identity}:20260920.314.1`,
+        }),
+      /source binding is invalid/u,
+    );
+
+    manifest.builder.observedImage = "github-hosted:wrong-runner:20261004.123.1";
+    manifest.builder.observedImageSha256 = sha256(manifest.builder.observedImage);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+
+    manifest.builder.observedImage = `${manifest.builder.identity}:latest`;
+    manifest.builder.observedImageSha256 = sha256(manifest.builder.observedImage);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    await assert.rejects(
+      () => assertRuntimeInputsManifest(fixture),
+      /source binding is invalid/u,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("toolchain lock rejects mutable, incomplete target recipes", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const target = currentRuntimeTarget();
+  const badUrl = structuredClone(lock);
+  badUrl.targets[target].node.url =
+    "https://nodejs.org/dist/latest/node.tar.gz";
+  assert.throws(() => validateRuntimeToolchainsLock(badUrl), /invalid/u);
+
+  const missingRecipe = structuredClone(lock);
+  missingRecipe.targets[target].nativeRecipes = [];
+  assert.throws(() => validateRuntimeToolchainsLock(missingRecipe), /invalid/u);
+
+  const missingBuilder = structuredClone(lock);
+  delete missingBuilder.targets[target].builder;
+  assert.throws(() => validateRuntimeToolchainsLock(missingBuilder), /invalid/u);
+
+  const mutableBuilderImage = structuredClone(lock);
+  mutableBuilderImage.targets[target].builder.image = { version: "latest" };
+  assert.throws(
+    () => validateRuntimeToolchainsLock(mutableBuilderImage),
+    /invalid/u,
+  );
+
+  const mismatchedBuilderIdentity = structuredClone(lock);
+  mismatchedBuilderIdentity.targets[target].builder.identity =
+    "github-hosted:other-runner";
+  assert.throws(
+    () => validateRuntimeToolchainsLock(mismatchedBuilderIdentity),
+    /invalid/u,
+  );
+
+  assert.equal(
+    isObservedBuilderImageIdentity(
+      lock.targets[target].builder,
+      `${lock.targets[target].builder.identity}:20261004.123.1`,
+    ),
+    true,
+  );
+  assert.equal(
+    isObservedBuilderImageIdentity(
+      lock.targets[target].builder,
+      `${lock.targets[target].builder.identity}:latest`,
+    ),
+    false,
+  );
+
+  const missingClosure = structuredClone(lock);
+  delete missingClosure.targets[target].nativeRecipes[0].closure;
+  assert.throws(() => validateRuntimeToolchainsLock(missingClosure), /invalid/u);
+
+  const incompleteClosure = structuredClone(lock);
+  incompleteClosure.targets[target].nativeRecipes[0].outputs = [
+    {
+      kind: "file",
+      source: "instdir/program/soffice",
+      destination: "dependencies/native/bin/soffice",
+      mode: "0755",
+    },
+  ];
+  assert.throws(
+    () => validateRuntimeToolchainsLock(incompleteClosure),
+    /invalid/u,
+  );
+
+  const unresolvedNativeDependency = structuredClone(lock);
+  unresolvedNativeDependency.targets[target].nativeRecipes.find(
+    (recipe) => recipe.name === "poppler",
+  ).nativeDependencies = ["not-in-the-lock"];
+  assert.throws(
+    () => validateRuntimeToolchainsLock(unresolvedNativeDependency), /invalid/u,
+  );
+});
+
+test("LibreOffice recipes use locked target-native binary materialization", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  for (const [target, toolchain] of Object.entries(lock.targets)) {
+    const recipe = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "libreoffice",
+    );
+    assert.equal(recipe?.materialization, "prebuilt", target);
+    assert.deepEqual(recipe?.commands, []);
+    assert.deepEqual(recipe?.environment, {});
+    if (target === "linux-x64") {
+      assert.equal(recipe?.sourceComponent, "libreoffice-linux-x64");
+      assert.equal(recipe?.sourceArchiveFormat, "tar.gz");
+      assert.equal(
+        recipe?.sourceDirectory,
+        "LibreOffice_26.2.6.3_Linux_x86-64_deb/DEBS",
+      );
+      assert.equal(recipe?.toolchain.extraction, "dpkg-deb-readonly");
+      assert.ok(toolchain.builder.tools.includes("dpkg-deb"));
+      assert.deepEqual(recipe?.outputs, [
+        {
+          kind: "directory",
+          source: "runtime-root/opt/libreoffice26.2",
+          destination: "dependencies/native/libreoffice",
+        },
+      ]);
+      continue;
+    }
+    if (target === "win32-x64") {
+      assert.equal(recipe?.sourceComponent, "libreoffice-windows-x64");
+      assert.equal(recipe?.sourceArchiveFormat, "msi");
+      assert.equal(recipe?.sourceDirectory, ".");
+      assert.ok(toolchain.builder.tools.includes("msiexec"));
+      assert.deepEqual(recipe?.outputs, [
+        {
+          kind: "directory",
+          source: ".",
+          destination: "dependencies/native/libreoffice",
+        },
+      ]);
+      continue;
+    }
+    assert.equal(recipe?.sourceComponent, `libreoffice-${target}`);
+    assert.equal(recipe?.sourceArchiveFormat, "dmg");
+    assert.equal(recipe?.sourceDirectory, "LibreOffice.app");
+    assert.ok(toolchain.builder.tools.includes("hdiutil"));
+    assert.ok(toolchain.builder.tools.includes("xattr"));
+    assert.ok(!toolchain.builder.tools.includes("codesign"));
+    assert.ok(!toolchain.builder.tools.includes("file"));
+    assert.equal(recipe?.toolchain.codeSigning, undefined);
+    assert.deepEqual(recipe?.outputs, [
+      {
+        kind: "directory",
+        source: "Contents",
+        destination: "dependencies/native/libreoffice/LibreOffice.app/Contents",
+      },
+    ]);
+    assert.deepEqual(recipe?.closure.entrypoints, [
+      "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice",
+    ]);
+  }
+});
+
+test("Poppler source recipes use only locked zlib, Freetype, and libpng prefixes", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const disabledOptions = [
+    "-DENABLE_NSS3=OFF",
+    "-DENABLE_GPGME=OFF",
+    "-DENABLE_LIBTIFF=OFF",
+    "-DENABLE_BOOST=OFF",
+    "-DENABLE_GLIB=OFF",
+    "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+    "-DENABLE_QT5=OFF",
+    "-DENABLE_QT6=OFF",
+    "-DENABLE_LIBOPENJPEG=OFF",
+    "-DENABLE_LIBJPEG=OFF",
+    "-DENABLE_LCMS=OFF",
+    "-DENABLE_LIBCURL=OFF",
+    "-DENABLE_HARFBUZZ=OFF",
+    "-DFONT_CONFIGURATION=generic",
+  ];
+  for (const [target, toolchain] of Object.entries(lock.targets)) {
+    const zlib = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "zlib",
+    );
+    const freetype = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "freetype",
+    );
+    const libpng = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "libpng",
+    );
+    const recipe = toolchain.nativeRecipes.find(
+      (candidate) => candidate.name === "poppler",
+    );
+    assert.equal(zlib?.materialization, "source-build", target);
+    assert.equal(zlib?.sourceComponent, "zlib", target);
+    assert.ok(
+      zlib?.commands[0]?.includes("-DZLIB_BUILD_EXAMPLES=OFF"),
+      `${target}: zlib examples must remain disabled`,
+    );
+    assert.equal(freetype?.materialization, "source-build", target);
+    assert.equal(freetype?.sourceComponent, "freetype", target);
+    for (const option of [
+      "-DBUILD_SHARED_LIBS=OFF",
+      "-DFT_DISABLE_ZLIB=TRUE",
+      "-DFT_DISABLE_BZIP2=TRUE",
+      "-DFT_DISABLE_PNG=TRUE",
+      "-DFT_DISABLE_HARFBUZZ=TRUE",
+      "-DFT_DISABLE_BROTLI=TRUE",
+    ]) {
+      assert.ok(freetype?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
+    assert.equal(libpng?.materialization, "source-build", target);
+    assert.equal(libpng?.sourceComponent, "libpng", target);
+    assert.deepEqual(libpng?.nativeDependencies, ["zlib"], target);
+    for (const option of [
+      "-DPNG_SHARED=OFF",
+      "-DPNG_STATIC=ON",
+      "-DPNG_TESTS=OFF",
+      "-DPNG_TOOLS=OFF",
+    ]) {
+      assert.ok(libpng?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
+    assert.equal(recipe?.materialization, "source-build", target);
+    assert.deepEqual(recipe?.nativeDependencies, ["zlib", "freetype", "libpng"], target);
+    assert.ok(
+      recipe?.commands[0]?.includes("-DZLIB_USE_STATIC_LIBS=TRUE"),
+      `${target}: zlib must be linked from the locked static prefix`,
+    );
+    assert.ok(
+      recipe?.commands[0]?.includes("-DENABLE_LIBPNG=ON"),
+      `${target}: PNG output must be backed by the locked libpng prefix`,
+    );
+    for (const option of disabledOptions) {
+      assert.ok(recipe?.toolchain.flags?.includes(option), `${target}: ${option}`);
+      assert.ok(recipe?.commands[0]?.includes(option), `${target}: ${option}`);
+    }
+  }
+});
+
+test("Windows native source recipes explicitly produce release binaries", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const recipes = lock.targets["win32-x64"].nativeRecipes.filter(
+    (recipe) => recipe.materialization === "source-build",
+  );
+
+  assert.equal(recipes.length, 4);
+  for (const recipe of recipes) {
+    assert.ok(
+      recipe.toolchain.flags.includes("-DCMAKE_BUILD_TYPE=Release"),
+      `${recipe.name}: toolchain receipt must bind release mode`,
+    );
+    assert.ok(
+      recipe.commands[0].includes("-DCMAKE_BUILD_TYPE=Release"),
+      `${recipe.name}: CMake configure command must not select debug CRT`,
+    );
+  }
+});
+
+test("native source dependency prefixes are injected only into CMake configure commands", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(source, /DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_COMMAND_TIMEOUT_MS/u);
+  assert.match(source, /\[primary-runtime:materialize\] start \$\{label\}/u);
+  assert.match(source, /if \(code === 0 && !timedOut\)/u);
+  assert.match(source, /timed out after \$\{timeoutMs\}ms/u);
+  assert.match(source, /resolveNativeDependencyPrefixes/u);
+  assert.match(source, /addLockedNativeDependencyPrefixes/u);
+  assert.match(source, /-DCMAKE_FIND_USE_CMAKE_SYSTEM_PATH=FALSE/u);
+  assert.match(source, /-DCMAKE_FIND_FRAMEWORK=NEVER/u);
+  assert.match(source, /run\(resolveLockedBuilderCommand\(file\), commandArgs/u);
+  assert.doesNotMatch(source, /(?:apt-get|brew)\s+(?:install|update)/u);
+});
+
+test("native dependency closure validates executable entrypoints without accepting host dependencies", async () => {
+  const source = await readFile(verifyInputsScript, "utf8");
+
+  assert.match(source, /dependency\.startsWith\("\/lib\/"\) \|\|\s+dependency\.startsWith\("\/lib64\/"\)/u);
+  assert.match(source, /if \(header\.length < 4\) return false;/u);
+  assert.match(source, /const nativeClosureEntrypoints = \[/u);
+  assert.match(source, /entrypoints: nativeClosureEntrypoints/u);
+  assert.match(source, /basename\(dependency\) === basename\(object\)/u);
+});
+
+test("Windows MSI extraction is locked and does not restore the rejected MSYS source-build path", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(
+    source,
+    /target === "win32-x64" && command === "msiexec"[\s\S]*?System32", "msiexec\.exe"/u,
+  );
+  assert.match(
+    source,
+    /if \(archiveFormat === "msi"\)[\s\S]*?extractWindowsMsi/u,
+  );
+  assert.match(source, /\["\/a", archive, "\/qn", `TARGETDIR=\$\{output\}`\]/u);
+  assert.match(source, /LibreOffice MSI administrative extraction/u);
+  assert.match(source, /DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_MSI_TIMEOUT_MS/u);
+  assert.match(source, /timeoutMs: msiExtractionTimeoutMs/u);
+  assert.match(source, /Windows MSI extraction root entries/u);
+  assert.match(
+    source,
+    /if \(command === "msiexec"\)[\s\S]*?await lstat\(executable\)[\s\S]*?metadata\.isFile\(\)[\s\S]*?await readFile\(executable\)[\s\S]*?versionSha256: sha256\(contents\)/u,
+  );
+  assert.doesNotMatch(source, /command === "msiexec"[\s\S]{0,120}\["\/\?"\]/u);
+  assert.doesNotMatch(source, /DASCOWORK_PRIMARY_RUNTIME_MSYS_ROOT|MSYSTEM/u);
+});
+
+test("Linux LibreOffice DEB extraction is offline and never installs into the runner", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(source, /recipe\.toolchain\.extraction !== "dpkg-deb-readonly"/u);
+  assert.match(
+    source,
+    /resolveLockedBuilderCommand\("dpkg-deb"\),\s*\["--extract", join\(buildRoot, packageName\), runtimeRoot\]/u,
+  );
+  assert.doesNotMatch(source, /dpkg\s+--install|dpkg\s+-i/u);
+});
+
+test("macOS DMG extraction is temporary and produces only the locked application payload", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(
+    source,
+    /if \(archiveFormat === "dmg"\)[\s\S]*?extractMacosDmg/u,
+  );
+  assert.match(
+    source,
+    /target\.startsWith\("darwin"\)[\s\S]*?DMG Runtime inputs/u,
+  );
+  assert.match(
+    source,
+    /\["attach", "-readonly", "-nobrowse", "-noverify", "-mountpoint", mountpoint, archive\]/u,
+  );
+  assert.match(source, /safeChild\(mountpoint, "LibreOffice\.app"\)/u);
+  assert.match(source, /clearMacosQuarantine\(join\(output, "LibreOffice\.app"\)\)/u);
+  assert.match(source, /xattr", \["-dr", "com\.apple\.quarantine", application\]/u);
+  assert.doesNotMatch(source, /codesign/u);
+  assert.doesNotMatch(source, /ad-hoc-signature/u);
+  assert.match(source, /\["detach", mountpoint, "-force"\]/u);
+});
+
+test("P1 rendering uses only the Runtime-owned presentation plugin scripts", async () => {
+  const [materializerSource, verifierSource] = await Promise.all([
+    readFile(materializeScript, "utf8"),
+    readFile(verifyInputsScript, "utf8"),
+  ]);
+
+  assert.match(
+    materializerSource,
+    /scripts\/design_tokens\.py[\s\S]*?scripts\/design_tokens\.py/u,
+  );
+  assert.match(verifierSource, /build_deck_pptxgenjs\.js/u);
+  assert.match(verifierSource, /layout_lint\.py/u);
+  assert.match(verifierSource, /render_slides\.py/u);
+  assert.match(verifierSource, /presentation-plugin-create-chinese-deck/u);
+  assert.match(verifierSource, /presentation-plugin-layout-lint/u);
+  assert.match(verifierSource, /presentation-plugin-render-slides/u);
+  assert.match(verifierSource, /variant: "table"/u);
+  assert.match(verifierSource, /variant: "chart"/u);
+  assert.match(verifierSource, /variant: "image-sidebar"/u);
+  assert.match(verifierSource, /PPTX_RUNTIME_SOFFICE: soffice/u);
+  assert.match(verifierSource, /PPTX_RUNTIME_PDFTOPPM: pdftoppm/u);
+  assert.match(verifierSource, /runtimeUtilityPaths\(target\)/u);
+  assert.match(verifierSource, /\["\/usr\/bin", "\/bin"\]/u);
+  assert.match(verifierSource, /PYTHONDONTWRITEBYTECODE: "1"/u);
+  assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
+});
+
+test("platform validation restores each archived input mode from its manifest", async () => {
+  const source = await readFile(verifyPlatformScript, "utf8");
+
+  assert.match(source, /const inputFileModes = inputFileModesFromManifest\(inputManifest\)/u);
+  assert.match(source, /const mode = inputFileModes\.get\(entry\.path\)/u);
+  assert.match(source, /await chmod\(path, mode\)/u);
+  assert.match(source, /archive input \$\{entry\.path\} is not bound/u);
+  assert.doesNotMatch(source, /function isExecutableEntry/u);
+});
+
+test("locked-source fetch streams Web response chunks without buffering an archive", async () => {
+  const source = await readFile(fetchScript, "utf8");
+
+  assert.match(source, /async function writeResponseBody/u);
+  assert.match(source, /for await \(const chunk of body\)/u);
+  assert.match(source, /await once\(output, "drain"\)/u);
+  assert.match(source, /request as requestHttps/u);
+  assert.match(source, /function requestLockedObject/u);
+  assert.doesNotMatch(source, /\bfetch\(|Readable\.fromWeb|response\.arrayBuffer\(\)|await pipeline\(/u);
+});
+
+test("the source-lock-bound Runtime patch preserves its exact bytes on Windows checkouts", async () => {
+  const attributes = await readFile(repositoryAttributesPath, "utf8");
+  assert.match(
+    attributes,
+    /^primary-runtime\/patches\/\*\.patch -text whitespace=-blank-at-eol$/mu,
+    "a Windows checkout must not rewrite the patch bytes bound by runtime-sources.lock.json",
+  );
+});
+
+test("hash-bound Runtime metadata keeps LF bytes on Windows checkouts", async () => {
+  const attributes = (await readFile(repositoryAttributesPath, "utf8")).split(/\r?\n/u);
+  for (const filename of [
+    "runtime-hard-limits.json",
+    "runtime-sources.lock.json",
+    "runtime-toolchains.lock.json",
+  ]) {
+    assert.ok(
+      attributes.includes(`primary-runtime/${filename} text eol=lf`),
+      `${filename} must retain the bytes bound by cross-target calibration evidence`,
+    );
+  }
+});
+
+test("the locked presentation-plugin archive strips only its GitHub tag wrapper", async () => {
+  const [sourceLock, toolchainsLock] = await Promise.all([
+    readRuntimeSourcesLock(sourceLockPath),
+    readRuntimeToolchainsLock(toolchainsLockPath),
+  ]);
+  const source = artifactsForTarget({
+    sourceLock,
+    toolchainsLock,
+    target: currentRuntimeTarget(),
+  }).find((artifact) => artifact.name === "presentation-skill-source");
+  assert.equal(source?.stripComponents, 1);
+});
+
+test("ZIP Runtime inputs without a strip rule extract from their source root", async () => {
+  const [sourceLock, toolchainsLock, materializerSource] = await Promise.all([
+    readRuntimeSourcesLock(sourceLockPath),
+    readRuntimeToolchainsLock(toolchainsLockPath),
+    readFile(materializeScript, "utf8"),
+  ]);
+  const rootZip = artifactsForTarget({
+    sourceLock,
+    toolchainsLock,
+    target: currentRuntimeTarget(),
+  }).find(
+    (artifact) =>
+      artifact.archiveFormat === "zip" && artifact.stripComponents === undefined,
+  );
+  assert.ok(rootZip, "the locked inputs must exercise a root ZIP extraction");
+  assert.match(
+    materializerSource,
+    /async function extractArchive\(\{[\s\S]*?stripComponents = 0,/u,
+  );
+  assert.match(
+    materializerSource,
+    /async function extractZipWithLockedTar\(\{ archive, output, stripComponents \}\)/u,
+  );
+  assert.match(
+    materializerSource,
+    /if \(!python\) \{\s+await extractZipWithLockedTar\(\{ archive, output, stripComponents \}\);/u,
+  );
+  assert.match(
+    materializerSource,
+    /async function extractWithLockedTar\(\{ archive, output, stripComponents \}\)/u,
+  );
+  assert.match(
+    materializerSource,
+    /target === "win32-x64"\s+\? relative\(output, archive\)\.split\(sep\)\.join\("\/"\)\s+: archive/u,
+  );
+  assert.match(
+    materializerSource,
+    /if \(target !== "win32-x64"\) args\.push\("-C", output\);/u,
+  );
+  assert.match(
+    materializerSource,
+    /await run\(resolveLockedBuilderCommand\("tar"\), args, \{\s+label: `extract \$\{basename\(archive\)\} with locked tar`,\s+cwd: output,\s+\}\);/u,
+  );
+  assert.match(
+    materializerSource,
+    /target === "win32-x64" && command === "tar"[\s\S]*?System32", "tar\.exe"/u,
+  );
+});
+
+test("toolchain lock rejects a prebuilt native binary with build commands or environment", async () => {
+  const lock = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const badCommands = structuredClone(lock);
+  const windowsRecipe = badCommands.targets["win32-x64"].nativeRecipes.find(
+    (recipe) => recipe.name === "libreoffice",
+  );
+  windowsRecipe.commands = [["cmd", "/c", "ver"]];
+  assert.throws(() => validateRuntimeToolchainsLock(badCommands), /invalid/u);
+
+  const badEnvironment = structuredClone(lock);
+  const prebuiltRecipe = badEnvironment.targets["win32-x64"].nativeRecipes.find(
+    (recipe) => recipe.name === "libreoffice",
+  );
+  prebuiltRecipe.environment = { PATH: "host" };
+  assert.throws(() => validateRuntimeToolchainsLock(badEnvironment), /invalid/u);
+});
+
+test("P1 command line tools accept the documented equals-form arguments", async () => {
+  const root = await (
+    await import("node:fs/promises")
+  ).mkdtemp(join(tmpdir(), "primary-runtime-cli-"));
+  const target = currentRuntimeTarget();
+  try {
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          fetchScript,
+          `--target=${target}`,
+          `--cache=${join(root, "cache")}`,
+          "--timeout-ms=999",
+        ]),
+      /timeout-ms must be an integer/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          fetchScript,
+          `--target=${target}`,
+          `--cache=${join(root, "cache")}`,
+          "--timeout-ms=900001",
+        ]),
+      /timeout-ms must be an integer from 1000 through 900000/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          fetchScript,
+          `--target=${target}`,
+          `--cache=${join(root, "cache")}`,
+          "--attempts=0",
+        ]),
+      /attempts must be an integer from 1 through 5/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          materializeScript,
+          `--target=${target}`,
+          `--source-cache=${join(root, "cache")}`,
+          `--output=${join(root, "inputs")}`,
+        ]),
+      /must report a valid hosted builder image|requires declared builder tool|cache is missing locked/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(
+          process.execPath,
+          [
+            materializeScript,
+            `--target=${target}`,
+            `--source-cache=${join(root, "cache")}`,
+            `--output=${join(root, "inputs")}`,
+          ],
+          {
+            env: {
+              ...process.env,
+              DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE:
+                "github-hosted:wrong-runner:20261004.123.1",
+            },
+          },
+        ),
+      /must report a valid hosted builder image/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          verifyInputsScript,
+          `--target=${target}`,
+          `--input-root=${join(root, "missing-inputs")}`,
+        ]),
+      /input manifest is missing or invalid/u,
+    );
+    await assert.rejects(
+      () =>
+        executeFile(process.execPath, [
+          verifyPlatformScript,
+          `--target=${target}`,
+          `--archive=${join(root, "missing.zip")}`,
+          `--output=${join(root, "platform-validation.json")}`,
+        ]),
+      /ENOENT/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("locked source fetching retries only transient transport failures", async () => {
+  const source = await readFile(fetchScript, "utf8");
+  assert.match(source, /--attempts/u);
+  assert.match(source, /ECONNRESET/u);
+  assert.match(source, /HTTP \(\?:408\|429\|5\\d\\d\)/u);
+  assert.match(source, /if \(!isRetryableFetchError\(error\) \|\| attempt === options\.attempts\) break;/u);
+  assert.match(source, /reusablePartial/u);
+});
+
+test("P1 scripts resolve default lock paths through file URLs safely on Windows", async () => {
+  const scriptFiles = [
+    fetchScript,
+    materializeScript,
+    verifyInputsScript,
+    verifyPlatformScript,
+    resolve(import.meta.dirname, "../scripts/build-runtime.mjs"),
+    resolve(import.meta.dirname, "../scripts/verify-runtime.mjs"),
+    resolve(import.meta.dirname, "../scripts/source-lock.mjs"),
+  ];
+  for (const scriptFile of scriptFiles) {
+    const source = await readFile(scriptFile, "utf8");
+    assert.match(source, /fileURLToPath/u, `${scriptFile} must use fileURLToPath`);
+    assert.doesNotMatch(
+      source,
+      /new URL\([^)]*import\.meta\.url\)\.pathname/u,
+      `${scriptFile} must not pass a file URL pathname to path.resolve`,
+    );
+  }
+});
+
+test("Windows Runtime keeps the official Node ZIP executable at its extracted root", async () => {
+  const [verifier, builder] = await Promise.all([
+    readFile(verifyInputsScript, "utf8"),
+    readFile(resolve(import.meta.dirname, "../scripts/build-runtime.mjs"), "utf8"),
+  ]);
+
+  assert.match(
+    verifier,
+    /target\.startsWith\("win32"\)[\s\S]*?dependencies\/node\/node\.exe/u,
+  );
+  assert.match(
+    builder,
+    /platform === "win32"[\s\S]*?dependencies\/node\/node\.exe/u,
+  );
+  assert.doesNotMatch(verifier, /dependencies\/node\/bin\/node\.exe/u);
+  assert.doesNotMatch(builder, /dependencies\/node\/bin\/node\.exe/u);
+});
+
+test("Windows Runtime input verification isolates LibreOffice and bounds child commands", async () => {
+  const verifier = await readFile(verifyInputsScript, "utf8");
+
+  assert.match(verifier, /DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS/u);
+  assert.match(verifier, /primary-runtime:verify-inputs\] start/u);
+  assert.match(verifier, /libreoffice-profile/u);
+  assert.match(verifier, /primary-runtime-lo-version-/u);
+  assert.match(verifier, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
+  assert.match(verifier, /name === "soffice" && target\.startsWith\("win32"\)/u);
+  assert.match(verifier, /\? "\.com"/u);
+  assert.match(verifier, /APPDATA/u);
+  assert.match(verifier, /LOCALAPPDATA/u);
+  assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);
+  assert.doesNotMatch(verifier, /runRawCommand\("(?:ldd|otool)"/u);
+  const patch = await readFile(
+    resolve(import.meta.dirname, "../patches/presentation-skill-runtime-v0.8.0.patch"),
+    "utf8",
+  );
+  assert.match(patch, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
+  assert.match(patch, /-env:UserInstallation=file:/u);
+  assert.match(patch, /\+    if not value:\n\+        return \[\]/u);
+  assert.match(patch, /pdf:impress_pdf_Export/u);
+  assert.match(patch, /Runtime LibreOffice conversion failed/u);
+  assert.match(patch, /\+    command = \[soffice, \*user_installation, \*base_args\]/u);
+  assert.match(patch, /str\(pptx_path\)/u);
+  assert.doesNotMatch(
+    patch,
+    /command_cwd|soffice_command|retry_profile|sibling_command|_windows_short_path|GetShortPathNameW/u,
+  );
+  assert.doesNotMatch(patch, /_windows_render_input/u);
+  assert.doesNotMatch(patch, /_windows_placeholder_render/u);
+  assert.doesNotMatch(patch, /non-ASCII image descriptions/u);
+  assert.doesNotMatch(patch, /ppt\/charts\/|ppt\/embeddings\/|ppt\/slides\//u);
+  assert.doesNotMatch(patch, /<p:graphicFrame|<p:pic|ImageDraw|zipfile/u);
+  assert.doesNotMatch(patch, /except RuntimeError:[\s\S]*os\.name != "nt"[\s\S]*generated =/u);
+});
+
+test("materialization keeps source-build intermediates outside the immutable input root", async () => {
+  const source = await readFile(materializeScript, "utf8");
+
+  assert.match(
+    source,
+    /const workRoot = resolve\(\s*options\.outputRoot,\s*"\.\.",\s*`\$\{basename\(options\.outputRoot\)\}\.materialize-work`,/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /join\(options\.outputRoot, "\.materialize-work"\)/u,
+  );
+});
+
+test("Runtime plugin lock records the copied manifest version and archive verification binds them", async () => {
+  const [materializer, verifier] = await Promise.all([
+    readFile(materializeScript, "utf8"),
+    readFile(resolve(import.meta.dirname, "../scripts/verify-runtime.mjs"), "utf8"),
+  ]);
+
+  assert.match(materializer, /\.codex-plugin",\s*"plugin\.json"/u);
+  assert.match(materializer, /version: pluginManifest\.version/u);
+  assert.match(
+    verifier,
+    /pluginManifest\?\.name !== item\.name \|\| pluginManifest\?\.version !== item\.version/u,
+  );
+  assert.match(verifier, /bundled plugin manifest does not match lock/u);
+});
+
+async function createInputFixture() {
+  const root = await (
+    await import("node:fs/promises")
+  ).mkdtemp(join(tmpdir(), "primary-runtime-inputs-"));
+  const inputRoot = join(root, "runtime-inputs");
+  const target = currentRuntimeTarget();
+  const toolchains = await readRuntimeToolchainsLock(toolchainsLockPath);
+  const fixture = {
+    root,
+    inputRoot,
+    target,
+    runner: toolchains.targets[target].runner,
+    sourceLockPath,
+    toolchainsLockPath,
+  };
+  await mkdir(join(inputRoot, "dependencies/node/bin"), { recursive: true });
+  await mkdir(join(inputRoot, "plugins/presentation-skill"), {
+    recursive: true,
+  });
+  await writeFile(
+    join(inputRoot, "dependencies/node/bin/node"),
+    "fixture runtime\n",
+  );
+  await writeFile(
+    join(inputRoot, "plugins/presentation-skill/fixture.txt"),
+    "fixture plugin\n",
+  );
+  await createFixtureManifest(fixture);
+  return fixture;
+}
+
+async function createFixtureManifest(fixture) {
+  const [sourceLock, toolchainsLock] = await Promise.all([
+    readRuntimeSourcesLock(sourceLockPath),
+    readRuntimeToolchainsLock(toolchainsLockPath),
+  ]);
+  const observedImage = `${toolchainsLock.targets[fixture.target].builder.identity}:20260920.314.1`;
+  await writeRuntimeInputsManifest({
+    inputRoot: fixture.inputRoot,
+    target: fixture.target,
+    sourceLockPath,
+    toolchainsLockPath,
+    artifacts: artifactsForTarget({
+      sourceLock,
+      toolchainsLock,
+      target: fixture.target,
+    }),
+    patches: [
+      {
+        path: sourceLock.candidate.patch.path,
+        sha256: sourceLock.candidate.patch.sha256,
+      },
+    ],
+    builder: {
+      name: "@dascowork/primary-runtime-materializer",
+      version: toolchainsLock.materializerVersion,
+      runner: fixture.runner,
+      identity: toolchainsLock.targets[fixture.target].builder.identity,
+      observedImage,
+      observedImageSha256: sha256(observedImage),
+      tools: toolchainsLock.targets[fixture.target].builder.tools.map(
+        (command) => ({ command, versionSha256: "a".repeat(64) }),
+      ),
+    },
+  });
+}

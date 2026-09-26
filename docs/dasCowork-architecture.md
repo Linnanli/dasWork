@@ -62,9 +62,9 @@ Renderer 中仍使用 AI SDK/assistant-ui 的 UI runtime，但只把它作为消
 
 Main 启动时按以下顺序建立桌面能力：
 
-1. 创建 `PrimaryRuntimeService`，诊断当前 Runtime。
-2. 创建 `DesktopHostCapabilityRuntime` 和 `DynamicAppToolRegistry`。
-3. 启动 App Tools bridge，并协调 bundled plugins。
+1. 创建 `PrimaryRuntimeService`，通过受信任的 product config / channel manifest 诊断、安装或更新 Runtime。打包应用只读取随安装介质签名的公开 trust config 资源，并忽略全部 Primary Runtime 环境变量；直接 archive 与 manifest 配置只用于开发或受控诊断。
+2. 创建 `DesktopHostCapabilityRuntime`、Runtime 状态观察器和 `DynamicAppToolRegistry`。
+3. 启动 App Tools bridge；Runtime 成功切换后，按 marketplace、skills、`skills/list { forceReload: true }` 的顺序同步 bundled plugins。
 4. 创建共享 `CodexAppServerConnection` / `HostCodexConnection`。
 5. 创建 history/context clients 与 `CodexChatRuntimeService`。
 
@@ -138,9 +138,12 @@ Main 在创建新 thread 前生成不可变 `DesktopCapabilitySnapshot`，并通
 
 - 恢复已有 thread 时不重新发布 `dynamicTools`。
 - Runtime、plugin 或工具目录变化只影响新 thread。
+- `PrimaryRuntimeCapabilityPolicy` 只缓存已观察到的 Runtime 与 plugin/skill 同步状态；它不阻塞 thread 创建，也不参与 Runtime 指针事务。
 - `codex_app` MCP/Native Pipe 是同一注册表的兼容投影，不是第二套工具实现。
 - Native Pipe/MCP 失败时关闭该兼容能力，保留原生聊天和 dynamic tools。
-- 只有健康的本地 Primary Runtime 才发布 `load_workspace_dependencies`。
+- 只有本机产品功能、app-server feature gate 和 Runtime 健康状态同时满足时，才向新 thread 发布 `load_workspace_dependencies`；Runtime missing、installing 或 broken 时由 Plugin Center 返回 Main 生成的结构化诊断与恢复建议，不暴露 Runtime root，也不允许模型自行安装替代依赖。
+- 恢复已有 thread 不补发或伪造 `dynamicTools`；符合产品、app-server 与 Runtime 健康门禁的本地 thread 从创建时就具备 loader。
+- Runtime-owned plugin descriptor 是替换式 desired set。升级后只退役逻辑 plugin ID 已从 desired set 消失的 Runtime-owned plugin；同 ID 的新版本替换不会被再次禁用，也不会触碰用户插件或累积历史 descriptor。
 
 TypeScript Native Pipe/MCP bridge 仍受公开发布门禁约束，路径权限或随机端点名不能替代 OS 级身份校验。
 
@@ -153,6 +156,7 @@ TypeScript Native Pipe/MCP bridge 仍受公开发布门禁约束，路径权限�
 - app-server 协议状态、共享连接、初始化、版本探测和 server request routing 由 Main 与 AI-free client 持有。
 - `thread/start`、`thread/resume`、`turn/start`、approval、sandbox、cwd、MCP、dynamic tools、elicitation 和 recovery 的语义不能在桌面端伪造。
 - Primary Runtime 只提供宿主工具依赖与 bundled plugins，不是模型运行时或 Renderer 通用文件系统入口。
+- Runtime feed 的私钥不进入 desktop、Renderer、app-server 或 feed 服务进程。Main 使用按 config / manifest 角色分隔的公钥、严格 HTTPS origin、不可重定向请求与持久化的 `{sequence,payloadHash,keyId}` 信任状态；发布流水线在打包前将这些**公开**信任材料写入资源，随后由安装介质签名，开发环境的 CA 和所有环境变量都不能取代它。
 
 ## 10. 定位入口
 
@@ -185,3 +189,5 @@ npm --prefix desktop-app run verify:real-codex-app-server-contract
 ```
 
 App Tools、Primary Runtime 或 bundled plugins 改动还需运行对应 release gate、真实 Runtime smoke 和 packaged smoke。涉及真实聊天链路时，端到端证据必须覆盖 Renderer → IPC → Main → AI-free client → Codex app server，必要时再覆盖 `item/tool/call` → Main registry。
+
+Runtime feed 与 builder 另有独立验证：`npm --prefix primary-runtime test`、`npm --prefix services/primary-runtime-feed test` 和 `npm --prefix desktop-app run verify:app-tools-release-gates`。没有授权的 Runtime source、四目标原生 P1a/P3b receipt、独立审查预算或 deterministic `presentation-skill` 产物证据时，engineering gate 必须保持关闭；普通聊天不受该功能降级影响。GitHub artifact 不是生产发布物，也不依赖平台信任回执。

@@ -12,3 +12,5 @@ out
 /test-results/
 /playwright-report/
 /blob-report/
+.primary-runtime-dev-cache/
+.primary-runtime-local-feed-user-data/

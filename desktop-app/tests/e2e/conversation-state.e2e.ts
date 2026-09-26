@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { ElectronApplication } from '@playwright/test'
 
 import { planAssert } from '../../scripts/lib/test-plan-assertions.mjs'
+import { conversationDraftStorageKey } from '../../src/renderer/src/runtime/ConversationDraftStore'
 
 import {
   attachDiagnostics,
@@ -23,7 +24,6 @@ import {
   startMockBackend
 } from './support/mockBackend'
 
-const draftStorageKey = 'das-cowork.conversation-drafts.v2'
 const transcriptRecoveryStorageKey = 'das-cowork.transcript-recovery.v1'
 
 test('restores per-thread drafts after restart but keeps scroll restoration session-only', async ({
@@ -481,7 +481,7 @@ async function expectDraftStorageToContain(
       page.evaluate(
         ({ key, expectedDraft }) =>
           window.localStorage.getItem(key)?.includes(expectedDraft) ?? false,
-        { key: draftStorageKey, expectedDraft: draft }
+        { key: conversationDraftStorageKey, expectedDraft: draft }
       )
     )
     .toBe(true)

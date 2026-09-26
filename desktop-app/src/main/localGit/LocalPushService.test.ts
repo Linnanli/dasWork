@@ -7,6 +7,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { LocalGitService } from './LocalGitService'
 import { LocalPushService } from './LocalPushService'
+import { createGitReadCacheKey, GitReadCache } from './GitReadCache'
 import type { WorktreeRepository } from './GitManager'
 import { createGitFixture, git, gitTarget } from './testHelpers'
 
@@ -96,6 +97,20 @@ describe('LocalPushService', () => {
       'upstream-host',
       'HEAD:refs/heads/review/base'
     ])
+  })
+
+  it('coalesces concurrent publish-status reads for the same repository', async () => {
+    const gitCalls: Array<{ args: readonly string[] }> = []
+    const service = createMockPushService({ gitCalls })
+
+    const [first, second] = await Promise.all([
+      service.getStatus(gitTarget('/mock/repo')),
+      service.getStatus(gitTarget('/mock/repo'))
+    ])
+
+    expect(second).toEqual(first)
+    expect(gitCalls.filter((call) => call.args[0] === 'remote')).toHaveLength(1)
+    expect(gitCalls.filter((call) => call.args[0] === 'for-each-ref')).toHaveLength(1)
   })
 
   it('falls back through push config when no upstream is configured', async () => {
@@ -317,6 +332,7 @@ function createMockPushService(input: {
   }
 }): LocalPushService {
   const gitCalls = input.gitCalls ?? []
+  const readCache = new GitReadCache()
   const repository = {
     git: vi.fn(async (args: readonly string[], options?: unknown) => {
       gitCalls.push({
@@ -354,6 +370,19 @@ function createMockPushService(input: {
       return gitResult()
     }),
     listUntrackedPaths: vi.fn(async () => []),
+    readCached: vi.fn(
+      async <T>(
+        type: string,
+        parts: readonly unknown[],
+        loader: () => Promise<T>,
+        options?: Parameters<GitReadCache['fetch']>[2]
+      ): Promise<T> =>
+        readCache.fetch(
+          createGitReadCacheKey('local', '/mock/repo', type, ...parts),
+          loader,
+          options
+        )
+    ),
     invalidateGitReadCachesForRepoChange: vi.fn()
   } as unknown as WorktreeRepository
   const localGit = {

@@ -65,6 +65,7 @@ import type {
 } from './followUps/ConversationFollowUpQueueService'
 import { ProjectStore, createDefaultProjectState } from './projects/ProjectStore'
 import { DesktopHostCapabilityRuntime } from './appTools/DesktopHostCapabilityRuntime'
+import { PrimaryRuntimeCapabilityPolicy } from './primaryRuntime'
 
 class FakePort implements CodexPortLike {
   readonly messages: unknown[] = []
@@ -524,6 +525,61 @@ describe('CodexChatRuntimeService', () => {
     )
 
     expect(recordedRunInput(runDriver)?.threadConfig).toEqual(threadConfig)
+  })
+
+  it('does not add a Runtime-specific admission gate while resuming a thread', async () => {
+    const port = new FakePort()
+    const policy = new PrimaryRuntimeCapabilityPolicy(true)
+    const hostCapabilities = new DesktopHostCapabilityRuntime({
+      workspaceDependencies: {
+        diagnoseDependencies: async () => ({
+          status: 'ready',
+          manifest: {
+            bundleFormatVersion: 2,
+            bundleVersion: 'v2',
+            target: { platform: process.platform, arch: process.arch },
+            node: { path: 'dependencies/node/bin/node' },
+            nodePackages: []
+          },
+          issues: []
+        }),
+        loadDependencies: async () => ({ node: '/runtime/node' })
+      },
+      primaryRuntimeCapabilities: policy
+    })
+    hostCapabilities.updatePrimaryRuntimeState({
+      diagnostic: {
+        status: 'ready',
+        manifest: {
+          bundleFormatVersion: 2,
+          bundleVersion: 'v2',
+          target: { platform: process.platform, arch: process.arch },
+          node: { path: 'dependencies/node/bin/node' },
+          nodePackages: []
+        },
+        issues: []
+      },
+      runtimePluginsSynchronized: true
+    })
+    const runDriver = vi.fn()
+    const service = new CodexChatRuntimeService({
+      cwd: '/repo',
+      hostCapabilities,
+      runDriver: runDriver as unknown as RecordedRunDriver
+    })
+
+    await service.startChatStream(
+      {
+        chatId: 'chat-legacy-runtime-thread',
+        trigger: 'submit-message',
+        messages: [],
+        modelId: 'gpt-test',
+        body: { threadId: 'legacy-runtime-thread' }
+      },
+      port
+    )
+
+    expect(runDriver).toHaveBeenCalledOnce()
   })
 
   it('binds dynamic tool calls to the active thread instead of trusting a supplied thread id', async () => {
