@@ -32,13 +32,32 @@ test('synthetic Feed fixture has a signed complete matrix and uses no real packa
   const root = await mkdtemp(join(tmpdir(), 'dascowork-synthetic-feed-contract-'))
   try {
     const fixture = await createSyntheticFeedFixture(root, { host: '127.0.0.1', port: 9444 })
-    await assert.doesNotReject(() =>
-      validateReleaseTree(fixture.stagedRoot, {
-        configPublicKeys: JSON.parse(fixture.configPublicKeys),
-        manifestPublicKeys: JSON.parse(fixture.manifestPublicKeys),
-        allowSyntheticTestOnly: true
-      })
+    const control = JSON.parse(await readFile(fixture.controlPath, 'utf8'))
+    assert.equal(control.repositoryRoot, fixture.repositoryRoot)
+    assert.match(control.bundleVersions.v1, /^0\.0\.0-synthetic\.1\+/u)
+    assert.match(control.bundleVersions.v2, /^0\.0\.0-synthetic\.2\+/u)
+    assert.match(control.archiveUrls.v1, /\/v1\/runtime\/archives\/0\.0\.0-synthetic\.1\//u)
+    assert.equal(control.metadataSnapshots.v2Refresh.config.sequence, 3)
+    assert.equal(control.metadataSnapshots.v2Refresh.manifest.sequence, 3)
+    assert.equal(control.metadataSnapshots.v1Return.config.sequence, 4)
+    assert.equal(control.metadataSnapshots.v1Return.manifest.sequence, 4)
+    assert.equal(
+      control.metadataSnapshots.v2Refresh.manifest.releases[0].version,
+      '0.0.0-synthetic.2'
     )
+    assert.equal(
+      control.metadataSnapshots.v1Return.manifest.releases[0].version,
+      '0.0.0-synthetic.1'
+    )
+    for (const stagedRoot of [control.staged.v1, control.staged.v2]) {
+      await assert.doesNotReject(() =>
+        validateReleaseTree(stagedRoot, {
+          configPublicKeys: JSON.parse(fixture.configPublicKeys),
+          manifestPublicKeys: JSON.parse(fixture.manifestPublicKeys),
+          allowSyntheticTestOnly: true
+        })
+      )
+    }
     await assert.rejects(
       validateReleaseTree(fixture.stagedRoot, {
         configPublicKeys: JSON.parse(fixture.configPublicKeys),
@@ -69,12 +88,18 @@ test('synthetic Feed E2E stays in a separate test-only runner and cannot use dir
   )
   assert.match(playwrightConfig, /DASCOWORK_PRIMARY_RUNTIME_SYNTHETIC_FEED_E2E/u)
   assert.match(runnerSource, /buildSyntheticRuntime/u)
-  assert.match(runnerSource, /startPrimaryRuntimeFeed/u)
+  assert.match(runnerSource, /publishDevelopmentRepositorySnapshot/u)
+  assert.match(runnerSource, /createDevelopmentPrimaryRuntimeFeedServer/u)
   assert.match(runnerSource, /primaryRuntimeFeedChildEnvironment/u)
+  assert.match(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_SYNTHETIC_FEED_CONTROL_PATH/u)
   assert.match(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)
   assert.match(e2eSource, /AT-E2E-SYNTHETIC-01/u)
+  assert.match(e2eSource, /runPrimaryRuntimeUpdate/u)
+  assert.match(e2eSource, /publishDevelopmentRepositorySnapshot/u)
+  assert.match(e2eSource, /publishDevelopmentMetadataSnapshot/u)
+  assert.match(e2eSource, /runtimeInstallMarker/u)
   assert.match(e2eSource, /@dascowork\/test-artifact-tool/u)
   assert.doesNotMatch(e2eSource, /@oai\/artifact-tool/u)
   assert.doesNotMatch(e2eSource, /test\.skip/u)

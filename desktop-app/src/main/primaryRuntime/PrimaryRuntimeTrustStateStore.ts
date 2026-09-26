@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rename } from 'node:fs/promises'
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { z } from 'zod'
@@ -29,6 +29,7 @@ export type PrimaryRuntimeTrustRecord = z.infer<typeof trustRecordSchema>
 export type PrimaryRuntimeTrustStateStore = {
   read(role: PrimaryRuntimeTrustRole): Promise<PrimaryRuntimeTrustRecord | undefined>
   accept(record: PrimaryRuntimeTrustRecord): Promise<void>
+  acceptMany?(records: readonly PrimaryRuntimeTrustRecord[]): Promise<void>
 }
 
 /**
@@ -45,22 +46,37 @@ export class FilePrimaryRuntimeTrustStateStore implements PrimaryRuntimeTrustSta
   }
 
   async accept(record: PrimaryRuntimeTrustRecord): Promise<void> {
+    await this.acceptMany([record])
+  }
+
+  async acceptMany(records: readonly PrimaryRuntimeTrustRecord[]): Promise<void> {
     const state = await this.readState()
-    const existing = state.records[record.role]
-    if (existing) assertMonotonicAcceptance(existing, record)
-    if (
-      existing &&
-      existing.sequence === record.sequence &&
-      existing.payloadHash === record.payloadHash &&
-      existing.keyId === record.keyId
-    ) {
+    const nextRecords = { ...state.records }
+    let changed = false
+
+    for (const record of records) {
+      const existing = nextRecords[record.role]
+      if (existing) assertMonotonicAcceptance(existing, record)
+      if (
+        existing &&
+        existing.sequence === record.sequence &&
+        existing.payloadHash === record.payloadHash &&
+        existing.keyId === record.keyId
+      ) {
+        continue
+      }
+      nextRecords[record.role] = record
+      changed = true
+    }
+
+    if (!changed) {
       return
     }
 
     await mkdir(dirname(this.statePath), { recursive: true })
     const next = {
       schemaVersion: 1 as const,
-      records: { ...state.records, [record.role]: record }
+      records: nextRecords
     }
     const temporaryPath = `${this.statePath}.next-${randomUUID()}`
     const handle = await open(temporaryPath, 'wx', 0o600)
@@ -70,7 +86,12 @@ export class FilePrimaryRuntimeTrustStateStore implements PrimaryRuntimeTrustSta
     } finally {
       await handle.close().catch(() => undefined)
     }
-    await rename(temporaryPath, this.statePath)
+    try {
+      await rename(temporaryPath, this.statePath)
+    } catch (error) {
+      await rm(temporaryPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   }
 
   private async readState(): Promise<z.infer<typeof trustStateSchema>> {

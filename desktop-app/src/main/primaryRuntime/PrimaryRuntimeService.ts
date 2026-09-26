@@ -310,6 +310,7 @@ export class PrimaryRuntimeService {
     if (failure) {
       const { error, ...safeFailure } = failure
       const failureKind = classifyUserFailure(error)
+      const failureCopy = userFailureCopy(failureKind, error)
       return {
         state: 'failed',
         ...(safeFailure.callId ? { callId: safeFailure.callId } : {}),
@@ -324,8 +325,8 @@ export class PrimaryRuntimeService {
         retryable: safeFailure.retryable,
         runtimeActive: safeFailure.runtimeActive,
         pluginReady: safeFailure.pluginReady,
-        message: userFailureMessage(failureKind),
-        recovery: userFailureRecovery(failureKind),
+        message: failureCopy.message,
+        recovery: failureCopy.recovery,
         canInstallOrRepair: true,
         canRunUpdate: true,
         canCancel: false,
@@ -397,9 +398,10 @@ export class PrimaryRuntimeService {
     const activeVersion = await this.activeVersion()
     const failure = this.lastFailure ?? this.lastUpdateCheckFailure
     if (failure) {
+      const failureKind = classifyUserFailure(failure.error)
       return {
         status: 'failed',
-        message: userFailureMessage(classifyUserFailure(failure.error)),
+        message: userFailureCopy(failureKind, failure.error).message,
         ...(activeVersion ? { activeVersion } : {}),
         cleanedStagingCount
       }
@@ -1004,6 +1006,59 @@ function userFailureRecovery(kind: NonNullable<PrimaryRuntimeUserStatus['failure
     case 'unavailable':
       return '请重试；若问题持续，请联系管理员。'
   }
+}
+
+function userFailureCopy(
+  kind: NonNullable<PrimaryRuntimeUserStatus['failureKind']>,
+  error: Error
+): { message: string; recovery: string } {
+  const metadataCopy = metadataFailureCopy(error)
+  if (metadataCopy) return metadataCopy
+  return {
+    message: userFailureMessage(kind),
+    recovery: userFailureRecovery(kind)
+  }
+}
+
+function metadataFailureCopy(error: Error): { message: string; recovery: string } | undefined {
+  const message = error.message.toLowerCase()
+  if (/snapshot pair sequence mismatch|config and manifest snapshot pair/u.test(message)) {
+    return {
+      message: 'Primary Runtime 的 product-config 与 manifest 不是同一批发布元数据。',
+      recovery: '请等待发布服务完成同一序列的元数据刷新后重试；这次不会写入新的信任状态。'
+    }
+  }
+  if (/equivocation|rolled back|sequence has rolled back|trust metadata/u.test(message)) {
+    return {
+      message: 'Primary Runtime 发布元数据与本机已接受的信任记录冲突。',
+      recovery: '请联系管理员检查发布源和签名记录；应用会保留当前已启用的 Runtime。'
+    }
+  }
+  if (/config.*expired|product config.*expired/u.test(message)) {
+    return {
+      message: 'Primary Runtime product-config 已过期。',
+      recovery: '请等待发布服务刷新 product-config 后重试；不会安装未成对验证的 Runtime。'
+    }
+  }
+  if (/manifest.*expired/u.test(message)) {
+    return {
+      message: 'Primary Runtime manifest 已过期。',
+      recovery: '请等待发布服务刷新 manifest 后重试；当前已启用的 Runtime 不受影响。'
+    }
+  }
+  if (/config.*signature|config uses unknown key|config keyring/u.test(message)) {
+    return {
+      message: 'Primary Runtime product-config 签名无法验证。',
+      recovery: '请联系管理员检查 config 签名密钥和发布配置；应用不会信任这份元数据。'
+    }
+  }
+  if (/manifest.*signature|manifest uses unknown key|manifest keyring/u.test(message)) {
+    return {
+      message: 'Primary Runtime manifest 签名无法验证。',
+      recovery: '请联系管理员检查 manifest 签名密钥和发布配置；应用不会安装该候选版本。'
+    }
+  }
+  return undefined
 }
 
 function progressMessage(

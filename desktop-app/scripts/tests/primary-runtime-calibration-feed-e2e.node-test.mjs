@@ -91,7 +91,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(e2eSource, /sandbox_permissions: 'require_escalated'/u)
   assert.match(
     e2eSource,
-    /shellCommandResponse\('response-runtime-command', runtimeCommandCallId, \{[\s\S]*?timeout_ms: 60_000/u
+    /shellCommandResponse\('response-runtime-command', runtimeCommandCallId, \{[\s\S]*?timeout_ms: 120_000/u
   )
   assert.match(e2eSource, /data:text\/javascript;base64/u)
   assert.match(

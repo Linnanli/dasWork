@@ -1,8 +1,5 @@
-#!/usr/bin/env node
-/* eslint-disable @typescript-eslint/explicit-function-return-type -- Executable configuration is covered by Node contract tests. */
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- E2E helper configuration is covered by Node contract tests. */
 
-import { spawn } from 'node:child_process'
-import { once } from 'node:events'
 import { isAbsolute, resolve } from 'node:path'
 
 import {
@@ -10,8 +7,6 @@ import {
   publishRepository
 } from '../../services/primary-runtime-feed/src/repository.mjs'
 import { createPrimaryRuntimeFeedServer } from '../../services/primary-runtime-feed/src/server.mjs'
-
-const appRoot = resolve(import.meta.dirname, '..')
 
 /**
  * Starts an already-built, signed local feed and launches Electron with only
@@ -98,36 +93,6 @@ function runtimeFeedRequestHost(host, port) {
   return `${formattedHost}:${port}`
 }
 
-async function main() {
-  const configuration = resolvePrimaryRuntimeFeedDevelopmentConfiguration()
-  const server = await startPrimaryRuntimeFeed(configuration)
-  const origin = `https://${configuration.host}:${configuration.port}`
-  console.info(`Primary Runtime development feed is ready at ${origin}.`)
-  const child = spawn('npm', ['run', 'dev'], {
-    cwd: appRoot,
-    env: primaryRuntimeFeedChildEnvironment(configuration),
-    stdio: 'inherit'
-  })
-  const closeServer = async () => {
-    if (server.listening) {
-      server.close()
-      await once(server, 'close')
-    }
-  }
-  const forwardShutdown = (signal) => {
-    child.kill(signal)
-  }
-  process.once('SIGINT', () => forwardShutdown('SIGINT'))
-  process.once('SIGTERM', () => forwardShutdown('SIGTERM'))
-  try {
-    const [code, signal] = await once(child, 'exit')
-    if (signal) process.exitCode = 1
-    else if (typeof code === 'number') process.exitCode = code
-  } finally {
-    await closeServer()
-  }
-}
-
 function requiredValue(env, name) {
   const value = env[name]?.trim()
   if (!value) throw new Error(`${name} is required.`)
@@ -157,4 +122,9 @@ const directRuntimeOverrides = [
   'DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL'
 ]
 
-if (resolve(process.argv[1] ?? '') === new URL(import.meta.url).pathname) await main()
+if (resolve(process.argv[1] ?? '') === new URL(import.meta.url).pathname) {
+  console.error(
+    'dev-with-primary-runtime-feed.mjs is an internal signed-Feed E2E helper. Use npm run dev:local-feed for desktop development.'
+  )
+  process.exitCode = 1
+}

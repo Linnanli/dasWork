@@ -1,8 +1,14 @@
 import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { createServer } from "node:https";
+import { resolve } from "node:path";
 
-import { readPublishedRuntimeFeedAsset } from "./repository.mjs";
+import {
+  loadPublishedRuntimeFeedSnapshot,
+  parseFeedPublicKeyring,
+  readPublishedRuntimeFeedAsset,
+  readPublishedRuntimeFeedSnapshotAsset,
+} from "./repository.mjs";
 
 export async function createPrimaryRuntimeFeedServer({
   repositoryRoot,
@@ -17,6 +23,73 @@ export async function createPrimaryRuntimeFeedServer({
   const trustedHosts = normalizeAllowedRequestHosts(allowedHosts);
   const key = await readFile(tls.keyPath);
   const cert = await readFile(tls.certPath);
+  return createRuntimeFeedServer({
+    key,
+    cert,
+    trustedHosts,
+    readAsset: (pathname) => readPublishedRuntimeFeedAsset(repositoryRoot, pathname),
+  });
+}
+
+export async function createDevelopmentPrimaryRuntimeFeedServer({
+  repositoryRoot,
+  tls,
+  allowedHosts,
+  configPublicKeys,
+  manifestPublicKeys,
+  publicKeyring,
+}) {
+  if (!repositoryRoot || !tls?.keyPath || !tls?.certPath || !allowedHosts) {
+    throw new Error(
+      "Primary Runtime development feed requires a repository root, explicit TLS key/certificate paths, and allowed request hosts.",
+    );
+  }
+  const keyring = await resolveDevelopmentPublicKeyring({
+    repositoryRoot,
+    configPublicKeys,
+    manifestPublicKeys,
+    publicKeyring,
+  });
+  const trustedHosts = normalizeAllowedRequestHosts(allowedHosts);
+  const key = await readFile(tls.keyPath);
+  const cert = await readFile(tls.certPath);
+  let snapshot = await loadPublishedRuntimeFeedSnapshot({
+    repositoryRoot,
+    configPublicKeys: keyring.configPublicKeys,
+    manifestPublicKeys: keyring.manifestPublicKeys,
+  });
+  let lastRefreshErrorKey;
+  let refreshQueue = Promise.resolve();
+  const refreshAdoptedSnapshot = async () => {
+    refreshQueue = refreshQueue.then(async () => {
+      const result = await refreshDevelopmentSnapshot({
+        repositoryRoot,
+        keyring,
+        snapshot,
+      });
+      snapshot = result.snapshot;
+      if (result.errorKey && result.errorKey !== lastRefreshErrorKey) {
+        lastRefreshErrorKey = result.errorKey;
+        console.error(result.message);
+      } else if (!result.errorKey) {
+        lastRefreshErrorKey = undefined;
+      }
+    });
+    await refreshQueue;
+    return snapshot;
+  };
+  return createRuntimeFeedServer({
+    key,
+    cert,
+    trustedHosts,
+    readAsset: async (pathname) => {
+      const adopted = await refreshAdoptedSnapshot();
+      return readPublishedRuntimeFeedSnapshotAsset(adopted, pathname);
+    },
+  });
+}
+
+function createRuntimeFeedServer({ key, cert, trustedHosts, readAsset }) {
   return createServer({ key, cert }, async (request, response) => {
     try {
       if (!isAllowedRequestHost(request.headers.host, trustedHosts)) {
@@ -36,10 +109,7 @@ export async function createPrimaryRuntimeFeedServer({
         request.url ?? "/",
         "https://primary-runtime.invalid",
       ).pathname;
-      const asset = await readPublishedRuntimeFeedAsset(
-        repositoryRoot,
-        pathname,
-      );
+      const asset = await readAsset(pathname);
       if (!asset) {
         response.writeHead(404, { "cache-control": "no-store" });
         response.end();
@@ -62,6 +132,65 @@ export async function createPrimaryRuntimeFeedServer({
       response.end(runtimeFeedInternalErrorBody(error));
     }
   });
+}
+
+async function refreshDevelopmentSnapshot({ repositoryRoot, keyring, snapshot }) {
+  try {
+    const next = await loadPublishedRuntimeFeedSnapshot({
+      repositoryRoot,
+      configPublicKeys: keyring.configPublicKeys,
+      manifestPublicKeys: keyring.manifestPublicKeys,
+      previousSnapshot: snapshot,
+    });
+    return {
+      snapshot: next.id === snapshot.id ? snapshot : next,
+    };
+  } catch (error) {
+    const current = await currentSnapshotId(repositoryRoot);
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      snapshot,
+      errorKey: `${current}:${reason}`,
+      message: `Primary Runtime development feed kept last-good snapshot after rejecting ${current}: ${reason}`,
+    };
+  }
+}
+
+async function currentSnapshotId(repositoryRoot) {
+  return realpath(resolve(repositoryRoot, "current")).catch(() =>
+    resolve(repositoryRoot, "current"),
+  );
+}
+
+async function resolveDevelopmentPublicKeyring({
+  repositoryRoot,
+  configPublicKeys,
+  manifestPublicKeys,
+  publicKeyring,
+}) {
+  if (publicKeyring) {
+    const parsed = parseFeedPublicKeyring(publicKeyring, "development");
+    return { configPublicKeys: parsed, manifestPublicKeys: parsed };
+  }
+  if (configPublicKeys || manifestPublicKeys) {
+    if (!configPublicKeys || !manifestPublicKeys) {
+      throw new Error(
+        "Primary Runtime development feed requires config and manifest public keyrings.",
+      );
+    }
+    return { configPublicKeys, manifestPublicKeys };
+  }
+  const keyringPath = resolve(
+    repositoryRoot,
+    "..",
+    "signing-key",
+    "public-keyring.json",
+  );
+  const parsed = parseFeedPublicKeyring(
+    await readFile(keyringPath, "utf8"),
+    "development",
+  );
+  return { configPublicKeys: parsed, manifestPublicKeys: parsed };
 }
 
 export function runtimeFeedInternalErrorBody(_error) {

@@ -193,8 +193,18 @@ const artifactPreviewCapabilities = new ArtifactPreviewCapabilityStore()
 const artifactComposerAttachments = new ArtifactComposerAttachmentStore()
 const convergingConversationThreadIds = new Set<string>()
 
-const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
-if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
+const devLocalFeedUserDataPath = process.env.DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR?.trim()
+if (devLocalFeedUserDataPath) {
+  if (app.isPackaged) {
+    throw new Error(
+      'Development Primary Runtime userData override is not allowed in packaged builds.'
+    )
+  }
+  app.setPath('userData', devLocalFeedUserDataPath)
+} else {
+  const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
+  if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
+}
 const e2eDocumentsPath = process.env.DASCOWORK_E2E_DOCUMENTS_DIR?.trim()
 if (e2eDocumentsPath) app.setPath('documents', e2eDocumentsPath)
 const artifactPreviewManifest = new ArtifactPreviewSourceManifest(
@@ -540,6 +550,9 @@ async function createPrimaryRuntimeProductReleaseProvider(
   cacheRoot: string
 ): Promise<PrimaryRuntimeProductReleaseProvider> {
   const trustState = new FilePrimaryRuntimeTrustStateStore(join(cacheRoot, 'trust-state.json'))
+  const manifestSequenceStore = new FilePrimaryRuntimeManifestSequenceStore(
+    join(cacheRoot, 'release-sequence.json')
+  )
   const packagedLoopbackTestCaPath = resolvePackagedLoopbackTestCaPath(config)
   const localTestCaPath = app.isPackaged ? packagedLoopbackTestCaPath : config.localTestCaPath
   const tlsPolicy = await PrimaryRuntimeTlsPolicy.create({
@@ -560,18 +573,16 @@ async function createPrimaryRuntimeProductReleaseProvider(
       configPublicKeys: config.configPublicKeys,
       allowedConfigOrigins: config.allowedConfigOrigins,
       allowedManifestOrigins: config.allowedManifestOrigins,
-      httpClient,
-      trustState
+      httpClient
     }),
+    trustState,
     createManifestProvider: (verifiedConfig) =>
       new SignedPrimaryRuntimeReleaseProvider({
         manifestUrl: verifiedConfig.manifestUrl,
         allowedOrigins: config.allowedManifestOrigins,
         channel: config.channel,
         publicKeys: config.manifestPublicKeys,
-        sequenceStore: new FilePrimaryRuntimeManifestSequenceStore(
-          join(cacheRoot, 'release-sequence.json')
-        ),
+        sequenceStore: manifestSequenceStore,
         httpClient,
         trustState
       })

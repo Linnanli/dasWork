@@ -805,6 +805,56 @@ describe('PrimaryRuntimeService', () => {
     expect(JSON.stringify(telemetry)).not.toContain('authorized source')
   })
 
+  it.each([
+    [
+      'expired config',
+      'Primary Runtime config has expired.',
+      'Primary Runtime product-config 已过期。',
+      '请等待发布服务刷新 product-config 后重试；不会安装未成对验证的 Runtime。'
+    ],
+    [
+      'invalid manifest signature',
+      'Primary Runtime manifest signature is invalid.',
+      'Primary Runtime manifest 签名无法验证。',
+      '请联系管理员检查 manifest 签名密钥和发布配置；应用不会安装该候选版本。'
+    ],
+    [
+      'trust conflict',
+      'Primary Runtime manifest metadata equivocation was detected.',
+      'Primary Runtime 发布元数据与本机已接受的信任记录冲突。',
+      '请联系管理员检查发布源和签名记录；应用会保留当前已启用的 Runtime。'
+    ],
+    [
+      'snapshot pair mismatch',
+      'Primary Runtime snapshot pair sequence mismatch: config 10, manifest 9.',
+      'Primary Runtime 的 product-config 与 manifest 不是同一批发布元数据。',
+      '请等待发布服务完成同一序列的元数据刷新后重试；这次不会写入新的信任状态。'
+    ]
+  ])(
+    'surfaces %s feed failures with actionable plugin-center status',
+    async (_label, failureMessage, expectedMessage, expectedRecovery) => {
+      const cacheRoot = await fixtureDirectory()
+      const service = new PrimaryRuntimeService({
+        locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+        cacheRoot,
+        diagnostics: new PrimaryRuntimeDiagnostics(),
+        releaseProvider: {
+          getRelease: async () => {
+            throw new Error(failureMessage)
+          },
+          downloadArchive: vi.fn()
+        }
+      })
+
+      await expect(service.installOrRepair()).rejects.toThrow(failureMessage)
+      await expect(service.getUserStatus()).resolves.toMatchObject({
+        state: 'failed',
+        message: expectedMessage,
+        recovery: expectedRecovery
+      })
+    }
+  )
+
   it('keeps the existing pointer when archive diagnostics fail before publication', async () => {
     const cacheRoot = await fixtureDirectory()
     await publishFixtureRuntime(cacheRoot, 'old-healthy')

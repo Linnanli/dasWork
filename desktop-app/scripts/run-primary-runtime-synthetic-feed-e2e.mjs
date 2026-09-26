@@ -12,12 +12,16 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 import { buildSyntheticRuntime } from '../../primary-runtime/scripts/build-synthetic-runtime.mjs'
-import { signFeedMetadata } from '../../services/primary-runtime-feed/src/repository.mjs'
+import {
+  parseFeedPublicKeyring,
+  publishDevelopmentRepositorySnapshot,
+  signFeedMetadata
+} from '../../services/primary-runtime-feed/src/repository.mjs'
+import { createDevelopmentPrimaryRuntimeFeedServer } from '../../services/primary-runtime-feed/src/server.mjs'
 
 import {
   primaryRuntimeFeedChildEnvironment,
-  resolvePrimaryRuntimeFeedDevelopmentConfiguration,
-  startPrimaryRuntimeFeed
+  resolvePrimaryRuntimeFeedDevelopmentConfiguration
 } from './dev-with-primary-runtime-feed.mjs'
 
 const executeFile = promisify(execFile)
@@ -38,59 +42,114 @@ export function requirePrimaryRuntimeSyntheticFeedE2eEnvironment(env = process.e
 }
 
 export async function createSyntheticFeedFixture(root, { host, port }) {
-  const build = await buildSyntheticRuntime({ outputRoot: join(root, 'runtime-build') })
   const configKey = generateFeedKey()
   const manifestKey = generateFeedKey()
-  const metadataRoot = join(root, 'metadata')
-  const stagedRoot = join(root, 'repository', 'staged')
+  const repositoryRoot = join(root, 'repository')
   const origin = `https://${host}:${port}`
-  const issuedAt = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-  const releases = build.targets.map((target) => ({
-    platform: target.platform,
-    arch: target.arch,
-    version: build.version,
-    archiveFormat: 'zip',
-    archiveUrl: `${origin}/v1/runtime/archives/${build.version}/${target.target}/primary-runtime.zip`,
-    archiveSizeBytes: target.archiveSizeBytes,
-    archiveSha256: target.archiveSha256,
-    budget: syntheticReleaseBudget(target.archiveSizeBytes)
-  }))
-  const manifest = signFeedMetadata(
-    {
-      schemaVersion: 1,
-      sequence: 1,
-      channel: syntheticChannel,
-      issuedAt,
-      expiresAt,
-      keyId: 'synthetic-manifest-v1',
-      releases
+  const first = await stageSyntheticRelease({
+    root,
+    repositoryRoot,
+    origin,
+    configKey,
+    manifestKey,
+    version: '0.0.0-synthetic.1',
+    sequence: 1,
+    name: 'v1'
+  })
+  const second = await stageSyntheticRelease({
+    root,
+    repositoryRoot,
+    origin,
+    configKey,
+    manifestKey,
+    version: '0.0.0-synthetic.2',
+    sequence: 2,
+    name: 'v2'
+  })
+  const secondRefresh = signedSyntheticMetadataSnapshot({
+    origin,
+    configKey,
+    manifestKey,
+    sequence: 3,
+    releases: second.releases
+  })
+  const returnToFirst = signedSyntheticMetadataSnapshot({
+    origin,
+    configKey,
+    manifestKey,
+    sequence: 4,
+    releases: first.releases
+  })
+  const configPublicKeys = JSON.stringify({ 'synthetic-config-v1': configKey.publicKey })
+  const manifestPublicKeys = JSON.stringify({ 'synthetic-manifest-v1': manifestKey.publicKey })
+  const tls = await createLocalTls(root)
+  const controlPath = join(root, 'synthetic-feed-control.json')
+  await writeJson(controlPath, {
+    repositoryRoot,
+    staged: {
+      v1: first.stagedRoot,
+      v2: second.stagedRoot
     },
-    manifestKey.privateKey
-  )
-  const config = signFeedMetadata(
-    {
-      schemaVersion: 1,
-      sequence: 1,
-      channel: syntheticChannel,
-      manifestUrl: `${origin}/v1/runtime/channels/${syntheticChannel}/manifest.json`,
-      pollIntervalMs: 30_000,
-      issuedAt,
-      expiresAt,
-      keyId: 'synthetic-config-v1'
+    metadataSnapshots: {
+      v2Refresh: secondRefresh,
+      v1Return: returnToFirst
     },
-    configKey.privateKey
-  )
+    versions: {
+      v1: first.build.version,
+      v2: second.build.version
+    },
+    bundleVersions: {
+      v1: bundleVersionForCurrentTarget(first.build.version),
+      v2: bundleVersionForCurrentTarget(second.build.version)
+    },
+    archiveUrls: {
+      v1: archiveUrlForCurrentTarget(first.releases)
+    },
+    tls: {
+      caPath: tls.caPath
+    },
+    configPublicKeys,
+    manifestPublicKeys
+  })
 
-  await writeJson(join(metadataRoot, 'config.json'), config)
-  await writeJson(join(metadataRoot, 'channels', syntheticChannel, 'manifest.json'), manifest)
-  await mkdir(stagedRoot, { recursive: true })
-  await cp(join(metadataRoot, 'config.json'), join(stagedRoot, 'config.json'))
-  await cp(
-    join(metadataRoot, 'channels', syntheticChannel, 'manifest.json'),
-    join(stagedRoot, 'channels', syntheticChannel, 'manifest.json'),
-    { recursive: true }
-  )
+  return {
+    repositoryRoot,
+    stagedRoot: first.stagedRoot,
+    tls,
+    controlPath,
+    configPublicKeys,
+    manifestPublicKeys,
+    sourceLockPath: first.build.sourceLockPath,
+    metadata: first.build
+  }
+}
+
+async function stageSyntheticRelease({
+  root,
+  repositoryRoot,
+  origin,
+  configKey,
+  manifestKey,
+  version,
+  sequence,
+  name
+}) {
+  const build = await buildSyntheticRuntime({
+    outputRoot: join(root, 'runtime-build', name),
+    version
+  })
+  const releases = releasesForBuild(origin, build)
+  const stagedRoot = join(repositoryRoot, `staged-${name}`)
+  const { config, manifest } = signedSyntheticMetadataSnapshot({
+    origin,
+    configKey,
+    manifestKey,
+    sequence,
+    releases
+  })
+
+  await writeJson(join(stagedRoot, 'config.json'), config)
+  await writeJson(join(stagedRoot, 'channels', syntheticChannel, 'manifest.json'), manifest)
   for (const target of build.targets) {
     const destination = join(stagedRoot, 'archives', build.version, target.target)
     await mkdir(destination, { recursive: true })
@@ -106,16 +165,52 @@ export async function createSyntheticFeedFixture(root, { host, port }) {
     })
   }
 
-  const tls = await createLocalTls(root)
-  return {
-    repositoryRoot: join(root, 'repository'),
-    stagedRoot,
-    tls,
-    configPublicKeys: JSON.stringify({ 'synthetic-config-v1': configKey.publicKey }),
-    manifestPublicKeys: JSON.stringify({ 'synthetic-manifest-v1': manifestKey.publicKey }),
-    sourceLockPath: build.sourceLockPath,
-    metadata: build
-  }
+  return { build, releases, stagedRoot }
+}
+
+function signedSyntheticMetadataSnapshot({ origin, configKey, manifestKey, sequence, releases }) {
+  const issuedAt = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+  const manifest = signFeedMetadata(
+    {
+      schemaVersion: 1,
+      sequence,
+      channel: syntheticChannel,
+      issuedAt,
+      expiresAt,
+      keyId: 'synthetic-manifest-v1',
+      releases
+    },
+    manifestKey.privateKey
+  )
+  const config = signFeedMetadata(
+    {
+      schemaVersion: 1,
+      sequence,
+      channel: syntheticChannel,
+      manifestUrl: `${origin}/v1/runtime/channels/${syntheticChannel}/manifest.json`,
+      pollIntervalMs: 30_000,
+      issuedAt,
+      expiresAt,
+      keyId: 'synthetic-config-v1'
+    },
+    configKey.privateKey
+  )
+
+  return { config, manifest }
+}
+
+function releasesForBuild(origin, build) {
+  return build.targets.map((target) => ({
+    platform: target.platform,
+    arch: target.arch,
+    version: build.version,
+    archiveFormat: 'zip',
+    archiveUrl: `${origin}/v1/runtime/archives/${build.version}/${target.target}/primary-runtime.zip`,
+    archiveSizeBytes: target.archiveSizeBytes,
+    archiveSha256: target.archiveSha256,
+    budget: syntheticReleaseBudget(target.archiveSizeBytes)
+  }))
 }
 
 function syntheticReleaseBudget(archiveSizeBytes) {
@@ -155,11 +250,32 @@ async function main() {
       DASCOWORK_PRIMARY_RUNTIME_FEED_HOST: host,
       DASCOWORK_PRIMARY_RUNTIME_FEED_PORT: String(port)
     })
-    server = await startPrimaryRuntimeFeed(configuration, { allowSyntheticTestOnly: true })
+    await publishDevelopmentRepositorySnapshot({
+      repositoryRoot: configuration.repositoryRoot,
+      stagedRoot: configuration.stagedRoot,
+      configPublicKeys: parseFeedPublicKeyring(configuration.configPublicKeys, 'config'),
+      manifestPublicKeys: parseFeedPublicKeyring(configuration.manifestPublicKeys, 'manifest'),
+      allowSyntheticTestOnly: true
+    })
+    server = await createDevelopmentPrimaryRuntimeFeedServer({
+      repositoryRoot: configuration.repositoryRoot,
+      tls: { keyPath: configuration.tlsKeyPath, certPath: configuration.tlsCertPath },
+      allowedHosts: [runtimeFeedRequestHost(configuration.host, configuration.port)],
+      configPublicKeys: parseFeedPublicKeyring(configuration.configPublicKeys, 'config'),
+      manifestPublicKeys: parseFeedPublicKeyring(configuration.manifestPublicKeys, 'manifest')
+    })
+    await new Promise((resolveServer, reject) => {
+      server.once('error', reject)
+      server.listen(configuration.port, configuration.host, () => {
+        server.off('error', reject)
+        resolveServer(undefined)
+      })
+    })
     await assertSyntheticFeedReachable(configuration, await readFile(fixture.tls.caPath, 'utf8'))
     const environment = primaryRuntimeFeedChildEnvironment(configuration, {
       ...process.env,
       DASCOWORK_PRIMARY_RUNTIME_SYNTHETIC_FEED_E2E: '1',
+      DASCOWORK_PRIMARY_RUNTIME_SYNTHETIC_FEED_CONTROL_PATH: fixture.controlPath,
       DASCOWORK_PRIMARY_RUNTIME_ALLOW_SYNTHETIC_TEST_RUNTIME: '1',
       DASCOWORK_PRIMARY_RUNTIME_CONFIG_LOCAL_TEST_CA_PATH: fixture.tls.caPath,
       DASCOWORK_SYNTHETIC_RUNTIME_HOST_NODE: process.execPath
@@ -190,6 +306,20 @@ function generateFeedKey() {
 
 function syntheticCommitFor(target) {
   return createHash('sha256').update(`synthetic-feed-e2e:${target}\n`).digest('hex').slice(0, 40)
+}
+
+function bundleVersionForCurrentTarget(version) {
+  return `${version}+${process.platform}-${process.arch}`
+}
+
+function archiveUrlForCurrentTarget(releases) {
+  const release = releases.find(
+    (candidate) => candidate.platform === process.platform && candidate.arch === process.arch
+  )
+  if (!release) {
+    throw new Error(`Synthetic Runtime fixture is missing ${process.platform}-${process.arch}.`)
+  }
+  return release.archiveUrl
 }
 
 async function assertSyntheticFeedReachable(configuration, ca) {
@@ -301,6 +431,11 @@ async function reserveLoopbackPort(host) {
   await once(server, 'close')
   if (!address || typeof address === 'string') throw new Error('Could not reserve a loopback port.')
   return address.port
+}
+
+function runtimeFeedRequestHost(host, port) {
+  const formattedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host
+  return `${formattedHost}:${port}`
 }
 
 async function writeJson(path, value) {

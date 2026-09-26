@@ -12,7 +12,10 @@ import {
   type PrimaryRuntimeManifestSequenceStore
 } from './PrimaryRuntimeReleaseManifest'
 import { PrimaryRuntimeHttpClient } from './PrimaryRuntimeHttpClient'
-import type { PrimaryRuntimeTrustStateStore } from './PrimaryRuntimeTrustStateStore'
+import type {
+  PrimaryRuntimeTrustRecord,
+  PrimaryRuntimeTrustStateStore
+} from './PrimaryRuntimeTrustStateStore'
 
 export type PrimaryRuntimeReleaseProvider = {
   getRelease(): Promise<PrimaryRuntimeReleaseDescriptor | null>
@@ -169,6 +172,16 @@ export type SignedPrimaryRuntimeReleaseProviderInput = {
   trustState: PrimaryRuntimeTrustStateStore
 }
 
+export type PrimaryRuntimeVerifiedSignedRelease = {
+  descriptor: PrimaryRuntimeReleaseDescriptor
+  archiveUrl: string
+  allowedOrigins: readonly string[]
+  issuedAt: string
+  expiresAt: string
+  trustRecord: PrimaryRuntimeTrustRecord
+  persistHighestSequence(): Promise<void>
+}
+
 /**
  * Fetches a signed product manifest, rejects stale or replayed metadata, then
  * delegates archive streaming to the same immutable-descriptor downloader used
@@ -200,6 +213,17 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
   }
 
   async getRelease(): Promise<PrimaryRuntimeReleaseDescriptor> {
+    const verifiedRelease = await this.getVerifiedRelease({ acceptTrust: true })
+    return { ...verifiedRelease.descriptor }
+  }
+
+  async getVerifiedRelease(
+    input: {
+      acceptTrust?: boolean
+      acceptedAt?: Date
+    } = {}
+  ): Promise<PrimaryRuntimeVerifiedSignedRelease> {
+    const acceptedAt = input.acceptedAt ?? this.now()
     const manifest = await this.httpClient.getJson(this.input.manifestUrl)
     const existingTrust = await this.input.trustState.read('manifest')
     const highestSequence = await this.input.sequenceStore.readHighestSequence()
@@ -210,19 +234,18 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
       channel: this.input.channel,
       platform: this.platform,
       arch: this.arch,
-      now: this.now(),
+      now: acceptedAt,
       highestAcceptedSequence: Math.max(existingTrust?.sequence ?? 0, highestSequence ?? 0)
     })
-    await this.input.trustState.accept({
+    const trustRecord: PrimaryRuntimeTrustRecord = {
       sequence: verified.sequence,
       payloadHash: verified.payloadHash,
       keyId: verified.keyId,
-      acceptedAt: this.now().toISOString(),
+      acceptedAt: acceptedAt.toISOString(),
       origin: new URL(this.input.manifestUrl).origin,
       channel: verified.channel,
       role: 'manifest'
-    })
-    await this.input.sequenceStore.persistHighestSequence(verified.sequence)
+    }
 
     if (!verified.budget) {
       throw new Error('Primary Runtime signed release manifest is missing its budget.')
@@ -253,7 +276,19 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
       },
       this.httpClient
     )
-    return { ...descriptor }
+    if (input.acceptTrust !== false) {
+      await this.input.trustState.accept(trustRecord)
+      await this.persistHighestSequence(verified.sequence)
+    }
+    return {
+      descriptor: { ...descriptor },
+      archiveUrl: verified.archiveUrl,
+      allowedOrigins: verified.allowedOrigins,
+      issuedAt: verified.issuedAt,
+      expiresAt: verified.expiresAt,
+      trustRecord,
+      persistHighestSequence: () => this.persistHighestSequence(verified.sequence)
+    }
   }
 
   async downloadArchive(
@@ -266,6 +301,10 @@ export class SignedPrimaryRuntimeReleaseProvider implements PrimaryRuntimeReleas
       throw new Error('Primary Runtime release descriptor does not match the verified manifest.')
     }
     return this.archiveProvider.downloadArchive(descriptor, destinationPath, signal, onProgress)
+  }
+
+  private async persistHighestSequence(sequence: number): Promise<void> {
+    await this.input.sequenceStore.persistHighestSequence(sequence)
   }
 }
 

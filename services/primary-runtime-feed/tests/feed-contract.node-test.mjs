@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash, generateKeyPairSync } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import {
   copyFile,
+  lstat,
   mkdtemp,
   mkdir,
   readFile,
+  realpath,
+  rename,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -19,6 +23,8 @@ import { fileURLToPath } from "node:url";
 import {
   CONFIG_PATH,
   canonicalSignedPayload,
+  publishDevelopmentMetadataSnapshot,
+  publishDevelopmentRepositorySnapshot,
   readPublishedRuntimeFeedAsset,
   publishRepository,
   runtimeFeedPathForRequest,
@@ -27,6 +33,8 @@ import {
 } from "../src/repository.mjs";
 import { assembleReleaseStaging } from "../scripts/assemble-release-staging.mjs";
 import {
+  createPrimaryRuntimeFeedServer,
+  createDevelopmentPrimaryRuntimeFeedServer,
   isAllowedRequestHost,
   normalizeAllowedRequestHosts,
   runtimeFeedInternalErrorBody,
@@ -439,6 +447,291 @@ test("publishing refuses symlinks in release history before immutable archive co
   }
 });
 
+test("development publishing hot-serves current metadata and only indexed immutable archives", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "primary-runtime-feed-dev-hot-"),
+  );
+  const first = join(root, "first");
+  const second = join(root, "second");
+  const tls = join(root, "tls");
+  let server;
+  try {
+    const verification = await writeReleaseTree(first);
+    const stagedEvidence = join(
+      first,
+      "archives",
+      "2026.09.10",
+      "darwin-arm64",
+      "evidence",
+    );
+    await mkdir(stagedEvidence);
+    await writeFile(join(stagedEvidence, "runtime.json"), "nested engineering evidence");
+    await publishDevelopmentRepositorySnapshot({
+      repositoryRoot: root,
+      stagedRoot: first,
+      ...verification,
+    });
+    assert.equal(
+      await readFile(
+        join(root, "archives", "2026.09.10", "darwin-arm64", "evidence", "runtime.json"),
+        "utf8",
+      ),
+      "nested engineering evidence",
+    );
+
+    await mkdir(
+      join(root, "archives", "2099.01.01", "darwin-arm64"),
+      { recursive: true },
+    );
+    await writeFile(
+      join(
+        root,
+        "archives",
+        "2099.01.01",
+        "darwin-arm64",
+        "primary-runtime.zip",
+      ),
+      "orphaned archive",
+    );
+
+    const tlsPaths = await writeTestTlsMaterial(tls);
+    server = await createDevelopmentPrimaryRuntimeFeedServer({
+      repositoryRoot: root,
+      tls: tlsPaths,
+      allowedHosts: ["feed.example.test"],
+      configPublicKeys: verification.configPublicKeys,
+      manifestPublicKeys: verification.manifestPublicKeys,
+    });
+    await listen(server);
+
+    const firstManifest = await getJson(server, {
+      path: "/v1/runtime/channels/stable/manifest.json",
+    });
+    assert.equal(firstManifest.releases[0].version, "2026.09.10");
+    assert.equal(
+      (
+        await getBytes(server, {
+          path: "/v1/runtime/archives/2026.09.10/darwin-arm64/primary-runtime.zip",
+        })
+      ).toString("utf8"),
+      "archive:darwin-arm64",
+    );
+    assert.equal(
+      (
+        await getBytes(server, {
+          path: "/v1/runtime/archives/2099.01.01/darwin-arm64/primary-runtime.zip",
+        })
+      ).statusCode,
+      404,
+    );
+
+    await writeReleaseTree(second, {
+      signing: verification.signing,
+      version: "2026.09.11",
+    });
+    await publishDevelopmentRepositorySnapshot({
+      repositoryRoot: root,
+      stagedRoot: second,
+      ...verification,
+    });
+
+    const secondManifest = await getJson(server, {
+      path: "/v1/runtime/channels/stable/manifest.json",
+    });
+    assert.equal(secondManifest.releases[0].version, "2026.09.11");
+    const concurrentManifests = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        getJson(server, {
+          path: "/v1/runtime/channels/stable/manifest.json",
+        }),
+      ),
+    );
+    assert.deepEqual(
+      concurrentManifests.map((manifest) => manifest.releases[0].version),
+      Array(8).fill("2026.09.11"),
+    );
+    assert.equal(
+      (
+        await getBytes(server, {
+          path: "/v1/runtime/archives/2026.09.10/darwin-arm64/primary-runtime.zip",
+        })
+      ).toString("utf8"),
+      "archive:darwin-arm64",
+    );
+
+    await close(server);
+    server = await createDevelopmentPrimaryRuntimeFeedServer({
+      repositoryRoot: root,
+      tls: tlsPaths,
+      allowedHosts: ["feed.example.test"],
+      configPublicKeys: verification.configPublicKeys,
+      manifestPublicKeys: verification.manifestPublicKeys,
+    });
+    await listen(server);
+    const restartedOldArchive = await getBytes(server, {
+      path: "/v1/runtime/archives/2026.09.10/darwin-arm64/primary-runtime.zip",
+    });
+    assert.equal(restartedOldArchive.toString("utf8"), "archive:darwin-arm64");
+    await writeFile(
+      join(
+        root,
+        "archives",
+        "2026.09.10",
+        "darwin-arm64",
+        "primary-runtime.zip",
+      ),
+      "ARCHIVE:darwin-arm64",
+    );
+    await close(server);
+    server = await createDevelopmentPrimaryRuntimeFeedServer({
+      repositoryRoot: root,
+      tls: tlsPaths,
+      allowedHosts: ["feed.example.test"],
+      configPublicKeys: verification.configPublicKeys,
+      manifestPublicKeys: verification.manifestPublicKeys,
+    });
+    await listen(server);
+    const restartAfterHistoricalTamper = await getJson(server, {
+      path: "/v1/runtime/channels/stable/manifest.json",
+    });
+    assert.equal(
+      restartAfterHistoricalTamper.releases[0].version,
+      "2026.09.11",
+    );
+
+    await writeInvalidSnapshotAndSwitchCurrent(root, {
+      kind: "sequence-mismatch",
+      signing: verification.signing,
+    });
+    const refreshErrors = [];
+    const originalConsoleError = console.error;
+    console.error = (message) => refreshErrors.push(String(message));
+    try {
+      const lastGoodManifest = await getJson(server, {
+        path: "/v1/runtime/channels/stable/manifest.json",
+      });
+      assert.equal(lastGoodManifest.releases[0].version, "2026.09.11");
+      const repeatedLastGoodManifest = await getJson(server, {
+        path: "/v1/runtime/channels/stable/manifest.json",
+      });
+      assert.equal(repeatedLastGoodManifest.releases[0].version, "2026.09.11");
+    } finally {
+      console.error = originalConsoleError;
+    }
+    assert.equal(refreshErrors.length, 1);
+    assert.match(refreshErrors[0], /kept last-good snapshot/u);
+    assert.match(refreshErrors[0], /manifest/u);
+    await close(server);
+    server = undefined;
+    await assert.rejects(
+      createDevelopmentPrimaryRuntimeFeedServer({
+        repositoryRoot: root,
+        tls: tlsPaths,
+        allowedHosts: ["feed.example.test"],
+        configPublicKeys: verification.configPublicKeys,
+        manifestPublicKeys: verification.manifestPublicKeys,
+      }),
+      /manifest|sequence/u,
+    );
+  } finally {
+    if (server?.listening) await close(server);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("development publishing keeps last-good current on failure and re-signs metadata without archive copies", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "primary-runtime-feed-dev-current-"),
+  );
+  const first = join(root, "first");
+  const refresh = join(root, "refresh");
+  const bad = join(root, "bad");
+  try {
+    const verification = await writeReleaseTree(first);
+    await publishDevelopmentRepositorySnapshot({
+      repositoryRoot: root,
+      stagedRoot: first,
+      ...verification,
+    });
+    const archivePath = join(
+      root,
+      "archives",
+      "2026.09.10",
+      "darwin-arm64",
+      "primary-runtime.zip",
+    );
+    const beforeRefresh = await lstat(archivePath);
+    const publishedProvenancePath = join(
+      root,
+      "archives",
+      "2026.09.10",
+      "darwin-arm64",
+      "provenance.json",
+    );
+    const publishedProvenance = await readFile(publishedProvenancePath, "utf8");
+
+    await writeReleaseTree(refresh, { signing: verification.signing });
+    const refreshConfig = JSON.parse(
+      await readFile(join(refresh, "config.json"), "utf8"),
+    );
+    const refreshManifest = JSON.parse(
+      await readFile(
+        join(refresh, "channels", "stable", "manifest.json"),
+        "utf8",
+      ),
+    );
+    const archiveIndex = JSON.parse(
+      await readFile(await resolveCurrent(root, "archive-index.json"), "utf8"),
+    );
+    await rm(join(refresh, "archives"), { recursive: true, force: true });
+    await publishDevelopmentMetadataSnapshot({
+      repositoryRoot: root,
+      config: refreshConfig,
+      manifest: refreshManifest,
+      archiveIndex,
+      configPublicKeys: verification.configPublicKeys,
+      manifestPublicKeys: verification.manifestPublicKeys,
+    });
+    const afterRefresh = await lstat(archivePath);
+    assert.equal(afterRefresh.ino, beforeRefresh.ino);
+    assert.equal(afterRefresh.mtimeMs, beforeRefresh.mtimeMs);
+    assert.equal(await readFile(publishedProvenancePath, "utf8"), publishedProvenance);
+
+    const currentConfig = await readFile(
+      await resolveCurrent(root, "config.json"),
+      { encoding: "utf8" },
+    );
+    await writeReleaseTree(bad, {
+      signing: verification.signing,
+      version: "2026.09.11",
+    });
+    await writeFile(
+      join(
+        bad,
+        "archives",
+        "2026.09.11",
+        "darwin-arm64",
+        "primary-runtime.zip",
+      ),
+      "tampered",
+    );
+    await assert.rejects(
+      publishDevelopmentRepositorySnapshot({
+        repositoryRoot: root,
+        stagedRoot: bad,
+        ...verification,
+      }),
+      /(?:size|SHA256)/u,
+    );
+    assert.equal(
+      await readFile(await resolveCurrent(root, "config.json"), "utf8"),
+      currentConfig,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("assembles only the signed metadata and four independently verified targets", async () => {
   const source = await mkdtemp(join(tmpdir(), "primary-runtime-feed-source-"));
   const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-staging-"));
@@ -487,6 +780,119 @@ test("rejects structurally valid metadata when the matching role key cannot veri
     await rm(root, { recursive: true, force: true });
   }
 });
+
+async function writeTestTlsMaterial(root) {
+  await mkdir(root, { recursive: true });
+  const keyPath = join(root, "key.pem");
+  const certPath = join(root, "cert.pem");
+  await execFileAsync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      keyPath,
+      "-out",
+      certPath,
+      "-subj",
+      "/CN=feed.example.test",
+      "-days",
+      "1",
+    ],
+    { timeout: 10_000 },
+  );
+  return { keyPath, certPath };
+}
+
+async function listen(server) {
+  await new Promise((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolveListen(undefined);
+    });
+  });
+}
+
+async function close(server) {
+  await new Promise((resolveClose) => server.close(resolveClose));
+}
+
+async function getJson(server, { path }) {
+  const response = await getBytes(server, { path });
+  assert.equal(response.statusCode, 200);
+  return JSON.parse(response.toString("utf8"));
+}
+
+async function getBytes(server, { path }) {
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  const chunks = [];
+  const response = await new Promise((resolveRequest, reject) => {
+    const request = httpsRequest(
+      {
+        hostname: "127.0.0.1",
+        port: address.port,
+        path,
+        method: "GET",
+        rejectUnauthorized: false,
+        headers: { host: "feed.example.test" },
+      },
+      (incoming) => {
+        incoming.on("data", (chunk) => chunks.push(chunk));
+        incoming.on("end", () => resolveRequest(incoming));
+      },
+    );
+    request.once("error", reject);
+    request.end();
+  });
+  const body = Buffer.concat(chunks);
+  body.statusCode = response.statusCode;
+  return body;
+}
+
+async function resolveCurrent(root, path) {
+  return join(await realpath(join(root, "current")), path);
+}
+
+async function writeInvalidSnapshotAndSwitchCurrent(root, { kind, signing }) {
+  const source = await realpath(join(root, "current"));
+  const invalid = join(root, "metadata-snapshots", `invalid-${kind}`);
+  await mkdir(join(invalid, "channels", "stable"), { recursive: true });
+  await copyFile(join(source, "config.json"), join(invalid, "config.json"));
+  await copyFile(
+    join(source, "channels", "stable", "manifest.json"),
+    join(invalid, "channels", "stable", "manifest.json"),
+  );
+  if (kind === "sequence-mismatch") {
+    const manifestPath = join(invalid, "channels", "stable", "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    await writeFile(
+      manifestPath,
+      JSON.stringify(
+        signFeedMetadata(
+          {
+            ...manifest,
+            sequence: manifest.sequence + 1,
+            signature: undefined,
+          },
+          signing.manifest.privateKey,
+        ),
+      ),
+    );
+  }
+  await writeFile(
+    join(invalid, "archive-index.json"),
+    await readFile(join(source, "archive-index.json"), "utf8"),
+  );
+  const nextLink = join(root, `.current-invalid-${process.pid}-${Date.now()}`);
+  await symlink(relative(root, invalid), nextLink);
+  await rm(join(root, "current"), { force: true });
+  await rename(nextLink, join(root, "current"));
+}
 
 async function writeReleaseTree(
   root,
@@ -586,7 +992,7 @@ async function writeReleaseTree(
       signFeedMetadata(
         {
           schemaVersion: 1,
-          sequence: 4,
+          sequence: 3,
           channel: "stable",
           issuedAt,
           expiresAt,

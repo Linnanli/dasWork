@@ -7,7 +7,14 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
   {
-    ignores: ['**/node_modules', '**/dist', '**/out', 'vendors/**', 'resources/bundled-plugins/**']
+    ignores: [
+      '**/node_modules',
+      '**/dist',
+      '**/out',
+      'vendors/**',
+      'resources/bundled-plugins/**',
+      '.primary-runtime-local-feed-user-data/**'
+    ]
   },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,

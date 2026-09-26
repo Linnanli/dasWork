@@ -9,11 +9,7 @@ import { canonicalPrimaryRuntimeReleaseManifestPayload } from './PrimaryRuntimeR
 const { privateKey, publicKey } = generateKeyPairSync('ed25519')
 
 describe('PrimaryRuntimeProductConfigClient', () => {
-  it('commits a verified config to its role-specific trust state before returning it', async () => {
-    const trustState = {
-      read: vi.fn(async () => undefined),
-      accept: vi.fn(async () => undefined)
-    }
+  it('returns a verified config without committing trust before the manifest pair is verified', async () => {
     const client = new PrimaryRuntimeProductConfigClient({
       configUrl: 'https://config.example.test/v1/runtime/config.json',
       channel: 'stable',
@@ -24,18 +20,11 @@ describe('PrimaryRuntimeProductConfigClient', () => {
         allowedOrigins: ['https://config.example.test'],
         fetchImpl: vi.fn(async () => new Response(JSON.stringify(signedConfig())))
       }),
-      trustState,
       now: () => new Date('2026-09-10T00:00:00.000Z')
     })
 
     await expect(client.getConfig()).resolves.toMatchObject({ sequence: 9, channel: 'stable' })
-    expect(trustState.accept).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: 'config',
-        sequence: 9,
-        origin: 'https://config.example.test'
-      })
-    )
+    expect(client.configOrigin).toBe('https://config.example.test')
   })
 
   it('never treats a manifest-only origin as a valid product-config endpoint', () => {
@@ -51,11 +40,7 @@ describe('PrimaryRuntimeProductConfigClient', () => {
             // The Main HTTP client deliberately serves both metadata roles;
             // the role-specific client must still reject this endpoint.
             allowedOrigins: ['https://config.example.test', 'https://releases.example.test']
-          }),
-          trustState: {
-            read: vi.fn(async () => undefined),
-            accept: vi.fn(async () => undefined)
-          }
+          })
         })
     ).toThrow('config-origin allowlist')
   })

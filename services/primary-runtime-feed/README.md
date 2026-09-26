@@ -1,41 +1,50 @@
 # Primary Runtime feed
 
-This is a read-only HTTPS implementation of the Runtime feed protocol. In this plan it
-is assembled only as a test-signed engineering artifact; it is not a production feed.
+This is a read-only HTTPS implementation of the Runtime feed protocol. The release
+contract produces a test-signed GitHub engineering artifact; local desktop development
+uses a persistent loopback Feed. Neither is a production feed.
 It serves signed `config.json`, signed channel manifests, and immutable ZIP archives;
-it never accepts uploads or holds model credentials or signing keys.
-Publication checks every retained release tree before advancing `current`, so a
-previously used version/target URL cannot later be rebound to different archive
-bytes. Missing assets return `404`, and internal failures never echo repository
-paths to clients.
+the serving process never accepts uploads or holds model credentials or signing keys.
+Publication rejects rebinding a previously used version/target URL to different
+archive bytes. The release publisher checks retained release trees; the local
+development publisher uses a cumulative archive index. Missing assets return
+`404`, and internal failures never echo repository paths to clients.
 
 The server requires an exact allowlist of HTTP `Host` values in addition to TLS.
 Set `PRIMARY_RUNTIME_FEED_ALLOWED_HOSTS` to comma-separated host[:port] values in
 standalone deployments. The development launcher derives this list from its single
 loopback host/port and rejects any other request host before it reads a feed file.
 
-Generate development TLS material under the ignored `var/tls/` directory, publish a
-fully validated staging tree with `npm run publish-release`, then run `npm start`.
+For the release-contract fixture, generate TLS material under the ignored `var/tls/`
+directory, publish a fully validated staging tree with `npm run publish-release`,
+then run `npm start`.
 The desktop client must be configured only with the feed config endpoint and a
 Main-owned local test CA policy. Do not disable TLS verification or use this service
 to distribute unprovenanced Runtime inputs.
 
-For an end-to-end local desktop run, use
-`npm --prefix desktop-app run dev:with-primary-runtime-feed`. It requires a fully
-signed staging release, local TLS key/certificate/CA paths, and the public config
-and manifest keyrings. The command publishes the staging tree atomically, starts
-this service on a loopback HTTPS origin, and starts Electron with only the signed
-product-config settings. It deliberately removes `DASCOWORK_PRIMARY_RUNTIME_ROOT`
-and all direct archive/manifest overrides from the Electron environment.
+For local desktop development, the Feed project owns artifact import and service
+lifetime. Run these commands from the repository root:
 
-During development, `npm --prefix desktop-app run dev:primary-runtime` prepares those
-inputs automatically from the four immutable staging artifacts of a successful final
-workflow for the current commit. It caches the source artifacts locally, creates
-ephemeral loopback TLS, signs new local metadata with a persistent ignored development
-key, validates the resulting feed tree, and then invokes the launcher above. It does
-not change production feed configuration or make the client trust a local Runtime root.
-The downloader and local feed assembler live in the repository-level
-`scripts/dev-primary-runtime.mjs`, outside the desktop client source tree.
+```bash
+npm --prefix services/primary-runtime-feed run dev:import
+npm --prefix services/primary-runtime-feed run dev:serve
+npm --prefix desktop-app run dev:local-feed
+```
+
+The import writes `var/development/client-profile.json`. After its signed metadata
+expires, run `npm --prefix services/primary-runtime-feed run dev:refresh` while the
+server stays up. The client command reads only the
+public profile: exact loopback HTTPS origin, channel, config public keyring, manifest
+public keyring, and absolute CA certificate path. The profile must never contain
+private signing keys, TLS private keys, archive roots, direct archive URLs, or Runtime
+install paths.
+
+The desktop launcher does not publish releases or start this service. It validates
+the profile and Feed reachability, clears inherited direct Runtime overrides, and
+passes only signed product-config settings to Electron. The launcher also uses a
+dedicated ignored user data directory through
+`DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR`, so local Feed trust state is separate from
+ordinary development and packaged app state.
 
 For the deterministic signed-Feed E2E, run
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 npm --prefix desktop-app run test:e2e:primary-runtime-feed`

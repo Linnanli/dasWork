@@ -78,6 +78,8 @@ export type PrimaryRuntimeVerifiedRelease = PrimaryRuntimeReleaseDescriptor & {
   archiveUrl: string
   allowedOrigins: readonly string[]
   sequence: number
+  issuedAt: string
+  expiresAt: string
   payloadHash: string
   keyId: string
   channel: string
@@ -150,6 +152,8 @@ export function parseAndVerifyPrimaryRuntimeReleaseManifest(input: {
     archiveUrl: archiveUrl.toString(),
     allowedOrigins: normalizedAllowedOrigins(input.allowedOrigins),
     sequence: manifest.sequence,
+    issuedAt: manifest.issuedAt,
+    expiresAt: manifest.expiresAt,
     payloadHash: createHash('sha256').update(canonical).digest('hex'),
     keyId: manifest.keyId,
     channel: manifest.channel

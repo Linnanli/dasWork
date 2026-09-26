@@ -74,32 +74,27 @@ config/manifest public keyrings before the installer is signed, then restores th
 checked-in disabled configuration. Private signing keys, archive credentials, Runtime
 roots, and feed locations are never exposed to the renderer.
 
-For an end-to-end local feed run, use `npm run dev:with-primary-runtime-feed` only with
-a fully signed staging tree and loopback TLS material. See
-[`services/primary-runtime-feed/README.md`](../services/primary-runtime-feed/README.md)
-for the required inputs and immutable-artifact handoff. Do not substitute a local root,
-temporary `npm`/`pip` install, `officecli`, or `python-pptx` for the Runtime chain.
+For local Feed development, prepare and serve the Feed from
+[`services/primary-runtime-feed`](../services/primary-runtime-feed/README.md), then run
+`npm run dev:local-feed`. The desktop command reads only
+`../services/primary-runtime-feed/var/development/client-profile.json`, validates the
+loopback HTTPS origin, public config and manifest keyrings, channel, CA certificate
+path, and Feed reachability, then starts ordinary `npm run dev` with signed
+product-config environment variables. It strips direct Runtime root, archive, and
+manifest overrides before launching Electron.
 
-For the normal one-command development path, run `npm run dev:primary-runtime`.
-It uses `gh` to find a successful final Primary Runtime workflow for the current Git
-commit, downloads and caches its four target staging artifacts in the ignored
-`.primary-runtime-dev-cache/`, validates and reassembles a local signed feed, then
-starts Electron against that loopback feed. The initial cache fill is several GB, but
-the client still downloads only its own platform's archive from the feed. It requires
-an authenticated GitHub CLI and a successful final workflow for the current commit;
-use `npm run dev:primary-runtime -- --source-run <run-id>` only to select that commit's
-known final run. The command has a stable local feed origin and signing key so later
-launches advance trusted metadata instead of changing the development trust identity.
-Ordinary `npm run dev` remains unchanged.
-The implementation is the repository-level development tool
-[`scripts/dev-primary-runtime.mjs`](../scripts/dev-primary-runtime.mjs), rather than
-desktop-client code.
+`dev:local-feed` does not call `gh`, publish artifacts, start the Feed service, or
+hold private signing/TLS keys. It also uses the dedicated
+`DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR` environment variable so Main can place this
+development entry in the ignored `.primary-runtime-local-feed-user-data/` directory
+instead of ordinary development or packaged user data. Ordinary `npm run dev` remains
+unchanged.
 
 The deterministic Feed gate is separate from ordinary Mock E2E: set
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1` and run
 `npm run test:e2e:primary-runtime-feed` only after supplying the same signed staging
 tree, loopback TLS paths, channel, and public keyrings required by the development
-launcher. It starts the Feed, clears every direct Runtime override, and verifies the
+E2E helper. It starts the Feed, clears every direct Runtime override, and verifies the
 production app-server → native registry → loader → Runtime Node → authorized
 `presentation-skill` command chain.
 It intentionally cannot run from a directory fixture or an unsigned archive.

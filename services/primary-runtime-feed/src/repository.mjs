@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, sign, verify } from "node:crypto";
 import {
+  copyFile,
   cp,
   lstat,
   mkdir,
@@ -7,12 +8,15 @@ import {
   readFile,
   realpath,
   rename,
+  rm,
   symlink,
+  writeFile,
 } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const FEED_ROOT = "/v1/runtime";
 export const CONFIG_PATH = `${FEED_ROOT}/config.json`;
+export const ARCHIVE_INDEX_PATH = "archive-index.json";
 const maxMetadataBytes = 1024 * 1024;
 const requiredTargets = [
   "darwin-x64",
@@ -59,6 +63,14 @@ const releaseBudgetKeys = [
   "maxColdInstallMs",
   "maxMainEventLoopDelayP99Ms",
   "maxMainEventLoopDelayMaxMs",
+];
+const archiveIndexKeys = ["schemaVersion", "generatedAt", "archives"];
+const archiveIndexEntryKeys = [
+  "relativePath",
+  "version",
+  "target",
+  "sizeBytes",
+  "sha256",
 ];
 
 export function canonicalJson(value) {
@@ -163,9 +175,18 @@ export function runtimeFeedPathForRequest(pathname) {
 export async function readPublishedRuntimeFeedAsset(repositoryRoot, pathname) {
   const relativePath = runtimeFeedPathForRequest(pathname);
   if (!relativePath) return null;
-  const root = await resolvePublishedRoot(repositoryRoot);
-  const path = resolve(root, relativePath);
-  if (!isInside(root, path))
+  const publishedRoot = await resolvePublishedRoot(repositoryRoot);
+  const repository = await resolveRepositoryRoot(repositoryRoot);
+  const indexedArchive = await resolveIndexedArchiveAsset({
+    repositoryRoot: repository,
+    snapshotRoot: publishedRoot,
+    relativePath,
+  });
+  if (indexedArchive) return indexedArchive;
+  if (indexedArchive === null && isArchivePath(relativePath)) return null;
+
+  const path = resolve(publishedRoot, relativePath);
+  if (!isInside(publishedRoot, path))
     throw new Error("Runtime feed path escapes the repository.");
   const details = await lstat(path).catch((error) => {
     if (error?.code === "ENOENT") return null;
@@ -236,6 +257,170 @@ export async function publishRepository({
   await rename(nextLink, current);
 }
 
+/**
+ * Publishes a development feed snapshot whose metadata is switchable while
+ * archives live in a repository-wide immutable store.
+ */
+export async function publishDevelopmentRepositorySnapshot({
+  repositoryRoot,
+  stagedRoot,
+  configPublicKeys,
+  manifestPublicKeys,
+  allowSyntheticTestOnly = false,
+  allowCalibrationCandidate = false,
+}) {
+  const root = resolve(repositoryRoot);
+  const staging = resolve(stagedRoot);
+  if (!isInside(root, staging) || root === staging) {
+    throw new Error(
+      "Runtime feed staging directory must live beneath its repository root.",
+    );
+  }
+  await validateReleaseTree(staging, {
+    configPublicKeys,
+    manifestPublicKeys,
+    allowSyntheticTestOnly,
+    allowCalibrationCandidate,
+  });
+  const currentIndex = await readCurrentDevelopmentArchiveIndex(root);
+  const stagedArchives = await releaseArchiveAssetRecords(staging);
+  const nextIndex = mergeArchiveIndex(currentIndex, stagedArchives);
+
+  await mkdir(root, { recursive: true });
+  await copyMissingDevelopmentArchives(root, staging, stagedArchives);
+
+  const snapshots = resolve(root, "metadata-snapshots");
+  const next = resolve(
+    snapshots,
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+  const current = resolve(root, "current");
+  const nextLink = resolve(
+    root,
+    `.current-next-${Math.random().toString(16).slice(2)}`,
+  );
+  await mkdir(resolve(next, "channels"), { recursive: true });
+  await cp(resolve(staging, "config.json"), resolve(next, "config.json"), {
+    errorOnExist: true,
+    force: false,
+  });
+  const config = JSON.parse(
+    await readRegularFile(resolve(staging, "config.json"), "config"),
+  );
+  await mkdir(resolve(next, "channels", config.channel), { recursive: true });
+  await cp(
+    resolve(staging, "channels", config.channel, "manifest.json"),
+    resolve(next, "channels", config.channel, "manifest.json"),
+    { errorOnExist: true, force: false },
+  );
+  await writeJsonFile(resolve(next, ARCHIVE_INDEX_PATH), nextIndex);
+  await validateDevelopmentSnapshot(root, next);
+  await symlink(relative(root, next), nextLink);
+  await rename(nextLink, current);
+}
+
+export async function publishDevelopmentMetadataSnapshot({
+  repositoryRoot,
+  config,
+  manifest,
+  archiveIndex,
+  configPublicKeys,
+  manifestPublicKeys,
+}) {
+  const root = resolve(repositoryRoot);
+  await mkdir(root, { recursive: true });
+  const snapshotRoot = await writeDevelopmentMetadataSnapshot({
+    repositoryRoot: root,
+    config,
+    manifest,
+    archiveIndex,
+    configPublicKeys,
+    manifestPublicKeys,
+  });
+  const current = resolve(root, "current");
+  const nextLink = resolve(
+    root,
+    `.current-next-${Math.random().toString(16).slice(2)}`,
+  );
+  await symlink(relative(root, snapshotRoot), nextLink);
+  await rename(nextLink, current);
+  return snapshotRoot;
+}
+
+export async function loadPublishedRuntimeFeedSnapshot({
+  repositoryRoot,
+  configPublicKeys,
+  manifestPublicKeys,
+  previousSnapshot,
+}) {
+  const root = await resolveRepositoryRoot(repositoryRoot);
+  const snapshotRoot = await resolvePublishedRoot(root);
+  const { config, manifest } = await validateReleaseMetadataPair(snapshotRoot, {
+    configPublicKeys,
+    manifestPublicKeys,
+  });
+  const archiveIndex = await readDevelopmentArchiveIndex(snapshotRoot);
+  if (!archiveIndex) {
+    throw new Error("Runtime feed development snapshot misses index.");
+  }
+  const archiveRecords = await validateDevelopmentArchiveIndex(root, {
+    archives: archiveIndex.archives,
+    manifest,
+    previousSnapshot,
+  });
+  return Object.freeze({
+    id: snapshotRoot,
+    repositoryRoot: root,
+    snapshotRoot,
+    config,
+    manifest,
+    archiveIndex: Object.freeze({
+      schemaVersion: archiveIndex.schemaVersion,
+      generatedAt: archiveIndex.generatedAt,
+      archives: Object.freeze(archiveIndex.archives.map(Object.freeze)),
+    }),
+    archiveRecords,
+  });
+}
+
+export async function readPublishedRuntimeFeedSnapshotAsset(snapshot, pathname) {
+  const relativePath = runtimeFeedPathForRequest(pathname);
+  if (!relativePath) return null;
+  const archive = snapshot.archiveRecords?.get(relativePath);
+  const isArchive = isArchivePath(relativePath);
+  if (isArchive && !archive) return null;
+  const path = archive
+    ? archive.path
+    : resolve(snapshot.snapshotRoot, relativePath);
+  const root = archive ? snapshot.repositoryRoot : snapshot.snapshotRoot;
+  if (!isInside(root, path)) {
+    throw new Error("Runtime feed path escapes the adopted snapshot.");
+  }
+  const details = await lstat(path).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!details) return null;
+  if (!details.isFile() || details.size <= 0) {
+    throw new Error("Runtime feed refuses a non-regular published asset.");
+  }
+  if (archive && details.size !== archive.sizeBytes) {
+    throw new Error("Runtime feed adopted archive size no longer matches.");
+  }
+  if (!archive && details.size > maxMetadataBytes) {
+    throw new Error("Runtime feed metadata exceeds the permitted size.");
+  }
+  return {
+    path,
+    size: details.size,
+    etag: archive ? `"${archive.sha256}"` : `"${await sha256File(path)}"`,
+    cacheControl: archive
+      ? "public, max-age=31536000, immutable"
+      : "no-cache",
+    contentType: archive ? "application/zip" : "application/json; charset=utf-8",
+  };
+}
+
 async function validatePublishedArchiveImmutability(repositoryRoot, stagedRoot) {
   const [publishedReleases, stagedReleases] = await Promise.all([
     publishedArchiveRecords(repositoryRoot),
@@ -250,6 +435,418 @@ async function validatePublishedArchiveImmutability(repositoryRoot, stagedRoot) 
       );
     }
   }
+}
+
+async function resolveIndexedArchiveAsset({
+  repositoryRoot,
+  snapshotRoot,
+  relativePath,
+}) {
+  if (!isArchivePath(relativePath)) return undefined;
+  const index = await readDevelopmentArchiveIndex(snapshotRoot);
+  if (!index) return undefined;
+  const archive = index.records.get(relativePath);
+  if (!archive) return null;
+  const path = resolve(repositoryRoot, archive.relativePath);
+  if (!isInside(repositoryRoot, path)) {
+    throw new Error("Runtime feed indexed archive escapes repository.");
+  }
+  const details = await lstat(path).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!details) return null;
+  if (!details.isFile()) {
+    throw new Error("Runtime feed refuses a non-regular published asset.");
+  }
+  if (details.size !== archive.sizeBytes) {
+    throw new Error("Runtime feed indexed archive size does not match.");
+  }
+  const sha256 = await sha256File(path);
+  if (sha256 !== archive.sha256) {
+    throw new Error("Runtime feed indexed archive SHA256 does not match.");
+  }
+  return {
+    path,
+    size: details.size,
+    etag: `"${sha256}"`,
+    cacheControl: "public, max-age=31536000, immutable",
+    contentType: "application/zip",
+  };
+}
+
+async function readCurrentDevelopmentArchiveIndex(repositoryRoot) {
+  const current = await resolvePublishedRoot(repositoryRoot);
+  const index = await readDevelopmentArchiveIndex(current);
+  if (!index) {
+    return {
+      schemaVersion: 1,
+      generatedAt: new Date(0).toISOString(),
+      archives: [],
+      records: new Map(),
+    };
+  }
+  await validateDevelopmentArchiveIndex(repositoryRoot, {
+    archives: index.archives,
+  });
+  return index;
+}
+
+async function readDevelopmentArchiveIndex(snapshotRoot) {
+  const path = resolve(snapshotRoot, ARCHIVE_INDEX_PATH);
+  const details = await lstat(path).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!details) return null;
+  if (!details.isFile()) {
+    throw new Error("Runtime feed archive index must be a regular file.");
+  }
+  if (details.size <= 0 || details.size > maxMetadataBytes) {
+    throw new Error("Runtime feed archive index is empty or oversized.");
+  }
+  const index = JSON.parse(await readFile(path, "utf8"));
+  if (
+    !hasExactlyKeys(index, archiveIndexKeys) ||
+    index.schemaVersion !== 1 ||
+    typeof index.generatedAt !== "string" ||
+    !Number.isFinite(Date.parse(index.generatedAt)) ||
+    !Array.isArray(index.archives)
+  ) {
+    throw new Error("Runtime feed archive index is invalid.");
+  }
+  const records = new Map();
+  for (const archive of index.archives) {
+    if (
+      !hasExactlyKeys(archive, archiveIndexEntryKeys) ||
+      !isArchivePath(archive.relativePath) ||
+      typeof archive.version !== "string" ||
+      archive.version.length === 0 ||
+      typeof archive.target !== "string" ||
+      !requiredTargets.includes(archive.target) ||
+      archive.relativePath !==
+        `archives/${archive.version}/${archive.target}/primary-runtime.zip` ||
+      !Number.isSafeInteger(archive.sizeBytes) ||
+      archive.sizeBytes <= 0 ||
+      !isSha256(archive.sha256)
+    ) {
+      throw new Error("Runtime feed archive index has an invalid entry.");
+    }
+    if (records.has(archive.relativePath)) {
+      throw new Error("Runtime feed archive index has a duplicate entry.");
+    }
+    records.set(archive.relativePath, archive);
+  }
+  return { ...index, records };
+}
+
+async function validateDevelopmentArchiveIndex(
+  repositoryRoot,
+  { archives, manifest, previousSnapshot } = {},
+) {
+  const root = resolve(repositoryRoot);
+  const releases = manifest
+    ? new Map(
+        manifest.releases.map((release) => [
+          `${release.version}/${release.platform}-${release.arch}`,
+          release,
+        ]),
+      )
+    : null;
+  const manifestArchivePaths = manifest
+    ? new Set(
+        manifest.releases.map((release) => {
+          const target = `${release.platform}-${release.arch}`;
+          return `archives/${release.version}/${target}/primary-runtime.zip`;
+        }),
+      )
+    : null;
+  const archiveRecords = new Map();
+  for (const archive of archives) {
+    const path = resolve(root, archive.relativePath);
+    if (!isInside(root, path)) {
+      throw new Error("Runtime feed indexed archive escapes repository.");
+    }
+    if (releases) {
+      const release = releases.get(`${archive.version}/${archive.target}`);
+      if (
+        release &&
+        (release.archiveSizeBytes !== archive.sizeBytes ||
+          release.archiveSha256 !== archive.sha256)
+      ) {
+        throw new Error(
+          "Runtime feed archive index does not match the manifest.",
+        );
+      }
+    }
+    const details = await lstat(path);
+    if (!details.isFile() || details.size !== archive.sizeBytes) {
+      throw new Error("Runtime feed indexed archive size does not match.");
+    }
+    const previous = previousSnapshot?.archiveRecords?.get(
+      archive.relativePath,
+    );
+    if (
+      previous &&
+      (previous.sha256 !== archive.sha256 ||
+        previous.sizeBytes !== archive.sizeBytes)
+    ) {
+      throw new Error(
+        `Runtime feed immutable archive ${archive.version}/${archive.target} changed in the archive index.`,
+      );
+    }
+    const needsSha256 = previousSnapshot
+      ? !previous
+      : manifestArchivePaths?.has(archive.relativePath) === true;
+    if (needsSha256 && (await sha256File(path)) !== archive.sha256) {
+      throw new Error("Runtime feed indexed archive SHA256 does not match.");
+    }
+    archiveRecords.set(archive.relativePath, {
+      relativePath: archive.relativePath,
+      version: archive.version,
+      target: archive.target,
+      sizeBytes: archive.sizeBytes,
+      sha256: archive.sha256,
+      path,
+    });
+  }
+  if (releases) {
+    for (const release of manifest.releases) {
+      const target = `${release.platform}-${release.arch}`;
+      const relativePath = `archives/${release.version}/${target}/primary-runtime.zip`;
+      if (!archiveRecords.has(relativePath)) {
+        throw new Error("Runtime feed archive index is missing a manifest release.");
+      }
+    }
+  }
+  return archiveRecords;
+}
+
+async function validateDevelopmentSnapshot(repositoryRoot, snapshotRoot) {
+  const { manifest } = await validateReleaseMetadataPair(snapshotRoot);
+  const index = await readDevelopmentArchiveIndex(snapshotRoot);
+  if (!index) throw new Error("Runtime feed development snapshot misses index.");
+  await validateDevelopmentArchiveIndex(repositoryRoot, {
+    archives: index.archives,
+    manifest,
+  });
+}
+
+async function writeDevelopmentMetadataSnapshot({
+  repositoryRoot,
+  config,
+  manifest,
+  archiveIndex,
+  configPublicKeys,
+  manifestPublicKeys,
+}) {
+  const root = resolve(repositoryRoot);
+  const snapshots = resolve(root, "metadata-snapshots");
+  const temporary = resolve(
+    snapshots,
+    `.snapshot-${process.pid}-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`,
+  );
+  const final = resolve(
+    snapshots,
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+  await mkdir(resolve(temporary, "channels", manifest.channel), {
+    recursive: true,
+  });
+  try {
+    await writeJsonFile(resolve(temporary, "config.json"), config);
+    await writeJsonFile(
+      resolve(temporary, "channels", manifest.channel, "manifest.json"),
+      manifest,
+    );
+    await writeJsonFile(resolve(temporary, ARCHIVE_INDEX_PATH), archiveIndex);
+    await validateReleaseMetadataPair(temporary, {
+      configPublicKeys,
+      manifestPublicKeys,
+    });
+    const index = await readDevelopmentArchiveIndex(temporary);
+    await validateDevelopmentArchiveIndex(root, {
+      archives: index.archives,
+      manifest,
+    });
+    await rename(temporary, final);
+  } catch (error) {
+    await rm(temporary, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  return final;
+}
+
+function mergeArchiveIndex(currentIndex, stagedArchives) {
+  const records = new Map();
+  for (const archive of currentIndex.archives) {
+    records.set(archive.relativePath, archive);
+  }
+  for (const archive of stagedArchives.values()) {
+    const existing = records.get(archive.relativePath);
+    if (existing && existing.sha256 !== archive.sha256) {
+      throw new Error(
+        `Runtime feed immutable archive ${archive.version}/${archive.target} is already published with a different SHA256.`,
+      );
+    }
+    records.set(archive.relativePath, archiveIndexEntry(archive));
+  }
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    archives: [...records.values()].sort((a, b) =>
+      a.relativePath.localeCompare(b.relativePath),
+    ),
+  };
+}
+
+async function copyMissingDevelopmentArchives(
+  repositoryRoot,
+  stagedRoot,
+  archives,
+) {
+  for (const archive of archives.values()) {
+    const destination = resolve(repositoryRoot, archive.relativePath);
+    if (!isInside(resolve(repositoryRoot), destination)) {
+      throw new Error("Runtime feed archive escapes the repository.");
+    }
+    const existing = await lstat(destination).catch((error) => {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    });
+    if (existing) {
+      if (!existing.isFile() || existing.size !== archive.sizeBytes) {
+        throw new Error(
+          `Runtime feed immutable archive ${archive.version}/${archive.target} is already published with a different size.`,
+        );
+      }
+      const existingSha256 = await sha256File(destination);
+      if (existingSha256 !== archive.sha256) {
+        throw new Error(
+          `Runtime feed immutable archive ${archive.version}/${archive.target} is already published with a different SHA256.`,
+        );
+      }
+      await copyMissingDevelopmentEvidence({
+        sourceRoot: dirname(archive.sourcePath),
+        destinationRoot: dirname(destination),
+      });
+      continue;
+    }
+    await mkdir(dirname(destination), { recursive: true });
+    const temporary = resolve(
+      dirname(destination),
+      `.primary-runtime.${process.pid}.${Date.now()}.${Math.random()
+        .toString(16)
+        .slice(2)}.tmp`,
+    );
+    try {
+      await copyFile(archive.sourcePath, temporary);
+      if ((await sha256File(temporary)) !== archive.sha256) {
+        throw new Error(
+          `Runtime feed archive ${archive.version}/${archive.target} changed while copying.`,
+        );
+      }
+      await rename(temporary, destination);
+    } catch (error) {
+      await rm(temporary, { force: true }).catch(() => {});
+      throw error;
+    }
+    await copyMissingDevelopmentEvidence({
+      sourceRoot: dirname(archive.sourcePath),
+      destinationRoot: dirname(destination),
+    });
+  }
+}
+
+async function copyMissingDevelopmentEvidence({ sourceRoot, destinationRoot }) {
+  const entries = await readdir(sourceRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === "primary-runtime.zip") continue;
+    const source = resolve(sourceRoot, entry.name);
+    const destination = resolve(destinationRoot, entry.name);
+    if (!isInside(sourceRoot, source) || !isInside(destinationRoot, destination)) {
+      throw new Error("Runtime feed evidence path escapes the archive directory.");
+    }
+    const sourceDetails = await lstat(source);
+    if (entry.name === "evidence" && sourceDetails.isDirectory()) {
+      const existingDirectory = await lstat(destination).catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+      if (existingDirectory && !existingDirectory.isDirectory()) {
+        throw new Error("Runtime feed refuses non-directory published evidence.");
+      }
+      await mkdir(destination, { recursive: true });
+      for (const evidenceEntry of await readdir(source, { withFileTypes: true })) {
+        const evidenceSource = resolve(source, evidenceEntry.name);
+        const evidenceDestination = resolve(destination, evidenceEntry.name);
+        if (
+          !isInside(source, evidenceSource) ||
+          !isInside(destination, evidenceDestination) ||
+          !(await lstat(evidenceSource)).isFile()
+        ) {
+          throw new Error("Runtime feed refuses non-regular archive evidence.");
+        }
+        await copyMissingDevelopmentEvidenceFile(evidenceSource, evidenceDestination);
+      }
+      continue;
+    }
+    if (!sourceDetails.isFile()) {
+      throw new Error("Runtime feed refuses non-regular archive evidence.");
+    }
+    await copyMissingDevelopmentEvidenceFile(source, destination);
+  }
+}
+
+async function copyMissingDevelopmentEvidenceFile(source, destination) {
+  const existing = await lstat(destination).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (existing) {
+    if (!existing.isFile()) {
+      throw new Error("Runtime feed refuses non-regular published evidence.");
+    }
+    return;
+  }
+  await copyFile(source, destination);
+}
+
+async function releaseArchiveAssetRecords(root) {
+  const records = new Map();
+  const releaseRecords = await releaseArchiveRecords(root);
+  for (const [key, record] of releaseRecords) {
+    const [version, target] = key.split("/");
+    const relativePath = `archives/${version}/${target}/primary-runtime.zip`;
+    const sourcePath = resolve(root, relativePath);
+    const details = await lstat(sourcePath);
+    records.set(relativePath, {
+      ...record,
+      relativePath,
+      version,
+      target,
+      sourcePath,
+      sizeBytes: details.size,
+      sha256: record.archiveSha256,
+    });
+  }
+  return records;
+}
+
+function archiveIndexEntry(archive) {
+  return {
+    relativePath: archive.relativePath,
+    version: archive.version,
+    target: archive.target,
+    sizeBytes: archive.sizeBytes,
+    sha256: archive.sha256,
+  };
+}
+
+async function writeJsonFile(path, value) {
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function publishedArchiveRecords(repositoryRoot) {
@@ -323,15 +920,7 @@ async function releaseArchiveRecords(root) {
 }
 
 async function resolvePublishedRoot(repositoryRoot) {
-  const configuredRoot = resolve(repositoryRoot);
-  // macOS commonly presents /var as a symlink to /private/var. Resolve the
-  // repository root before comparing it to the realpath of the `current`
-  // release pointer; otherwise a valid pointer is incorrectly treated as
-  // outside the repository and the server falls back to an empty root.
-  const root = await realpath(configuredRoot).catch((error) => {
-    if (error?.code === "ENOENT") return configuredRoot;
-    throw error;
-  });
+  const root = await resolveRepositoryRoot(repositoryRoot);
   const current = resolve(root, "current");
   try {
     const details = await lstat(current);
@@ -342,6 +931,120 @@ async function resolvePublishedRoot(repositoryRoot) {
     if (error?.code === "ENOENT") return root;
     throw error;
   }
+}
+
+async function resolveRepositoryRoot(repositoryRoot) {
+  const configuredRoot = resolve(repositoryRoot);
+  // macOS commonly presents /var as a symlink to /private/var. Resolve the
+  // repository root before comparing it to the realpath of the `current`
+  // release pointer; otherwise a valid pointer is incorrectly treated as
+  // outside the repository and the server falls back to an empty root.
+  return realpath(configuredRoot).catch((error) => {
+    if (error?.code === "ENOENT") return configuredRoot;
+    throw error;
+  });
+}
+
+async function validateReleaseMetadataPair(
+  root,
+  { configPublicKeys, manifestPublicKeys } = {},
+) {
+  if (Boolean(configPublicKeys) !== Boolean(manifestPublicKeys)) {
+    throw new Error(
+      "Runtime feed requires both config and manifest public keyrings.",
+    );
+  }
+  const config = JSON.parse(
+    await readRegularFile(resolve(root, "config.json"), "config"),
+  );
+  const configPayload = canonicalSignedPayload(config);
+  if (
+    !hasExactlyKeys(config, configKeys) ||
+    config.schemaVersion !== 1 ||
+    !isPositiveInteger(config.sequence) ||
+    !isChannel(config.channel) ||
+    !isPollInterval(config.pollIntervalMs) ||
+    !isValidMetadataWindow(config) ||
+    !isKeyId(config.keyId) ||
+    !isBase64(config.signature) ||
+    Buffer.byteLength(configPayload, "utf8") > maxMetadataBytes
+  ) {
+    throw new Error("Runtime feed config is invalid or oversized.");
+  }
+  const manifestUrl = new URL(config.manifestUrl);
+  if (
+    manifestUrl.protocol !== "https:" ||
+    manifestUrl.username ||
+    manifestUrl.password ||
+    manifestUrl.hash ||
+    manifestUrl.search ||
+    manifestUrl.pathname !==
+      `${FEED_ROOT}/channels/${config.channel}/manifest.json`
+  ) {
+    throw new Error(
+      "Runtime feed config does not select its channel manifest.",
+    );
+  }
+  const manifestPath = resolve(
+    root,
+    "channels",
+    config.channel,
+    "manifest.json",
+  );
+  if (!isInside(resolve(root), manifestPath))
+    throw new Error("Runtime feed manifest escapes repository.");
+  const manifest = JSON.parse(
+    await readRegularFile(manifestPath, "channel manifest"),
+  );
+  if (
+    !hasExactlyKeys(manifest, manifestKeys) ||
+    manifest.schemaVersion !== 1 ||
+    !isPositiveInteger(manifest.sequence) ||
+    manifest.sequence !== config.sequence ||
+    manifest.channel !== config.channel ||
+    !isValidMetadataWindow(manifest) ||
+    !isKeyId(manifest.keyId) ||
+    !isBase64(manifest.signature) ||
+    !Array.isArray(manifest.releases) ||
+    manifest.releases.length !== requiredTargets.length
+  ) {
+    throw new Error(
+      "Runtime feed manifest is invalid or does not contain the complete matrix.",
+    );
+  }
+  if (configPublicKeys) {
+    verifyFeedMetadataSignature(config, configPublicKeys, "config");
+    verifyFeedMetadataSignature(manifest, manifestPublicKeys, "manifest");
+  }
+  const seenTargets = new Set();
+  for (const release of manifest.releases) {
+    if (
+      !release ||
+      typeof release !== "object" ||
+      !hasExactlyKeys(release, manifestReleaseKeys) ||
+      typeof release.platform !== "string" ||
+      typeof release.arch !== "string" ||
+      typeof release.version !== "string" ||
+      release.version.length === 0 ||
+      release.archiveFormat !== "zip" ||
+      !release.archiveUrl ||
+      !release.archiveSha256 ||
+      !/^[a-f0-9]{64}$/u.test(release.archiveSha256) ||
+      !Number.isSafeInteger(release.archiveSizeBytes) ||
+      release.archiveSizeBytes <= 0 ||
+      !isReleaseBudget(release.budget)
+    ) {
+      throw new Error("Runtime feed manifest has an invalid release.");
+    }
+    const target = `${release.platform}-${release.arch}`;
+    if (!requiredTargets.includes(target) || seenTargets.has(target)) {
+      throw new Error(
+        "Runtime feed manifest has a duplicate or unsupported target.",
+      );
+    }
+    seenTargets.add(target);
+  }
+  return { config, manifest };
 }
 
 export async function validateReleaseTree(
@@ -404,6 +1107,7 @@ export async function validateReleaseTree(
     !hasExactlyKeys(manifest, manifestKeys) ||
     manifest.schemaVersion !== 1 ||
     !isPositiveInteger(manifest.sequence) ||
+    manifest.sequence !== config.sequence ||
     manifest.channel !== config.channel ||
     !isValidMetadataWindow(manifest) ||
     !isKeyId(manifest.keyId) ||
@@ -660,6 +1364,15 @@ function isReleaseBudget(value) {
   return (
     value.minimumFreeDiskBytes >=
     Math.ceil((value.maxArchiveBytes + 2 * value.maxUnpackedBytes) * 1.15)
+  );
+}
+
+function isArchivePath(value) {
+  return (
+    typeof value === "string" &&
+    /^archives\/[^/]+\/(?:darwin|win32|linux)-(?:x64|arm64)\/primary-runtime\.zip$/u.test(
+      value,
+    )
   );
 }
 
