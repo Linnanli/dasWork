@@ -86,8 +86,9 @@ permissions:
 concurrency:
   # PR/push fast lanes may supersede an earlier fast lane. Scheduled and
   # manually requested four-target calibrations stay queued instead, so a
-  # new commit cannot discard hours of target-native evidence.
-  group: primary-runtime-engineering-build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'push' && github.ref || github.event_name }}
+  # new commit cannot discard hours of target-native evidence. Keep the
+  # LibreOffice experiment in its own lane so it cannot block calibration.
+  group: primary-runtime-engineering-build-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'push' && github.ref || github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 env:

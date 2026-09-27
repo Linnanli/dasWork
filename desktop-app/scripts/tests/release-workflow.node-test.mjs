@@ -189,6 +189,10 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   )
   assert.match(
     buildWorkflow,
+    /github\.event_name == 'workflow_dispatch' && inputs\.mode \|\| github\.event_name/u
+  )
+  assert.match(
+    buildWorkflow,
     /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/u
   )
   assert.doesNotMatch(buildWorkflow, /continue-on-error:\s*true/u)
