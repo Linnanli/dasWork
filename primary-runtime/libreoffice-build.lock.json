@@ -36,6 +36,10 @@
     "automake": {
       "version": "1.19",
       "sourceSha256": "e3e2c2e3abf37898138db5b6c1d1dc35c9160c5978be7947d2c741705251d445"
+    },
+    "gperf": {
+      "version": "3.3",
+      "sourceSha256": "fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8"
     }
   },
   "targets": {

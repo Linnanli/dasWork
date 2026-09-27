@@ -40,10 +40,14 @@ const buildTools = {
   make: make.version.trim(),
   autoconf: (await capture("autoconf", ["--version"], { env })).split("\n")[0],
   aclocal: (await capture("aclocal", ["--version"], { env })).split("\n")[0],
+  gperf: (await capture("gperf", ["--version"], { env })).split("\n")[0],
   pkgConfig: (await capture(pkgConfig, ["--version"], { env })).trim(),
 };
 if (buildTools.aclocal !== `aclocal (GNU automake) ${lock.bootstrapTools.automake.version}`) {
   throw new Error(`Automake version mismatch: ${buildTools.aclocal}`);
+}
+if (buildTools.gperf !== `GNU gperf ${lock.bootstrapTools.gperf.version}`) {
+  throw new Error(`gperf version mismatch: ${buildTools.gperf}`);
 }
 if (!xcode.includes(`Xcode ${spec.xcodeVersion}\nBuild version ${spec.xcodeBuild}`)
     || sdkVersion !== spec.sdk.replace("macosx", "")

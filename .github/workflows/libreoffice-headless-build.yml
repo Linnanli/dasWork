@@ -51,6 +51,17 @@ jobs:
           brew install automake
           test "$(aclocal --version | head -1)" = "aclocal (GNU automake) $expected_version"
 
+      - name: Install source-locked gperf
+        shell: bash
+        run: |
+          expected_version="$(jq -r '.bootstrapTools.gperf.version' primary-runtime/libreoffice-build.lock.json)"
+          expected_source="$(jq -r '.bootstrapTools.gperf.sourceSha256' primary-runtime/libreoffice-build.lock.json)"
+          formula="$(brew info --json=v2 gperf)"
+          test "$(jq -r '.formulae[0].versions.stable' <<< "$formula")" = "$expected_version"
+          test "$(jq -r '.formulae[0].urls.stable.checksum' <<< "$formula")" = "$expected_source"
+          brew install gperf
+          gperf --version | head -1
+
       - name: Download pinned upstream source
         shell: bash
         run: |
