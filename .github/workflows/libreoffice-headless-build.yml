@@ -29,8 +29,8 @@ jobs:
           expected="$(jq -r '.bootstrapTools.gnuMake.bottleSha256["darwin-x64"]' primary-runtime/libreoffice-build.lock.json)"
           formula="$(brew info --json=v2 make | jq -r '.formulae[0].bottle.stable.files.sequoia.sha256')"
           test "$formula" = "$expected"
-          brew fetch --bottle make
-          bottle="$(brew --cache --bottle make)"
+          brew fetch --force-bottle make
+          bottle="$(brew --cache --force-bottle make)"
           actual="$(shasum -a 256 "$bottle" | cut -d ' ' -f 1)"
           test "$actual" = "$expected"
           brew install make
