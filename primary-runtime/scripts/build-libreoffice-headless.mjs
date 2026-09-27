@@ -205,6 +205,9 @@ async function verifyFetchedSources(source, buildLock) {
   const directory = join(source, "external", "tarballs");
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name === "tmp") continue;
+    // Makefile.fetch creates this directory even when experimental YRS is off.
+    // A populated Cargo cache needs its own Cargo.lock checksum audit.
+    if (entry.isDirectory() && entry.name === "cargo" && (await readdir(join(directory, entry.name))).length === 0) continue;
     if (entry.name === "fetch.log") continue;
     if (!entry.isFile() || !expected.has(entry.name)) {
       throw new Error(`Untracked external source object: ${entry.name}`);

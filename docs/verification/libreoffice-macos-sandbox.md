@@ -153,6 +153,7 @@ experiment without publishing any user document or replacing a Runtime lock:
 | [36302901288](https://github.com/Linnanli/dasWork/actions/runs/36302901288) | Failed | `gperf 3.3` passed; upstream macOS configuration enabled the developer kit and then required absent Doxygen. The experiment now disables the unused developer kit. |
 | [36303378766](https://github.com/Linnanli/dasWork/actions/runs/36303378766) | Failed | The unused developer kit was disabled. Configuration then required a privacy-policy URL because upstream's macOS distribution enables online update; the conversion build now disables online update and Breakpad instead of inventing a policy URL. |
 | [36303937942](https://github.com/Linnanli/dasWork/actions/runs/36303937942) | Failed | Configuration accepted disabled update/crash reporting, then required absent JUnit 4 for Java tests; the build now uses upstream `--without-junit`. |
+| [36304729543](https://github.com/Linnanli/dasWork/actions/runs/36304729543) | Failed | Configuration and `make fetch` completed. Our external-source audit rejected the empty `external/tarballs/cargo` directory that upstream `Makefile.fetch` creates unconditionally. The audit now accepts only an empty Cargo directory; populated Cargo caches still fail until separately checksum-verified. |
 
 No build artifact or restricted candidate conversion has been recorded yet.
 
