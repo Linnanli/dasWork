@@ -1,53 +1,53 @@
 {
   "schemaVersion": "dascowork-primary-runtime-budgets.v1",
   "evidence": {
-    "sourceRunId": "35977341257",
-    "sourceCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
-    "installerCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
+    "sourceRunId": "36324310893",
+    "sourceCommit": "41e7917f4c82c637c3f953e71336e4083bef61da",
+    "installerCommit": "41e7917f4c82c637c3f953e71336e4083bef61da",
     "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
-    "sourceLockSha256": "54efc2fc6d877eec5cddad954ae8ecbfa4df73291088a45bb53c76792e3aa283",
-    "toolchainsLockSha256": "95a990efabdf170f4dfb8504baf70407772889538c43d96b330c0e6809a0d560",
-    "measurementsFingerprint": "6a1ff97f54c3916a576eb1a52c764921e53aa5c5c3397b979a4abd4cea3f45c1",
+    "sourceLockSha256": "1a16a06ac2e4978314c7d2484dc879cf2f8bac71bb94bf138535c4a838f34420",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "measurementsFingerprint": "ca30dfa5b95ff51e70224498d55187fd09b8c5f23d489c957ad40a0bf7fd5498",
     "reviewed": true,
     "candidateArchiveSha256": {
-      "darwin-x64": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
-      "darwin-arm64": "f9905487c3860ad4ca3cc79e4cdba4ab8a51301ef775ad8c619323a6af3bad2f",
-      "win32-x64": "1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7",
-      "linux-x64": "11a05282fe7a0430c432edc8c3812ca78035243afa6dea82514df109ac37f60a"
+      "darwin-x64": "44ad294ca610fc6885cf5271295134c11e1a3a2774308df220285c793db027b2",
+      "darwin-arm64": "fc4fe36149701f63a9380e593eee5853a14802e7a89557af0f5fbac414ef57ef",
+      "win32-x64": "d2680a68d3d3e920f4c2e9f700ce0f6b65a97fcd1ac7fb3a6e071fd62050cfd3",
+      "linux-x64": "130e3b7562a018d552158251292f1a095c77d9097ca5ab39604a746a5ea2e711"
     }
   },
   "targets": {
     "darwin-x64": {
-      "maxArchiveBytes": 913574811,
-      "maxUnpackedBytes": 2302206561,
-      "minimumFreeDiskBytes": 6345686123,
-      "maxColdInstallMs": 293963,
-      "maxMainEventLoopDelayP99Ms": 9,
-      "maxMainEventLoopDelayMaxMs": 433
+      "maxArchiveBytes": 133758059,
+      "maxUnpackedBytes": 200837079,
+      "minimumFreeDiskBytes": 615747050,
+      "maxColdInstallMs": 41050,
+      "maxMainEventLoopDelayP99Ms": 15,
+      "maxMainEventLoopDelayMaxMs": 239
     },
     "darwin-arm64": {
-      "maxArchiveBytes": 894211050,
-      "maxUnpackedBytes": 2277857413,
-      "minimumFreeDiskBytes": 6267414758,
-      "maxColdInstallMs": 102145,
-      "maxMainEventLoopDelayP99Ms": 9,
-      "maxMainEventLoopDelayMaxMs": 787
+      "maxArchiveBytes": 132681742,
+      "maxUnpackedBytes": 199639394,
+      "minimumFreeDiskBytes": 611754610,
+      "maxColdInstallMs": 12515,
+      "maxMainEventLoopDelayP99Ms": 22,
+      "maxMainEventLoopDelayMaxMs": 414
     },
     "win32-x64": {
-      "maxArchiveBytes": 838179644,
-      "maxUnpackedBytes": 2317488739,
-      "minimumFreeDiskBytes": 6294130691,
-      "maxColdInstallMs": 94053,
-      "maxMainEventLoopDelayP99Ms": 4,
-      "maxMainEventLoopDelayMaxMs": 57
+      "maxArchiveBytes": 129687468,
+      "maxUnpackedBytes": 187309584,
+      "minimumFreeDiskBytes": 579952632,
+      "maxColdInstallMs": 12725,
+      "maxMainEventLoopDelayP99Ms": 13,
+      "maxMainEventLoopDelayMaxMs": 52
     },
     "linux-x64": {
-      "maxArchiveBytes": 955019883,
-      "maxUnpackedBytes": 2465836319,
-      "minimumFreeDiskBytes": 6769696400,
-      "maxColdInstallMs": 84462,
-      "maxMainEventLoopDelayP99Ms": 4,
-      "maxMainEventLoopDelayMaxMs": 39
+      "maxArchiveBytes": 206790648,
+      "maxUnpackedBytes": 403636065,
+      "minimumFreeDiskBytes": 1166172195,
+      "maxColdInstallMs": 16644,
+      "maxMainEventLoopDelayP99Ms": 5,
+      "maxMainEventLoopDelayMaxMs": 37
     }
   }
 }
