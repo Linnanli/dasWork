@@ -1,0 +1,60 @@
+name: LibreOffice macOS headless experiment
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check native builder architecture
+        shell: bash
+        run: |
+          test "$(uname -m)" = x86_64
+          test -d /Applications/Xcode_16.4.app/Contents/Developer
+          DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer xcodebuild -version
+
+      - name: Download pinned upstream source
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 \
+            --output "$RUNNER_TEMP/libreoffice-core.tar.gz" \
+            https://codeload.github.com/LibreOffice/core/tar.gz/refs/tags/libreoffice-26.8.0.3
+
+      - name: Build from checked source and record external dependencies
+        shell: bash
+        run: |
+          node primary-runtime/scripts/build-libreoffice-headless.mjs \
+            --target=darwin-x64 \
+            --source-archive="$RUNNER_TEMP/libreoffice-core.tar.gz" \
+            --output="$RUNNER_TEMP/libreoffice-build" \
+            --jobs=3
+
+      - name: Archive the experimental app and provenance
+        if: success()
+        shell: bash
+        run: |
+          tar -czf "$RUNNER_TEMP/libreoffice-darwin-x64-experiment.tar.gz" \
+            -C "$RUNNER_TEMP/libreoffice-build" \
+            LibreOffice.app source-build-report.json
+          shasum -a 256 "$RUNNER_TEMP/libreoffice-darwin-x64-experiment.tar.gz" \
+            | tee "$RUNNER_TEMP/libreoffice-darwin-x64-experiment.sha256"
+
+      - name: Retain experimental build for local restricted validation
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: libreoffice-darwin-x64-experiment
+          path: |
+            ${{ runner.temp }}/libreoffice-darwin-x64-experiment.tar.gz
+            ${{ runner.temp }}/libreoffice-darwin-x64-experiment.sha256
+          retention-days: 7

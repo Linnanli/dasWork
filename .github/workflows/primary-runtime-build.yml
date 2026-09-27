@@ -73,6 +73,7 @@ on:
           - calibrate
           - review
           - final
+          - lo-experiment
       calibration_run_id:
         description: Required by review/final mode; successful P3b calibration run (independently reviewed before final).
         required: false
@@ -93,6 +94,10 @@ env:
   PRIMARY_RUNTIME_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'schedule' && 'calibrate' || 'fast' }}
 
 jobs:
+  libreoffice-experiment:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'lo-experiment' }}
+    uses: ./.github/workflows/libreoffice-headless-build.yml
+
   review-calibration:
     name: Extract small P3b budget review evidence
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'review' }}
@@ -102,7 +107,7 @@ jobs:
 
   source-and-contract:
     name: Validate source authority and stage order
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode != 'review' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.mode != 'review' && inputs.mode != 'lo-experiment') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
