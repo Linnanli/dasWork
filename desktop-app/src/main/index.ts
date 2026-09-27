@@ -96,6 +96,7 @@ import { LocalGitWatchBroker, localGitWatchControlChannels } from './localGit/Lo
 import { invalidateLocalGitWatchCaches } from './localGit/LocalGitWatchInvalidation'
 import type { DesktopRuntimeConfig } from './runtimeConfig'
 import { loadPrimaryRuntimeStartupConfig } from './primaryRuntime/PrimaryRuntimeStartupConfig'
+import { resolvePrimaryRuntimeCacheRoot } from './primaryRuntime/primaryRuntimeCacheRoot'
 import {
   FilePrimaryRuntimeManifestSequenceStore,
   FilePrimaryRuntimeTrustStateStore,
@@ -193,18 +194,14 @@ const artifactPreviewCapabilities = new ArtifactPreviewCapabilityStore()
 const artifactComposerAttachments = new ArtifactComposerAttachmentStore()
 const convergingConversationThreadIds = new Set<string>()
 
-const devLocalFeedUserDataPath = process.env.DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR?.trim()
-if (devLocalFeedUserDataPath) {
-  if (app.isPackaged) {
-    throw new Error(
-      'Development Primary Runtime userData override is not allowed in packaged builds.'
-    )
-  }
-  app.setPath('userData', devLocalFeedUserDataPath)
-} else {
-  const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
-  if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
-}
+const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
+if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
+const primaryRuntimeCacheRoot = resolvePrimaryRuntimeCacheRoot({
+  userDataPath: app.getPath('userData'),
+  localFeedCachePath: process.env.DASCOWORK_DEV_LOCAL_FEED_RUNTIME_CACHE_DIR,
+  useLocalFeedCache: process.env.DASCOWORK_DEV_LOCAL_FEED === '1',
+  isPackaged: app.isPackaged
+})
 const e2eDocumentsPath = process.env.DASCOWORK_E2E_DOCUMENTS_DIR?.trim()
 if (e2eDocumentsPath) app.setPath('documents', e2eDocumentsPath)
 const artifactPreviewManifest = new ArtifactPreviewSourceManifest(
@@ -221,7 +218,6 @@ async function createCodexRuntime(
   const primaryRuntimeCapabilities = new PrimaryRuntimeCapabilityPolicy(
     runtimeConfig.workspaceDependenciesFeatureEnabled ?? true
   )
-  const primaryRuntimeCacheRoot = join(app.getPath('userData'), 'primary-runtime')
   const primaryRuntimeReleaseProvider = runtimeConfig.primaryRuntimeProductConfig
     ? await createPrimaryRuntimeProductReleaseProvider(
         runtimeConfig.primaryRuntimeProductConfig,
@@ -773,6 +769,11 @@ function requirePluginCenterService(): PluginCenterService {
   return pluginCenterService
 }
 
+function requirePrimaryRuntimeService(): PrimaryRuntimeService {
+  if (!primaryRuntimeService) throw new Error('Primary Runtime service is not initialized')
+  return primaryRuntimeService
+}
+
 function requireFollowUpQueue(): ConversationFollowUpQueueService {
   if (!followUpQueue) throw new Error('Follow-up queue is not initialized')
   return followUpQueue
@@ -1023,6 +1024,7 @@ app.whenReady().then(async () => {
     redeemAuthorizedLocalPreview: (token) => artifactPreviewCapabilities.redeem(token),
     issueArtifactComposerAttachment: (input) => artifactComposerAttachments.issue(input),
     artifactPreviewManifest,
+    loadPrimaryRuntimeDependencies: () => requirePrimaryRuntimeService().loadDependencies(),
     fileSearchProvider: requireComposerContextClient(),
     terminalBackendFactory: new TerminalBackendFactory(terminalHosts),
     terminalCommand: runtimeConfig.terminalCommand

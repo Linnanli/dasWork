@@ -15,8 +15,7 @@ export const defaultLocalFeedClientProfilePath = join(
   repositoryRoot,
   'services/primary-runtime-feed/var/development/client-profile.json'
 )
-export const localFeedUserDataEnvironmentVariable = 'DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR'
-export const defaultLocalFeedUserDataPath = join(appRoot, '.primary-runtime-local-feed-user-data')
+export const localFeedRuntimeCacheEnvironmentVariable = 'DASCOWORK_DEV_LOCAL_FEED_RUNTIME_CACHE_DIR'
 
 export async function readLocalFeedClientProfile(path = defaultLocalFeedClientProfilePath) {
   let source
@@ -95,42 +94,47 @@ export async function assertLocalFeedClientProfileAvailable(
   await probe(profile)
 }
 
-export async function prepareLocalFeedUserDataDirectory(
-  userDataPath,
+export async function prepareLocalFeedRuntimeCacheDirectory(
+  cachePath,
   { makeDirectory = mkdir, chmodPath = chmod, statPath = stat, accessPath = access } = {}
 ) {
   let existed = true
   try {
-    await statPath(userDataPath)
+    await statPath(cachePath)
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
     existed = false
   }
-  await makeDirectory(userDataPath, { recursive: true, mode: 0o700 })
-  if (!existed) await chmodPath(userDataPath, 0o700)
+  await makeDirectory(cachePath, { recursive: true, mode: 0o700 })
+  if (!existed) await chmodPath(cachePath, 0o700)
 
-  const details = await statPath(userDataPath)
+  const details = await statPath(cachePath)
   if (!details.isDirectory()) {
-    throw new Error(`${localFeedUserDataEnvironmentVariable} must point to a directory.`)
+    throw new Error(`${localFeedRuntimeCacheEnvironmentVariable} must point to a directory.`)
   }
   try {
-    await accessPath(userDataPath, constants.W_OK)
+    await accessPath(cachePath, constants.W_OK)
   } catch {
-    throw new Error(`${localFeedUserDataEnvironmentVariable} must point to a writable directory.`)
+    throw new Error(
+      `${localFeedRuntimeCacheEnvironmentVariable} must point to a writable directory.`
+    )
   }
 }
 
 export function localFeedChildEnvironment(profile, baseEnvironment = process.env) {
   const environment = { ...baseEnvironment }
   for (const key of directRuntimeOverrides) delete environment[key]
-  const userDataPath =
-    environment[localFeedUserDataEnvironmentVariable]?.trim() || defaultLocalFeedUserDataPath
-  if (!isAbsolute(userDataPath)) {
-    throw new Error(`${localFeedUserDataEnvironmentVariable} must be an absolute path.`)
+  delete environment.DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR
+  delete environment.DASCOWORK_E2E_USER_DATA_DIR
+  const cachePath = environment[localFeedRuntimeCacheEnvironmentVariable]?.trim()
+  if (cachePath && !isAbsolute(cachePath)) {
+    throw new Error(`${localFeedRuntimeCacheEnvironmentVariable} must be an absolute path.`)
   }
+  delete environment[localFeedRuntimeCacheEnvironmentVariable]
   return {
     ...environment,
-    [localFeedUserDataEnvironmentVariable]: userDataPath,
+    DASCOWORK_DEV_LOCAL_FEED: '1',
+    ...(cachePath ? { [localFeedRuntimeCacheEnvironmentVariable]: cachePath } : {}),
     DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL: `${profile.origin}/v1/runtime/config.json`,
     DASCOWORK_PRIMARY_RUNTIME_CONFIG_ALLOWED_ORIGINS: profile.origin,
     DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_ALLOWED_ORIGINS: profile.origin,
@@ -147,7 +151,8 @@ async function main() {
   const profile = await readLocalFeedClientProfile()
   await assertLocalFeedClientProfileAvailable(profile)
   const environment = localFeedChildEnvironment(profile)
-  await prepareLocalFeedUserDataDirectory(environment[localFeedUserDataEnvironmentVariable])
+  const cachePath = environment[localFeedRuntimeCacheEnvironmentVariable]
+  if (cachePath) await prepareLocalFeedRuntimeCacheDirectory(cachePath)
   const child = spawn('npm', ['run', 'dev'], {
     cwd: appRoot,
     env: environment,

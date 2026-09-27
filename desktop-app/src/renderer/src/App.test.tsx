@@ -4072,6 +4072,10 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="generated-image-entry-unit"]')).not.toBeNull()
     expect(container.textContent).toContain('已生成 1 张图片')
     expect(container.querySelector('[data-slot="end-resource-cards-unit"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-slot="end-resource-card-unit"]')).toHaveLength(3)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-slot="end-resource-expand"]')?.click()
+    })
     expect(container.querySelectorAll('[data-slot="end-resource-card-unit"]')).toHaveLength(4)
     expect(container.textContent).toContain('Report')
     await act(async () => {

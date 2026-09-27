@@ -85,10 +85,10 @@ manifest overrides before launching Electron.
 
 `dev:local-feed` does not call `gh`, publish artifacts, start the Feed service, or
 hold private signing/TLS keys. It also uses the dedicated
-`DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR` environment variable so Main can place this
-development entry in the ignored `.primary-runtime-local-feed-user-data/` directory
-instead of ordinary development or packaged user data. Ordinary `npm run dev` remains
-unchanged.
+`DASCOWORK_DEV_LOCAL_FEED=1` so Main keeps local Feed downloads and trust state
+under the app user data directory in `primary-runtime-local-feed/`. Projects and
+other desktop data use the same user data directory as ordinary `npm run dev`.
+`DASCOWORK_DEV_LOCAL_FEED_RUNTIME_CACHE_DIR` can override only the Runtime location.
 
 The deterministic Feed gate is separate from ordinary Mock E2E: set
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1` and run

@@ -850,6 +850,7 @@ function EndResourceCardsUnit({
   workspaceCwd?: string
   canOpenLocalPaths: boolean
 }): React.JSX.Element | null {
+  const [expanded, setExpanded] = useState(false)
   const resources = useMemo(
     () => arrayValue(unit.item?.resources ?? unit.item?.items).map(resourceCardData),
     [unit.item]
@@ -863,6 +864,7 @@ function EndResourceCardsUnit({
   )
   const localPathCheckPending = localPathCheck.status === 'pending'
   const localPathCheckFailed = localPathCheck.status === 'failed'
+  const visibleResources = expanded ? displayableResources : displayableResources.slice(0, 3)
 
   if (displayableResources.length === 0) return null
 
@@ -882,7 +884,7 @@ function EndResourceCardsUnit({
           暂时无法确认本地资源，仍可尝试打开。
         </p>
       ) : null}
-      {displayableResources.map((resource, index) => (
+      {visibleResources.map((resource, index) => (
         <ResourceCard
           key={`${resource.type}:${resource.openPath ?? resource.openUrl ?? resource.label}:${index}`}
           resource={resource}
@@ -891,6 +893,18 @@ function EndResourceCardsUnit({
           canOpenLocalPaths={canOpenLocalPaths}
         />
       ))}
+      {displayableResources.length > 3 ? (
+        <Button
+          type="button"
+          data-slot="end-resource-expand"
+          variant="ghost"
+          size="sm"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? '收起资源' : `显示其余 ${displayableResources.length - 3} 个资源`}
+        </Button>
+      ) : null}
     </div>
   )
 }

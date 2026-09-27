@@ -42,9 +42,10 @@ install paths.
 The desktop launcher does not publish releases or start this service. It validates
 the profile and Feed reachability, clears inherited direct Runtime overrides, and
 passes only signed product-config settings to Electron. The launcher also uses a
-dedicated ignored user data directory through
-`DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR`, so local Feed trust state is separate from
-ordinary development and packaged app state.
+dedicated `primary-runtime-local-feed/` directory under the app user data directory
+through `DASCOWORK_DEV_LOCAL_FEED=1`, so local Feed downloads and trust state stay
+separate while projects and other desktop data use the normal app directory. The
+Runtime location can be overridden with `DASCOWORK_DEV_LOCAL_FEED_RUNTIME_CACHE_DIR`.
 
 For the deterministic signed-Feed E2E, run
 `DASCOWORK_PRIMARY_RUNTIME_FEED_E2E=1 npm --prefix desktop-app run test:e2e:primary-runtime-feed`

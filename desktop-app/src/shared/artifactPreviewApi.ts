@@ -30,6 +30,11 @@ export const artifactPreviewSourceRequestSchema = requestBaseSchema
   .strict()
 export type ArtifactPreviewSourceRequest = z.infer<typeof artifactPreviewSourceRequestSchema>
 
+export const artifactPresentationRenderRequestSchema = artifactPreviewSourceRequestSchema
+export type ArtifactPresentationRenderRequest = z.infer<
+  typeof artifactPresentationRenderRequestSchema
+>
+
 const artifactAttachmentUrlSchema = z
   .string()
   .regex(/^dascowork-artifact:\/\/[A-Za-z0-9_-]{16,256}\/[A-Za-z0-9_-]{16,256}$/u)
@@ -137,6 +142,25 @@ export const artifactPreviewReadBinaryResultSchema = z.union([
     .strict()
 ])
 export type ArtifactPreviewReadBinaryResult = z.infer<typeof artifactPreviewReadBinaryResultSchema>
+
+export const artifactPresentationRenderResultSchema = artifactPreviewSuccessSchema
+  .extend({
+    generation: z.number().int().nonnegative(),
+    slides: z
+      .array(
+        z
+          .object({
+            number: z.number().int().min(1),
+            base64: z.string()
+          })
+          .strict()
+      )
+      .min(1)
+  })
+  .strict()
+export type ArtifactPresentationRenderResult = z.infer<
+  typeof artifactPresentationRenderResultSchema
+>
 
 export const artifactPreviewSourceChangeEventSchema = z
   .object({ version: z.literal(ARTIFACT_PREVIEW_API_VERSION), sourceId: sourceIdSchema })

@@ -9,10 +9,9 @@ import test from 'node:test'
 import {
   assertLocalFeedClientProfileAvailable,
   defaultLocalFeedClientProfilePath,
-  defaultLocalFeedUserDataPath,
   localFeedChildEnvironment,
-  localFeedUserDataEnvironmentVariable,
-  prepareLocalFeedUserDataDirectory,
+  localFeedRuntimeCacheEnvironmentVariable,
+  prepareLocalFeedRuntimeCacheDirectory,
   validateLocalFeedClientProfile
 } from '../dev-local-feed.mjs'
 
@@ -100,18 +99,23 @@ test('local Feed launcher verifies CA file and Feed reachability before starting
   assert.equal(probedOrigin, 'https://127.0.0.1:9443')
 })
 
-test('local Feed child environment strips direct Runtime overrides and isolates userData', () => {
+test('local Feed child environment strips direct Runtime overrides and isolates only its cache', () => {
   const profile = validateLocalFeedClientProfile(validProfile())
   const environment = localFeedChildEnvironment(profile, {
     DASCOWORK_PRIMARY_RUNTIME_ROOT: '/private/tmp/forbidden-root',
     DASCOWORK_PRIMARY_RUNTIME_VERSION: 'forbidden-direct-release',
-    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'https://forbidden.example.test/manifest.json'
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: 'https://forbidden.example.test/manifest.json',
+    DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR: '/old-profile',
+    DASCOWORK_E2E_USER_DATA_DIR: '/test-profile'
   })
 
   assert.equal(environment.DASCOWORK_PRIMARY_RUNTIME_ROOT, undefined)
   assert.equal(environment.DASCOWORK_PRIMARY_RUNTIME_VERSION, undefined)
   assert.equal(environment.DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL, undefined)
-  assert.equal(environment[localFeedUserDataEnvironmentVariable], defaultLocalFeedUserDataPath)
+  assert.equal(environment.DASCOWORK_DEV_LOCAL_FEED_USER_DATA_DIR, undefined)
+  assert.equal(environment.DASCOWORK_E2E_USER_DATA_DIR, undefined)
+  assert.equal(environment.DASCOWORK_DEV_LOCAL_FEED, '1')
+  assert.equal(environment[localFeedRuntimeCacheEnvironmentVariable], undefined)
   assert.equal(
     environment.DASCOWORK_PRIMARY_RUNTIME_CONFIG_URL,
     'https://127.0.0.1:9443/v1/runtime/config.json'
@@ -122,25 +126,31 @@ test('local Feed child environment strips direct Runtime overrides and isolates 
   assert.throws(
     () =>
       localFeedChildEnvironment(profile, {
-        [localFeedUserDataEnvironmentVariable]: 'relative-user-data'
+        [localFeedRuntimeCacheEnvironmentVariable]: 'relative-cache'
       }),
     /absolute/u
   )
+  assert.equal(
+    localFeedChildEnvironment(profile, {
+      [localFeedRuntimeCacheEnvironmentVariable]: join(tmpdir(), 'custom-feed-cache')
+    })[localFeedRuntimeCacheEnvironmentVariable],
+    join(tmpdir(), 'custom-feed-cache')
+  )
 })
 
-test('local Feed launcher creates the dedicated userData directory on cold start', async () => {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dascowork-local-feed-user-data-'))
-  const userDataPath = join(temporaryRoot, 'cold-start-user-data')
-  await prepareLocalFeedUserDataDirectory(userDataPath)
+test('local Feed launcher creates the dedicated Runtime cache directory on cold start', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dascowork-local-feed-cache-'))
+  const cachePath = join(temporaryRoot, 'cold-start-cache')
+  await prepareLocalFeedRuntimeCacheDirectory(cachePath)
 
-  const details = await stat(userDataPath)
+  const details = await stat(cachePath)
   assert.equal(details.isDirectory(), true)
   assert.equal(details.mode & 0o777, 0o700)
 })
 
-test('local Feed launcher rejects a non-directory userData path', async () => {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dascowork-local-feed-user-data-'))
-  const userDataPath = join(temporaryRoot, 'not-a-directory')
-  await writeFile(userDataPath, 'file')
-  await assert.rejects(() => prepareLocalFeedUserDataDirectory(userDataPath), /directory/u)
+test('local Feed launcher rejects a non-directory Runtime cache path', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'dascowork-local-feed-cache-'))
+  const cachePath = join(temporaryRoot, 'not-a-directory')
+  await writeFile(cachePath, 'file')
+  await assert.rejects(() => prepareLocalFeedRuntimeCacheDirectory(cachePath), /directory/u)
 })

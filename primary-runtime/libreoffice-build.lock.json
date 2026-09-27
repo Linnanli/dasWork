@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "dascowork-libreoffice-macos-build.v1",
+  "source": {
+    "tag": "libreoffice-26.8.0.3",
+    "commit": "cf55f45554a356e77e7977c6a28679069017157f",
+    "url": "https://codeload.github.com/LibreOffice/core/tar.gz/refs/tags/libreoffice-26.8.0.3",
+    "sha256": "10cf530dcbf171ff40c34c9c2a32d43d0bd8a7fa00150b99667ac820b40e9aa5",
+    "directory": "core-libreoffice-26.8.0.3"
+  },
+  "patch": {
+    "path": "patches/libreoffice-macos-headless-no-ipc.patch",
+    "sha256": "1a53e61731832543bb8cc41028223d1dcb1b304dae929cb6f71e999d86a38b5d"
+  },
+  "externalSources": {
+    "manifest": "download.lst",
+    "sha256": "cf38c8d828d8ac1cdf7f06f037118f272ad700e46507f7f05f82d50d2ad3d812",
+    "hashAlgorithm": "sha256"
+  },
+  "configuration": {
+    "upstreamFile": "distro-configs/LibreOfficeMacOSX.conf",
+    "sha256": "0b9452aaa0a6e77ff3b6b03a753cdeafff258b8cb4511b861790664025c4753c",
+    "requiredOptions": [
+      "--enable-headless",
+      "--without-system-fontconfig",
+      "--without-system-freetype"
+    ]
+  },
+  "bootstrapTools": {
+    "gnuMake": {
+      "version": "4.4.1",
+      "bottleSha256": {
+        "darwin-x64": "cd86f41f2d02a827e15380a13a055606ba2f61819ad5100e4feba0400ef685a7",
+        "darwin-arm64": "f361639a5ec1a9355e12f985c511dd6631b6790452a52057032a3a07a690ca4e"
+      }
+    },
+    "automake": {
+      "version": "1.19",
+      "sourceSha256": "e3e2c2e3abf37898138db5b6c1d1dc35c9160c5978be7947d2c741705251d445"
+    },
+    "gperf": {
+      "version": "3.3",
+      "sourceSha256": "fd87e0aba7e43ae054837afd6cd4db03a3f2693deb3619085e6ed9d8d9604ad8"
+    }
+  },
+  "targets": {
+    "darwin-x64": {
+      "runner": "macos-15-intel",
+      "architecture": "x86_64",
+      "xcodeVersion": "16.4",
+      "xcodeBuild": "16F6",
+      "sdk": "macosx15.5"
+    },
+    "darwin-arm64": {
+      "runner": "macos-15",
+      "architecture": "arm64",
+      "xcodeVersion": "16.4",
+      "xcodeBuild": "16F6",
+      "sdk": "macosx15.5"
+    }
+  }
+}

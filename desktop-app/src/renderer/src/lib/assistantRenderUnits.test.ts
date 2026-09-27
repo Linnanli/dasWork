@@ -185,7 +185,7 @@ describe('buildAssistantRenderUnits', () => {
     expect(JSON.stringify(running.units)).toContain('::code-comment')
   })
 
-  it('derives completed output resources but excludes HTML files', () => {
+  it('derives declared output files while excluding JSON and HTML files', () => {
     const visualizationPath =
       '/repo/.codex/visualizations/2026/08/19/agent_123/security-market-analysis.html'
     const htmlExportPath = '/repo/exports/metrics-dashboard.html'
@@ -194,6 +194,16 @@ describe('buildAssistantRenderUnits', () => {
       workspaceCwd: '/repo',
       content: [
         toolPart('generated-files', 'fileChange', {
+          artifacts: {
+            outputFilePaths: [
+              '/repo/report.pdf',
+              'exports/metrics.xlsx',
+              '/repo/qa-receipt.json',
+              '/repo/.codex/visualizations/renders/slide-1.png',
+              visualizationPath,
+              htmlExportPath
+            ]
+          },
           changes: [
             { path: '/repo/report.pdf', kind: { type: 'add' }, diff: '' },
             { path: visualizationPath, kind: { type: 'add' }, diff: '' },
@@ -217,6 +227,12 @@ describe('buildAssistantRenderUnits', () => {
       target: { itemIds: ['generated-files'] },
       item: {
         resources: [
+          {
+            type: 'file',
+            path: '/repo/.codex/visualizations/renders/slide-1.png',
+            title: 'slide-1.png',
+            cwd: '/repo'
+          },
           { type: 'file', path: '/repo/report.pdf', title: 'report.pdf', cwd: '/repo' },
           { type: 'file', path: 'exports/metrics.xlsx', title: 'metrics.xlsx', cwd: '/repo' }
         ]
@@ -224,6 +240,7 @@ describe('buildAssistantRenderUnits', () => {
     })
     expect(JSON.stringify(resourcesUnit)).not.toContain(visualizationPath)
     expect(JSON.stringify(resourcesUnit)).not.toContain(htmlExportPath)
+    expect(JSON.stringify(resourcesUnit)).not.toContain('qa-receipt.json')
   })
 
   it('does not derive HTML output resources for historical messages without an explicit status', () => {
@@ -331,6 +348,7 @@ describe('buildAssistantRenderUnits', () => {
       content: [
         { type: 'text', text: `[下载](${encodedUrl})` },
         toolPart('case-distinct-files', 'fileChange', {
+          artifacts: { outputFilePaths: ['/repo/Report.pdf', '/repo/report.pdf'] },
           changes: [
             { path: '/repo/Report.pdf', kind: { type: 'add' }, diff: '' },
             { path: '/repo/report.pdf', kind: { type: 'add' }, diff: '' }
@@ -444,7 +462,75 @@ describe('buildAssistantRenderUnits', () => {
     ).toBe(false)
   })
 
-  it('derives generic output files and every completed remote resource', () => {
+  it('adds only document links from the final answer', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      workspaceCwd: '/repo',
+      content: [
+        {
+          type: 'text',
+          text: '[草稿](/repo/draft.pdf)'
+        },
+        {
+          type: 'text',
+          text: [
+            '[PPT](/repo/ai-agent-security-market.pptx)',
+            '[结构](/repo/outline.json)',
+            '[预览](/repo/renders/slide-1.png)',
+            '[报告](/repo/report.docx)'
+          ].join('\n')
+        }
+      ],
+      textPhases: ['commentary', 'final_answer']
+    })
+
+    const resourcesUnit = model.units.find(
+      (unit) => unit.type === 'entry' && unit.itemType === 'endResources'
+    )
+    expect(resourcesUnit).toMatchObject({
+      item: {
+        resources: [
+          { type: 'file', path: '/repo/ai-agent-security-market.pptx' },
+          { type: 'file', path: '/repo/report.docx' }
+        ]
+      }
+    })
+    expect(JSON.stringify(resourcesUnit)).not.toContain('draft.pdf')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('outline.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('slide-1.png')
+  })
+
+  it("keeps an older turn's inline PPTX deliverable without adding its JSON or PNG support files", () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      workspaceCwd: '/repo',
+      content: [
+        {
+          type: 'text',
+          text: [
+            '主文件：`ai-agent-security-market.pptx`',
+            '大纲：`outline.json`；QA：`qa-receipt.json`',
+            '![第1页](/repo/renders/slide-01.png)'
+          ].join('\n')
+        }
+      ],
+      textPhases: ['final_answer']
+    })
+
+    const resourcesUnit = model.units.find(
+      (unit) => unit.type === 'entry' && unit.itemType === 'endResources'
+    )
+    expect(resourcesUnit).toMatchObject({
+      item: {
+        resources: [{ type: 'file', path: 'ai-agent-security-market.pptx', cwd: '/repo' }]
+      }
+    })
+    expect(JSON.stringify(resourcesUnit)).not.toContain('outline.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('qa-receipt.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('slide-01.png')
+  })
+
+  it('keeps remote resources but excludes JSON links from end cards', () => {
     const model = buildAssistantRenderUnits({
       status: { type: 'complete' },
       workspaceCwd: '/repo',
@@ -481,7 +567,6 @@ describe('buildAssistantRenderUnits', () => {
             url: 'https://reports.example.test/monthly',
             title: 'reports.example.test'
           },
-          { type: 'file', path: '/repo/exports/results.json', title: '结果数据' },
           {
             type: 'google-drive',
             url: 'https://docs.google.com/document/d/doc-1/edit',
@@ -509,12 +594,13 @@ describe('buildAssistantRenderUnits', () => {
     ).toBe(false)
   })
 
-  it('derives completed artifact metadata and historical diff paths without file changes', () => {
+  it('uses output paths rather than edited or referenced paths in artifact metadata', () => {
     const artifactModel = buildAssistantRenderUnits({
       status: { type: 'complete' },
       workspaceCwd: '/repo',
       metadata: {
         artifacts: {
+          outputFilePaths: ['/repo/report.pdf', '/repo/qa.json'],
           editedFilePaths: ['/repo/notes.md'],
           referencedFilePaths: ['/repo/data.csv']
         }
@@ -534,8 +620,10 @@ describe('buildAssistantRenderUnits', () => {
       ]
     })
 
-    expect(JSON.stringify(artifactModel.units)).toContain('/repo/data.csv')
-    expect(JSON.stringify(artifactModel.units)).toContain('/repo/notes.md')
+    expect(JSON.stringify(artifactModel.units)).toContain('/repo/report.pdf')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/data.csv')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/notes.md')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/qa.json')
     expect(
       diffModel.units.some((unit) => unit.type === 'entry' && unit.itemType === 'endResources')
     ).toBe(false)

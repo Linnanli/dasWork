@@ -27,6 +27,7 @@ import './PresentationPanel.css'
 
 type Props = {
   document: PresentationDocument
+  renderedSlides: readonly string[]
   navigation?: ArtifactNavigationTarget
   onOpenHyperlink?(url: string): void
   onSelectElement?(slide: PresentationSlide, element: PresentationElement): void
@@ -36,6 +37,7 @@ type Props = {
 
 export function PresentationPanel({
   document,
+  renderedSlides,
   navigation,
   onOpenHyperlink,
   onSelectElement,
@@ -100,6 +102,7 @@ export function PresentationPanel({
       <div className={cn('presentation-rail-wrap', layout === 'floating' && !railOpen && 'hidden')}>
         <SlideRail
           slides={document.slides}
+          renderedSlides={renderedSlides}
           selectedIndex={selectedSlideIndex}
           onSelect={selectSlide}
         />
@@ -214,6 +217,8 @@ export function PresentationPanel({
           <div className="presentation-stage-scroll">
             <SlideCanvas
               slide={slide}
+              imageSrc={renderedSlides[selectedSlideIndex]}
+              aspectRatio={document.width / document.height}
               zoom={zoom}
               highlightedObjectId={highlightedObjectId}
               onOpenHyperlink={onOpenHyperlink}
@@ -236,10 +241,12 @@ export function PresentationPanel({
 
 function SlideRail({
   slides,
+  renderedSlides,
   selectedIndex,
   onSelect
 }: {
   slides: readonly PresentationSlide[]
+  renderedSlides: readonly string[]
   selectedIndex: number
   onSelect(index: number): void
 }): React.JSX.Element {
@@ -255,17 +262,7 @@ function SlideRail({
           onClick={() => onSelect(index)}
         >
           <span className="presentation-thumbnail-canvas" aria-hidden="true">
-            {slide.elements.slice(0, 5).map((element) => (
-              <span
-                key={element.id}
-                className="presentation-thumbnail-line"
-                style={{
-                  top: `${element.frame.y * 100}%`,
-                  left: `${element.frame.x * 100}%`,
-                  width: `${Math.max(element.frame.width * 100, 8)}%`
-                }}
-              />
-            ))}
+            <img src={renderedSlides[index]} alt="" draggable={false} />
           </span>
           <span>{slide.number}</span>
         </button>
@@ -276,6 +273,8 @@ function SlideRail({
 
 function SlideCanvas({
   slide,
+  imageSrc,
+  aspectRatio,
   zoom,
   highlightedObjectId,
   onOpenHyperlink,
@@ -286,6 +285,8 @@ function SlideCanvas({
   onRegionSelectionDone
 }: {
   slide: PresentationSlide
+  imageSrc: string | undefined
+  aspectRatio: number
   zoom: number
   highlightedObjectId?: string
   onOpenHyperlink?(url: string): void
@@ -319,7 +320,7 @@ function SlideCanvas({
   return (
     <div
       className={cn('presentation-stage', regionSelection && 'presentation-stage-selecting-region')}
-      style={{ width: `${zoom}%` }}
+      style={{ width: `${zoom}%`, aspectRatio }}
       aria-label={`第 ${slide.number} 张幻灯片`}
       onPointerDown={(event) => {
         if (!regionSelection || event.target !== event.currentTarget) return
@@ -333,15 +334,15 @@ function SlideCanvas({
       }}
       onPointerUp={finishRegion}
     >
+      {imageSrc ? (
+        <img
+          className="presentation-stage-image"
+          src={imageSrc}
+          alt={`${slide.name}预览`}
+          draggable={false}
+        />
+      ) : null}
       {slide.elements.map((element) => {
-        const content =
-          element.kind === 'image' && element.imageDataUrl ? (
-            <img src={element.imageDataUrl} alt={element.name} draggable={false} />
-          ) : element.kind === 'chart' ? (
-            <span className="presentation-chart-placeholder">{element.text ?? '图表'}</span>
-          ) : (
-            <span>{element.text}</span>
-          )
         return (
           <button
             key={element.id}
@@ -355,9 +356,7 @@ function SlideCanvas({
               left: `${element.frame.x * 100}%`,
               top: `${element.frame.y * 100}%`,
               width: `${element.frame.width * 100}%`,
-              height: `${element.frame.height * 100}%`,
-              ...(element.fill ? { backgroundColor: element.fill } : {}),
-              ...(element.color ? { color: element.color } : {})
+              height: `${element.frame.height * 100}%`
             }}
             aria-label={element.hyperlink ? `${element.name}，打开链接` : element.name}
             onClick={() => {
@@ -367,9 +366,7 @@ function SlideCanvas({
                 onRequestAnnotation?.({ kind: 'element', slideId: slide.id, objectId: element.id })
               }
             }}
-          >
-            {content}
-          </button>
+          ></button>
         )
       })}
       {annotations.map((annotation, index) => {

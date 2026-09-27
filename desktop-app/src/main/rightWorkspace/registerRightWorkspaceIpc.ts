@@ -11,7 +11,8 @@ import { basename, sep } from 'node:path'
 import {
   artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
   artifactPreviewRegisterWorkspaceSourceRequestSchema,
-  artifactPreviewSourceRequestSchema
+  artifactPreviewSourceRequestSchema,
+  artifactPresentationRenderRequestSchema
 } from '../../shared/artifactPreviewApi'
 
 import {
@@ -75,6 +76,8 @@ import {
   type ArtifactPreviewAuthorizedLocalFile
 } from '../artifacts/ArtifactPreviewSourceService'
 import { ArtifactPreviewSourceManifest } from '../artifacts/ArtifactPreviewSourceManifest'
+import { PresentationArtifactPreviewService } from '../artifacts/PresentationArtifactPreviewService'
+import type { WorkspaceDependencyLoadResult } from '../primaryRuntime'
 
 type WorkspaceRoot = { path: string; label: string }
 
@@ -84,6 +87,7 @@ type WindowWorkspaceServices = {
   rootWatchers: Map<string, FSWatcher>
   files: FileWorkspaceService
   artifacts: ArtifactPreviewSourceService
+  presentationPreviews: PresentationArtifactPreviewService
   browser: BrowserWorkspaceService
   dispose(): void
 }
@@ -102,6 +106,7 @@ export function registerRightWorkspaceIpc({
   redeemAuthorizedLocalPreview,
   issueArtifactComposerAttachment,
   artifactPreviewManifest,
+  loadPrimaryRuntimeDependencies,
   fileSearchProvider,
   terminalBackendFactory,
   terminalCommand,
@@ -123,6 +128,7 @@ export function registerRightWorkspaceIpc({
     label: string
   }): import('../../shared/artifactPreviewApi').ArtifactPreviewComposerAttachment
   artifactPreviewManifest?: ArtifactPreviewSourceManifest
+  loadPrimaryRuntimeDependencies(): Promise<WorkspaceDependencyLoadResult>
   fileSearchProvider: FileWorkspacePathSearchProviderLike
   terminalBackendFactory?: Pick<TerminalBackendFactory, 'create'>
   terminalCommand?: string
@@ -250,6 +256,13 @@ export function registerRightWorkspaceIpc({
     const request = artifactPreviewSourceRequestSchema.parse(payload)
     return requireServices(event).artifacts.readBinary(request.sourceId)
   })
+  ipcMain.handle(
+    rightWorkspaceIpcChannels.renderArtifactPresentation,
+    async (event, payload: unknown) => {
+      const request = artifactPresentationRenderRequestSchema.parse(payload)
+      return requireServices(event).presentationPreviews.render(request.sourceId)
+    }
+  )
   ipcMain.handle(rightWorkspaceIpcChannels.releaseArtifactSource, (event, payload: unknown) => {
     const request = artifactPreviewSourceRequestSchema.parse(payload)
     requireServices(event).artifacts.release(request.sourceId)
@@ -375,7 +388,8 @@ export function registerRightWorkspaceIpc({
           fileSearchProvider,
           redeemAuthorizedLocalPreview,
           issueArtifactComposerAttachment,
-          artifactPreviewManifest
+          artifactPreviewManifest,
+          loadPrimaryRuntimeDependencies
         )
       )
     },
@@ -466,7 +480,8 @@ function createWindowServices(
     identity: import('../../shared/artifactPreviewApi').ArtifactPreviewFileIdentity
     label: string
   }) => import('../../shared/artifactPreviewApi').ArtifactPreviewComposerAttachment,
-  artifactPreviewManifest?: ArtifactPreviewSourceManifest
+  artifactPreviewManifest: ArtifactPreviewSourceManifest | undefined,
+  loadPrimaryRuntimeDependencies: () => Promise<WorkspaceDependencyLoadResult>
 ): WindowWorkspaceServices {
   const roots = new Map<string, WorkspaceRoot>()
   const rootWatchers = new Map<string, FSWatcher>()
@@ -503,6 +518,10 @@ function createWindowServices(
       })
     }
   })
+  const presentationPreviews = new PresentationArtifactPreviewService({
+    artifacts,
+    loadDependencies: loadPrimaryRuntimeDependencies
+  })
   const browser = new BrowserWorkspaceService({ host: createBrowserHost(window) })
   const removeBrowserListener = browser.onEvent((event) => {
     if (!window.isDestroyed()) {
@@ -516,6 +535,7 @@ function createWindowServices(
     rootWatchers,
     files,
     artifacts,
+    presentationPreviews,
     browser,
     dispose() {
       removeBrowserListener()

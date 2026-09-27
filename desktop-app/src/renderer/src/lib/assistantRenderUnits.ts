@@ -357,6 +357,27 @@ const END_RESOURCE_SOURCE_FILE_EXTENSIONS = new Set([
   'zsh'
 ])
 const WEBSITE_FILE_EXTENSIONS = new Set(['htm', 'html'])
+const OUTPUT_FILE_EXTENSIONS = new Set([
+  'avif',
+  'csv',
+  'doc',
+  'docx',
+  'gif',
+  'jpeg',
+  'jpg',
+  'md',
+  'mdx',
+  'pdf',
+  'png',
+  'ppt',
+  'pptx',
+  'tsv',
+  'webp',
+  'xls',
+  'xlsm',
+  'xlsx'
+])
+const LINKED_FILE_EXTENSIONS = new Set(['docx', 'pdf', 'pptx', 'xlsx'])
 type SubagentRenderContext = {
   displayNamesByThreadId: ReadonlyMap<string, string>
   activityStatusesByPartIndex: ReadonlyMap<number, SubagentActivityDisplayStatus>
@@ -529,12 +550,12 @@ function deriveEndResources(
   const sourceItemIds = new Set<string>()
   const externalUrls = new Set<string>()
 
-  for (const resource of artifactResourcesFromMetadata(metadata, workspaceCwd)) {
+  for (const resource of outputFileResourcesFromMetadata(metadata, workspaceCwd)) {
     addEndResource(resourcesByKey, resource)
   }
 
   for (const part of parts) {
-    if (part.kind === 'text') {
+    if (part.kind === 'text' && part.phase !== 'commentary') {
       const textResources = endResourcesFromAssistantText(part.text, workspaceCwd)
       for (const resource of textResources.resources) {
         addEndResource(resourcesByKey, resource)
@@ -550,14 +571,10 @@ function deriveEndResources(
 
     if (part.kind !== 'tool' || !part.item || isFailedToolPart(part.part, part.item)) continue
 
-    const resources =
-      part.itemType === 'fileChange'
-        ? arrayValue(part.item.changes)
-            .map((change) => endResourceForFileChange(change, workspaceCwd))
-            .filter(isDefined)
-        : [endResourceForMcpItem(part.item)]
-    const artifactResources = artifactResourcesFromPart(part, workspaceCwd)
-    resources.push(...artifactResources)
+    const resources = [
+      endResourceForMcpItem(part.item),
+      ...outputFileResourcesFromPart(part, workspaceCwd)
+    ]
     for (const resource of resources) {
       addEndResource(resourcesByKey, resource)
     }
@@ -628,17 +645,21 @@ function endResourcesFromAssistantText(
     }
 
     const localPath = localMarkdownPath(destination)
-    const resource = localPath
-      ? endResourceForPath(localPath.path, workspaceCwd, link.label, false, localPath.line)
-      : undefined
+    const resource =
+      localPath && LINKED_FILE_EXTENSIONS.has(fileExtension(localPath.path) ?? '')
+        ? endResourceForPath(localPath.path, workspaceCwd, link.label, false, localPath.line)
+        : undefined
     if (resource) resources.push(resource)
   }
 
+  // Older turns can mention the deliverable only as inline code while lacking
+  // turn.artifacts.outputFilePaths. Keep the same narrow document allowlist.
   for (const inlineCode of inlineCodeSpansOutsideCodeFences(text)) {
     const localPath = localMarkdownPath(inlineCode)
-    const resource = localPath
-      ? endResourceForPath(localPath.path, workspaceCwd, undefined, false, localPath.line)
-      : undefined
+    const resource =
+      localPath && LINKED_FILE_EXTENSIONS.has(fileExtension(localPath.path) ?? '')
+        ? endResourceForPath(localPath.path, workspaceCwd, undefined, false, localPath.line)
+        : undefined
     if (resource) resources.push(resource)
   }
 
@@ -689,7 +710,6 @@ function inlineCodeSpansOutsideCodeFences(text: string): string[] {
       continue
     }
     if (inFence) continue
-
     for (const match of line.matchAll(/(`+)([^`]+?)\1/g)) {
       const value = match[2]?.trim()
       if (value) spans.push(value)
@@ -816,7 +836,7 @@ function isAppgenMcpItem(item: Record<string, unknown>): boolean {
   return server === 'sites' || tool.startsWith('sites_') || tool.startsWith('codex_apps__sites_')
 }
 
-function artifactResourcesFromPart(
+function outputFileResourcesFromPart(
   part: Extract<NormalizedPart, { kind: 'tool' }>,
   workspaceCwd: string | undefined
 ): DerivedEndResource[] {
@@ -824,55 +844,38 @@ function artifactResourcesFromPart(
     .flatMap((value) => {
       const record = recordValue(value)
       const artifacts = recordValue(record?.artifacts)
-      return [
-        ...arrayValue(artifacts?.editedFilePaths),
-        ...arrayValue(artifacts?.referencedFilePaths),
-        ...arrayValue(record?.editedFilePaths),
-        ...arrayValue(record?.referencedFilePaths)
-      ]
+      return [...arrayValue(artifacts?.outputFilePaths), ...arrayValue(record?.outputFilePaths)]
     })
     .map(stringValue)
     .filter(isDefined)
-  const diffPaths = [
-    ...arrayValue(part.item?.patchBatches).flatMap((batch) => {
-      const record = recordValue(batch)
-      return diffPathsFromUnifiedDiff(stringValue(record?.diff))
-    }),
-    ...diffPathsFromUnifiedDiff(stringValue(part.item?.diff))
-  ]
-  return [...candidates, ...diffPaths]
-    .map((path) => endResourceForPath(path, workspaceCwd))
-    .filter(isDefined)
+  return candidates.map((path) => outputFileResource(path, workspaceCwd)).filter(isDefined)
 }
 
-function artifactResourcesFromMetadata(
+function outputFileResourcesFromMetadata(
   metadata: unknown,
   workspaceCwd: string | undefined
 ): DerivedEndResource[] {
   const record = recordValue(metadata)
   const candidates = [record, recordValue(record?.artifacts), recordValue(record?.codexArtifacts)]
-    .flatMap((value) => [
-      ...arrayValue(value?.editedFilePaths),
-      ...arrayValue(value?.referencedFilePaths),
-      ...arrayValue(value?.files)
-    ])
-    .map((value) => {
-      const file = recordValue(value)
-      return stringValue(file?.path) ?? stringValue(value)
-    })
+    .flatMap((value) => arrayValue(value?.outputFilePaths))
+    .map(stringValue)
     .filter(isDefined)
-  return candidates.map((path) => endResourceForPath(path, workspaceCwd)).filter(isDefined)
+  return candidates.map((path) => outputFileResource(path, workspaceCwd)).filter(isDefined)
 }
 
-function diffPathsFromUnifiedDiff(diff: string | undefined): string[] {
-  if (!diff) return []
-  const paths: string[] = []
-  for (const line of diff.split(/\r?\n/u)) {
-    const match = line.match(/^\+\+\+ (.*?)(?:\t.*)?$/u)
-    const path = match?.[1]?.replace(/^[ab]\//u, '')
-    if (path && path !== '/dev/null') paths.push(path)
-  }
-  return paths
+function outputFileResource(
+  path: string,
+  workspaceCwd: string | undefined
+): DerivedEndResource | undefined {
+  if (!OUTPUT_FILE_EXTENSIONS.has(fileExtension(path) ?? '')) return undefined
+  const segments = path.replace(/\\/g, '/').split('/')
+  if (
+    segments.some(
+      (segment, index) => segment === 'work' && segments[index + 1] === '.codex_scratch'
+    )
+  )
+    return undefined
+  return endResourceForPath(path, workspaceCwd)
 }
 
 function externalUrlsFromRecord(item: Record<string, unknown>): string[] {
@@ -892,22 +895,6 @@ function websiteTitle(url: string): string {
   } catch {
     return 'Website'
   }
-}
-
-function endResourceForFileChange(
-  value: unknown,
-  workspaceCwd: string | undefined
-): DerivedEndResource | undefined {
-  const change = recordValue(value)
-  const kind = recordValue(change?.kind)
-  if (stringValue(kind?.type) === 'delete') return undefined
-
-  const path =
-    (stringValue(kind?.type) === 'update' ? stringValue(kind?.move_path) : undefined) ??
-    stringValue(change?.path)
-  if (!path) return undefined
-
-  return endResourceForPath(path, workspaceCwd)
 }
 
 function isFailedToolPart(part: AssistantMessagePart, item: Record<string, unknown>): boolean {

@@ -28,6 +28,8 @@ import type {
 import {
   artifactPreviewSourceRequestSchema,
   artifactPreviewComposerAttachmentResultSchema,
+  artifactPresentationRenderResultSchema,
+  artifactPresentationRenderRequestSchema,
   artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
   artifactPreviewRegisterWorkspaceSourceRequestSchema,
   artifactPreviewSourceChangeEventSchema
@@ -591,6 +593,13 @@ const desktopRightWorkspace: DesktopRightWorkspaceApi = {
         rightWorkspaceIpcChannels.readArtifactBinary,
         parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
       ),
+    renderPresentation: (input) =>
+      ipcRenderer
+        .invoke(
+          rightWorkspaceIpcChannels.renderArtifactPresentation,
+          parseWorkspacePayload(artifactPresentationRenderRequestSchema, input)
+        )
+        .then((result) => artifactPresentationRenderResultSchema.parse(result, { jitless: true })),
     release: (input) =>
       ipcRenderer.invoke(
         rightWorkspaceIpcChannels.releaseArtifactSource,
