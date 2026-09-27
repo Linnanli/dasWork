@@ -39,11 +39,15 @@ jobs:
       - name: Install source-locked Automake
         shell: bash
         run: |
+          brew update
           expected_version="$(jq -r '.bootstrapTools.automake.version' primary-runtime/libreoffice-build.lock.json)"
           expected_source="$(jq -r '.bootstrapTools.automake.sourceSha256' primary-runtime/libreoffice-build.lock.json)"
           formula="$(brew info --json=v2 automake)"
-          test "$(jq -r '.formulae[0].versions.stable' <<< "$formula")" = "$expected_version"
-          test "$(jq -r '.formulae[0].urls.stable.checksum' <<< "$formula")" = "$expected_source"
+          actual_version="$(jq -r '.formulae[0].versions.stable' <<< "$formula")"
+          actual_source="$(jq -r '.formulae[0].urls.stable.checksum' <<< "$formula")"
+          echo "Automake formula version=$actual_version source-sha256=$actual_source"
+          test "$actual_version" = "$expected_version"
+          test "$actual_source" = "$expected_source"
           brew install automake
           test "$(aclocal --version | head -1)" = "aclocal (GNU automake) $expected_version"
 
