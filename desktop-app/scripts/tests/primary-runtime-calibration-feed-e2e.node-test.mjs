@@ -61,10 +61,10 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(runnerSource, /p3b-main-overlap-sample-\$\{sampleIndex\}\.json/u)
   assert.match(runnerSource, /dascowork-primary-runtime-main-overlap-performance\.v1/u)
   assert.match(runnerSource, /'AT-P3B-MAIN-OVERLAP'/u)
-  assert.match(runnerSource, /'AT-E2E-01\/PRESENTATION-SKILL-RUNTIME'/u)
+  assert.match(runnerSource, /'AT-E2E-01\/OFFICECLI-RUNTIME'/u)
   assert.ok(
     runnerSource.indexOf("'AT-P3B-MAIN-OVERLAP'") <
-      runnerSource.indexOf("'AT-E2E-01/PRESENTATION-SKILL-RUNTIME'")
+      runnerSource.indexOf("'AT-E2E-01/OFFICECLI-RUNTIME'")
   )
   assert.match(e2eSource, /AT-P3B-MAIN-OVERLAP/u)
   assert.match(e2eSource, /startMainDiskProbe/u)
@@ -93,17 +93,16 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
     e2eSource,
     /shellCommandResponse\('response-runtime-command', runtimeCommandCallId, \{[\s\S]*?timeout_ms: 120_000/u
   )
-  assert.match(e2eSource, /data:text\/javascript;base64/u)
-  assert.match(
-    e2eSource,
-    /process\.platform === 'win32'[\s\S]*?& \$\{shellQuote\(dependencies\.node\)\}/u
-  )
-  assert.match(e2eSource, /invalid `,;` separators/u)
-  assert.match(e2eSource, /runtimeSystemPaths/u)
-  assert.match(
-    e2eSource,
-    /PATH: \[dirname\(dependencies\.soffice\), dirname\(dependencies\.pdftoppm\), \.\.\.runtimeSystemPaths, process\.env\.PATH\]\.filter\(Boolean\)\.join\(delimiter\)/u
-  )
+  assert.match(e2eSource, /runtimeOfficeCommandSource/u)
+  assert.match(e2eSource, /OFFICECLI_SKIP_UPDATE/u)
+  assert.doesNotMatch(e2eSource, /data:text\/javascript;base64/u)
+  assert.match(e2eSource, /process\.platform === 'win32'[\s\S]*?powerShellInvocation\(args\)/u)
+  assert.match(e2eSource, /dependencies\.officecli/u)
+  assert.doesNotMatch(e2eSource, /invalid `,;` separators/u)
+  assert.match(e2eSource, /parseWorkspaceDependencies/u)
+  assert.match(e2eSource, /readInstructionPath\(value, 'OfficeCLI', false\)/u)
+  assert.match(e2eSource, /OfficeCLI:/u)
+  assert.doesNotMatch(e2eSource, /dependencies\.soffice|dependencies\.pdftoppm/u)
   assert.match(e2eSource, /renderer approval surface/u)
   assert.match(e2eSource, /await expect\(approvalPanel\)\.toContainText\('是否允许执行以下命令？'/u)
   assert.match(e2eSource, /\{ timeout: 120_000 \}/u)
@@ -117,7 +116,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   )
   assert.match(e2eSource, /runtimeCommandOutput/u)
   assert.match(e2eSource, /expect\(runtimeCommandOutput\)\.toBeTruthy\(\)/u)
-  assert.match(e2eSource, /presentation-skill:created:6/u)
+  assert.match(e2eSource, /officecli:created:6/u)
   assert.match(e2eSource, /runPrimaryRuntimeUpdate\(\{ version: 1 \}\)/u)
   assert.match(e2eSource, /serializeDiagnosticData/u)
   assert.match(

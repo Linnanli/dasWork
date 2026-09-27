@@ -52,7 +52,7 @@ export const codexDesktopInstructionCatalog: readonly CodexDesktopInstructionSec
     defaultEnabled: false,
     capability: 'workspaceDependencies',
     contentTemplate: `### Workspace Dependencies
-- For spreadsheet, presentation, document, and PDF work, call \`load_workspace_dependencies\` to locate the bundled runtime and libraries.`
+- For Word, Excel, PowerPoint, and PDF work, call \`load_workspace_dependencies\` to locate the verified bundled runtime paths before choosing commands.`
   },
   {
     id: 'automations',

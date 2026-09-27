@@ -2,13 +2,13 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
-import { readRuntimeSourcesLock, sha256 } from "./source-lock.mjs";
+import { sha256 } from "./source-lock.mjs";
 import { assertNativeRuntimeTarget, parseRuntimeTargetOption } from "./runtime-target.mjs";
 
 const defaultCommandTimeoutMs = positiveIntegerEnv(
@@ -27,27 +27,17 @@ const { manifest } = await assertRuntimeInputsManifest({
   expectedObservedBuilderImage:
     process.env.DASCOWORK_PRIMARY_RUNTIME_BUILDER_IMAGE,
 });
-const sourceLock = await readRuntimeSourcesLock(options.sourceLock);
 const commands = [];
-const node = target.startsWith("win32")
-  ? join(options.inputRoot, "dependencies/node/node.exe")
-  : join(options.inputRoot, "dependencies/node/bin/node");
-const python = target.startsWith("win32")
-  ? join(options.inputRoot, "dependencies/python/python.exe")
-  : join(options.inputRoot, "dependencies/python/bin/python");
 const nativeExecutableExtension = target.startsWith("win32") ? ".exe" : "";
-const libreofficeRuntimePath = target.startsWith("darwin")
-  ? "libreoffice/LibreOffice.app/Contents/MacOS/soffice"
-  : "libreoffice/program/soffice";
 const binaries = Object.fromEntries(
   [
-    ["soffice", libreofficeRuntimePath],
     ["pdfinfo", "poppler/bin/pdfinfo"],
     ["pdftoppm", "poppler/bin/pdftoppm"],
+    ["officecli", "officecli/officecli"],
   ].map(([name, relativePath]) => {
     const executableExtension =
-      name === "soffice" && target.startsWith("win32")
-        ? ".com"
+      name === "officecli" && target.startsWith("win32")
+        ? ".exe"
         : nativeExecutableExtension;
     return [
       name,
@@ -56,14 +46,12 @@ const binaries = Object.fromEntries(
   }),
 );
 const nativeClosureEntrypoints = [
-  target === "linux-x64"
-    ? join(options.inputRoot, "dependencies/native/libreoffice/program/soffice.bin")
-    : binaries.soffice,
   binaries.pdfinfo,
   binaries.pdftoppm,
+  binaries.officecli,
 ];
 
-for (const [label, path] of Object.entries({ node, python, ...binaries })) {
+for (const [label, path] of Object.entries(binaries)) {
   await assertTargetExecutable(path, target, label);
 }
 for (const path of nativeClosureEntrypoints) {
@@ -76,67 +64,20 @@ commands.push(
     entrypoints: nativeClosureEntrypoints,
   }),
 );
-await assertNodeClosure({ inputRoot: options.inputRoot, components: sourceLock.components.node });
-await assertPythonClosure({ inputRoot: options.inputRoot, components: sourceLock.components.python });
 const font = await findLockedFont(join(options.inputRoot, "fonts"));
 
-commands.push(await runCommand("node-version", node, ["--version"]));
-commands.push(
-  await runCommand(
-    "node-pptxgenjs-load",
-    node,
-    ["--no-addons", "-e", "require('pptxgenjs'); require('jszip'); process.stdout.write('node-closure-ok\\n')"],
-    { NODE_PATH: join(options.inputRoot, "dependencies/node/node_modules") },
-  ),
-);
-commands.push(
-  await runCommand(
-    "python-closure-import",
-    python,
-    [
-      "-c",
-      "import pptx, PIL, lxml, xlsxwriter, typing_extensions; print('python-closure-ok')",
-    ],
-    { PYTHONPATH: join(options.inputRoot, "dependencies/python/packages"), PYTHONNOUSERSITE: "1" },
-  ),
-);
-const libreOfficeVersionDirectory = target.startsWith("win32")
-  ? await mkdtemp(join(tmpdir(), "primary-runtime-lo-version-"))
-  : undefined;
-try {
-  const libreOfficeVersionEnvironment = libreOfficeVersionDirectory
-    ? libreOfficeProfileEnvironment({ target, directory: libreOfficeVersionDirectory })
-    : undefined;
-  commands.push(
-    await runCommand(
-      "libreoffice-version",
-      binaries.soffice,
-      [
-        ...(libreOfficeVersionEnvironment
-          ? [libreOfficeVersionEnvironment.PPTX_RUNTIME_SOFFICE_USER_INSTALLATION]
-          : []),
-        "--headless",
-        "--version",
-      ],
-      libreOfficeVersionEnvironment,
-    ),
-  );
-} finally {
-  if (libreOfficeVersionDirectory) {
-    await rm(libreOfficeVersionDirectory, { recursive: true, force: true });
-  }
-}
 commands.push(await runCommand("poppler-pdfinfo-version", binaries.pdfinfo, ["-v"]));
 commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["-v"]));
+commands.push(
+  await runCommand("officecli-version", binaries.officecli, ["--version"], {
+    OFFICECLI_SKIP_UPDATE: "1",
+    OFFICECLI_NO_AUTO_RESIDENT: "1",
+  }),
+);
 
-const render = await renderChineseDeck({
+const render = await renderOfficeCliSmoke({
   target,
-  node,
-  python,
-  soffice: binaries.soffice,
-  pdftoppm: binaries.pdftoppm,
-  inputRoot: options.inputRoot,
-  font,
+  officecli: binaries.officecli,
 });
 commands.push(...render.commands);
 
@@ -411,42 +352,8 @@ function hasExpectedExecutableHeader(header, target, label) {
   return magic === 0xfeedfacf || magic === 0xcffaedfe || magic === 0xcafebabe || magic === 0xbebafeca;
 }
 
-async function assertNodeClosure({ inputRoot, components }) {
-  for (const component of components) {
-    const packagePath = join(inputRoot, "dependencies/node/node_modules", component.name, "package.json");
-    const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
-    if (packageJson.name !== component.name || packageJson.version !== component.version) {
-      throw new Error(`AT-RT-INPUT-01 blocked: Node package ${component.name} does not match the source lock.`);
-    }
-  }
-}
 
-async function assertPythonClosure({ inputRoot, components }) {
-  const metadata = await findMetadataFiles(join(inputRoot, "dependencies/python/packages"));
-  for (const component of components) {
-    const expectedName = normalizeDistributionName(component.name);
-    const match = metadata.some(({ text }) => {
-      const fields = Object.fromEntries(
-        text
-          .split(/\r?\n/u)
-          .filter((line) => line.includes(":"))
-          .map((line) => line.split(/:\s*/u, 2)),
-      );
-      return normalizeDistributionName(fields.Name) === expectedName && fields.Version === component.version;
-    });
-    if (!match) {
-      throw new Error(`AT-RT-INPUT-01 blocked: Python distribution ${component.name} does not match the source lock.`);
-    }
-  }
-}
 
-async function findMetadataFiles(root) {
-  const paths = [];
-  await walk(root, async (path) => {
-    if (basename(path) === "METADATA") paths.push({ path, text: await readFile(path, "utf8") });
-  });
-  return paths;
-}
 
 async function findLockedFont(root) {
   const fonts = [];
@@ -494,98 +401,234 @@ async function readFirstBytes(path, length) {
   }
 }
 
-async function renderChineseDeck({ target, node, python, soffice, pdftoppm, inputRoot, font }) {
-  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-render-"));
-  const pptx = join(directory, "runtime-input-smoke.pptx");
-  const outline = join(directory, "runtime-input-outline.json");
-  const image = join(directory, "runtime-input-image.png");
-  const layoutReceipt = join(directory, "runtime-input-layout.json");
-  const renderedSlides = join(directory, "rendered-slides");
-  const fontConfig = join(directory, "fonts.conf");
-  const pluginRoot = join(
-    inputRoot,
-    "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill",
-  );
-  const buildDeck = join(pluginRoot, "scripts/build_deck_pptxgenjs.js");
-  const layoutLint = join(pluginRoot, "scripts/layout_lint.py");
-  const renderSlides = join(pluginRoot, "scripts/render_slides.py");
-  const nodeModules = join(inputRoot, "dependencies/node/node_modules");
-  const pythonPackages = join(inputRoot, "dependencies/python/packages");
+async function renderOfficeCliSmoke({ target, officecli }) {
+  const directory = await mkdtemp(join(tmpdir(), "primary-runtime-officecli-"));
+  const originals = {
+    docx: join(directory, "runtime-original.docx"),
+    xlsx: join(directory, "runtime-original.xlsx"),
+    pptx: join(directory, "runtime-original.pptx"),
+  };
+  const edited = {
+    docx: join(directory, "runtime-edited.docx"),
+    xlsx: join(directory, "runtime-edited.xlsx"),
+    pptx: join(directory, "runtime-edited.pptx"),
+  };
+  const svg = join(directory, "runtime-edited.svg");
   const commands = [];
+  const officeCliEnvironment = {
+    OFFICECLI_SKIP_UPDATE: "1",
+    OFFICECLI_NO_AUTO_RESIDENT: "1",
+  };
   try {
-    await writeFile(
-      outline,
-      `${JSON.stringify(pluginSmokeOutline(), null, 2)}\n`,
-    );
-    await writeFile(
-      image,
-      Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    );
-    await writeFile(
-      fontConfig,
-      `<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>${escapeXml(resolve(inputRoot, "fonts"))}</dir></fontconfig>`,
-    );
-    commands.push(
-      await runCommand(
-        "presentation-plugin-create-chinese-deck",
-        node,
-        [buildDeck, "--outline", outline, "--output", pptx, "--asset-root", directory],
-        { PPTX_NODE_MODULES: nodeModules, NODE_PATH: nodeModules },
-      ),
-    );
-    commands.push(
-      await runCommand(
-        "presentation-plugin-layout-lint",
-        python,
-        [layoutLint, "--input", pptx, "--outline", outline, "--output", layoutReceipt, "--fail-on-error"],
-        {
-          PYTHONPATH: [join(pluginRoot, "scripts"), pythonPackages].join(delimiter),
-          PYTHONNOUSERSITE: "1",
-        },
-      ),
-    );
-    commands.push(
-      await runCommand(
-        "presentation-plugin-render-slides",
-        python,
-        [renderSlides, "--input", pptx, "--outdir", renderedSlides, "--format", "png", "--dpi", "72"],
-        {
-          ...fontEnvironment({ font, fontConfig }),
-          ...libreOfficeProfileEnvironment({ target, directory }),
-          PYTHONPATH: [join(pluginRoot, "scripts"), pythonPackages].join(delimiter),
-          PYTHONNOUSERSITE: "1",
-          PPTX_RUNTIME_SOFFICE: soffice,
-          PPTX_RUNTIME_PDFTOPPM: pdftoppm,
-          PATH: [
-            dirname(soffice),
-            dirname(pdftoppm),
-            ...runtimeUtilityPaths(target),
-          ].join(delimiter),
-        },
-      ),
-    );
-    const [pptxBytes, layoutReceiptBytes, imageNames] = await Promise.all([
-      readFile(pptx),
-      readFile(layoutReceipt),
-      readdir(renderedSlides),
-    ]);
-    const layout = JSON.parse(layoutReceiptBytes.toString("utf8"));
-    const rendered = imageNames.filter((name) => /^slide-\d+\.png$/u.test(name)).sort();
-    if (layout?.summary?.slide_count < 3 || rendered.length < 3) {
-      throw new Error(
-        "AT-RT-INPUT-01 blocked: Runtime presentation plugin did not create and render at least three slides.",
+    for (const [kind, path] of Object.entries(originals)) {
+      commands.push(
+        await runCommand(
+          `officecli-create-${kind}-original`,
+          officecli,
+          ["create", path],
+          officeCliEnvironment,
+        ),
       );
+      commands.push(
+        await runJsonCommand(
+          `officecli-read-${kind}-original`,
+          officecli,
+          ["get", path, "/", "--json"],
+          officeCliEnvironment,
+        ),
+      );
+      await copyFile(path, edited[kind]);
     }
-    const renderedPngBytes = await readFile(join(renderedSlides, rendered[0]));
+
+    const originalSha256 = Object.fromEntries(
+      await Promise.all(
+        Object.entries(originals).map(async ([kind, path]) => [
+          kind,
+          sha256(await readFile(path)),
+        ]),
+      ),
+    );
+
+    commands.push(
+      await runJsonCommand(
+        "officecli-add-docx-paragraph-copy",
+        officecli,
+        [
+          "add",
+          edited.docx,
+          "/body",
+          "--type",
+          "paragraph",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--json",
+        ],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-save-docx-copy",
+        officecli,
+        ["save", edited.docx, "--json"],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-validate-docx-copy",
+        officecli,
+        ["validate", edited.docx, "--json"],
+        officeCliEnvironment,
+        { validateNoErrors: true },
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-reread-docx-copy",
+        officecli,
+        ["get", edited.docx, "/body", "--json"],
+        officeCliEnvironment,
+      ),
+    );
+
+    commands.push(
+      await runJsonCommand(
+        "officecli-add-xlsx-cell-copy",
+        officecli,
+        [
+          "add",
+          edited.xlsx,
+          "/Sheet1",
+          "--type",
+          "cell",
+          "--prop",
+          "address=A1",
+          "--prop",
+          "value=Runtime 中文验证",
+          "--json",
+        ],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-save-xlsx-copy",
+        officecli,
+        ["save", edited.xlsx, "--json"],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-validate-xlsx-copy",
+        officecli,
+        ["validate", edited.xlsx, "--json"],
+        officeCliEnvironment,
+        { validateNoErrors: true },
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-reread-xlsx-copy",
+        officecli,
+        ["get", edited.xlsx, "/Sheet1/A1", "--json"],
+        officeCliEnvironment,
+      ),
+    );
+
+    commands.push(
+      await runJsonCommand(
+        "officecli-add-pptx-slide-copy",
+        officecli,
+        ["add", edited.pptx, "/", "--type", "slide", "--json"],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-add-pptx-text-copy",
+        officecli,
+        [
+          "add",
+          edited.pptx,
+          "/slide[1]",
+          "--type",
+          "shape",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--prop",
+          "x=1",
+          "--prop",
+          "y=1",
+          "--prop",
+          "w=8",
+          "--prop",
+          "h=1",
+          "--json",
+        ],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-save-pptx-copy",
+        officecli,
+        ["save", edited.pptx, "--json"],
+        officeCliEnvironment,
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-validate-pptx-copy",
+        officecli,
+        ["validate", edited.pptx, "--json"],
+        officeCliEnvironment,
+        { validateNoErrors: true },
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-reread-pptx-copy",
+        officecli,
+        ["get", edited.pptx, "/slide[1]", "--json"],
+        officeCliEnvironment,
+      ),
+    );
+
+    const svgResult = await runCommand(
+      "officecli-view-pptx-svg-copy",
+      officecli,
+      ["view", edited.pptx, "svg", "--start", "1", "--max-lines", "1"],
+      officeCliEnvironment,
+      { captureOutput: true },
+    );
+    await writeFile(svg, svgResult.output);
+    commands.push(stripCommandOutput(svgResult));
+
+    const [docxBytes, xlsxBytes, pptxBytes, svgBytes] = await Promise.all([
+      readFile(edited.docx),
+      readFile(edited.xlsx),
+      readFile(edited.pptx),
+      readFile(svg),
+    ]);
+    if (!svgBytes.toString("utf8").includes("<svg")) {
+      throw new Error("AT-RT-INPUT-01 blocked: OfficeCLI did not emit SVG preview output.");
+    }
+    for (const [kind, path] of Object.entries(originals)) {
+      const current = sha256(await readFile(path));
+      if (current !== originalSha256[kind]) {
+        throw new Error(`AT-RT-INPUT-01 blocked: OfficeCLI smoke modified original ${kind}.`);
+      }
+    }
     return {
       target,
+      engine: "officecli",
+      originalSha256,
+      docxSha256: sha256(docxBytes),
+      xlsxSha256: sha256(xlsxBytes),
       pptxSha256: sha256(pptxBytes),
-      layoutReceiptSha256: sha256(layoutReceiptBytes),
-      renderedSlideCount: rendered.length,
-      renderedFirstPngSha256: sha256(renderedPngBytes),
+      svgSha256: sha256(svgBytes),
       commands,
     };
   } finally {
@@ -593,66 +636,39 @@ async function renderChineseDeck({ target, node, python, soffice, pdftoppm, inpu
   }
 }
 
-function pluginSmokeOutline() {
+async function runJsonCommand(name, file, args, environment = undefined, options = {}) {
+  const command = await runCommand(name, file, args, environment, {
+    captureOutput: true,
+    allowedExitCodes: [0, 2],
+  });
+  let parsed;
+  try {
+    parsed = JSON.parse(command.output.toString("utf8"));
+  } catch (error) {
+    throw new Error(`AT-RT-INPUT-01 blocked: ${name} did not emit JSON: ${String(error.message ?? error)}`);
+  }
+  const warnings = Array.isArray(parsed.warnings) ? parsed.warnings : [];
+  if (command.exitCode !== 0 || parsed.success !== true || warnings.length > 0) {
+    throw new Error(
+      `AT-RT-INPUT-01 blocked: ${name} reported OfficeCLI caveats or failure.`,
+    );
+  }
+  if (options.validateNoErrors && Number(parsed.data?.count ?? 0) !== 0) {
+    throw new Error(`AT-RT-INPUT-01 blocked: ${name} reported validation errors.`);
+  }
   return {
-    title: "运行时演示文稿验证",
-    subtitle: "从非 PPTX 工作区输入创建并自动 QA",
-    slides: [
-      {
-        type: "title",
-        title: "运行时中文封面",
-        subtitle: "插件脚本创建的新演示文稿",
-      },
-      {
-        type: "content",
-        variant: "table",
-        title: "数据表验证",
-        subtitle: "来自 outline.json 的非 PPTX 数据",
-        headers: ["项目", "数值"],
-        rows: [["中文指标", "100"], ["验证状态", "通过"]],
-        interpretation: "表格由 Runtime 内 presentation-skill 生成。",
-      },
-      {
-        type: "content",
-        variant: "chart",
-        title: "图表验证",
-        subtitle: "来自 outline.json 的内联数据",
-        chart: {
-          type: "bar",
-          series: [{ name: "数据", labels: ["甲", "乙", "丙"], values: [10, 20, 30] }],
-          options: { catAxisTitle: "类别", valAxisTitle: "数值", showValue: true },
-        },
-        message: "图表由 Runtime 内 presentation-skill 生成。",
-      },
-      {
-        type: "content",
-        variant: "image-sidebar",
-        title: "工作区图片验证",
-        subtitle: "图片来自受控的非 PPTX 工作区文件",
-        assets: { image: "runtime-input-image.png" },
-        sidebar_sections: [{ title: "图片", body: "由插件从工作区图片输入创建。" }],
-      },
-    ],
+    ...stripCommandOutput(command),
+    jsonSuccess: parsed.success,
+    warningCount: warnings.length,
   };
 }
 
-function fontEnvironment({ font, fontConfig }) {
-  return {
-    FONTCONFIG_FILE: fontConfig,
-    FONTCONFIG_PATH: resolve(font.path, ".."),
-  };
+function stripCommandOutput(command) {
+  const { output, ...withoutOutput } = command;
+  return withoutOutput;
 }
 
-function libreOfficeProfileEnvironment({ target, directory }) {
-  if (!target.startsWith("win32")) return {};
-  const profile = join(directory, "libreoffice-profile");
-  return {
-    APPDATA: join(profile, "AppData", "Roaming"),
-    LOCALAPPDATA: join(profile, "AppData", "Local"),
-    PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=${pathToFileURL(profile).href}`,
-    USERPROFILE: profile,
-  };
-}
+
 
 function runtimeUtilityPaths(target) {
   if (target.startsWith("win32")) {
@@ -668,16 +684,29 @@ function escapeXml(value) {
   return value.replace(/[<>&"']/gu, (character) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[character]);
 }
 
-async function runCommand(name, file, args, environment = undefined) {
+async function runCommand(name, file, args, environment = undefined, options = {}) {
   process.stderr.write(
     `[primary-runtime:verify-inputs] start ${name} (timeout ${defaultCommandTimeoutMs}ms)\n`,
   );
-  const { output, elapsedMs } = await runRawCommand({ file, args, environment, name });
+  const { output, elapsedMs, exitCode } = await runRawCommand({
+    file,
+    args,
+    environment,
+    name,
+    allowedExitCodes: options.allowedExitCodes,
+  });
   process.stderr.write(`[primary-runtime:verify-inputs] ok ${name} (${elapsedMs}ms)\n`);
-  return { name, executable: basename(file), args, resultSha256: createHash("sha256").update(output).digest("hex") };
+  return {
+    name,
+    executable: basename(file),
+    args,
+    exitCode,
+    resultSha256: createHash("sha256").update(output).digest("hex"),
+    ...(options.captureOutput ? { output } : {}),
+  };
 }
 
-async function runRawCommand({ file, args, environment = undefined, name }) {
+async function runRawCommand({ file, args, environment = undefined, name, allowedExitCodes = [0] }) {
   return new Promise((resolveCommand, rejectCommand) => {
     const startedAt = Date.now();
     const child = spawn(file, args, {
@@ -714,8 +743,8 @@ async function runRawCommand({ file, args, environment = undefined, name }) {
         const elapsedMs = Date.now() - startedAt;
         const outputBytes = Buffer.concat(output);
         const capturedOutput = outputBytes.toString("utf8").slice(-capturedCommandOutputBytes);
-        if (code === 0 && !timedOut) {
-          resolveCommand({ output: outputBytes, elapsedMs });
+        if (allowedExitCodes.includes(code) && !timedOut) {
+          resolveCommand({ output: outputBytes, elapsedMs, exitCode: code });
           return;
         }
         const reason = timedOut
@@ -739,9 +768,6 @@ function positiveIntegerEnv(name, fallback) {
   return value;
 }
 
-function normalizeDistributionName(value) {
-  return String(value ?? "").toLowerCase().replace(/[-_.]+/gu, "-");
-}
 
 function parseArgs(argv) {
   const target = parseRuntimeTargetOption(argv);

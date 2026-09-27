@@ -1147,12 +1147,12 @@ function workspaceDependencyResultFrom(
   )
   const nodeModules =
     nodeModulesRootFrom(dependencies.nodePackages[0]?.path) ??
-    join(dependencies.root, 'node_modules')
+    (dependencies.node ? join(dependencies.root, 'node_modules') : null)
 
   return {
     bundleVersion: dependencies.bundleVersion,
-    node: dependencies.node.path,
-    nodeModules,
+    ...(dependencies.node ? { node: dependencies.node.path } : {}),
+    ...(nodeModules ? { nodeModules } : {}),
     ...(dependencies.python ? { python: dependencies.python.path } : {}),
     ...(dependencies.python
       ? { pythonPackages: [...new Set(dependencies.python.packages.map((entry) => entry.path))] }

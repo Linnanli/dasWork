@@ -8,7 +8,8 @@ import {
   BundledPluginManager,
   parseBundledPluginLock,
   readAppBundledPluginDescriptors,
-  readBundledPluginDescriptorsFromMarketplaceRoot
+  readBundledPluginDescriptorsFromMarketplaceRoot,
+  readRetiredPrimaryRuntimeBundledPluginDescriptors
 } from './index'
 
 const directories: string[] = []
@@ -200,6 +201,59 @@ describe('BundledPluginDescriptors', () => {
       })
     ).not.toThrow()
   })
+
+  it('recovers retired Primary Runtime plugin descriptors from trusted cache installed entries only', async () => {
+    const cacheRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-cache-')))
+    const userRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-user-plugin-')))
+    directories.push(cacheRoot, userRoot)
+    const oldMarketplace = join(cacheRoot, 'versions', 'v2', 'plugins', 'presentation-skill')
+    const newMarketplace = join(cacheRoot, 'versions', 'v3', 'plugins', 'officecli')
+    await writeRuntimeMarketplace(oldMarketplace, {
+      marketplaceName: 'presentation-skill',
+      pluginName: 'presentation-skill',
+      version: '0.8.0'
+    })
+    await writeRuntimeMarketplace(newMarketplace, {
+      marketplaceName: 'officecli',
+      pluginName: 'officecli',
+      version: '1.0.0'
+    })
+    await writeRuntimeMarketplace(userRoot, {
+      marketplaceName: 'presentation-skill',
+      pluginName: 'presentation-skill',
+      version: '0.8.0'
+    })
+    const activeDescriptors = await readBundledPluginDescriptorsFromMarketplaceRoot(
+      newMarketplace,
+      'primary-runtime'
+    )
+    const descriptors = await readRetiredPrimaryRuntimeBundledPluginDescriptors({
+      cacheRoot,
+      activeDescriptors,
+      installed: {
+        marketplaceLoadErrors: [],
+        marketplaces: [
+          installedMarketplace(oldMarketplace, 'presentation-skill', 'presentation-skill'),
+          installedMarketplace(newMarketplace, 'officecli', 'officecli'),
+          installedMarketplace(userRoot, 'presentation-skill', 'presentation-skill')
+        ]
+      }
+    })
+
+    expect(descriptors).toEqual([
+      expect.objectContaining({
+        marketplaceName: 'presentation-skill',
+        marketplaceRoot: oldMarketplace,
+        marketplacePath: join(oldMarketplace, '.agents', 'plugins', 'marketplace.json'),
+        pluginRoot: join(oldMarketplace, 'plugins', 'presentation-skill'),
+        pluginName: 'presentation-skill',
+        sourceKind: 'primary-runtime',
+        installWhenMissing: false,
+        internal: true,
+        owner: 'primary-runtime:retired-cache'
+      })
+    ])
+  })
 })
 
 async function fixtureMarketplace(): Promise<string> {
@@ -280,4 +334,88 @@ async function fixtureRuntimeMarketplace(
     JSON.stringify({ name: manifestPluginName, version: 'v0.8.0' })
   )
   return root
+}
+
+async function writeRuntimeMarketplace(
+  root: string,
+  input: { marketplaceName: string; pluginName: string; version: string }
+): Promise<void> {
+  await mkdir(join(root, '.agents', 'plugins'), { recursive: true })
+  await mkdir(join(root, 'plugins', input.pluginName, '.codex-plugin'), { recursive: true })
+  await writeFile(
+    join(root, '.agents', 'plugins', 'marketplace.json'),
+    JSON.stringify({
+      name: input.marketplaceName,
+      plugins: [
+        {
+          name: input.pluginName,
+          source: { source: 'local', path: `./plugins/${input.pluginName}` }
+        }
+      ]
+    })
+  )
+  await writeFile(
+    join(root, 'plugins', input.pluginName, '.codex-plugin', 'plugin.json'),
+    JSON.stringify({ name: input.pluginName, version: input.version })
+  )
+}
+
+function installedMarketplace(
+  root: string,
+  marketplaceName: string,
+  pluginName: string
+): {
+  name: string
+  path: string
+  interface: null
+  plugins: Array<{
+    id: string
+    remotePluginId: null
+    version: null
+    localVersion: string
+    name: string
+    shareContext: null
+    source: { type: 'local'; path: string }
+    installed: true
+    installedAt: number
+    enabled: true
+    installPolicy: 'AVAILABLE'
+    installPolicySource: null
+    mustShowInstallationInterstitial: null
+    authPolicy: 'ON_USE'
+    availability: 'AVAILABLE'
+    disabledReason: null
+    eligiblePlanTypes: null
+    interface: null
+    keywords: []
+  }>
+} {
+  return {
+    name: marketplaceName,
+    path: join(root, '.agents', 'plugins', 'marketplace.json'),
+    interface: null,
+    plugins: [
+      {
+        id: `${pluginName}@${marketplaceName}`,
+        remotePluginId: null,
+        version: null,
+        localVersion: '0.8.0',
+        name: pluginName,
+        shareContext: null,
+        source: { type: 'local' as const, path: join(root, 'plugins', pluginName) },
+        installed: true,
+        installedAt: 1,
+        enabled: true,
+        installPolicy: 'AVAILABLE' as const,
+        installPolicySource: null,
+        mustShowInstallationInterstitial: null,
+        authPolicy: 'ON_USE' as const,
+        availability: 'AVAILABLE' as const,
+        disabledReason: null,
+        eligiblePlanTypes: null,
+        interface: null,
+        keywords: []
+      }
+    ]
+  }
 }

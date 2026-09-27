@@ -28,17 +28,17 @@ export type PrimaryRuntimeSourceDigest = {
 }
 
 export type PrimaryRuntimeManifest = {
-  bundleFormatVersion: 1 | 2
+  bundleFormatVersion: 1 | 2 | 3
   bundleVersion: string
   target: {
     platform: PrimaryRuntimePlatform
     arch: PrimaryRuntimeArch
   }
-  node: {
+  node?: {
     path: PrimaryRuntimeRelativePath
     version?: string
   }
-  nodePackages: PrimaryRuntimePackageManifest[]
+  nodePackages?: PrimaryRuntimePackageManifest[]
   python?: {
     path: PrimaryRuntimeRelativePath
     version?: string
@@ -95,7 +95,7 @@ export type PrimaryRuntimeResolvedFont = {
 export type PrimaryRuntimeDependencies = {
   root: string
   bundleVersion: string
-  node: {
+  node?: {
     path: string
     version?: string
   }
@@ -111,8 +111,8 @@ export type PrimaryRuntimeDependencies = {
 
 export type WorkspaceDependencyLoadResult = {
   bundleVersion: string
-  node: string
-  nodeModules: string
+  node?: string
+  nodeModules?: string
   python?: string
   pythonPackages?: string[]
   binaries: Record<string, string>
@@ -128,6 +128,7 @@ export type PrimaryRuntimeIssueCode =
   | 'path-escape'
   | 'missing-file'
   | 'missing-directory'
+  | 'missing-binary'
   | 'not-executable'
   | 'missing-package'
   | 'invalid-package'

@@ -863,7 +863,7 @@ jobs:
             --outputDir "$evidence"
           node desktop-app/scripts/write-app-tools-release-evidence.mjs \
             --gateId AT-LIVE-01 \
-            --producer live-presentation-skill-dev \
+            --producer live-office-runtime-dev \
             --commit "$GITHUB_SHA" \
             --target linux-x64 \
             --targetRoot "$RUNNER_TEMP/targets/linux-x64" \
@@ -873,7 +873,7 @@ jobs:
             --outputDir "$evidence"
           node desktop-app/scripts/write-app-tools-release-evidence.mjs \
             --gateId AT-LIVE-PKG-01 \
-            --producer live-presentation-skill-packaged \
+            --producer live-office-runtime-packaged \
             --commit "$GITHUB_SHA" \
             --target linux-x64 \
             --targetRoot "$RUNNER_TEMP/targets/linux-x64" \

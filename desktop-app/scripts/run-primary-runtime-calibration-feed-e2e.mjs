@@ -84,7 +84,7 @@ try {
           'test',
           'tests/e2e/primary-runtime-feed.e2e.ts',
           '--grep',
-          'AT-E2E-01/PRESENTATION-SKILL-RUNTIME',
+          'AT-E2E-01/OFFICECLI-RUNTIME',
           '--reporter=line'
         ],
         environment

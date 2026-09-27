@@ -105,6 +105,56 @@ describe('PrimaryRuntime manifest parsing', () => {
     expect(manifest).not.toHaveProperty('legacyV2')
   })
 
+  it('accepts a v3 OfficeCLI release schema without Node packages', () => {
+    const skill = '# OfficeCLI\n'
+    expect(
+      parsePrimaryRuntimeManifest({
+        bundleFormatVersion: 3,
+        bundleVersion: '2026.9.27-officecli',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+        bundledSkills: [
+          {
+            path: 'skills/officecli/SKILL.md',
+            sha256: createHash('sha256').update(skill).digest('hex')
+          }
+        ],
+        sourceDigests: [
+          {
+            path: 'THIRD_PARTY_NOTICES.md',
+            sha256: 'b'.repeat(64)
+          }
+        ]
+      })
+    ).toMatchObject({
+      bundleFormatVersion: 3,
+      binaries: [{ name: 'officecli', path: 'bin/officecli' }]
+    })
+
+    expect(() =>
+      parsePrimaryRuntimeManifest({
+        bundleFormatVersion: 3,
+        bundleVersion: '2026.9.27-officecli',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'soffice', path: 'bin/soffice' }],
+        bundledSkills: [
+          {
+            path: 'skills/officecli/SKILL.md',
+            sha256: createHash('sha256').update(skill).digest('hex')
+          }
+        ]
+      })
+    ).toThrow()
+    expect(() =>
+      parsePrimaryRuntimeManifest({
+        bundleFormatVersion: 3,
+        bundleVersion: '2026.9.27-officecli',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }]
+      })
+    ).toThrow()
+  })
+
   it('only accepts the fixed repository-owned synthetic marker and package name', () => {
     expect(
       parsePrimaryRuntimeManifest({
@@ -339,6 +389,90 @@ describe('PrimaryRuntimeService', () => {
     expect(result.text).toContain('Runtime Python packages:')
     expect(result.text).toContain('Runtime fonts:')
     expect(result.text).not.toContain('Primary Runtime root:')
+  })
+
+  it('loads OfficeCLI workspace dependencies from a healthy v3 runtime without inventing Node paths', async () => {
+    const root = await fixtureOfficeCliRuntime()
+    const service = new PrimaryRuntimeService({
+      locator: { locate: async () => ({ kind: 'development', path: root }) },
+      diagnostics: new PrimaryRuntimeDiagnostics()
+    })
+
+    const diagnostic = await service.diagnoseDependencies()
+    const result = await service.loadDependencies()
+
+    expect(diagnostic).toMatchObject({
+      status: 'ready',
+      manifest: { bundleFormatVersion: 3 },
+      dependencies: {
+        nodePackages: [],
+        binaries: [
+          expect.objectContaining({ name: 'officecli', path: join(root, 'bin', 'officecli') })
+        ]
+      }
+    })
+    expect(result).toMatchObject({
+      bundleVersion: '2026.9.27-officecli',
+      binaries: { officecli: join(root, 'bin', 'officecli') }
+    })
+    expect(result).not.toHaveProperty('node')
+    expect(result).not.toHaveProperty('nodeModules')
+    expect(result.text).toContain(`OfficeCLI: ${join(root, 'bin', 'officecli')}`)
+    expect(result.text).toContain('do not fall back to PATH lookup')
+    expect(result.text).not.toContain('Runtime Node:')
+    expect(result.text).not.toContain('Runtime Node modules:')
+  })
+
+  it('does not publish v3 workspace dependencies when the OfficeCLI binary is missing', async () => {
+    const root = await fixtureOfficeCliRuntime()
+    await rm(join(root, 'bin', 'officecli'), { force: true })
+    const service = new PrimaryRuntimeService({
+      locator: { locate: async () => ({ kind: 'development', path: root }) },
+      diagnostics: new PrimaryRuntimeDiagnostics()
+    })
+
+    await expect(new PrimaryRuntimeDiagnostics().diagnose(root)).resolves.toMatchObject({
+      status: 'broken',
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'missing-file' }),
+        expect.objectContaining({ code: 'missing-binary' })
+      ])
+    })
+    await expect(service.loadDependencies()).rejects.toMatchObject({
+      name: 'PrimaryRuntimeUnavailableError',
+      status: 'broken',
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'missing-binary' })])
+    })
+  })
+
+  it('does not publish v3 workspace dependencies when the OfficeCLI skill is missing or altered', async () => {
+    const root = await fixtureOfficeCliRuntime()
+    await rm(join(root, 'skills', 'officecli', 'SKILL.md'), { force: true })
+    const service = new PrimaryRuntimeService({
+      locator: { locate: async () => ({ kind: 'development', path: root }) },
+      diagnostics: new PrimaryRuntimeDiagnostics()
+    })
+
+    await expect(service.loadDependencies()).rejects.toMatchObject({
+      name: 'PrimaryRuntimeUnavailableError',
+      status: 'broken',
+      issues: expect.arrayContaining([expect.objectContaining({ code: 'missing-file' })])
+    })
+
+    const alteredRoot = await fixtureOfficeCliRuntime()
+    await writeFile(join(alteredRoot, 'skills', 'officecli', 'SKILL.md'), '# altered\n')
+    const alteredService = new PrimaryRuntimeService({
+      locator: { locate: async () => ({ kind: 'development', path: alteredRoot }) },
+      diagnostics: new PrimaryRuntimeDiagnostics()
+    })
+
+    await expect(alteredService.loadDependencies()).rejects.toMatchObject({
+      name: 'PrimaryRuntimeUnavailableError',
+      status: 'broken',
+      issues: expect.arrayContaining([
+        expect.objectContaining({ code: 'bundled-skill-digest-mismatch' })
+      ])
+    })
   })
 
   it('accepts locked non-executable Node packages in the Runtime dependency closure', async () => {
@@ -1166,6 +1300,39 @@ async function fixtureRuntime(
   await chmod(join(root, 'bin', 'python'), 0o755)
   await chmod(join(root, 'bin', 'libreoffice'), 0o755)
   await writeFile(join(root, 'runtime.json'), JSON.stringify(manifest(overrides), null, 2))
+  return root
+}
+
+async function fixtureOfficeCliRuntime(targetRoot?: string): Promise<string> {
+  const root = targetRoot ?? (await fixtureDirectory())
+  if (targetRoot) await mkdir(root, { recursive: true })
+
+  await mkdir(join(root, 'bin'), { recursive: true })
+  await mkdir(join(root, 'skills', 'officecli'), { recursive: true })
+  const skill = '# OfficeCLI\n'
+  await writeFile(join(root, 'bin', 'officecli'), '#!/bin/sh\n')
+  await writeFile(join(root, 'skills', 'officecli', 'SKILL.md'), skill)
+  await chmod(join(root, 'bin', 'officecli'), 0o755)
+  await writeFile(
+    join(root, 'runtime.json'),
+    JSON.stringify(
+      {
+        bundleFormatVersion: 3,
+        bundleVersion: '2026.9.27-officecli',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+        bundledSkills: [
+          {
+            path: 'skills/officecli/SKILL.md',
+            sha256: createHash('sha256').update(skill).digest('hex')
+          }
+        ],
+        fonts: []
+      } satisfies PrimaryRuntimeManifest,
+      null,
+      2
+    )
+  )
   return root
 }
 

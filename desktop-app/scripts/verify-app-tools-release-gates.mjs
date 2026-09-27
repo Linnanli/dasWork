@@ -291,9 +291,9 @@ function isSkillBinding(value) {
     isRecord(value) &&
     typeof value.id === 'string' &&
     value.id.length > 0 &&
-    value.name === 'presentation-skill' &&
+    value.name === 'officecli' &&
     typeof value.localPath === 'string' &&
-    value.localPath.endsWith('/skills/dascowork-primary-runtime/presentation-skill/SKILL.md') &&
+    value.localPath.endsWith('/skills/dascowork-primary-runtime/officecli/SKILL.md') &&
     isSha256(value.instructionsSha256)
   )
 }

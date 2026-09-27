@@ -18,7 +18,7 @@ const runtime = readJsonEntry(entryMap, "runtime.json");
 const externalProvenance = JSON.parse(await readFile(options.provenancePath, "utf8"));
 const [platform, arch] = target.split("-");
 if (
-  runtime.bundleFormatVersion !== 2 ||
+  runtime.bundleFormatVersion !== 3 ||
   runtime.target?.platform !== platform ||
   runtime.target?.arch !== arch
 ) {
@@ -117,7 +117,7 @@ function safeDestination(root, archivePath) {
 }
 
 function isExecutable(path) {
-  return /^(?:dependencies\/(?:node|python|native)\/bin\/)/u.test(path);
+  return /^(?:dependencies\/(?:node|python|native)\/bin\/)/u.test(path) || /^dependencies\/native\/officecli\/officecli(?:\.exe)?$/u.test(path);
 }
 
 function parseArgs(argv) {

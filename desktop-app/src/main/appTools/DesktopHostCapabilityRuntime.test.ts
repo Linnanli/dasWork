@@ -144,6 +144,48 @@ describe('DesktopHostCapabilityRuntime', () => {
     expect((await runtime.snapshot()).availableToolNames).toContain('load_workspace_dependencies')
   })
 
+  it('withholds the v3 OfficeCLI loader until Runtime-owned skills are synchronized', async () => {
+    const diagnostic = {
+      status: 'ready' as const,
+      manifest: {
+        bundleFormatVersion: 3 as const,
+        bundleVersion: 'v3',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+        bundledSkills: [{ path: 'skills/officecli/SKILL.md', sha256: 'a'.repeat(64) }]
+      },
+      issues: []
+    }
+    const runtime = new DesktopHostCapabilityRuntime({
+      workspaceDependencies: {
+        diagnoseDependencies: async () => diagnostic,
+        loadDependencies: async () => ({ binaries: { officecli: '/runtime/bin/officecli' } })
+      },
+      primaryRuntimeCapabilities: new PrimaryRuntimeCapabilityPolicy(true)
+    })
+
+    runtime.updatePrimaryRuntimeState({
+      diagnostic,
+      runtimePluginsSynchronized: false
+    })
+    await expect(runtime.snapshot()).resolves.toMatchObject({
+      availableToolNames: [],
+      dynamicTools: [],
+      workspaceInstructionsEnabled: false,
+      presentationsEligible: false
+    })
+
+    runtime.updatePrimaryRuntimeState({
+      diagnostic,
+      runtimePluginsSynchronized: true
+    })
+    await expect(runtime.snapshot()).resolves.toMatchObject({
+      availableToolNames: ['load_workspace_dependencies'],
+      workspaceInstructionsEnabled: true,
+      presentationsEligible: true
+    })
+  })
+
   it('omits the loader from a new-thread snapshot when Main closes the feature gate', async () => {
     const runtime = new DesktopHostCapabilityRuntime({
       workspaceDependencies: {

@@ -71,4 +71,49 @@ describe('PrimaryRuntimeCapabilityPolicy', () => {
     })
     expect(invalidate).toHaveBeenCalledOnce()
   })
+
+  it('requires synchronized skills before publishing the v3 OfficeCLI loader', async () => {
+    const policy = new PrimaryRuntimeCapabilityPolicy(true)
+    policy.update({
+      diagnostic: {
+        status: 'ready',
+        manifest: {
+          bundleFormatVersion: 3,
+          bundleVersion: 'v3',
+          target: { platform: process.platform, arch: process.arch },
+          binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+          bundledSkills: [{ path: 'skills/officecli/SKILL.md', sha256: 'a'.repeat(64) }]
+        },
+        issues: []
+      },
+      runtimePluginsSynchronized: false
+    })
+
+    await expect(policy.snapshot()).resolves.toMatchObject({
+      loaderPublished: false,
+      workspaceInstructionsEnabled: false,
+      presentationsEligible: false
+    })
+
+    policy.update({
+      diagnostic: {
+        status: 'ready',
+        manifest: {
+          bundleFormatVersion: 3,
+          bundleVersion: 'v3',
+          target: { platform: process.platform, arch: process.arch },
+          binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+          bundledSkills: [{ path: 'skills/officecli/SKILL.md', sha256: 'a'.repeat(64) }]
+        },
+        issues: []
+      },
+      runtimePluginsSynchronized: true
+    })
+
+    await expect(policy.snapshot()).resolves.toMatchObject({
+      loaderPublished: true,
+      workspaceInstructionsEnabled: true,
+      presentationsEligible: true
+    })
+  })
 })

@@ -122,6 +122,7 @@ import {
   isInternalBundledPlugin,
   readAppBundledPluginDescriptors,
   readPrimaryRuntimeBundledPluginDescriptors,
+  readRetiredPrimaryRuntimeBundledPluginDescriptors,
   RuntimeOwnedSkillManager,
   type BundledPluginDescriptor
 } from './bundledPlugins'
@@ -283,6 +284,7 @@ async function createCodexRuntime(
       hostCapabilities,
       retiredPrimaryRuntimeDescriptors: previousPrimaryRuntimeDescriptors,
       primaryRuntimeDiagnostic: diagnostic,
+      primaryRuntimeCacheRoot,
       codexHome
     })
     // Each reconcile is a replacement of the committed desired set. Retaining
@@ -291,18 +293,12 @@ async function createCodexRuntime(
     bundledPluginDescriptors = uniqueBundledPluginDescriptors(active.descriptors)
     hostCapabilities.updatePrimaryRuntimeState({
       diagnostic,
-      runtimePluginsSynchronized:
-        diagnostic.status === 'ready' &&
-        active.status === 'ready' &&
-        bundledPluginDescriptors.some((descriptor) => descriptor.sourceKind === 'primary-runtime')
+      runtimePluginsSynchronized: diagnostic.status === 'ready' && active.status === 'ready'
     })
-    const runtimePluginReady =
-      diagnostic.status !== 'ready' ||
-      bundledPluginDescriptors.some((descriptor) => descriptor.sourceKind === 'primary-runtime')
-    if (active.status !== 'ready' || !runtimePluginReady) {
+    if (active.status !== 'ready') {
       throw new PrimaryRuntimePostInstallError(
         active.failureStage ?? 'sync_plugins',
-        'Runtime-owned bundled plugins did not reconcile successfully.'
+        'Runtime-owned skills and bundled plugins did not reconcile successfully.'
       )
     }
   }
@@ -628,6 +624,7 @@ async function reconcileBundledPlugins(input: {
   retiredPrimaryRuntimeDescriptors: readonly BundledPluginDescriptor[]
   primaryRuntimeDiagnostic?: PrimaryRuntimeDiagnostic
   primaryRuntimeDescriptors?: readonly BundledPluginDescriptor[]
+  primaryRuntimeCacheRoot?: string
   codexHome: string
   requireReady?: boolean
 }): Promise<{
@@ -647,25 +644,35 @@ async function reconcileBundledPlugins(input: {
     ...input.appDescriptors,
     ...primaryDescriptors
   ])
-  if (descriptors.length === 0) {
+  const hasRuntimeSkills =
+    diagnostic.status === 'ready' && Boolean(diagnostic.manifest?.bundledSkills?.length)
+  if (descriptors.length === 0 && !hasRuntimeSkills) {
     input.hostCapabilities.setBundledPluginsStatus('unavailable')
     if (input.requireReady) throw new Error('Bundled plugin desired set is empty.')
     return { descriptors: [], status: 'unavailable', failureStage: 'sync_plugins' }
   }
 
+  const retiredDescriptors = await retiredPrimaryRuntimeDescriptorsForReconcile({
+    catalogClient: input.catalogClient,
+    cacheRoot: input.primaryRuntimeCacheRoot,
+    activeDescriptors: descriptors,
+    committedDescriptors: input.retiredPrimaryRuntimeDescriptors
+  })
+
   const result = await new BundledPluginManager({
     catalogClient: input.catalogClient,
     descriptors,
-    retiredDescriptors: input.retiredPrimaryRuntimeDescriptors,
+    retiredDescriptors,
     invalidateCaches: () => input.hostCapabilities.refresh(),
     syncRuntimeSkills: async () => {
       if (diagnostic.status !== 'ready' || !diagnostic.root || !diagnostic.manifest) return
-      await new RuntimeOwnedSkillManager({
+      const transaction = await new RuntimeOwnedSkillManager({
         codexHome: input.codexHome,
         runtimeRoot: diagnostic.root,
         bundleVersion: diagnostic.manifest.bundleVersion,
         manifest: diagnostic.manifest
-      }).reconcile()
+      }).reconcileWithRollback()
+      return transaction.rollback
     }
   }).reconcile()
   input.hostCapabilities.setBundledPluginsStatus(
@@ -681,6 +688,30 @@ async function reconcileBundledPlugins(input: {
     descriptors,
     status: result.status,
     ...(result.failures[0]?.stage ? { failureStage: result.failures[0].stage } : {})
+  }
+}
+
+async function retiredPrimaryRuntimeDescriptorsForReconcile(input: {
+  catalogClient: NonNullable<typeof composerContextClient>
+  cacheRoot?: string
+  activeDescriptors: readonly BundledPluginDescriptor[]
+  committedDescriptors: readonly BundledPluginDescriptor[]
+}): Promise<BundledPluginDescriptor[]> {
+  if (!input.cacheRoot) return [...input.committedDescriptors]
+
+  try {
+    const installed = await input.catalogClient.listInstalledPluginsForManagement()
+    return uniqueBundledPluginDescriptors([
+      ...input.committedDescriptors,
+      ...(await readRetiredPrimaryRuntimeBundledPluginDescriptors({
+        installed,
+        cacheRoot: input.cacheRoot,
+        activeDescriptors: input.activeDescriptors
+      }))
+    ])
+  } catch (error) {
+    console.warn('[bundled-plugins] failed to recover retired primary runtime descriptors', error)
+    return [...input.committedDescriptors]
   }
 }
 

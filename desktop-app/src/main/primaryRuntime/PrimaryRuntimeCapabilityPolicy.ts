@@ -1,4 +1,4 @@
-import type { PrimaryRuntimeDiagnostic } from './primaryRuntimeTypes'
+import type { PrimaryRuntimeDiagnostic, PrimaryRuntimeManifest } from './primaryRuntimeTypes'
 
 export type PrimaryRuntimeLoaderFeatureGate = {
   isEnabled(input: { hostId: 'local' | 'remote' }): Promise<boolean>
@@ -16,6 +16,7 @@ export type PrimaryRuntimeCapabilityState = {
   revision: string
   runtimeStatus: PrimaryRuntimeDiagnostic['status']
   bundleVersion?: string
+  runtimeFormatVersion?: PrimaryRuntimeManifest['bundleFormatVersion']
   runtimePluginsSynchronized: boolean
   loaderPublished: boolean
   workspaceInstructionsEnabled: boolean
@@ -44,8 +45,8 @@ export class PrimaryRuntimeCapabilityPolicy {
   async snapshot(
     input: { hostId?: 'local' | 'remote' } = {}
   ): Promise<PrimaryRuntimeCapabilityState> {
-    const loaderPublished = await this.loaderPublished(input.hostId ?? 'local')
-    return withLoaderEligibility(this.committed, loaderPublished)
+    const loaderFeatureEnabled = await this.loaderFeatureEnabled(input.hostId ?? 'local')
+    return withLoaderEligibility(this.committed, loaderFeatureEnabled)
   }
 
   update(input: {
@@ -81,12 +82,22 @@ export class PrimaryRuntimeCapabilityPolicy {
     // `snapshot()` is authoritative whenever an app-server feature gate is
     // installed. Keeping this optimistic value only preserves the synchronous
     // update API used by Runtime/plugin state changes.
-    const loaderPublished = this.productFeatureEnabled && !this.loaderFeatureGate
+    const loaderFeatureEnabled = this.productFeatureEnabled && !this.loaderFeatureGate
     const runtimeReady = diagnostic.status === 'ready'
+    const runtimeFormatVersion = diagnostic.manifest?.bundleFormatVersion
+    const loaderPublished = canPublishLoader(
+      {
+        runtimeStatus: diagnostic.status,
+        ...(runtimeFormatVersion ? { runtimeFormatVersion } : {}),
+        runtimePluginsSynchronized
+      },
+      loaderFeatureEnabled
+    )
     return {
       revision: `primary-runtime-capabilities-${this.revision}`,
       runtimeStatus: diagnostic.status,
       ...(diagnostic.manifest ? { bundleVersion: diagnostic.manifest.bundleVersion } : {}),
+      ...(runtimeFormatVersion ? { runtimeFormatVersion } : {}),
       runtimePluginsSynchronized,
       loaderPublished,
       workspaceInstructionsEnabled: loaderPublished && runtimeReady,
@@ -94,7 +105,7 @@ export class PrimaryRuntimeCapabilityPolicy {
     }
   }
 
-  private async loaderPublished(hostId: 'local' | 'remote'): Promise<boolean> {
+  private async loaderFeatureEnabled(hostId: 'local' | 'remote'): Promise<boolean> {
     if (hostId !== 'local' || !this.productFeatureEnabled) return false
     return this.loaderFeatureGate ? this.loaderFeatureGate.isEnabled({ hostId }) : true
   }
@@ -102,11 +113,24 @@ export class PrimaryRuntimeCapabilityPolicy {
 
 function withLoaderEligibility(
   state: PrimaryRuntimeCapabilityState,
-  loaderPublished: boolean
+  loaderFeatureEnabled: boolean
 ): PrimaryRuntimeCapabilityState {
+  const loaderPublished = canPublishLoader(state, loaderFeatureEnabled)
   return {
     ...state,
     loaderPublished,
     workspaceInstructionsEnabled: loaderPublished && state.runtimeStatus === 'ready'
   }
+}
+
+function canPublishLoader(
+  state: Pick<
+    PrimaryRuntimeCapabilityState,
+    'runtimeStatus' | 'runtimeFormatVersion' | 'runtimePluginsSynchronized'
+  >,
+  loaderFeatureEnabled: boolean
+): boolean {
+  if (!loaderFeatureEnabled) return false
+  if (state.runtimeFormatVersion !== 3) return true
+  return state.runtimeStatus === 'ready' && state.runtimePluginsSynchronized
 }

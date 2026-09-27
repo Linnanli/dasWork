@@ -76,15 +76,9 @@ test("accepts only a complete, immutable approved Runtime source record", () => 
 test("rejects missing candidate provenance and every floating or placeholder value", () => {
   const lock = validApprovedLock();
   for (const invalid of [
-    { ...lock, candidate: { ...lock.candidate, commit: "a".repeat(39) } },
+    { ...lock, candidate: { ...lock.candidate, commit: "a".repeat(6) } },
     { ...lock, candidate: { ...lock.candidate, tag: "main" } },
-    {
-      ...lock,
-      candidate: {
-        ...lock.candidate,
-        patch: { ...lock.candidate.patch, sha256: "TBD" },
-      },
-    },
+    { ...lock, candidate: { ...lock.candidate, commit: "pending" } },
     {
       ...lock,
       components: {
@@ -137,21 +131,20 @@ test("requires every audited capability to cover every release target", () => {
           native: [{ ...lock.components.native[0], platforms: ["darwin-x64"] }],
         },
       }),
-    /native capability poppler does not cover every release target/u,
+    /native capability officecli does not cover every release target/u,
   );
 });
 
 test("accepts platform-specific immutable binaries when their capability coverage is complete", () => {
   const lock = validApprovedLock();
-  const poppler = lock.components.native.find(
-    (component) => component.name === "poppler",
+  const officecli = lock.components.native.find(
+    (component) => component.name === "officecli",
   );
-  assert.ok(poppler);
-  poppler.capability = "poppler";
-  poppler.platforms = ["darwin-x64", "darwin-arm64", "linux-x64"];
+  assert.ok(officecli);
+  officecli.platforms = ["darwin-x64", "darwin-arm64", "linux-x64"];
   lock.components.native.push({
-    ...poppler,
-    name: "poppler-windows-x64",
+    ...officecli,
+    name: "officecli-windows-x64",
     platforms: ["win32-x64"],
   });
   assert.doesNotThrow(() => assertApprovedSources(lock));
@@ -162,18 +155,9 @@ test("provenance binds the exact approved source-lock bytes", async () => {
     join(tmpdir(), "primary-runtime-source-lock-"),
   );
   const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(
-    directory,
-    "patches/presentation-skill-runtime-v0.8.0.patch",
-  );
-  const patch = validRuntimePatch();
-  const lock = validApprovedLock({
-    patchSha256: createHash("sha256").update(patch).digest("hex"),
-  });
+  const lock = validApprovedLock();
   const source = `${JSON.stringify(lock, null, 2)}\n`;
   try {
-    await mkdir(join(directory, "patches"), { recursive: true });
-    await writeFile(patchPath, patch);
     await writeFile(sourceLockPath, source);
     const { stdout } = await executeFile(process.execPath, [
       provenanceScript,
@@ -185,7 +169,7 @@ test("provenance binds the exact approved source-lock bytes", async () => {
       provenance.sourceLockSha256,
       createHash("sha256").update(source).digest("hex"),
     );
-    assert.equal(provenance.builderVersion, "1.1.0");
+    assert.equal(provenance.builderVersion, "1.3.0");
     assert.deepEqual(provenance.candidate, lock.candidate);
     assert.deepEqual(provenance.components, lock.components);
   } finally {
@@ -193,83 +177,26 @@ test("provenance binds the exact approved source-lock bytes", async () => {
   }
 });
 
-test("binds the project patch file to the source lock", async () => {
+test("OfficeCLI source locks do not require a repository patch", async () => {
   const directory = await mkdtemp(
-    join(tmpdir(), "primary-runtime-patch-lock-"),
+    join(tmpdir(), "primary-runtime-no-patch-lock-"),
   );
   const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(
-    directory,
-    "patches/presentation-skill-runtime-v0.8.0.patch",
-  );
-  const patch = validRuntimePatch();
   try {
-    await mkdir(join(directory, "patches"), { recursive: true });
-    await writeFile(patchPath, patch);
     await writeFile(
       sourceLockPath,
-      `${JSON.stringify(
-        validApprovedLock({
-          patchSha256: createHash("sha256").update(patch).digest("hex"),
-        }),
-        null,
-        2,
-      )}\n`,
+      `${JSON.stringify(validApprovedLock(), null, 2)}\n`,
     );
     assert.deepEqual(
       await assertRepositoryPatchMatchesLock({
         lockPath: sourceLockPath,
-        repositoryRoot: directory,
       }),
       {
-        patchPath,
-        patchSha256: createHash("sha256").update(patch).digest("hex"),
+        candidate: "iOfficeAI/OfficeCLI",
+        tag: "v1.0.152",
+        patchPath: undefined,
+        patchSha256: undefined,
       },
-    );
-    await writeFile(patchPath, `${patch}\nmutated\n`);
-    await assert.rejects(
-      () =>
-        assertRepositoryPatchMatchesLock({
-          lockPath: sourceLockPath,
-          repositoryRoot: directory,
-        }),
-      /patch digest mismatch/u,
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("rejects Runtime patch additions that restore host or icon-renderer fallbacks", async () => {
-  const directory = await mkdtemp(
-    join(tmpdir(), "primary-runtime-patch-boundary-"),
-  );
-  const sourceLockPath = join(directory, "runtime-sources.lock.json");
-  const patchPath = join(
-    directory,
-    "patches/presentation-skill-runtime-v0.8.0.patch",
-  );
-  const patch = `${validRuntimePatch()}+const sharp = require('sharp');\n`;
-  try {
-    await mkdir(join(directory, "patches"), { recursive: true });
-    await writeFile(patchPath, patch);
-    await writeFile(
-      sourceLockPath,
-      `${JSON.stringify(
-        validApprovedLock({
-          patchSha256: createHash("sha256").update(patch).digest("hex"),
-        }),
-        null,
-        2,
-      )}\n`,
-    );
-    await assert.rejects(
-      () =>
-        assertRepositoryPatchMatchesLock({
-          lockPath: sourceLockPath,
-          repositoryRoot: directory,
-        }),
-      /restores a forbidden Runtime fallback/u,
     );
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -455,7 +382,7 @@ test("writes readable Deflate ZIP archives with an explicit compression level", 
   }
 });
 
-test("builds and verifies a generic v2 Runtime archive from offline inputs", async () => {
+test("builds and verifies a generic v3 Runtime archive from offline inputs", async () => {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-build-"));
   const target = currentRuntimeTarget();
   const inputRoot = join(directory, "input");
@@ -492,6 +419,21 @@ test("builds and verifies a generic v2 Runtime archive from offline inputs", asy
         path: "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
       },
     ]);
+    assert.ok(
+      runtimeManifest.binaries.some((binary) => binary.name === "officecli"),
+    );
+    assert.equal(runtimeManifest.bundleFormatVersion, 3);
+    assert.deepEqual(runtimeManifest.bundledPlugins, []);
+    assert.deepEqual(runtimeManifest.skillsToRemove, []);
+    const officeCliSkill = runtimeManifest.bundledSkills.find(
+      (skill) => skill.path === "skills/officecli/SKILL.md",
+    );
+    assert.ok(officeCliSkill);
+    assert.match(officeCliSkill.sha256, /^[a-f0-9]{64}$/u);
+    assert.ok(!runtimeManifest.binaries.some((binary) => binary.name === "soffice"));
+    assert.equal(runtimeManifest.node, undefined);
+    assert.equal(runtimeManifest.python, undefined);
+    assert.equal(runtimeManifest.nodePackages, undefined);
     const [notices, sbom] = await Promise.all([
       readFile(join(targetRoot, "THIRD_PARTY_NOTICES.txt")),
       readFile(join(targetRoot, "SBOM.json")),
@@ -655,49 +597,28 @@ test("final Runtime build rejects reviewed budget evidence from stale checkout f
   }
 });
 
-function validApprovedLock({ patchSha256 = "e".repeat(64) } = {}) {
+function validApprovedLock() {
   return {
     schemaVersion: "dascowork-primary-runtime-sources.v2",
-    builderVersion: "1.1.0",
+    builderVersion: "1.3.0",
     candidate: {
-      name: "siril9/presentation-skill",
-      repository: "https://github.com/siril9/presentation-skill",
-      publisher: { githubAccount: "siril9", commitAuthor: "Siril Sengolraj" },
-      tag: "v0.8.0",
-      commit: "a".repeat(40),
-      sourceArchive: {
-        url: "https://github.com/siril9/presentation-skill/archive/refs/tags/v0.8.0.tar.gz",
-        sha256: "b".repeat(64),
-      },
-      pluginDirectory: {
-        path: "plugins/presentation-skill",
-        fileCount: 1,
-        treeSha256: "c".repeat(64),
-      },
-      license: { spdx: "MIT", path: "LICENSE", sha256: "d".repeat(64) },
-      patch: {
-        path: "patches/presentation-skill-runtime-v0.8.0.patch",
-        sha256: patchSha256,
-      },
+      name: "iOfficeAI/OfficeCLI",
+      repository: "https://github.com/iOfficeAI/OfficeCLI",
+      publisher: { githubAccount: "iOfficeAI", releaseActor: "github-actions" },
+      tag: "v1.0.152",
+      commit: "ffa8a0a",
+      license: { spdx: "Apache-2.0", path: "LICENSE" },
       runtimeScope: {
-        entryPoints: ["scripts/build_deck_pptxgenjs.js"],
-        nodeDependencyClosure: ["pptxgenjs@4.0.1"],
-        excludedCapabilities: ["existing-pptx-editing"],
+        entryPoints: ["officecli"],
+        capabilities: ["docx-read-write", "xlsx-read-write", "pptx-read-write"],
+        excludedCapabilities: ["browser-backed-screenshot-preview", "auto-update"],
       },
     },
-    rejectedCandidates: [
-      {
-        tag: "v0.11.0",
-        commit: "f".repeat(40),
-        sourceArchiveSha256: "0".repeat(64),
-        status: "candidate_rejected",
-        reason: "Pinned dependency is not published.",
-      },
-    ],
+    rejectedCandidates: [],
     components: {
-      node: [component("pptxgenjs", "4.0.1")],
-      python: [component("python-pptx", "1.0.2")],
-      native: [component("poppler", "26.09.0")],
+      node: [],
+      python: [],
+      native: [{ ...component("officecli", "1.0.152"), capability: "officecli" }],
       fonts: [component("noto-sans-cjk-sc", "2.004")],
     },
   };
@@ -714,43 +635,16 @@ function component(name, version) {
   };
 }
 
-function validRuntimePatch() {
-  return [
-    "diff --git a/plugins/presentation-skill/skills/presentation-skill/SKILL.md b/plugins/presentation-skill/skills/presentation-skill/SKILL.md",
-    "+++ b/plugins/presentation-skill/skills/presentation-skill/SKILL.md",
-    "+This Runtime-owned distribution is restricted to creating a new PPTX.",
-    "+Before running a deck command, call `load_workspace_dependencies`.",
-    "+Do not run `npm`, `npx`, `pip`, `uv`, `conda`, a bootstrap/setup script, or create a virtual environment.",
-    "+Never call a model HTTP endpoint, read a model API key, download an image, scrape a URL, or make another network request.",
-    "+Missing Runtime paths are terminal for this operation; no host fallback or online install is permitted.",
-    "+Existing PPTX inspection, editing, redesign, or round-trip workflows.",
-    "",
-  ].join("\n");
-}
-
 async function createOfflineRuntimeInputs({ inputRoot, target }) {
   const [platform] = target.split("-");
-  const nodePath =
-    platform === "win32"
-      ? "dependencies/node/node.exe"
-      : "dependencies/node/bin/node";
-  const pythonPath =
-    platform === "win32"
-      ? "dependencies/python/python.exe"
-      : "dependencies/python/bin/python";
-  await writeExecutable(join(inputRoot, nodePath), "#!/bin/sh\nexit 0\n");
-  await writeExecutable(join(inputRoot, pythonPath), "#!/bin/sh\nexit 0\n");
   const extension = platform === "win32" ? ".exe" : "";
-  const sofficePath = target.startsWith("darwin")
-    ? "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"
-    : "dependencies/native/libreoffice/program/soffice";
   for (const [name, path] of [
-    ["soffice", sofficePath],
     ["pdfinfo", "dependencies/native/poppler/bin/pdfinfo"],
     ["pdftoppm", "dependencies/native/poppler/bin/pdftoppm"],
+    ["officecli", "dependencies/native/officecli/officecli"],
   ]) {
     await writeExecutable(
-      join(inputRoot, `${path}${name === "soffice" && platform === "win32" ? ".com" : extension}`),
+      join(inputRoot, `${path}${extension}`),
       "#!/bin/sh\nexit 0\n",
     );
   }
@@ -798,65 +692,6 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
     );
   }
 
-  const skill = [
-    "---",
-    "name: presentation-skill",
-    "description: Runtime-owned presentation skill test fixture.",
-    "---",
-    "",
-    "Create new PPTX files only.",
-    "",
-  ].join("\n");
-  const pluginRoot = join(inputRoot, "plugins/presentation-skill");
-  await writeJson(join(pluginRoot, ".agents/plugins/marketplace.json"), {
-    name: "presentation-skill",
-    plugins: [
-      {
-        name: "presentation-skill",
-        source: { source: "local", path: "./plugins/presentation-skill" },
-      },
-    ],
-  });
-  await writeJson(join(pluginRoot, "bundle-lock.json"), {
-    bundleFormatVersion: 2,
-    marketplace: { name: "presentation-skill", pluginRoot: "plugins" },
-    plugins: [
-      {
-        name: "presentation-skill",
-        version: lock.candidate.tag,
-        installWhenMissing: true,
-        internal: true,
-        provenance: {
-          kind: "repo-owned",
-          sourcePath:
-            "desktop-app/resources/bundled-plugins/presentation-skill",
-          licensePath: "LICENSE",
-          reviewStatus: "approved",
-        },
-        files: [
-          {
-            path: "skills/presentation-skill/SKILL.md",
-            sha256: sha256(skill),
-          },
-        ],
-      },
-    ],
-  });
-  await writeJson(
-    join(pluginRoot, "plugins/presentation-skill/.codex-plugin/plugin.json"),
-    {
-      name: "presentation-skill",
-      version: lock.candidate.tag,
-      description: "Runtime-owned presentation skill.",
-    },
-  );
-  await writeFileEnsured(
-    join(
-      pluginRoot,
-      "plugins/presentation-skill/skills/presentation-skill/SKILL.md",
-    ),
-    skill,
-  );
   await writeFileEnsured(
     join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"),
     "OTTOfixture\n",
@@ -876,9 +711,7 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
       toolchainsLock,
       target,
     }),
-    patches: [
-      { path: lock.candidate.patch.path, sha256: lock.candidate.patch.sha256 },
-    ],
+    patches: [],
     builder: {
       name: "@dascowork/primary-runtime-materializer",
       version: "1.0.0",

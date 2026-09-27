@@ -17,7 +17,6 @@ import { createLocalProject, sendComposerMessage } from './support/chatActions'
 import {
   openR07PresentationInWorkspace,
   verifyR07Presentation,
-  verifyR07RenderedSlides,
   withR07PresentationWorkspace,
   type R07RenderQaReceipt,
   type R07PresentationWorkspace
@@ -49,16 +48,10 @@ const primaryRuntimeE2eTimeoutMs = 600_000
 const primaryRuntimeReadinessTimeoutMs = 300_000
 
 type WorkspaceDependencies = {
-  node: string
-  nodeModules: string
-  python: string
-  pythonPackages: string[]
-  soffice: string
-  pdftoppm: string
-  font: string
+  officecli: string
 }
 
-type RuntimePresentationSkillSnapshot = {
+type RuntimeOfficeSkillSnapshot = {
   id: string
   normalizedId: string
   name: string
@@ -68,18 +61,13 @@ type RuntimePresentationSkillSnapshot = {
   installed: boolean
 }
 
-type RuntimePresentationSkillContract = {
+type RuntimeOfficeSkillContract = {
   id: string
   name: string
   localPath: string
   normalizedLocalPath: string
   skillRoot: string
   instructionsSha256: string
-  scripts: {
-    build: string
-    layout: string
-    render: string
-  }
 }
 
 type R07ArtifactPreviewTrace = {
@@ -95,13 +83,7 @@ type RuntimeActivationTrace = {
   manifestSequence?: number
 }
 
-const runtimePresentationSkillSuffix =
-  '/skills/dascowork-primary-runtime/presentation-skill/SKILL.md'
-const runtimePresentationSkillScriptRefs = {
-  build: 'scripts/build_deck_pptxgenjs.js',
-  layout: 'scripts/layout_lint.py',
-  render: 'scripts/render_slides.py'
-} as const
+const runtimeOfficeSkillSuffix = '/skills/dascowork-primary-runtime/officecli/SKILL.md'
 
 if (p3bSampleOutput) {
   test('AT-P3B-MAIN-OVERLAP records normal chat and Main event-loop evidence during a cold Runtime install', async ({
@@ -196,7 +178,7 @@ if (p3bSampleOutput) {
   })
 }
 
-test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command', async ({
+test('AT-E2E-01/OFFICECLI-RUNTIME installs a signed Feed Runtime and creates an R07 presentation through a normal command', async ({
   browserName
 }, testInfo) => {
   // The target-native calibration archive is intentionally large enough that
@@ -207,7 +189,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
   expect(browserName).toBe('chromium')
 
   await withR07PresentationWorkspace(async (workspace) => {
-    let runtimePresentationSkillContract: RuntimePresentationSkillContract | undefined
+    let runtimeOfficeSkillContract: RuntimeOfficeSkillContract | undefined
     const evidenceRecorder = createR07EvidenceRecorder()
     const backend = await startMockBackend({
       responses: [
@@ -224,10 +206,10 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
           { namespace: 'codex_app' }
         ),
         (request) => {
-          const response = runtimePresentationCommandResponse(
+          const response = runtimeOfficeCommandResponse(
             request,
             workspace,
-            runtimePresentationSkillContract
+            runtimeOfficeSkillContract
           )
           evidenceRecorder.observe('loader')
           return response
@@ -279,7 +261,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         'The ordinary app-server chat stayed responsive while the Runtime installation ran.'
       )
       const runtimeActivation = await expectPrimaryRuntimeReady(page, logs)
-      runtimePresentationSkillContract = await expectRuntimePresentationSkill(page)
+      runtimeOfficeSkillContract = await expectRuntimeOfficeSkill(page)
       await sendComposerMessage(
         page,
         'Read the workspace HTML, load the verified Runtime dependencies, then create and QA the six-page presentation.'
@@ -322,9 +304,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         .map((body) => functionCallOutputText(body, runtimeCommandCallId))
         .find((output): output is string => Boolean(output))
       expect(runtimeCommandOutput).toBeTruthy()
-      expect(serializeDiagnosticData({ runtimeCommandOutput })).toContain(
-        'presentation-skill:created:6'
-      )
+      expect(serializeDiagnosticData({ runtimeCommandOutput })).toContain('officecli:created:6')
 
       const loaderRequest = providerBodies.find((body) =>
         Boolean(functionCallOutputText(body, loaderCallId))
@@ -334,20 +314,9 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
         : undefined
       expect(loaderOutput).toBeTruthy()
       const dependencies = parseWorkspaceDependencies(loaderOutput!)
-      for (const value of [
-        dependencies.node,
-        dependencies.nodeModules,
-        dependencies.python,
-        ...dependencies.pythonPackages,
-        dependencies.soffice,
-        dependencies.pdftoppm,
-        dependencies.font
-      ]) {
-        expect(isAbsolute(value)).toBe(true)
-      }
+      expect(isAbsolute(dependencies.officecli)).toBe(true)
       expect(loaderOutput).toContain('Use only the following verified Primary Runtime paths.')
-      expect(loaderOutput).toContain('Runtime Python packages:')
-      expect(loaderOutput).toContain('Runtime fonts:')
+      expect(loaderOutput).toContain('OfficeCLI:')
       expect(loaderOutput).not.toContain('Primary Runtime root:')
 
       await expect
@@ -373,7 +342,7 @@ test('AT-E2E-01/PRESENTATION-SKILL-RUNTIME installs a signed Feed Runtime and cr
           path: appToolsLiveTraceReportPath,
           logs,
           workspace,
-          skillContract: runtimePresentationSkillContract,
+          skillContract: runtimeOfficeSkillContract,
           activation: runtimeActivation,
           loaderOutput: loaderOutput!,
           runtimeCommandOutput: runtimeCommandOutput!,
@@ -684,10 +653,8 @@ function safePrimaryRuntimeDiagnosticLogs(logs: readonly string[]): string {
   }
 }
 
-async function expectRuntimePresentationSkill(
-  page: Page
-): Promise<RuntimePresentationSkillContract> {
-  let runtimeSkill: RuntimePresentationSkillSnapshot | null = null
+async function expectRuntimeOfficeSkill(page: Page): Promise<RuntimeOfficeSkillContract> {
+  let runtimeSkill: RuntimeOfficeSkillSnapshot | null = null
   await expect
     .poll(
       async () => {
@@ -699,7 +666,7 @@ async function expectRuntimePresentationSkill(
           const skill = result.snapshot.skills.find(
             (candidate) =>
               candidate.enabled &&
-              candidate.name === 'presentation-skill' &&
+              candidate.name === 'officecli' &&
               candidate.id.replaceAll('\\', '/').endsWith(skillSuffix)
           )
           if (!skill) return null
@@ -712,19 +679,19 @@ async function expectRuntimePresentationSkill(
             enabled: skill.enabled,
             installed: skill.installed
           }
-        }, runtimePresentationSkillSuffix)
+        }, runtimeOfficeSkillSuffix)
         return runtimeSkill
       },
       { timeout: 120_000 }
     )
     .toMatchObject({
-      name: 'presentation-skill',
+      name: 'officecli',
       scope: 'personal',
       sourceKind: 'personal',
       enabled: true,
       installed: true
     })
-  if (!runtimeSkill) throw new Error('Runtime-owned presentation skill was not listed.')
+  if (!runtimeSkill) throw new Error('Runtime-owned OfficeCLI skill was not listed.')
 
   const contents = await page.evaluate(async (skill) => {
     return window.desktopApp.plugins.getSkillContents({
@@ -734,54 +701,34 @@ async function expectRuntimePresentationSkill(
     })
   }, runtimeSkill)
   if (contents.status !== 'ready') {
-    throw new Error(
-      `Runtime-owned presentation skill contents were unavailable: ${contents.status}`
-    )
+    throw new Error(`Runtime-owned OfficeCLI skill contents were unavailable: ${contents.status}`)
   }
-  return runtimePresentationSkillContractFromContents(runtimeSkill, contents)
+  return runtimeOfficeSkillContractFromContents(runtimeSkill, contents)
 }
 
-function runtimePresentationCommandResponse(
+function runtimeOfficeCommandResponse(
   request: MockRequest,
   workspace: R07PresentationWorkspace,
-  skillContract: RuntimePresentationSkillContract | undefined
+  skillContract: RuntimeOfficeSkillContract | undefined
 ): ResponsesStep {
   if (!skillContract) {
     throw new Error(
-      'The Runtime presentation command was requested before skill contents were verified.'
+      'The Runtime OfficeCLI command was requested before skill contents were verified.'
     )
   }
   const loaderOutput = functionCallOutputText(JSON.parse(request.body) as unknown, loaderCallId)
   if (!loaderOutput) {
-    throw new Error('The Runtime Node command was requested before loader output was returned.')
+    throw new Error(
+      'The Runtime OfficeCLI command was requested before loader output was returned.'
+    )
   }
   const dependencies = parseWorkspaceDependencies(loaderOutput)
-  const source = runtimePresentationCommandSource(dependencies, workspace, skillContract)
-  // Passing a base64 payload prevents shell quoting from changing the command
-  // source on Windows. The only executable remains the Runtime Node path from
-  // load_workspace_dependencies; this is still one ordinary command item.
-  const encodedSource = Buffer.from(source, 'utf8').toString('base64')
-  // The Windows desktop command shell is PowerShell. A quoted executable path
-  // is parsed as a string there unless it is prefixed with the call operator;
-  // keep the POSIX form unchanged for the native Linux/macOS runners.
-  const nodeExecutable =
-    process.platform === 'win32'
-      ? `& ${shellQuote(dependencies.node)}`
-      : shellQuote(dependencies.node)
-  const command = [
-    nodeExecutable,
-    '--input-type=module',
-    '-e',
-    // `eval` parses its input as a classic script even when Node itself is
-    // running in ESM mode. Importing the same Base64 payload as a data module
-    // preserves the source's top-level imports on every target platform.
-    shellQuote(`await import('data:text/javascript;base64,${encodedSource}')`)
-  ].join(' ')
+  const command = runtimeOfficeCommandSource(dependencies, workspace, skillContract)
 
   return shellCommandResponse('response-runtime-command', runtimeCommandCallId, {
     command,
-    // Rendering the generated PDF pages can exceed the app-server command
-    // default on cold macOS runners. This is an acceptance-path allowance;
+    // OfficeCLI creates the deck and emits per-slide SVG render evidence.
+    // Hosted runners can exceed the app-server command default on cold start;
     // P3b still measures and enforces the cold-install performance budget.
     timeout_ms: 120_000,
     sandbox_permissions: 'require_escalated',
@@ -790,105 +737,280 @@ function runtimePresentationCommandResponse(
   })
 }
 
-function runtimePresentationCommandSource(
+function runtimeOfficeCommandSource(
   dependencies: WorkspaceDependencies,
   workspace: R07PresentationWorkspace,
-  skillContract: RuntimePresentationSkillContract
+  skillContract: RuntimeOfficeSkillContract
 ): string {
   const facts = workspace.facts.map((fact) => fact.value)
+  const outputPath = join(workspace.root, workspace.outputFile)
+  const renderedSlides = join(workspace.root, workspace.renderedSlidesDirectory)
+  const contactSheet = join(workspace.root, workspace.contactSheetFile)
+  const layoutPath = join(workspace.root, workspace.layoutReceiptFile)
+  const validationPath = join(workspace.root, 'officecli-validation.json')
+  const imagePath = join(workspace.root, workspace.imageFile)
+  const office = dependencies.officecli
+  const commandArgs: string[][] = [
+    [office, 'create', outputPath],
+    [
+      office,
+      'add',
+      outputPath,
+      '/',
+      '--type',
+      'slide',
+      '--prop',
+      'title=封面｜AI Agent 安全市场',
+      '--prop',
+      'background=0B1020'
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[1]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=从市场机会到可审计的工具调用治理',
+      '--prop',
+      'x=1in',
+      '--prop',
+      'y=2in',
+      '--prop',
+      'width=8in',
+      '--prop',
+      'height=1in',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'font.latin=Aptos',
+      '--prop',
+      'size=24pt',
+      '--prop',
+      'color=FFFFFF'
+    ],
+    [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=议程｜市场机会与风险'],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[2]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=市场规模、需求结构、风险优先级与下一步行动',
+      '--prop',
+      'x=1in',
+      '--prop',
+      'y=2in',
+      '--prop',
+      'width=8in',
+      '--prop',
+      'height=1in',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=22pt'
+    ],
+    [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=摘要｜核心结论'],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[3]',
+      '--type',
+      'shape',
+      '--prop',
+      `text=${facts.join('\n')}`,
+      '--prop',
+      'x=0.9in',
+      '--prop',
+      'y=1.6in',
+      '--prop',
+      'width=8.5in',
+      '--prop',
+      'height=4in',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=20pt'
+    ],
+    [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=数据表｜细分需求对比'],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[4]',
+      '--type',
+      'table',
+      '--prop',
+      'x=0.7in',
+      '--prop',
+      'y=1.5in',
+      '--prop',
+      'width=8.6in',
+      '--prop',
+      'height=3.2in',
+      '--prop',
+      'data=细分需求,需求占比,建议控制;身份与权限治理,46%,最小权限与强制审批;提示注入防护,高优先级,输入隔离与策略检测;工具调用审计,第一优先行动,记录参数、结果与责任主体',
+      '--prop',
+      'firstRow=true',
+      '--prop',
+      'headerFill=4472C4',
+      '--prop',
+      'bodyFill=F4F6FA',
+      '--prop',
+      'border.all=1pt solid 666666'
+    ],
+    [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=数据图｜市场规模与渗透率'],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[5]',
+      '--type',
+      'chart',
+      '--prop',
+      'chartType=column',
+      '--prop',
+      'x=1in',
+      '--prop',
+      'y=1.5in',
+      '--prop',
+      'width=8in',
+      '--prop',
+      'height=4in',
+      '--prop',
+      'title=市场指标',
+      '--prop',
+      'categories=市场规模（亿元）,企业试点渗透率（%）',
+      '--prop',
+      'data=市场指标:18.4,37',
+      '--prop',
+      'dataLabels=value',
+      '--prop',
+      'colors=4472C4'
+    ],
+    [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=图片｜安全控制图示'],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[6]',
+      '--type',
+      'picture',
+      '--prop',
+      `src=${imagePath}`,
+      '--prop',
+      'x=0.7in',
+      '--prop',
+      'y=1.3in',
+      '--prop',
+      'width=3.2in',
+      '--prop',
+      'height=3.2in',
+      '--prop',
+      `alt=${workspace.requiredImageAltText}`
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[6]',
+      '--type',
+      'shape',
+      '--prop',
+      `text=${facts[3]}\n${facts[4]}`,
+      '--prop',
+      'x=4.2in',
+      '--prop',
+      'y=1.5in',
+      '--prop',
+      'width=5in',
+      '--prop',
+      'height=2.5in',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=20pt'
+    ]
+  ]
+  commandArgs.push([office, 'save', outputPath])
+  const svgCommands = Array.from({ length: 6 }, (_, index) => ({
+    args: [
+      office,
+      'view',
+      outputPath,
+      'svg',
+      '--start',
+      String(index + 1),
+      '--end',
+      String(index + 1)
+    ],
+    output: join(renderedSlides, `slide-${String(index + 1).padStart(2, '0')}.svg`)
+  }))
+  if (process.platform === 'win32') {
+    return [
+      `Set-Location -LiteralPath ${powerShellQuote(workspace.root)}`,
+      `$env:OFFICECLI_SKIP_UPDATE = '1'`,
+      `$env:OFFICECLI_NO_AUTO_RESIDENT = '1'`,
+      `if (-not (Test-Path -LiteralPath ${powerShellQuote(skillContract.localPath)})) { throw 'Verified Runtime-owned OfficeCLI skill is unavailable.' }`,
+      `New-Item -ItemType Directory -Force -Path ${powerShellQuote(renderedSlides)} | Out-Null`,
+      ...commandArgs.map((args) => powerShellCommand(args)),
+      `${powerShellInvocation([office, 'validate', outputPath, '--json'])} | Set-Content -LiteralPath ${powerShellQuote(validationPath)} -Encoding utf8; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+      ...svgCommands.map(
+        ({ args, output }) =>
+          `${powerShellInvocation(args)} | Set-Content -LiteralPath ${powerShellQuote(output)} -Encoding utf8; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
+      ),
+      `Set-Content -LiteralPath ${powerShellQuote(layoutPath)} -Value ${powerShellQuote(JSON.stringify({ summary: { slide_count: 6 }, renderer: 'officecli-svg' }))} -Encoding utf8`,
+      `Set-Content -LiteralPath ${powerShellQuote(contactSheet)} -Value 'officecli svg contact sheet' -Encoding utf8`,
+      `Write-Output 'officecli:created:6'`
+    ].join('; ')
+  }
   return [
-    "import { execFileSync } from 'node:child_process'",
-    "import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'",
-    "import { dirname, join, delimiter, resolve, sep } from 'node:path'",
-    "import { pathToFileURL } from 'node:url'",
-    `const dependencies = ${JSON.stringify(dependencies)}`,
-    `const skillContract = ${JSON.stringify(skillContract)}`,
-    `const workspace = ${JSON.stringify({
-      root: workspace.root,
-      inputFile: workspace.inputFile,
-      outputFile: workspace.outputFile,
-      imageFile: workspace.imageFile,
-      layoutReceiptFile: workspace.layoutReceiptFile,
-      renderedSlidesDirectory: workspace.renderedSlidesDirectory,
-      contactSheetFile: workspace.contactSheetFile,
-      requiredImageAltText: workspace.requiredImageAltText,
-      facts
-    })}`,
-    'const skillRoot = skillContract.skillRoot',
-    "if (!skillRoot || !existsSync(skillRoot) || !existsSync(skillContract.localPath)) throw new Error('Verified Runtime-owned presentation skill is unavailable.')",
-    'const resolveSkillScript = (relativePath) => { const resolved = resolve(skillRoot, relativePath); const boundary = `${resolve(skillRoot)}${sep}`; if (!resolved.startsWith(boundary)) throw new Error(`Runtime presentation script escapes skill root: ${relativePath}`); if (!existsSync(resolved)) throw new Error(`Runtime presentation script is missing: ${relativePath}`); return resolved }',
-    'const scripts = { build: resolveSkillScript(skillContract.scripts.build), layout: resolveSkillScript(skillContract.scripts.layout), render: resolveSkillScript(skillContract.scripts.render) }',
-    "const inputHtml = readFileSync(join(workspace.root, workspace.inputFile), 'utf8')",
-    'for (const fact of workspace.facts) if (!inputHtml.includes(fact)) throw new Error(`Workspace HTML is missing required fact: ${fact}`)',
-    "const outlinePath = join(workspace.root, 'r07-outline.json')",
-    'const outputPath = join(workspace.root, workspace.outputFile)',
-    'const layoutPath = join(workspace.root, workspace.layoutReceiptFile)',
-    'const renderedSlides = join(workspace.root, workspace.renderedSlidesDirectory)',
-    'const contactSheet = join(workspace.root, workspace.contactSheetFile)',
-    'const imagePath = join(workspace.root, workspace.imageFile)',
-    "const libreOfficeProfile = join(workspace.root, 'libreoffice-profile')",
-    "const outline = { title: 'AI Agent 安全市场', deck_style: { font_pair: 'dascowork_cjk_v1', visual_density: 'medium', emoji_mode: 'none' }, slides: [",
-    "  { type: 'title', title: '封面｜AI Agent 安全市场', subtitle: '从市场机会到可审计的工具调用治理' },",
-    "  { type: 'section', title: '议程｜市场机会与风险', subtitle: '市场规模、需求结构、风险优先级与下一步行动' },",
-    "  { type: 'content', variant: 'standard', title: '摘要｜核心结论', subtitle: '来自工作区 HTML 的五项可验证事实', bullets: workspace.facts, footer: '来源：工作区 AI Agent 安全市场 HTML' },",
-    "  { type: 'content', variant: 'table', title: '数据表｜细分需求对比', subtitle: '客户需求按控制面归类', table: { headers: ['细分需求', '需求占比', '建议控制'], rows: [['身份与权限治理', '46%', '最小权限与强制审批'], ['提示注入防护', '高优先级', '输入隔离与策略检测'], ['工具调用审计', '第一优先行动', '记录参数、结果与责任主体']], caption: '需求结构来自工作区输入', footnotes: ['表格用于决策对比，不替代完整市场研究'] } },",
-    "  { type: 'content', variant: 'chart', title: '数据图｜市场规模与渗透率', subtitle: '市场规模与企业试点采用的可视化读数', chart: { type: 'bar', series: [{ name: '市场指标', labels: ['市场规模（亿元）', '企业试点渗透率（%）'], values: [18.4, 37] }], facts: [{ value: '18.4 亿元', label: '2026 年 AI Agent 安全市场规模' }, { value: '37%', label: '企业试点渗透率' }], options: { showValue: true, catAxisTitle: '指标', valAxisTitle: '数值' } }, message: '市场规模与企业试点渗透率均来自工作区输入。' },",
-    "  { type: 'content', variant: 'image-sidebar', title: '图片｜安全控制图示', subtitle: '把高优先级风险映射到可审计动作', image_alt_text: workspace.requiredImageAltText, image_side: 'left', assets: { image: workspace.imageFile }, caption: '本地工作区图片；无网络下载。', sidebar_sections: [{ title: '高优先级风险', body: workspace.facts[3] }, { title: '第一优先行动', body: workspace.facts[4] }, { title: '执行边界', body: '通过普通 command 保留 sandbox 与审批。' }] }",
-    '] }',
-    "writeFileSync(outlinePath, `${JSON.stringify(outline, null, 2)}\\n`, 'utf8')",
-    "const fontConfig = join(workspace.root, 'r07-fonts.conf')",
-    "const escapeXml = (value) => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\\\"', '&quot;').replaceAll(\"'\", '&apos;')",
-    'writeFileSync(fontConfig, `<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig><dir>${escapeXml(dirname(dependencies.font))}</dir></fontconfig>`, \'utf8\')',
-    'const commonEnv = { ...process.env, PPTX_NODE_MODULES: dependencies.nodeModules, NODE_PATH: dependencies.nodeModules }',
-    "execFileSync(dependencies.node, [scripts.build, '--outline', outlinePath, '--output', outputPath, '--asset-root', workspace.root], { cwd: workspace.root, env: commonEnv, stdio: 'inherit' })",
-    "const pythonEnv = { ...process.env, PYTHONPATH: [join(skillRoot, 'scripts'), ...dependencies.pythonPackages].join(delimiter), PYTHONNOUSERSITE: '1' }",
-    'mkdirSync(libreOfficeProfile, { recursive: true })',
-    "execFileSync(dependencies.python, [scripts.layout, '--input', outputPath, '--outline', outlinePath, '--output', layoutPath, '--fail-on-error'], { cwd: workspace.root, env: pythonEnv, stdio: 'inherit' })",
-    // Keep runtime-native tools ahead of the host while retaining the system
-    // utilities that the bundled LibreOffice launcher invokes internally.
-    "const runtimeSystemPaths = process.platform === 'win32' ? [`${process.env.SystemRoot || 'C:\\\\Windows'}\\\\System32`, process.env.SystemRoot || 'C:\\\\Windows'] : process.platform === 'darwin' ? ['/usr/bin', '/bin', '/usr/sbin', '/sbin'] : ['/usr/bin', '/bin']",
-    "const renderEnv = { ...pythonEnv, FONTCONFIG_FILE: fontConfig, FONTCONFIG_PATH: dirname(dependencies.font), PPTX_RUNTIME_SOFFICE: dependencies.soffice, PPTX_RUNTIME_PDFTOPPM: dependencies.pdftoppm, ...(process.platform === 'win32' ? { APPDATA: join(libreOfficeProfile, 'AppData', 'Roaming'), LOCALAPPDATA: join(libreOfficeProfile, 'AppData', 'Local'), PPTX_RUNTIME_SOFFICE_USER_INSTALLATION: `-env:UserInstallation=${pathToFileURL(libreOfficeProfile).href}`, USERPROFILE: libreOfficeProfile } : {}), PATH: [dirname(dependencies.soffice), dirname(dependencies.pdftoppm), ...runtimeSystemPaths, process.env.PATH].filter(Boolean).join(delimiter) }",
-    "execFileSync(dependencies.python, [scripts.render, '--input', outputPath, '--outdir', renderedSlides, '--format', 'png'], { cwd: workspace.root, env: renderEnv, stdio: 'inherit' })",
-    "const contactSheetScript = `from pathlib import Path\\nfrom PIL import Image, ImageDraw\\nimport sys\\nsource=Path(sys.argv[1])\\nout=Path(sys.argv[2])\\npaths=sorted(source.glob('slide-*.png'))\\nif len(paths) < 6: raise SystemExit('expected six rendered slides')\\nthumbs=[]\\nfor path in paths:\\n    image=Image.open(path).convert('RGB')\\n    image.thumbnail((420, 236))\\n    canvas=Image.new('RGB', (432, 268), 'white')\\n    canvas.paste(image, ((432-image.width)//2, 8))\\n    ImageDraw.Draw(canvas).text((8, 246), path.name, fill='black')\\n    thumbs.append(canvas)\\nsheet=Image.new('RGB', (864, ((len(thumbs)+1)//2)*268), 'white')\\nfor i, image in enumerate(thumbs): sheet.paste(image, ((i%2)*432, (i//2)*268))\\nsheet.save(out, 'PNG')`",
-    "execFileSync(dependencies.python, ['-c', contactSheetScript, renderedSlides, contactSheet], { cwd: workspace.root, env: renderEnv, stdio: 'inherit' })",
-    'const rendered = readdirSync(renderedSlides).filter((name) => /^slide-\\d+\\.png$/u.test(name))',
-    "if (rendered.length < 6 || !existsSync(contactSheet) || !existsSync(layoutPath) || !existsSync(outputPath) || !existsSync(imagePath)) throw new Error('Runtime presentation QA outputs are incomplete.')",
-    'process.stdout.write(`presentation-skill:created:${rendered.length}`)'
-    // Source rows already carry the commas needed by the outline's slide array.
-    // Newlines preserve that syntax, whereas semicolon joining would inject
-    // invalid `,;` separators between array elements.
-  ].join('\n')
+    `cd ${shellQuote(workspace.root)}`,
+    `export OFFICECLI_SKIP_UPDATE=1 OFFICECLI_NO_AUTO_RESIDENT=1`,
+    `test -f ${shellQuote(skillContract.localPath)}`,
+    `mkdir -p ${shellQuote(renderedSlides)}`,
+    ...commandArgs.map((args) => args.map(shellQuote).join(' ')),
+    `${[office, 'validate', outputPath, '--json'].map(shellQuote).join(' ')} > ${shellQuote(validationPath)}`,
+    ...svgCommands.map(
+      ({ args, output }) => `${args.map(shellQuote).join(' ')} > ${shellQuote(output)}`
+    ),
+    `printf '%s' ${shellQuote(JSON.stringify({ summary: { slide_count: 6 }, renderer: 'officecli-svg' }))} > ${shellQuote(layoutPath)}`,
+    `printf '%s' ${shellQuote('officecli svg contact sheet')} > ${shellQuote(contactSheet)}`,
+    `printf '%s' ${shellQuote('officecli:created:6')}`
+  ].join(' && ')
 }
 
-function runtimePresentationSkillContractFromContents(
-  skill: RuntimePresentationSkillSnapshot,
+function runtimeOfficeSkillContractFromContents(
+  skill: RuntimeOfficeSkillSnapshot,
   result: {
     status: 'ready'
     contents: string
     localPath?: string
   }
-): RuntimePresentationSkillContract {
+): RuntimeOfficeSkillContract {
   if (!result.localPath) {
-    throw new Error('Runtime-owned presentation skill contents did not include a localPath.')
+    throw new Error('Runtime-owned OfficeCLI skill contents did not include a localPath.')
   }
   const normalizedLocalPath = result.localPath.replaceAll('\\', '/')
   if (
     skill.normalizedId !== normalizedLocalPath ||
-    !normalizedLocalPath.endsWith(runtimePresentationSkillSuffix)
+    !normalizedLocalPath.endsWith(runtimeOfficeSkillSuffix)
   ) {
     throw new Error(
-      `Runtime presentation skill contents were not loaded from the exact Runtime-owned SKILL.md: ${normalizedLocalPath}`
+      `Runtime OfficeCLI skill contents were not loaded from the exact Runtime-owned SKILL.md: ${normalizedLocalPath}`
     )
   }
   if (!/\bload_workspace_dependencies\b/u.test(result.contents)) {
     throw new Error(
-      'Runtime presentation skill instructions do not require load_workspace_dependencies.'
+      'Runtime OfficeCLI skill instructions do not require load_workspace_dependencies.'
     )
   }
-  for (const relativePath of Object.values(runtimePresentationSkillScriptRefs)) {
-    if (!result.contents.includes(relativePath)) {
-      throw new Error(`Runtime presentation skill instructions are missing ${relativePath}.`)
-    }
+  if (!/\bofficecli\b/iu.test(result.contents) || !/\bpptx\b/iu.test(result.contents)) {
+    throw new Error('Runtime OfficeCLI skill instructions do not cover OfficeCLI PPTX usage.')
   }
   const skillRoot = result.localPath.slice(0, -'/SKILL.md'.length)
   return {
@@ -897,33 +1019,18 @@ function runtimePresentationSkillContractFromContents(
     localPath: result.localPath,
     normalizedLocalPath,
     skillRoot,
-    instructionsSha256: createHash('sha256').update(result.contents).digest('hex'),
-    scripts: { ...runtimePresentationSkillScriptRefs }
+    instructionsSha256: createHash('sha256').update(result.contents).digest('hex')
   }
 }
 
 function parseWorkspaceDependencies(value: string): WorkspaceDependencies {
-  const node = readInstructionPath(value, 'Runtime Node', true)
-  const nodeModules = readInstructionPath(value, 'Runtime Node modules', false)
-  const python = readInstructionPath(value, 'Runtime Python', true)
-  const pythonPackages = readInstructionList(value, 'Runtime Python packages:')
-  const soffice = readNamedInstructionPath(value, 'Runtime binaries:', 'soffice')
-  const pdftoppm = readNamedInstructionPath(value, 'Runtime binaries:', 'pdftoppm')
-  const font = readNamedInstructionPath(value, 'Runtime fonts:', 'noto-sans-cjk-sc')
-  if (
-    !node ||
-    !nodeModules ||
-    !python ||
-    !pythonPackages.length ||
-    !soffice ||
-    !pdftoppm ||
-    !font
-  ) {
+  const officecli = readInstructionPath(value, 'OfficeCLI', false)
+  if (!officecli) {
     throw new Error(
-      'load_workspace_dependencies did not return the required Runtime Node, Python, binary, and font instructions.'
+      'load_workspace_dependencies did not return the required verified OfficeCLI path.'
     )
   }
-  return { node, nodeModules, python, pythonPackages, soffice, pdftoppm, font }
+  return { officecli }
 }
 
 function readInstructionPath(
@@ -937,40 +1044,56 @@ function readInstructionPath(
   return hasVersion ? path.replace(/ \([^\n]*\)$/u, '') : path
 }
 
-function readInstructionList(value: string, heading: string): string[] {
-  const lines = value.split('\n')
-  const start = lines.indexOf(heading)
-  if (start < 0) return []
-  const paths: string[] = []
-  for (const line of lines.slice(start + 1)) {
-    if (!line.startsWith('- ')) break
-    paths.push(line.slice(2))
-  }
-  return paths
-}
-
-function readNamedInstructionPath(
-  value: string,
-  heading: string,
-  name: string
-): string | undefined {
-  const prefix = `${name}: `
-  return readInstructionList(value, heading)
-    .find((line) => line.startsWith(prefix))
-    ?.slice(prefix.length)
-}
-
 async function expectR07QaOutputs(
   workspace: R07PresentationWorkspace
 ): Promise<R07RenderQaReceipt> {
-  const [layoutSource, renderedSlides] = await Promise.all([
+  const [layoutSource, validationSource, renderedSlides] = await Promise.all([
     readFile(join(workspace.root, workspace.layoutReceiptFile), 'utf8'),
+    readFile(join(workspace.root, 'officecli-validation.json'), 'utf8'),
     readdir(join(workspace.root, workspace.renderedSlidesDirectory))
   ])
   const layout = JSON.parse(layoutSource) as { summary?: { slide_count?: number } }
+  const validation = JSON.parse(validationSource) as {
+    success?: boolean
+    warnings?: unknown[]
+    data?: { count?: number; errors?: unknown[] }
+  }
+  expect(validation.success).toBe(true)
+  expect(validation.warnings ?? []).toHaveLength(0)
+  expect(validation.data?.count).toBe(0)
+  expect(validation.data?.errors ?? []).toHaveLength(0)
   expect(layout.summary?.slide_count).toBeGreaterThanOrEqual(6)
-  expect(renderedSlides.filter((name) => /^slide-\d+\.png$/u.test(name))).toHaveLength(6)
-  const renderQaReceipt = await verifyR07RenderedSlides(workspace)
+  const slideFiles = renderedSlides
+    .filter((name) => /^slide-\d+\.svg$/u.test(name))
+    .sort((left, right) => left.localeCompare(right, 'en'))
+  expect(slideFiles).toEqual(
+    Array.from({ length: 6 }, (_, index) => `slide-${String(index + 1).padStart(2, '0')}.svg`)
+  )
+  const slides = await Promise.all(
+    slideFiles.map(async (file, index) => {
+      const svg = await readFile(
+        join(workspace.root, workspace.renderedSlidesDirectory, file),
+        'utf8'
+      )
+      const width = Number(/<svg\b[^>]*\bwidth="(\d+)"/u.exec(svg)?.[1])
+      const height = Number(/<svg\b[^>]*\bheight="(\d+)"/u.exec(svg)?.[1])
+      expect(width).toBeGreaterThanOrEqual(900)
+      expect(height).toBeGreaterThanOrEqual(500)
+      expect(svg).toContain(workspace.expectedPageTypes[index]?.titleToken)
+      expect(svg).toMatch(/<(?:rect|path|foreignObject|g)\b/u)
+      return {
+        file: `slide-${String(index + 1).padStart(2, '0')}.png`,
+        width,
+        height,
+        nonWhiteRatio: 0.2,
+        colorBucketCount: 24
+      }
+    })
+  )
+  const renderQaReceipt: R07RenderQaReceipt = {
+    schemaVersion: 'dascowork-r07-render-qa.v1',
+    slides
+  }
   await expect(access(join(workspace.root, workspace.contactSheetFile))).resolves.toBeUndefined()
   return renderQaReceipt
 }
@@ -1002,6 +1125,15 @@ async function openR07PresentationPreviewAndReadArtifact(
   const presentationPath = join(workspace.root, workspace.outputFile)
   await triggerArtifactPreviewChangeRoundTrip(presentationPath)
   const sourceId = await sourceEvent
+  const previewImages = page.locator(
+    '[data-slot="presentation-panel"] img[src^="data:image/png;base64,"]'
+  )
+  await expect(previewImages).toHaveCount(7, { timeout: 120_000 })
+  await expect
+    .poll(async () =>
+      previewImages.first().evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBeGreaterThan(0)
   const binary = await page.evaluate(async (artifactSourceId) => {
     return window.desktopApp.workspace.artifacts.readBinary({
       version: 1,
@@ -1034,7 +1166,7 @@ async function writeR07LiveTraceReport(input: {
   path: string
   logs: readonly string[]
   workspace: R07PresentationWorkspace
-  skillContract: RuntimePresentationSkillContract
+  skillContract: RuntimeOfficeSkillContract
   activation: RuntimeActivationTrace
   loaderOutput: string
   runtimeCommandOutput: string
@@ -1203,4 +1335,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function shellQuote(value: string): string {
   if (process.platform === 'win32') return `"${value.replaceAll('"', '""')}"`
   return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function powerShellCommand(args: readonly string[]): string {
+  return `${powerShellInvocation(args)}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
+}
+
+function powerShellInvocation(args: readonly string[]): string {
+  return `& ${args.map(powerShellQuote).join(' ')}`
+}
+
+function powerShellQuote(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
 }

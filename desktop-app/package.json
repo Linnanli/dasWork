@@ -61,7 +61,7 @@
     "test:primary-runtime:stress": "node scripts/run-primary-runtime-install-stress.mjs",
     "test:primary-runtime:performance": "node scripts/run-primary-runtime-performance.mjs",
     "smoke:packaged-app-tools": "node scripts/run-packaged-app-tools-smoke.mjs",
-    "smoke:presentation-skill-runtime": "node scripts/run-presentations-runtime-smoke.mjs",
+    "smoke:office-runtime": "node scripts/run-office-runtime-smoke.mjs",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",

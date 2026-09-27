@@ -56,12 +56,23 @@ const syntheticTestOnlySchema = z
   })
   .strict()
 
-const genericManifestFields = {
+const commonManifestFields = {
   bundleVersion: z.string().min(1),
   target: z.object({
     platform: z.custom<NodeJS.Platform>((value) => typeof value === 'string'),
     arch: z.custom<NodeJS.Architecture>((value) => typeof value === 'string')
   }),
+  binaries: z.array(binaryManifestSchema).optional(),
+  fonts: z.array(fontManifestSchema).optional(),
+  bundledPlugins: z.array(bundledPluginManifestSchema).optional(),
+  bundledSkills: z.array(bundledSkillManifestSchema).optional(),
+  skillsToRemove: z.array(relativePathSchema).optional(),
+  sourceDigests: z.array(sourceDigestSchema).optional(),
+  syntheticTestOnly: syntheticTestOnlySchema.optional()
+}
+
+const nodeRuntimeManifestFields = {
+  ...commonManifestFields,
   node: z.object({
     path: relativePathSchema,
     version: z.string().min(1).optional()
@@ -73,23 +84,53 @@ const genericManifestFields = {
       version: z.string().min(1).optional(),
       packages: z.array(packageManifestSchema).optional()
     })
-    .optional(),
-  binaries: z.array(binaryManifestSchema).optional(),
-  fonts: z.array(fontManifestSchema).optional(),
-  bundledPlugins: z.array(bundledPluginManifestSchema).optional(),
-  bundledSkills: z.array(bundledSkillManifestSchema).optional(),
-  skillsToRemove: z.array(relativePathSchema).optional(),
-  sourceDigests: z.array(sourceDigestSchema).optional(),
-  syntheticTestOnly: syntheticTestOnlySchema.optional()
+    .optional()
 }
 
 const primaryRuntimeManifestV1Schema = z
-  .object({ bundleFormatVersion: z.literal(1), ...genericManifestFields })
+  .object({ bundleFormatVersion: z.literal(1), ...nodeRuntimeManifestFields })
   .strict()
 
 const primaryRuntimeManifestV2Schema = z
-  .object({ bundleFormatVersion: z.literal(2), ...genericManifestFields })
+  .object({ bundleFormatVersion: z.literal(2), ...nodeRuntimeManifestFields })
   .strict()
+
+const primaryRuntimeManifestV3Schema = z
+  .object({
+    bundleFormatVersion: z.literal(3),
+    ...commonManifestFields,
+    node: z
+      .object({
+        path: relativePathSchema,
+        version: z.string().min(1).optional()
+      })
+      .optional(),
+    nodePackages: z.array(packageManifestSchema).optional(),
+    python: z
+      .object({
+        path: relativePathSchema,
+        version: z.string().min(1).optional(),
+        packages: z.array(packageManifestSchema).optional()
+      })
+      .optional()
+  })
+  .strict()
+  .superRefine((manifest, context) => {
+    if (!manifest.binaries?.some((binary) => binary.name === 'officecli')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'v3 Primary Runtime manifest must declare the officecli binary',
+        path: ['binaries']
+      })
+    }
+    if (!manifest.bundledSkills?.some((skill) => skill.path === 'skills/officecli/SKILL.md')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'v3 Primary Runtime manifest must declare the OfficeCLI skill',
+        path: ['bundledSkills']
+      })
+    }
+  })
 
 /**
  * Legacy v2 cache decoder. This is intentionally read-only: production feeds
@@ -162,6 +203,7 @@ const legacyPrimaryRuntimeManifestV2Schema = z
 export const primaryRuntimeManifestSchema = z.union([
   primaryRuntimeManifestV1Schema,
   primaryRuntimeManifestV2Schema,
+  primaryRuntimeManifestV3Schema,
   legacyPrimaryRuntimeManifestV2Schema
 ])
 

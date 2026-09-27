@@ -109,14 +109,14 @@
     {
       "id": "AT-LIVE-01",
       "layer": "engineering",
-      "producers": ["live-presentation-skill-dev"],
+      "producers": ["live-office-runtime-dev"],
       "assetBound": false,
       "runtimeBound": true
     },
     {
       "id": "AT-LIVE-PKG-01",
       "layer": "release",
-      "producers": ["live-presentation-skill-packaged"],
+      "producers": ["live-office-runtime-packaged"],
       "assetBound": true,
       "runtimeBound": true
     },

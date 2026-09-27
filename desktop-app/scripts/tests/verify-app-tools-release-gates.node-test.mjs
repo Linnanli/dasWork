@@ -53,12 +53,12 @@ test('verifies an evidence report only when it binds to the requested commit and
   }
 })
 
-test('requires an ordered, SHA-bound live trace for each live presentation-skill gate', async () => {
+test('requires an ordered, SHA-bound live trace for each live OfficeCLI gate', async () => {
   const directory = await fixtureDirectory()
   try {
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
-      producer: 'live-presentation-skill-dev',
+      producer: 'live-office-runtime-dev',
       commit,
       capturedAt: new Date(now).toISOString()
     })
@@ -74,7 +74,7 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
     const invalidLiveRuntime = runtimeBinding(true)
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
-      producer: 'live-presentation-skill-dev',
+      producer: 'live-office-runtime-dev',
       commit,
       capturedAt: new Date(now).toISOString(),
       extra: { runtime: { ...runtimeBinding(), live: { loader: {} } } }
@@ -92,7 +92,7 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
     await rm(join(directory, 'evidence.json'))
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
-      producer: 'live-presentation-skill-dev',
+      producer: 'live-office-runtime-dev',
       commit,
       capturedAt: new Date(now).toISOString(),
       extra: {
@@ -120,7 +120,7 @@ test('requires an ordered, SHA-bound live trace for each live presentation-skill
     const outOfOrderRuntime = runtimeBinding(true)
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
-      producer: 'live-presentation-skill-dev',
+      producer: 'live-office-runtime-dev',
       commit,
       capturedAt: new Date(now).toISOString(),
       extra: {
@@ -185,7 +185,7 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
 
     const packagedResult = await writeAppToolsReleaseEvidence({
       gateId: 'AT-LIVE-PKG-01',
-      producer: 'live-presentation-skill-packaged',
+      producer: 'live-office-runtime-packaged',
       commit,
       target: fixture.target,
       targetRoot: fixture.targetRoot,
@@ -203,7 +203,7 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
     await assert.rejects(
       writeAppToolsReleaseEvidence({
         gateId: 'AT-LIVE-PKG-01',
-        producer: 'live-presentation-skill-packaged',
+        producer: 'live-office-runtime-packaged',
         commit,
         target: fixture.target,
         targetRoot: fixture.targetRoot,
@@ -676,7 +676,7 @@ function runtimeBinding(includeLive = false) {
     },
     activation: {
       operationId: 'activate-1',
-      activeVersion: '2026.9.12-presentation-skill',
+      activeVersion: '2026.9.27-officecli',
       manifestSequence: 2
     },
     ...(includeLive
@@ -685,9 +685,9 @@ function runtimeBinding(includeLive = false) {
             threadId: 'thread-1',
             turnId: 'turn-1',
             skill: {
-              id: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
-              name: 'presentation-skill',
-              localPath: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+              id: '/tmp/skills/dascowork-primary-runtime/officecli/SKILL.md',
+              name: 'officecli',
+              localPath: '/tmp/skills/dascowork-primary-runtime/officecli/SKILL.md',
               instructionsSha256: '5'.repeat(64)
             },
             modelEvidence: deterministicModelEvidence(),
@@ -790,9 +790,9 @@ async function writeAppToolsProducerFixture(directory) {
     threadId: 'thread-1',
     turnId: 'turn-1',
     skill: {
-      id: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
-      name: 'presentation-skill',
-      localPath: '/tmp/skills/dascowork-primary-runtime/presentation-skill/SKILL.md',
+      id: '/tmp/skills/dascowork-primary-runtime/officecli/SKILL.md',
+      name: 'officecli',
+      localPath: '/tmp/skills/dascowork-primary-runtime/officecli/SKILL.md',
       instructionsSha256: '5'.repeat(64)
     },
     modelEvidence: deterministicModelEvidence(),

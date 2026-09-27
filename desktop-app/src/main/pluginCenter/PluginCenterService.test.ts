@@ -1888,10 +1888,10 @@ describe('PluginCenterService', () => {
       listPluginCatalog: vi.fn(async () => ({
         marketplaces: [
           {
-            name: 'presentation-skill',
+            name: 'officecli',
             plugins: [
               {
-                id: 'latex@presentation-skill',
+                id: 'latex@officecli',
                 name: 'latex',
                 installed: false,
                 enabled: false,
@@ -1918,9 +1918,7 @@ describe('PluginCenterService', () => {
       sections: ['plugins']
     })
 
-    expect(result.snapshot.plugins.map((plugin) => plugin.id)).toEqual([
-      'latex@presentation-skill'
-    ])
+    expect(result.snapshot.plugins.map((plugin) => plugin.id)).toEqual(['latex@officecli'])
     expect(result.snapshot.catalogUnavailableReason).toContain('当前仅显示本地插件')
   })
 

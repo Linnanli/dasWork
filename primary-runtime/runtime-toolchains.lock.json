@@ -1,12 +1,19 @@
 {
   "schemaVersion": "dascowork-primary-runtime-toolchains.v2",
-  "materializerVersion": "1.3.0",
+  "materializerVersion": "1.4.0",
   "targets": {
     "darwin-x64": {
       "runner": "macos-15-intel",
       "builder": {
         "identity": "github-hosted:macos-15-intel",
-        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
+        "tools": [
+          "tar",
+          "hdiutil",
+          "xattr",
+          "cmake",
+          "ninja",
+          "clang"
+        ]
       },
       "node": {
         "name": "node-runtime",
@@ -94,11 +101,17 @@
           "environment": {},
           "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents" }
+            {
+              "kind": "directory",
+              "source": "Contents",
+              "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"]
+            "entrypoints": [
+              "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"
+            ]
           }
         },
         {
@@ -112,17 +125,43 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DZLIB_BUILD_EXAMPLES=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/zlib"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+            "entrypoints": [
+              "dependencies/native/zlib/include/zlib.h"
+            ]
           }
         },
         {
@@ -136,24 +175,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DBUILD_SHARED_LIBS=OFF",
+              "-DFT_DISABLE_ZLIB=TRUE",
+              "-DFT_DISABLE_BZIP2=TRUE",
+              "-DFT_DISABLE_PNG=TRUE",
+              "-DFT_DISABLE_HARFBUZZ=TRUE",
+              "-DFT_DISABLE_BROTLI=TRUE",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/freetype"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+            "entrypoints": [
+              "dependencies/native/freetype/include/freetype2/ft2build.h"
+            ]
           }
         },
         {
           "name": "libpng",
           "materialization": "source-build",
           "sourceComponent": "libpng",
-          "nativeDependencies": ["zlib"],
+          "nativeDependencies": [
+            "zlib"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libpng-1.6.52",
           "toolchain": {
@@ -161,24 +233,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DPNG_SHARED=OFF",
+              "-DPNG_STATIC=ON",
+              "-DPNG_TESTS=OFF",
+              "-DPNG_TOOLS=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/libpng"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+            "entrypoints": [
+              "dependencies/native/libpng/include/png.h"
+            ]
           }
         },
         {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
-          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "nativeDependencies": [
+            "zlib",
+            "freetype",
+            "libpng"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
@@ -186,17 +291,87 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DENABLE_UTILS=ON",
+              "-DENABLE_CPP=OFF",
+              "-DFONT_CONFIGURATION=generic",
+              "-DENABLE_NSS3=OFF",
+              "-DENABLE_GPGME=OFF",
+              "-DENABLE_LIBTIFF=OFF",
+              "-DENABLE_BOOST=OFF",
+              "-DENABLE_GLIB=OFF",
+              "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+              "-DENABLE_QT5=OFF",
+              "-DENABLE_QT6=OFF",
+              "-DENABLE_LIBOPENJPEG=OFF",
+              "-DENABLE_LIBJPEG=OFF",
+              "-DENABLE_LIBPNG=ON",
+              "-DENABLE_LCMS=OFF",
+              "-DENABLE_LIBCURL=OFF",
+              "-DENABLE_HARFBUZZ=OFF",
+              "-DZLIB_USE_STATIC_LIBS=TRUE",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install",
+              "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/poppler"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+            "entrypoints": [
+              "dependencies/native/poppler/bin/pdfinfo",
+              "dependencies/native/poppler/bin/pdftoppm"
+            ]
+          }
+        },
+        {
+          "name": "officecli",
+          "materialization": "prebuilt-binary",
+          "sourceComponent": "officecli-darwin-x64",
+          "sourceArchiveFormat": "binary",
+          "sourceDirectory": ".",
+          "toolchain": {
+            "distribution": "iOfficeAI-OfficeCLI-v1.0.152-release-binary"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            {
+              "kind": "file",
+              "source": "officecli",
+              "destination": "dependencies/native/officecli/officecli",
+              "mode": "0755"
+            }
+          ],
+          "closure": {
+            "mode": "static",
+            "entrypoints": [
+              "dependencies/native/officecli/officecli"
+            ]
           }
         }
       ]
@@ -205,7 +380,14 @@
       "runner": "macos-15",
       "builder": {
         "identity": "github-hosted:macos-15",
-        "tools": ["tar", "hdiutil", "xattr", "cmake", "ninja", "clang"]
+        "tools": [
+          "tar",
+          "hdiutil",
+          "xattr",
+          "cmake",
+          "ninja",
+          "clang"
+        ]
       },
       "node": {
         "name": "node-runtime",
@@ -293,11 +475,17 @@
           "environment": {},
           "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "Contents", "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents" }
+            {
+              "kind": "directory",
+              "source": "Contents",
+              "destination": "dependencies/native/libreoffice/LibreOffice.app/Contents"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"]
+            "entrypoints": [
+              "dependencies/native/libreoffice/LibreOffice.app/Contents/MacOS/soffice"
+            ]
           }
         },
         {
@@ -311,17 +499,43 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DZLIB_BUILD_EXAMPLES=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/zlib"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+            "entrypoints": [
+              "dependencies/native/zlib/include/zlib.h"
+            ]
           }
         },
         {
@@ -335,24 +549,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DBUILD_SHARED_LIBS=OFF",
+              "-DFT_DISABLE_ZLIB=TRUE",
+              "-DFT_DISABLE_BZIP2=TRUE",
+              "-DFT_DISABLE_PNG=TRUE",
+              "-DFT_DISABLE_HARFBUZZ=TRUE",
+              "-DFT_DISABLE_BROTLI=TRUE",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/freetype"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+            "entrypoints": [
+              "dependencies/native/freetype/include/freetype2/ft2build.h"
+            ]
           }
         },
         {
           "name": "libpng",
           "materialization": "source-build",
           "sourceComponent": "libpng",
-          "nativeDependencies": ["zlib"],
+          "nativeDependencies": [
+            "zlib"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libpng-1.6.52",
           "toolchain": {
@@ -360,24 +607,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DPNG_SHARED=OFF",
+              "-DPNG_STATIC=ON",
+              "-DPNG_TESTS=OFF",
+              "-DPNG_TOOLS=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/libpng"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+            "entrypoints": [
+              "dependencies/native/libpng/include/png.h"
+            ]
           }
         },
         {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
-          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "nativeDependencies": [
+            "zlib",
+            "freetype",
+            "libpng"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
@@ -385,17 +665,87 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=@loader_path/../lib"
           },
-          "environment": { "CC": "clang", "CXX": "clang++" },
+          "environment": {
+            "CC": "clang",
+            "CXX": "clang++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DENABLE_UTILS=ON",
+              "-DENABLE_CPP=OFF",
+              "-DFONT_CONFIGURATION=generic",
+              "-DENABLE_NSS3=OFF",
+              "-DENABLE_GPGME=OFF",
+              "-DENABLE_LIBTIFF=OFF",
+              "-DENABLE_BOOST=OFF",
+              "-DENABLE_GLIB=OFF",
+              "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+              "-DENABLE_QT5=OFF",
+              "-DENABLE_QT6=OFF",
+              "-DENABLE_LIBOPENJPEG=OFF",
+              "-DENABLE_LIBJPEG=OFF",
+              "-DENABLE_LIBPNG=ON",
+              "-DENABLE_LCMS=OFF",
+              "-DENABLE_LIBCURL=OFF",
+              "-DENABLE_HARFBUZZ=OFF",
+              "-DZLIB_USE_STATIC_LIBS=TRUE",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install",
+              "-DCMAKE_INSTALL_RPATH=@loader_path/../lib"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/poppler"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+            "entrypoints": [
+              "dependencies/native/poppler/bin/pdfinfo",
+              "dependencies/native/poppler/bin/pdftoppm"
+            ]
+          }
+        },
+        {
+          "name": "officecli",
+          "materialization": "prebuilt-binary",
+          "sourceComponent": "officecli-darwin-arm64",
+          "sourceArchiveFormat": "binary",
+          "sourceDirectory": ".",
+          "toolchain": {
+            "distribution": "iOfficeAI-OfficeCLI-v1.0.152-release-binary"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            {
+              "kind": "file",
+              "source": "officecli",
+              "destination": "dependencies/native/officecli/officecli",
+              "mode": "0755"
+            }
+          ],
+          "closure": {
+            "mode": "static",
+            "entrypoints": [
+              "dependencies/native/officecli/officecli"
+            ]
           }
         }
       ]
@@ -404,7 +754,14 @@
       "runner": "windows-2025",
       "builder": {
         "identity": "github-hosted:windows-2025",
-        "tools": ["git", "tar", "msiexec", "cmake", "ninja", "cl"]
+        "tools": [
+          "git",
+          "tar",
+          "msiexec",
+          "cmake",
+          "ninja",
+          "cl"
+        ]
       },
       "node": {
         "name": "node-runtime",
@@ -492,11 +849,17 @@
           "environment": {},
           "commands": [],
           "outputs": [
-            { "kind": "directory", "source": ".", "destination": "dependencies/native/libreoffice" }
+            {
+              "kind": "directory",
+              "source": ".",
+              "destination": "dependencies/native/libreoffice"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/program/soffice.com"]
+            "entrypoints": [
+              "dependencies/native/libreoffice/program/soffice.com"
+            ]
           }
         },
         {
@@ -510,17 +873,44 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "cl", "CXX": "cl" },
+          "environment": {
+            "CC": "cl",
+            "CXX": "cl"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DZLIB_BUILD_EXAMPLES=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/zlib"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+            "entrypoints": [
+              "dependencies/native/zlib/include/zlib.h"
+            ]
           }
         },
         {
@@ -534,24 +924,58 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "cl", "CXX": "cl" },
+          "environment": {
+            "CC": "cl",
+            "CXX": "cl"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DBUILD_SHARED_LIBS=OFF",
+              "-DFT_DISABLE_ZLIB=TRUE",
+              "-DFT_DISABLE_BZIP2=TRUE",
+              "-DFT_DISABLE_PNG=TRUE",
+              "-DFT_DISABLE_HARFBUZZ=TRUE",
+              "-DFT_DISABLE_BROTLI=TRUE",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/freetype"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+            "entrypoints": [
+              "dependencies/native/freetype/include/freetype2/ft2build.h"
+            ]
           }
         },
         {
           "name": "libpng",
           "materialization": "source-build",
           "sourceComponent": "libpng",
-          "nativeDependencies": ["zlib"],
+          "nativeDependencies": [
+            "zlib"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libpng-1.6.52",
           "toolchain": {
@@ -559,24 +983,58 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "cl", "CXX": "cl" },
+          "environment": {
+            "CC": "cl",
+            "CXX": "cl"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DPNG_SHARED=OFF",
+              "-DPNG_STATIC=ON",
+              "-DPNG_TESTS=OFF",
+              "-DPNG_TOOLS=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/libpng"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+            "entrypoints": [
+              "dependencies/native/libpng/include/png.h"
+            ]
           }
         },
         {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
-          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "nativeDependencies": [
+            "zlib",
+            "freetype",
+            "libpng"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
@@ -584,17 +1042,87 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "cl", "CXX": "cl" },
+          "environment": {
+            "CC": "cl",
+            "CXX": "cl"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DENABLE_UTILS=ON",
+              "-DENABLE_CPP=OFF",
+              "-DFONT_CONFIGURATION=generic",
+              "-DENABLE_NSS3=OFF",
+              "-DENABLE_GPGME=OFF",
+              "-DENABLE_LIBTIFF=OFF",
+              "-DENABLE_BOOST=OFF",
+              "-DENABLE_GLIB=OFF",
+              "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+              "-DENABLE_QT5=OFF",
+              "-DENABLE_QT6=OFF",
+              "-DENABLE_LIBOPENJPEG=OFF",
+              "-DENABLE_LIBJPEG=OFF",
+              "-DENABLE_LIBPNG=ON",
+              "-DENABLE_LCMS=OFF",
+              "-DENABLE_LIBCURL=OFF",
+              "-DENABLE_HARFBUZZ=OFF",
+              "-DZLIB_USE_STATIC_LIBS=TRUE",
+              "-DCMAKE_BUILD_TYPE=Release",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/poppler"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo.exe", "dependencies/native/poppler/bin/pdftoppm.exe"]
+            "entrypoints": [
+              "dependencies/native/poppler/bin/pdfinfo.exe",
+              "dependencies/native/poppler/bin/pdftoppm.exe"
+            ]
+          }
+        },
+        {
+          "name": "officecli",
+          "materialization": "prebuilt-binary",
+          "sourceComponent": "officecli-win32-x64",
+          "sourceArchiveFormat": "binary",
+          "sourceDirectory": ".",
+          "toolchain": {
+            "distribution": "iOfficeAI-OfficeCLI-v1.0.152-release-binary"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            {
+              "kind": "file",
+              "source": "officecli",
+              "destination": "dependencies/native/officecli/officecli.exe",
+              "mode": "0755"
+            }
+          ],
+          "closure": {
+            "mode": "static",
+            "entrypoints": [
+              "dependencies/native/officecli/officecli.exe"
+            ]
           }
         }
       ]
@@ -603,7 +1131,14 @@
       "runner": "ubuntu-24.04",
       "builder": {
         "identity": "github-hosted:ubuntu-24.04",
-        "tools": ["tar", "dpkg-deb", "cmake", "ninja", "gcc", "g++"]
+        "tools": [
+          "tar",
+          "dpkg-deb",
+          "cmake",
+          "ninja",
+          "gcc",
+          "g++"
+        ]
       },
       "node": {
         "name": "node-runtime",
@@ -691,11 +1226,17 @@
           "environment": {},
           "commands": [],
           "outputs": [
-            { "kind": "directory", "source": "runtime-root/opt/libreoffice26.2", "destination": "dependencies/native/libreoffice" }
+            {
+              "kind": "directory",
+              "source": "runtime-root/opt/libreoffice26.2",
+              "destination": "dependencies/native/libreoffice"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libreoffice/program/soffice"]
+            "entrypoints": [
+              "dependencies/native/libreoffice/program/soffice"
+            ]
           }
         },
         {
@@ -709,17 +1250,43 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DZLIB_BUILD_EXAMPLES=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "gcc", "CXX": "g++" },
+          "environment": {
+            "CC": "gcc",
+            "CXX": "g++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DZLIB_BUILD_EXAMPLES=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DZLIB_BUILD_EXAMPLES=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/zlib" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/zlib"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/zlib/include/zlib.h"]
+            "entrypoints": [
+              "dependencies/native/zlib/include/zlib.h"
+            ]
           }
         },
         {
@@ -733,24 +1300,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "gcc", "CXX": "g++" },
+          "environment": {
+            "CC": "gcc",
+            "CXX": "g++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DBUILD_SHARED_LIBS=OFF", "-DFT_DISABLE_ZLIB=TRUE", "-DFT_DISABLE_BZIP2=TRUE", "-DFT_DISABLE_PNG=TRUE", "-DFT_DISABLE_HARFBUZZ=TRUE", "-DFT_DISABLE_BROTLI=TRUE", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DBUILD_SHARED_LIBS=OFF",
+              "-DFT_DISABLE_ZLIB=TRUE",
+              "-DFT_DISABLE_BZIP2=TRUE",
+              "-DFT_DISABLE_PNG=TRUE",
+              "-DFT_DISABLE_HARFBUZZ=TRUE",
+              "-DFT_DISABLE_BROTLI=TRUE",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/freetype" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/freetype"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/freetype/include/freetype2/ft2build.h"]
+            "entrypoints": [
+              "dependencies/native/freetype/include/freetype2/ft2build.h"
+            ]
           }
         },
         {
           "name": "libpng",
           "materialization": "source-build",
           "sourceComponent": "libpng",
-          "nativeDependencies": ["zlib"],
+          "nativeDependencies": [
+            "zlib"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "libpng-1.6.52",
           "toolchain": {
@@ -758,24 +1358,57 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DPNG_SHARED=OFF -DPNG_STATIC=ON -DPNG_TESTS=OFF -DPNG_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=runtime-install"
           },
-          "environment": { "CC": "gcc", "CXX": "g++" },
+          "environment": {
+            "CC": "gcc",
+            "CXX": "g++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DPNG_SHARED=OFF", "-DPNG_STATIC=ON", "-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON", "-DCMAKE_INSTALL_PREFIX=runtime-install"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DPNG_SHARED=OFF",
+              "-DPNG_STATIC=ON",
+              "-DPNG_TESTS=OFF",
+              "-DPNG_TOOLS=OFF",
+              "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/libpng" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/libpng"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/libpng/include/png.h"]
+            "entrypoints": [
+              "dependencies/native/libpng/include/png.h"
+            ]
           }
         },
         {
           "name": "poppler",
           "materialization": "source-build",
           "sourceComponent": "poppler",
-          "nativeDependencies": ["zlib", "freetype", "libpng"],
+          "nativeDependencies": [
+            "zlib",
+            "freetype",
+            "libpng"
+          ],
           "sourceArchiveFormat": "tar.xz",
           "sourceDirectory": "poppler-26.09.0",
           "toolchain": {
@@ -783,17 +1416,87 @@
             "buildSystem": "cmake+ninja",
             "flags": "-DENABLE_UTILS=ON -DENABLE_CPP=OFF -DFONT_CONFIGURATION=generic -DENABLE_NSS3=OFF -DENABLE_GPGME=OFF -DENABLE_LIBTIFF=OFF -DENABLE_BOOST=OFF -DENABLE_GLIB=OFF -DENABLE_GOBJECT_INTROSPECTION=OFF -DENABLE_QT5=OFF -DENABLE_QT6=OFF -DENABLE_LIBOPENJPEG=OFF -DENABLE_LIBJPEG=OFF -DENABLE_LIBPNG=ON -DENABLE_LCMS=OFF -DENABLE_LIBCURL=OFF -DENABLE_HARFBUZZ=OFF -DZLIB_USE_STATIC_LIBS=TRUE -DCMAKE_INSTALL_PREFIX=runtime-install -DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
           },
-          "environment": { "CC": "gcc", "CXX": "g++" },
+          "environment": {
+            "CC": "gcc",
+            "CXX": "g++"
+          },
           "commands": [
-            ["cmake", "-S", ".", "-B", "build", "-G", "Ninja", "-DENABLE_UTILS=ON", "-DENABLE_CPP=OFF", "-DFONT_CONFIGURATION=generic", "-DENABLE_NSS3=OFF", "-DENABLE_GPGME=OFF", "-DENABLE_LIBTIFF=OFF", "-DENABLE_BOOST=OFF", "-DENABLE_GLIB=OFF", "-DENABLE_GOBJECT_INTROSPECTION=OFF", "-DENABLE_QT5=OFF", "-DENABLE_QT6=OFF", "-DENABLE_LIBOPENJPEG=OFF", "-DENABLE_LIBJPEG=OFF", "-DENABLE_LIBPNG=ON", "-DENABLE_LCMS=OFF", "-DENABLE_LIBCURL=OFF", "-DENABLE_HARFBUZZ=OFF", "-DZLIB_USE_STATIC_LIBS=TRUE", "-DCMAKE_INSTALL_PREFIX=runtime-install", "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"],
-            ["cmake", "--build", "build", "--target", "install"]
+            [
+              "cmake",
+              "-S",
+              ".",
+              "-B",
+              "build",
+              "-G",
+              "Ninja",
+              "-DENABLE_UTILS=ON",
+              "-DENABLE_CPP=OFF",
+              "-DFONT_CONFIGURATION=generic",
+              "-DENABLE_NSS3=OFF",
+              "-DENABLE_GPGME=OFF",
+              "-DENABLE_LIBTIFF=OFF",
+              "-DENABLE_BOOST=OFF",
+              "-DENABLE_GLIB=OFF",
+              "-DENABLE_GOBJECT_INTROSPECTION=OFF",
+              "-DENABLE_QT5=OFF",
+              "-DENABLE_QT6=OFF",
+              "-DENABLE_LIBOPENJPEG=OFF",
+              "-DENABLE_LIBJPEG=OFF",
+              "-DENABLE_LIBPNG=ON",
+              "-DENABLE_LCMS=OFF",
+              "-DENABLE_LIBCURL=OFF",
+              "-DENABLE_HARFBUZZ=OFF",
+              "-DZLIB_USE_STATIC_LIBS=TRUE",
+              "-DCMAKE_INSTALL_PREFIX=runtime-install",
+              "-DCMAKE_INSTALL_RPATH=$ORIGIN/../lib"
+            ],
+            [
+              "cmake",
+              "--build",
+              "build",
+              "--target",
+              "install"
+            ]
           ],
           "outputs": [
-            { "kind": "directory", "source": "runtime-install", "destination": "dependencies/native/poppler" }
+            {
+              "kind": "directory",
+              "source": "runtime-install",
+              "destination": "dependencies/native/poppler"
+            }
           ],
           "closure": {
             "mode": "directory",
-            "entrypoints": ["dependencies/native/poppler/bin/pdfinfo", "dependencies/native/poppler/bin/pdftoppm"]
+            "entrypoints": [
+              "dependencies/native/poppler/bin/pdfinfo",
+              "dependencies/native/poppler/bin/pdftoppm"
+            ]
+          }
+        },
+        {
+          "name": "officecli",
+          "materialization": "prebuilt-binary",
+          "sourceComponent": "officecli-linux-x64",
+          "sourceArchiveFormat": "binary",
+          "sourceDirectory": ".",
+          "toolchain": {
+            "distribution": "iOfficeAI-OfficeCLI-v1.0.152-release-binary"
+          },
+          "environment": {},
+          "commands": [],
+          "outputs": [
+            {
+              "kind": "file",
+              "source": "officecli",
+              "destination": "dependencies/native/officecli/officecli",
+              "mode": "0755"
+            }
+          ],
+          "closure": {
+            "mode": "static",
+            "entrypoints": [
+              "dependencies/native/officecli/officecli"
+            ]
           }
         }
       ]

@@ -24,7 +24,7 @@ const inputManifest = JSON.parse(
 const inputFileModes = inputFileModesFromManifest(inputManifest);
 const [platform, arch] = target.split("-");
 if (
-  runtimeManifest.bundleFormatVersion !== 2 ||
+  runtimeManifest.bundleFormatVersion !== 3 ||
   runtimeManifest.target?.platform !== platform ||
   runtimeManifest.target?.arch !== arch
 ) {
@@ -35,7 +35,7 @@ const directory = await mkdtemp(join(tmpdir(), "primary-runtime-platform-"));
 try {
   const inputRoot = join(directory, "runtime-inputs");
   for (const entry of entries) {
-    if (!/^(?:dependencies|plugins|fonts)\//u.test(entry.path)) continue;
+    if (!/^(?:dependencies|fonts)\//u.test(entry.path)) continue;
     const path = join(inputRoot, ...entry.path.split("/"));
     const mode = inputFileModes.get(entry.path);
     if (mode === undefined) {
@@ -111,7 +111,7 @@ function inputFileModesFromManifest(manifest) {
     if (
       !file ||
       typeof file.path !== "string" ||
-      !/^(?:dependencies|plugins|fonts)\//u.test(file.path) ||
+      !/^(?:dependencies|fonts)\//u.test(file.path) ||
       typeof file.mode !== "string" ||
       !/^10[067][0-7]{3}$/u.test(file.mode)
     ) {

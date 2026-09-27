@@ -181,55 +181,51 @@ await rm(workRoot, { recursive: true, force: true });
 await mkdir(workRoot, { recursive: true });
 
 try {
-  await extractLockedArtifact({
-    artifact: artifactsByName.get("node-runtime"),
-    output: join(options.outputRoot, "dependencies/node"),
-    cacheRoot: options.sourceCache,
-  });
-  await extractLockedArtifact({
-    artifact: artifactsByName.get("cpython-runtime"),
-    output: join(options.outputRoot, "dependencies/python"),
-    cacheRoot: options.sourceCache,
-  });
-  await dereferenceInternalSymlinks(
-    join(options.outputRoot, "dependencies/node"),
-  );
-  await dereferenceInternalSymlinks(
-    join(options.outputRoot, "dependencies/python"),
-  );
-  await materializeNodePackages({
-    sourceLock,
-    artifactsByName,
-    cacheRoot: options.sourceCache,
-    outputRoot: options.outputRoot,
-  });
-  await materializePythonPackages({
-    targetToolchain,
-    artifactsByName,
-    cacheRoot: options.sourceCache,
-    outputRoot: options.outputRoot,
-    workRoot,
-    target,
-  });
-  await materializePlugin({
-    sourceLock,
-    artifact: artifactsByName.get("presentation-skill-source"),
-    cacheRoot: options.sourceCache,
-    outputRoot: options.outputRoot,
-    workRoot,
-    patchPath: resolve(
-      options.sourceLock,
-      "..",
-      sourceLock.candidate.patch.path,
-    ),
-  });
+  const hasNodeInputs = sourceLock.components.node.length > 0;
+  const hasPythonInputs = sourceLock.components.python.length > 0;
+  if (hasNodeInputs) {
+    await extractLockedArtifact({
+      artifact: artifactsByName.get("node-runtime"),
+      output: join(options.outputRoot, "dependencies/node"),
+      cacheRoot: options.sourceCache,
+    });
+    await dereferenceInternalSymlinks(
+      join(options.outputRoot, "dependencies/node"),
+    );
+    await materializeNodePackages({
+      sourceLock,
+      artifactsByName,
+      cacheRoot: options.sourceCache,
+      outputRoot: options.outputRoot,
+    });
+  }
+  if (hasPythonInputs) {
+    await extractLockedArtifact({
+      artifact: artifactsByName.get("cpython-runtime"),
+      output: join(options.outputRoot, "dependencies/python"),
+      cacheRoot: options.sourceCache,
+    });
+    await dereferenceInternalSymlinks(
+      join(options.outputRoot, "dependencies/python"),
+    );
+    await materializePythonPackages({
+      targetToolchain,
+      artifactsByName,
+      cacheRoot: options.sourceCache,
+      outputRoot: options.outputRoot,
+      workRoot,
+      target,
+    });
+  }
   await materializeFonts({
     sourceLock,
     artifactsByName,
     cacheRoot: options.sourceCache,
     outputRoot: options.outputRoot,
     workRoot,
-    python: runtimePythonExecutable({ outputRoot: options.outputRoot, target }),
+    python: hasPythonInputs
+      ? runtimePythonExecutable({ outputRoot: options.outputRoot, target })
+      : undefined,
   });
   await materializeNativeRecipes({
     targetToolchain,
@@ -240,19 +236,21 @@ try {
     workRoot,
     allowSourceBuild: options.allowSourceBuild,
   });
+  await materializeOfficeCli({
+    target,
+    targetToolchain,
+    artifactsByName,
+    cacheRoot: options.sourceCache,
+    outputRoot: options.outputRoot,
+  });
 
-  const patchSha256 = sha256(
-    await readFile(
-      resolve(options.sourceLock, "..", sourceLock.candidate.patch.path),
-    ),
-  );
   const { manifestPath } = await writeRuntimeInputsManifest({
     inputRoot: options.outputRoot,
     target,
     sourceLockPath: options.sourceLock,
     toolchainsLockPath: options.toolchainsLock,
     artifacts,
-    patches: [{ path: sourceLock.candidate.patch.path, sha256: patchSha256 }],
+    patches: [],
     builder: {
       name: "@dascowork/primary-runtime-materializer",
       version: toolchainsLock.materializerVersion,
@@ -412,171 +410,37 @@ async function materializePythonPackages({
   );
 }
 
-async function materializePlugin({
-  sourceLock,
-  artifact,
-  cacheRoot,
-  outputRoot,
-  workRoot,
-  patchPath,
-}) {
-  const sourceRoot = join(workRoot, "plugin-source");
-  await extractLockedArtifact({ artifact, output: sourceRoot, cacheRoot });
-  await run("git", ["apply", "--whitespace=error", patchPath], {
-    label: "presentation plugin: apply locked Runtime patch",
-    cwd: sourceRoot,
-  });
-  const source = join(sourceRoot, sourceLock.candidate.pluginDirectory.path);
-  const marketplaceRoot = join(outputRoot, "plugins/presentation-skill");
-  const destination = join(marketplaceRoot, "plugins/presentation-skill");
-  await assertRegularDirectory(source, "authorized presentation plugin source");
-  const files = await copyRuntimePluginPayload({
-    source,
-    destination,
-    sourceLock,
-  });
-  await writeRuntimePluginMarketplace({
-    marketplaceRoot,
-    sourceLock,
-    files,
-  });
-  await assertPluginPayload(marketplaceRoot);
-}
-
-/**
- * The selected upstream repository is an auditable source input, not the
- * Runtime payload.  Copying its plugin root wholesale would carry unrelated
- * network, image-generation, installer, and existing-PPTX workflows into the
- * archive.  The locked patch supplies the Runtime-facing metadata and skill
- * text; this explicit map is the only file surface that reaches the Runtime.
- */
-async function copyRuntimePluginPayload({ source, destination, sourceLock }) {
-  const requiredEntryPoints = [
-    "skills/presentation-skill/scripts/build_deck_pptxgenjs.js",
-    "skills/presentation-skill/scripts/layout_lint.py",
-    "skills/presentation-skill/scripts/render_slides.py",
-  ];
-  const lockedEntryPoints = sourceLock.candidate.runtimeScope.entryPoints;
-  if (
-    lockedEntryPoints.length !== requiredEntryPoints.length ||
-    requiredEntryPoints.some((entry) => !lockedEntryPoints.includes(entry))
-  ) {
-    throw new Error(
-      "AT-RT-INPUT-01 blocked: presentation Runtime entry-point allowlist does not match the source lock.",
-    );
-  }
-  const files = [
-    {
-      source: ".codex-plugin/DASCOWORK_RUNTIME_PLUGIN.json",
-      destination: ".codex-plugin/plugin.json",
-    },
-    {
-      source:
-        "skills/presentation-skill/DASCOWORK_RUNTIME_SKILL.md",
-      destination: "skills/presentation-skill/SKILL.md",
-    },
-    {
-      source: "skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md",
-      destination: "skills/presentation-skill/DASCOWORK_RUNTIME_POLICY.md",
-    },
-    ...requiredEntryPoints.map((path) => ({ source: path, destination: path })),
-    {
-      source: "skills/presentation-skill/scripts/design_tokens.py",
-      destination: "skills/presentation-skill/scripts/design_tokens.py",
-    },
-    {
-      source: "skills/presentation-skill/templates/pptxgenjs/presets.js",
-      destination: "skills/presentation-skill/templates/pptxgenjs/presets.js",
-    },
-    {
-      source: "skills/presentation-skill/templates/pptxgenjs/slides.js",
-      destination: "skills/presentation-skill/templates/pptxgenjs/slides.js",
-    },
-  ];
-  const copied = [];
-  for (const file of files) {
-    const input = await safeChild(source, file.source);
-    const output = await safeChild(destination, file.destination);
-    await assertRegularFile(
-      input,
-      `authorized presentation plugin file ${file.source}`,
-    );
-    await mkdir(dirname(output), { recursive: true });
-    await copyFile(input, output);
-    copied.push({
-      path: file.destination,
-      sha256: sha256(await readFile(output)),
-    });
-  }
-  return copied;
-}
-
-async function writeRuntimePluginMarketplace({
-  marketplaceRoot,
-  sourceLock,
-  files,
-}) {
-  const name = "presentation-skill";
-  const pluginManifest = JSON.parse(
-    await readFile(
-      join(
-        marketplaceRoot,
-        "plugins",
-        name,
-        ".codex-plugin",
-        "plugin.json",
-      ),
-      "utf8",
-    ),
-  );
-  if (
-    !pluginManifest ||
-    pluginManifest.name !== name ||
-    typeof pluginManifest.version !== "string" ||
-    pluginManifest.version.trim() === ""
-  ) {
-    throw new Error(
-      "AT-RT-INPUT-01 blocked: Runtime plugin manifest must provide its exact name and version.",
-    );
-  }
-  await writeJson(join(marketplaceRoot, ".agents/plugins/marketplace.json"), {
-    name,
-    plugins: [
-      {
-        name,
-        source: { source: "local", path: `./plugins/${name}` },
-      },
-    ],
-  });
-  await writeJson(join(marketplaceRoot, "bundle-lock.json"), {
-    bundleFormatVersion: 2,
-    marketplace: { name, pluginRoot: "plugins" },
-    plugins: [
-      {
-        name,
-        // Git tags identify the audited source snapshot, while app-server
-        // reports the version declared by the copied plugin manifest. Lock
-        // that manifest version so the post-install readback is exact.
-        version: pluginManifest.version,
-        installWhenMissing: true,
-        internal: true,
-        provenance: {
-          kind: "locked-source",
-          sourceLock: "primary-runtime/runtime-sources.lock.json",
-          sourceCommit: sourceLock.candidate.commit,
-          sourceArchiveSha256: sourceLock.candidate.sourceArchive.sha256,
-          licensePath: sourceLock.candidate.license.path,
-          reviewStatus: "approved",
-        },
-        files: files.sort((left, right) => left.path.localeCompare(right.path)),
-      },
-    ],
-  });
-}
-
 async function writeJson(path, value) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function materializeOfficeCli({
+  target,
+  targetToolchain,
+  artifactsByName,
+  cacheRoot,
+  outputRoot,
+}) {
+  const recipe = targetToolchain.nativeRecipes.find(
+    (candidate) => candidate.name === "officecli",
+  );
+  if (!recipe || recipe.materialization !== "prebuilt-binary") {
+    throw new Error("AT-RT-INPUT-01 blocked: OfficeCLI native binary recipe is missing.");
+  }
+  const artifact = artifactsByName.get(recipe.sourceComponent);
+  if (!artifact || artifact.archiveFormat !== "binary") {
+    throw new Error("AT-RT-INPUT-01 blocked: OfficeCLI recipe is not bound to a locked binary.");
+  }
+  const output = recipe.outputs[0];
+  if (!output || output.kind !== "file") {
+    throw new Error("AT-RT-INPUT-01 blocked: OfficeCLI recipe must produce one executable file.");
+  }
+  const destination = await safeChild(outputRoot, output.destination);
+  await mkdir(dirname(destination), { recursive: true });
+  await copyFile(contentAddressedCachePath(cacheRoot, artifact), destination);
+  await chmod(destination, target.startsWith("win32") ? 0o644 : 0o755);
+  await assertRecipeClosure({ recipe, outputRoot });
 }
 
 async function materializeFonts({
@@ -595,7 +459,7 @@ async function materializeFonts({
       artifact,
       output: extracted,
       cacheRoot,
-      python,
+      ...(python ? { python } : {}),
     });
     await cp(extracted, destination, {
       recursive: true,
@@ -624,6 +488,8 @@ async function materializeNativeRecipes({
   );
   const completedRecipeNames = new Set();
   for (const recipe of targetToolchain.nativeRecipes) {
+    if (recipe.materialization === "prebuilt-binary") continue;
+    if (!artifactsByName.has(recipe.sourceComponent)) continue;
     const component = componentsByName.get(recipe.sourceComponent);
     const artifact = artifactsByName.get(recipe.sourceComponent);
     if (
@@ -788,6 +654,14 @@ async function extractArchive({
   archiveFormat,
   python,
 }) {
+  if (archiveFormat === "binary") {
+    await mkdir(dirname(output), { recursive: true });
+    await copyFile(archive, output);
+    if (stripComponents !== 0) {
+      throw new Error("AT-RT-INPUT-01 blocked: binary Runtime inputs cannot be stripped.");
+    }
+    return;
+  }
   if (archiveFormat === "zip") {
     if (!python) {
       await extractZipWithLockedTar({ archive, output, stripComponents });

@@ -41,8 +41,14 @@ export async function verifyLivePresentationArtifact({ inputPath, expectedPath }
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/u.test(path))
     .sort(compareSlidePaths)
 
-  assert(slidePaths.length >= expected.expectedPageTypes.length, 'PPTX does not contain six slides.')
-  assert(slideTargets.length === slidePaths.length, 'PPTX slide relationships do not match slide files.')
+  assert(
+    slidePaths.length >= expected.expectedPageTypes.length,
+    'PPTX does not contain six slides.'
+  )
+  assert(
+    slideTargets.length === slidePaths.length,
+    'PPTX slide relationships do not match slide files.'
+  )
   assert(
     new Set(slideTargets).size === slideTargets.length,
     'PPTX presentation relationships contain a duplicate slide target.'
@@ -51,7 +57,10 @@ export async function verifyLivePresentationArtifact({ inputPath, expectedPath }
     assert(archive.file(target), `PPTX presentation references a missing slide: ${target}`)
   }
   for (const slidePath of slidePaths) {
-    assert(slideTargets.includes(slidePath), `PPTX slide is missing from the presentation: ${slidePath}`)
+    assert(
+      slideTargets.includes(slidePath),
+      `PPTX slide is missing from the presentation: ${slidePath}`
+    )
   }
 
   const slideXml = await Promise.all(slidePaths.map((path) => requiredText(archive, path)))
@@ -156,8 +165,7 @@ function hasExpectedPageTypes(value) {
         typeof entry.id === 'string' &&
         typeof entry.titleToken === 'string' &&
         entry.titleToken.length > 0
-    ) &&
-    [...value.map((entry) => entry.id)].sort().join(',') === expectedIds.sort().join(',')
+    ) && [...value.map((entry) => entry.id)].sort().join(',') === expectedIds.sort().join(',')
   )
 }
 
@@ -196,11 +204,14 @@ function readPresentationSlideTargets(presentationXml, relationshipsXml) {
     if (!type?.endsWith('/slide') || !target) continue
     assert(id, 'PPTX slide relationship has no ID.')
     assert(
-      /^slides\/slide\d+\.xml$/u.test(target),
+      /^(?:\/ppt\/)?slides\/slide\d+\.xml$/u.test(target),
       `PPTX presentation contains an unsafe slide relationship target: ${target}`
     )
     assert(!targetsById.has(id), `PPTX presentation contains duplicate relationship ID: ${id}`)
-    targetsById.set(id, join('ppt', target).replaceAll('\\', '/'))
+    targetsById.set(
+      id,
+      target.startsWith('/ppt/') ? target.slice(1) : join('ppt', target).replaceAll('\\', '/')
+    )
   }
   assert(targetsById.size > 0, 'PPTX presentation does not reference any slides.')
   assert(
@@ -225,10 +236,7 @@ function readSlideGeometry(xml, slidePath, slideSize) {
     // coordinate space. It is OOXML scaffolding rather than a drawable shape,
     // so accept that exact form without allowing zero-sized drawings.
     const isZeroSizedGroupCoordinateSpace =
-      cx === 0 &&
-      cy === 0 &&
-      /<a:chOff\b[^>]*\/>/u.test(body) &&
-      /<a:chExt\b[^>]*\/>/u.test(body)
+      cx === 0 && cy === 0 && /<a:chOff\b[^>]*\/>/u.test(body) && /<a:chExt\b[^>]*\/>/u.test(body)
     if (isZeroSizedGroupCoordinateSpace) {
       assert(
         x !== undefined && y !== undefined,
@@ -251,11 +259,19 @@ function readSlideGeometry(xml, slidePath, slideSize) {
 
 function assertDistinctTitleSlides(slideText, pageTypes) {
   const candidates = pageTypes.map((pageType) => {
-    const matches = slideText.flatMap((text, index) => (text.includes(pageType.titleToken) ? [index] : []))
-    assert(matches.length > 0, `PPTX does not contain the required page title: ${pageType.titleToken}`)
+    const matches = slideText.flatMap((text, index) =>
+      text.includes(pageType.titleToken) ? [index] : []
+    )
+    assert(
+      matches.length > 0,
+      `PPTX does not contain the required page title: ${pageType.titleToken}`
+    )
     return matches
   })
-  assert(assignDistinctSlides(candidates), 'One slide cannot substitute for multiple required page types.')
+  assert(
+    assignDistinctSlides(candidates),
+    'One slide cannot substitute for multiple required page types.'
+  )
 }
 
 function assignDistinctSlides(candidates, index = 0, assigned = new Set()) {
@@ -289,7 +305,8 @@ async function hasChartRelationship(archive, slidePaths, slideXml) {
       .map((match) => readAttribute(match[0], 'r:id'))
       .filter((id) => typeof id === 'string' && id.length > 0)
     for (const relationshipId of chartRelationshipIds) {
-      if (hasRelatedPart(archive, relationshipXml, relationshipId, '/chart', '../charts/')) return true
+      if (hasRelatedPart(archive, relationshipXml, relationshipId, '/chart', '../charts/'))
+        return true
     }
   }
   return false
@@ -315,21 +332,30 @@ async function hasImageRelationshipAndAltText(archive, slidePaths, slideXml, req
   return false
 }
 
-function hasRelatedPart(archive, relationshipsXml, relationshipId, requiredTypeSuffix, requiredTargetPrefix) {
+function hasRelatedPart(
+  archive,
+  relationshipsXml,
+  relationshipId,
+  requiredTypeSuffix,
+  requiredTargetPrefix
+) {
   const relationship = [...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gu)].find(
     (match) => readAttribute(match[0], 'Id') === relationshipId
   )?.[0]
   const type = relationship ? readAttribute(relationship, 'Type') : undefined
   const target = relationship ? readAttribute(relationship, 'Target') : undefined
   const partPath = target ? resolveRelatedPartPath(target, requiredTargetPrefix) : undefined
-  return Boolean(
-    type?.endsWith(requiredTypeSuffix) &&
-      partPath &&
-      archive.file(partPath)
-  )
+  return Boolean(type?.endsWith(requiredTypeSuffix) && partPath && archive.file(partPath))
 }
 
 function resolveRelatedPartPath(target, relativeTargetPrefix) {
+  if (target.startsWith('/ppt/')) {
+    const partPath = target.slice(1)
+    const expectedDirectory = relativeTargetPrefix.includes('charts')
+      ? /^ppt\/(?:slides\/)?charts\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/u
+      : /^ppt\/media\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/u
+    return expectedDirectory.test(partPath) ? partPath : undefined
+  }
   const relativeDirectory = relativeTargetPrefix.replace(/^\.\.\//u, '')
   const absoluteTargetPrefix = `/ppt/${relativeDirectory}`
   const filename = target.startsWith(relativeTargetPrefix)
@@ -342,9 +368,7 @@ function resolveRelatedPartPath(target, relativeTargetPrefix) {
 }
 
 function extractText(xml) {
-  return [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/gu)]
-    .map((match) => decodeXml(match[1]))
-    .join('')
+  return [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/gu)].map((match) => decodeXml(match[1])).join('')
 }
 
 function decodeXml(value) {
@@ -390,7 +414,8 @@ function assert(condition, message) {
 async function main() {
   const options = parseArguments(process.argv.slice(2))
   const report = await verifyLivePresentationArtifact(options)
-  if (options.reportPath) await writeFile(options.reportPath, `${JSON.stringify(report, null, 2)}\n`)
+  if (options.reportPath)
+    await writeFile(options.reportPath, `${JSON.stringify(report, null, 2)}\n`)
   console.log(JSON.stringify(report))
 }
 
@@ -407,7 +432,9 @@ function parseArguments(argv) {
     else throw new Error(`Unknown argument: ${argument}`)
   }
   if (!options.inputPath || !options.expectedPath) {
-    throw new Error('Usage: verify-live-presentation-artifact.mjs --input <pptx> --expected <expected.json> [--report <json>]')
+    throw new Error(
+      'Usage: verify-live-presentation-artifact.mjs --input <pptx> --expected <expected.json> [--report <json>]'
+    )
   }
   if (options.reportPath && dirname(options.reportPath) === options.reportPath) {
     throw new Error('Live presentation report must be a file path.')

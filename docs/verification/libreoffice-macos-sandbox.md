@@ -1,5 +1,10 @@
 # macOS LibreOffice sandbox verification
 
+> Current note, 2026-09-27: this page preserves v1/v2 LibreOffice rollback
+> evidence. The current Office runtime release path is OfficeCLI-based; smoke
+> and release gates should use `smoke:office-runtime` and the signed Primary
+> Runtime feed instead of LibreOffice rendering.
+
 Date: 2026-09-27. This record belongs to the execution of
 `.omx/plans/2026-09-27-libreoffice-macos-sandbox.md`. A conversion outside a
 sandbox, a Codex tool sandbox, and a real app-server restricted turn are three

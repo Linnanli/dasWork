@@ -233,11 +233,11 @@ function assertLiveTrace(value) {
   if (!isRecord(value.skill)) invalid('skill')
   if (
     typeof value.skill.localPath !== 'string' ||
-    !value.skill.localPath.endsWith('/skills/dascowork-primary-runtime/presentation-skill/SKILL.md')
+    !value.skill.localPath.endsWith('/skills/dascowork-primary-runtime/officecli/SKILL.md')
   )
     invalid('skill.localPath')
   if (typeof value.skill.id !== 'string' || value.skill.id.length === 0) invalid('skill.id')
-  if (value.skill.name !== 'presentation-skill') invalid('skill.name')
+  if (value.skill.name !== 'officecli') invalid('skill.name')
   if (!isSha256(value.skill.instructionsSha256)) invalid('skill.instructionsSha256')
 }
 

@@ -252,7 +252,7 @@ const SHARED_CACHE_GC_MS = 5 * 60_000
 const MAX_CATALOG_CWD_KEYS = 3
 const REMOTE_PLUGIN_MARKETPLACE_NAME = 'openai-curated-remote'
 const LEGACY_REMOTE_PLUGIN_MARKETPLACE_NAME = 'openai-curated'
-const OFFICIAL_LOCAL_MARKETPLACE_NAMES = new Set(['presentation-skill', 'openai-bundled'])
+const OFFICIAL_LOCAL_MARKETPLACE_NAMES = new Set(['officecli', 'openai-bundled'])
 const REMOTE_CATALOG_FALLBACK_MESSAGE =
   '远程插件市场暂时不可用，正在显示最近一次成功加载的目录。请稍后刷新重试。'
 const REMOTE_CATALOG_LOCAL_ONLY_MESSAGE =

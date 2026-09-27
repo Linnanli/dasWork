@@ -7,16 +7,14 @@ import { resolve } from 'node:path'
 const appRoot = resolve(import.meta.dirname, '..')
 const feedRunner = resolve(import.meta.dirname, 'run-primary-runtime-feed-e2e.mjs')
 
-if (process.env.DASCOWORK_PRESENTATION_SKILL_RUNTIME_SMOKE !== '1') {
-  throw new Error(
-    'Set DASCOWORK_PRESENTATION_SKILL_RUNTIME_SMOKE=1 to run the presentation-skill Runtime smoke.'
-  )
+if (process.env.DASCOWORK_OFFICE_RUNTIME_SMOKE !== '1') {
+  throw new Error('Set DASCOWORK_OFFICE_RUNTIME_SMOKE=1 to run the OfficeCLI Runtime smoke.')
 }
 
-// This is intentionally an alias for the production-shaped Feed E2E. It must
-// never accept an active Runtime root or invoke a Runtime executable directly:
-// the evidence path is empty cache → signed Feed → Main installer → loader →
-// app-server command → artifact/QA/preview.
+// Alias for the production-shaped Feed E2E. It must never accept an active
+// Runtime root or invoke a Runtime executable directly: the evidence path is
+// empty cache -> signed Feed -> Main installer -> loader -> app-server command
+// -> artifact/QA/preview.
 const exitCode = await run(process.execPath, [feedRunner], {
   ...process.env,
   DASCOWORK_PRIMARY_RUNTIME_FEED_E2E: '1'

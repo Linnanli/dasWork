@@ -17,7 +17,7 @@ const e2ePath = resolve(appRoot, 'tests/e2e/primary-runtime-feed.e2e.ts')
 const r07SupportPath = resolve(appRoot, 'tests/e2e/support/r07Presentation.ts')
 const runnerPath = resolve(appRoot, 'scripts/run-primary-runtime-feed-e2e.mjs')
 const packagedRunnerPath = resolve(appRoot, 'scripts/run-primary-runtime-packaged-feed-e2e.mjs')
-const presentationSmokePath = resolve(appRoot, 'scripts/run-presentations-runtime-smoke.mjs')
+const officeSmokePath = resolve(appRoot, 'scripts/run-office-runtime-smoke.mjs')
 
 test('signed Feed E2E requires an explicit real-Runtime opt-in', () => {
   assert.throws(
@@ -52,7 +52,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     r07SupportSource,
     runnerSource,
     packagedRunnerSource,
-    presentationSmokeSource
+    officeSmokeSource
   ] = await Promise.all([
     readFile(packageJsonPath, 'utf8'),
     readFile(playwrightConfigPath, 'utf8'),
@@ -60,7 +60,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     readFile(r07SupportPath, 'utf8'),
     readFile(runnerPath, 'utf8'),
     readFile(packagedRunnerPath, 'utf8'),
-    readFile(presentationSmokePath, 'utf8')
+    readFile(officeSmokePath, 'utf8')
   ])
   const packageJson = JSON.parse(packageJsonSource)
 
@@ -73,8 +73,8 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     'node scripts/run-primary-runtime-packaged-feed-e2e.mjs'
   )
   assert.equal(
-    packageJson.scripts['smoke:presentation-skill-runtime'],
-    'node scripts/run-presentations-runtime-smoke.mjs'
+    packageJson.scripts['smoke:office-runtime'],
+    'node scripts/run-office-runtime-smoke.mjs'
   )
   assert.match(playwrightConfig, /DASCOWORK_PRIMARY_RUNTIME_FEED_E2E/u)
   assert.match(playwrightConfig, /primary-runtime-feed\.e2e\.ts/u)
@@ -98,27 +98,28 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(e2eSource, /load_workspace_dependencies/u)
   assert.doesNotMatch(e2eSource, /@oai\/artifact-tool/u)
   assert.doesNotMatch(e2eSource, /import pptxgen/u)
-  assert.match(e2eSource, /build_deck_pptxgenjs\.js/u)
-  assert.match(e2eSource, /layout_lint\.py/u)
-  assert.match(e2eSource, /render_slides\.py/u)
+  assert.doesNotMatch(e2eSource, /build_deck_pptxgenjs\.js/u)
+  assert.doesNotMatch(e2eSource, /layout_lint\.py/u)
+  assert.doesNotMatch(e2eSource, /render_slides\.py/u)
+  assert.match(e2eSource, /runtimeOfficeCommandResponse/u)
   assert.match(e2eSource, /verifyR07Presentation/u)
   assert.match(e2eSource, /openR07PresentationInWorkspace/u)
   assert.match(e2eSource, /cwd: workspace\.root/u)
   assert.match(e2eSource, /args: \[appRoot\]/u)
   assert.match(e2eSource, /launchTimeoutMs: 90_000/u)
   assert.match(e2eSource, /contactSheetFile/u)
-  assert.match(e2eSource, /runtimePresentationCommandResponse/u)
+  assert.doesNotMatch(e2eSource, /runtimePresentationCommandResponse/u)
   assert.match(e2eSource, /getSkillContents/u)
-  assert.match(e2eSource, /runtimePresentationSkillContractFromContents/u)
-  assert.match(e2eSource, /runtimePresentationSkillSuffix/u)
-  const skillLookupStart = e2eSource.indexOf('async function expectRuntimePresentationSkill')
-  const skillLookupEnd = e2eSource.indexOf('function runtimePresentationCommandResponse')
+  assert.match(e2eSource, /runtimeOfficeSkillContractFromContents/u)
+  assert.match(e2eSource, /runtimeOfficeSkillSuffix/u)
+  const skillLookupStart = e2eSource.indexOf('async function expectRuntimeOfficeSkill')
+  const skillLookupEnd = e2eSource.indexOf('function runtimeOfficeCommandResponse')
   assert.ok(skillLookupStart >= 0 && skillLookupEnd > skillLookupStart)
   const skillLookupSource = e2eSource.slice(skillLookupStart, skillLookupEnd)
   assert.match(skillLookupSource, /page\.evaluate\(async \(skillSuffix\) =>/u)
   assert.match(skillLookupSource, /\.endsWith\(skillSuffix\)/u)
-  assert.ok(skillLookupSource.includes('}, runtimePresentationSkillSuffix)'))
-  assert.doesNotMatch(skillLookupSource, /\.endsWith\(runtimePresentationSkillSuffix\)/u)
+  assert.ok(skillLookupSource.includes('}, runtimeOfficeSkillSuffix)'))
+  assert.doesNotMatch(skillLookupSource, /\.endsWith\(runtimeOfficeSkillSuffix\)/u)
   assert.match(e2eSource, /instructionsSha256/u)
   assert.match(e2eSource, /DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT/u)
   assert.match(e2eSource, /parseR07AppServerTrace/u)
@@ -160,13 +161,16 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.doesNotMatch(e2eSource, /join\(process\.env\.CODEX_HOME/u)
   assert.doesNotMatch(e2eSource, /readFileSync\(join\(skillRoot, 'SKILL\.md'\)/u)
   assert.match(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)
-  assert.match(e2eSource, /Buffer\.from\(source, 'utf8'\)\.toString\('base64'\)/u)
+  assert.doesNotMatch(e2eSource, /Buffer\.from\(source, 'utf8'\)\.toString\('base64'\)/u)
+  assert.match(e2eSource, /dependencies\.officecli/u)
   assert.match(e2eSource, /process\.platform === 'win32'/u)
-  assert.match(e2eSource, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u)
-  assert.match(e2eSource, /libreoffice-profile/u)
-  assert.match(presentationSmokeSource, /run-primary-runtime-feed-e2e\.mjs/u)
-  assert.doesNotMatch(presentationSmokeSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
-  assert.doesNotMatch(presentationSmokeSource, /spawnSync/u)
+  assert.doesNotMatch(e2eSource, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u)
+  assert.doesNotMatch(e2eSource, /libreoffice-profile/u)
+  assert.match(e2eSource, /officecli:created:6/u)
+  assert.match(e2eSource, /officecli-svg/u)
+  assert.match(officeSmokeSource, /run-primary-runtime-feed-e2e\.mjs/u)
+  assert.doesNotMatch(officeSmokeSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
+  assert.doesNotMatch(officeSmokeSource, /spawnSync/u)
 })
 
 test('packaged asset receipts bind a sorted real file tree', async () => {

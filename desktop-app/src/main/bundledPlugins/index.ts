@@ -2,6 +2,7 @@ export {
   readAppBundledPluginDescriptors,
   readBundledPluginDescriptorsFromMarketplaceRoot,
   readPrimaryRuntimeBundledPluginDescriptors,
+  readRetiredPrimaryRuntimeBundledPluginDescriptors,
   parseBundledPluginLock
 } from './BundledPluginDescriptors'
 export type { BundledPluginDescriptor, BundledPluginLock } from './BundledPluginDescriptors'

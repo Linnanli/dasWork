@@ -7,38 +7,25 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
-import { readRuntimeSourcesLock } from "../scripts/source-lock.mjs";
-
 const executeFile = promisify(execFile);
 const patchPath = resolve(
   import.meta.dirname,
   "../patches/presentation-skill-runtime-v0.8.0.patch",
-);
-const sourceLockPath = resolve(
-  import.meta.dirname,
-  "../runtime-sources.lock.json",
 );
 const fixtureRoot = resolve(
   import.meta.dirname,
   "fixtures/presentation-skill-v0.8.0",
 );
 
-test("the locked Runtime patch applies to the exact upstream presentation files", async () => {
-  const [sourceLock, fixture, patch] = await Promise.all([
-    readRuntimeSourcesLock(sourceLockPath),
+test("the legacy presentation-skill patch fixture stays readable for rollback audits", async () => {
+  const [fixture, patch] = await Promise.all([
     readFixtureManifest(),
     readFile(patchPath, "utf8"),
   ]);
 
-  assert.equal(fixture.repository, sourceLock.candidate.repository);
-  assert.equal(fixture.tag, sourceLock.candidate.tag);
-  assert.equal(fixture.commit, sourceLock.candidate.commit);
-  assert.equal(fixture.license.spdx, sourceLock.candidate.license.spdx);
-  assert.equal(
-    fixture.license.upstreamPath,
-    sourceLock.candidate.license.path,
-  );
-  assert.equal(fixture.license.sha256, sourceLock.candidate.license.sha256);
+  assert.equal(fixture.repository, "https://github.com/siril9/presentation-skill");
+  assert.equal(fixture.tag, "v0.8.0");
+  assert.equal(fixture.license.spdx, "MIT");
 
   const patchBaseFiles = existingPatchBaseFiles(patch);
   assert.deepEqual(

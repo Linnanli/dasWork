@@ -5,9 +5,22 @@ import type { PrimaryRuntimeDependencies } from './primaryRuntimeTypes'
 export function formatWorkspaceDependencies(dependencies: PrimaryRuntimeDependencies): string {
   const lines = [
     'Use only the following verified Primary Runtime paths. Do not use a system toolchain,',
-    'discover a Runtime root, or install dependencies online.',
-    `Runtime Node: ${formatPathWithVersion(dependencies.node.path, dependencies.node.version)}`
+    'discover a Runtime root, or install dependencies online.'
   ]
+
+  const officecli = dependencies.binaries.find((entry) => entry.name === 'officecli')
+  if (officecli) {
+    lines.push(
+      `OfficeCLI: ${officecli.path}`,
+      'Use OfficeCLI for Word, Excel, and PowerPoint files; call this exact binary path and do not fall back to PATH lookup or online installation.'
+    )
+  }
+
+  if (dependencies.node) {
+    lines.push(
+      `Runtime Node: ${formatPathWithVersion(dependencies.node.path, dependencies.node.version)}`
+    )
+  }
 
   const nodeModules = nodeModulesRootFrom(dependencies.nodePackages[0]?.path)
   if (nodeModules) lines.push(`Runtime Node modules: ${nodeModules}`)

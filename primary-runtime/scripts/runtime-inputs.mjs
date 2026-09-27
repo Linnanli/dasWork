@@ -47,8 +47,8 @@ const recipeKeys = new Set([
 ]);
 const recipeOutputKeys = new Set(["kind", "source", "destination", "mode"]);
 const recipeClosureKeys = new Set(["mode", "entrypoints"]);
-const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip", "dmg", "msi"]);
-const nativeMaterializations = new Set(["source-build", "prebuilt"]);
+const allowedArchiveFormats = new Set(["tar.gz", "tar.xz", "zip", "dmg", "msi", "binary"]);
+const nativeMaterializations = new Set(["source-build", "prebuilt", "prebuilt-binary"]);
 const executableModes = new Set(["0755", "100755"]);
 
 /**
@@ -112,19 +112,6 @@ export function artifactsForTarget({ sourceLock, toolchainsLock, target }) {
     deduplicated.set(key, artifact);
   };
 
-  add({
-    name: "presentation-skill-source",
-    version: sources.candidate.tag,
-    url: sources.candidate.sourceArchive.url,
-    sha256: sources.candidate.sourceArchive.sha256,
-    license: sources.candidate.license.spdx,
-    archiveFormat: archiveFormatForUrl(sources.candidate.sourceArchive.url),
-    // GitHub tag archives add one repository-name root. Materialization must
-    // remove that wrapper before applying the lock-bound patch and selecting
-    // the audited plugin directory.
-    stripComponents: 1,
-    kind: "plugin-source",
-  });
   for (const [group, components] of Object.entries(sources.components)) {
     if (group === "python") continue;
     for (const component of components) {
@@ -138,28 +125,32 @@ export function artifactsForTarget({ sourceLock, toolchainsLock, target }) {
     }
   }
   const targetToolchain = toolchains.targets[target];
+  if (sources.components.node.length > 0) {
+    add({ ...targetToolchain.node, kind: "toolchain:node" });
+  }
   const lockedPythonPackages = new Map(
     sources.components.python.map((component) => [component.name, component]),
   );
-  if (
-    targetToolchain.pythonWheels.length !== lockedPythonPackages.size ||
-    targetToolchain.pythonWheels.some((wheel) => {
-      const source = lockedPythonPackages.get(wheel.name);
-      return (
-        !source ||
-        source.version !== wheel.version ||
-        source.license !== wheel.license
+  if (lockedPythonPackages.size > 0) {
+    if (
+      targetToolchain.pythonWheels.length !== lockedPythonPackages.size ||
+      targetToolchain.pythonWheels.some((wheel) => {
+        const source = lockedPythonPackages.get(wheel.name);
+        return (
+          !source ||
+          source.version !== wheel.version ||
+          source.license !== wheel.license
+        );
+      })
+    ) {
+      throw new Error(
+        "Primary Runtime Python wheel lock is not bound to the audited dependency closure.",
       );
-    })
-  ) {
-    throw new Error(
-      "Primary Runtime Python wheel lock is not bound to the audited dependency closure.",
-    );
-  }
-  add({ ...targetToolchain.node, kind: "toolchain:node" });
-  add({ ...targetToolchain.python, kind: "toolchain:python" });
-  for (const wheel of targetToolchain.pythonWheels) {
-    add({ ...wheel, kind: "toolchain:python-wheel" });
+    }
+    add({ ...targetToolchain.python, kind: "toolchain:python" });
+    for (const wheel of targetToolchain.pythonWheels) {
+      add({ ...wheel, kind: "toolchain:python-wheel" });
+    }
   }
   return [...deduplicated.values()].sort((left, right) =>
     left.sha256.localeCompare(right.sha256),
@@ -333,9 +324,7 @@ export async function assertRuntimeInputsManifest({
       manifest.builder.observedImage !== expectedObservedBuilderImage) ||
     JSON.stringify(manifest.builder.tools.map((tool) => tool.command)) !==
       JSON.stringify(toolchainsLock.targets[target].builder.tools) ||
-    manifest.patches.length !== 1 ||
-    manifest.patches[0]?.path !== sourceLock.candidate.patch.path ||
-    manifest.patches[0]?.sha256 !== sourceLock.candidate.patch.sha256
+    JSON.stringify(manifest.patches) !== JSON.stringify(expectedPatches(sourceLock))
   ) {
     throw new Error(
       "AT-RT-INPUT-01 blocked: Runtime input manifest source binding is invalid.",
@@ -374,9 +363,21 @@ export function archiveFormatForUrl(url) {
   if (url.endsWith(".zip")) return "zip";
   if (url.endsWith(".dmg")) return "dmg";
   if (url.endsWith(".msi")) return "msi";
+  if (/\/officecli-(?:mac|linux|win)[A-Za-z0-9._-]*$/u.test(new URL(url).pathname)) return "binary";
   throw new Error(
     `Primary Runtime source has an unsupported archive format: ${url}`,
   );
+}
+
+function expectedPatches(sourceLock) {
+  return sourceLock.candidate.patch
+    ? [
+        {
+          path: sourceLock.candidate.patch.path,
+          sha256: sourceLock.candidate.patch.sha256,
+        },
+      ]
+    : [];
 }
 
 function isTargetToolchain(value) {

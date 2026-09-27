@@ -100,7 +100,11 @@ const bundleVersion =
 const inputEntries = await withEntryDigests(
   await collectInputEntries(inputRoot),
 );
+const bundledSkillEntries = await withEntryDigests(
+  await collectBundledSkillEntries(),
+);
 assertRequiredRuntimeInputs(inputEntries, target);
+assertRequiredBundledSkills(bundledSkillEntries);
 
 const runtimeManifest = buildRuntimeManifest({
   bundleVersion,
@@ -109,12 +113,14 @@ const runtimeManifest = buildRuntimeManifest({
   lock,
   toolchains,
   inputEntries,
+  bundledSkillEntries,
   sourceLockBytes,
   toolchainsLockBytes,
 });
 const notices = thirdPartyNotices(lock, toolchains);
 const sbomDocument = sbom({ lock, toolchains, target, bundleVersion });
 const generatedEntries = [
+  ...bundledSkillEntries,
   textEntry("runtime.json", runtimeManifest),
   binaryEntry("provenance/source-lock.json", sourceLockBytes),
   binaryEntry("provenance/toolchains-lock.json", toolchainsLockBytes),
@@ -169,7 +175,7 @@ const provenance = {
   sbomSha256: sha256(`${JSON.stringify(sbomDocument, null, 2)}\n`),
   noticesSha256: sha256(notices),
   componentSmokeSha256: sha256(componentSmokeBytes),
-  patchSha256: lock.candidate.patch.sha256,
+  ...(lock.candidate.patch ? { patchSha256: lock.candidate.patch.sha256 } : {}),
   builderIdentity: inputManifest.builder,
   releaseClass: "engineering-candidate",
   productionTrust: false,
@@ -211,22 +217,15 @@ function buildRuntimeManifest({
   lock,
   toolchains,
   inputEntries,
+  bundledSkillEntries,
   sourceLockBytes,
   toolchainsLockBytes,
 }) {
   const executableExtension = platform === "win32" ? ".exe" : "";
-  const target = `${platform}-${arch}`;
-  const sofficePath = libreofficeBinaryPath(target, executableExtension);
-  const bundledSkillPath =
-    "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill/SKILL.md";
-  const bundledSkill = inputEntries.find(
-    (entry) => entry.path === bundledSkillPath,
-  );
-  if (!bundledSkill) {
-    throw new Error(
-      "AT-RT-BUILD-01 blocked: missing Runtime-owned presentation SKILL.md.",
-    );
-  }
+  const officeCliPath =
+    platform === "win32"
+      ? "dependencies/native/officecli/officecli.exe"
+      : "dependencies/native/officecli/officecli";
   const fonts = lock.components.fonts.map((component) => {
     const prefix = `fonts/${component.name}/`;
     const font = inputEntries
@@ -243,39 +242,10 @@ function buildRuntimeManifest({
     return { name: component.name, path: font.path };
   });
   return {
-    bundleFormatVersion: 2,
+    bundleFormatVersion: 3,
     bundleVersion,
     target: { platform, arch },
-    node: {
-      path:
-        platform === "win32"
-          ? "dependencies/node/node.exe"
-          : "dependencies/node/bin/node",
-      version: toolchains.targets[target].node.version,
-    },
-    nodePackages: lock.components.node.map((component) => ({
-      name: component.name,
-      version: component.version,
-      path: `dependencies/node/node_modules/${component.name}`,
-      ...(component.entryRequired === false ? { entryRequired: false } : {}),
-    })),
-    python: {
-      path:
-        platform === "win32"
-          ? "dependencies/python/python.exe"
-          : "dependencies/python/bin/python",
-      packages: lock.components.python.map((component) => ({
-        name: component.name,
-        version: component.version,
-        path: "dependencies/python/packages",
-      })),
-    },
     binaries: [
-      {
-        name: "soffice",
-        path: sofficePath,
-        required: true,
-      },
       {
         name: "pdfinfo",
         path: `dependencies/native/poppler/bin/pdfinfo${executableExtension}`,
@@ -286,22 +256,15 @@ function buildRuntimeManifest({
         path: `dependencies/native/poppler/bin/pdftoppm${executableExtension}`,
         required: true,
       },
+      {
+        name: "officecli",
+        path: officeCliPath,
+        required: true,
+      },
     ],
     fonts,
-    bundledPlugins: [
-      {
-        marketplace: "presentation-skill",
-        path: "plugins/presentation-skill",
-      },
-    ],
-    bundledSkills: [
-      {
-        path: bundledSkillPath,
-        sha256: bundledSkill.sha256,
-      },
-    ],
-    // New Runtime generations do not retire any skill by default. A future
-    // migration must declare a relative path here so Main can move it safely.
+    bundledPlugins: [],
+    bundledSkills: bundledSkillFileManifest(bundledSkillEntries),
     skillsToRemove: [],
     sourceDigests: [
       {
@@ -320,6 +283,21 @@ function buildRuntimeManifest({
   };
 }
 
+function bundledSkillFileManifest(entries) {
+  return entries
+    .map((entry) => {
+      if (!/^skills\/[A-Za-z0-9._-]+\/SKILL\.md$/u.test(entry.path)) {
+        throw new Error(`AT-RT-BUILD-01 blocked: bundled skill entry has invalid path ${entry.path}.`);
+      }
+      return {
+        path: entry.path,
+        sha256: entry.sha256,
+        sizeBytes: entry.sizeBytes,
+      };
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
 async function assertInputRoot(inputRoot) {
   let details;
   try {
@@ -336,46 +314,31 @@ async function assertInputRoot(inputRoot) {
   }
 }
 
+function assertRequiredBundledSkills(entries) {
+  const paths = new Set(entries.map((entry) => entry.path));
+  if (!paths.has("skills/officecli/SKILL.md")) {
+    throw new Error("AT-RT-BUILD-01 blocked: missing Runtime-owned officecli skill.");
+  }
+}
+
 function assertRequiredRuntimeInputs(entries, target) {
   const paths = new Set(entries.map((entry) => entry.path));
-  for (const required of [
-    "plugins/presentation-skill/.agents/plugins/marketplace.json",
-    "plugins/presentation-skill/bundle-lock.json",
-    "plugins/presentation-skill/plugins/presentation-skill/.codex-plugin/plugin.json",
-    "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill/SKILL.md",
-  ]) {
-    if (!paths.has(required)) {
-      throw new Error(
-        `AT-RT-BUILD-01 blocked: missing Runtime input ${required}.`,
-      );
-    }
-  }
-  const nodePath = target.startsWith("win32")
-    ? "dependencies/node/node.exe"
-    : "dependencies/node/bin/node";
-  if (!paths.has(nodePath)) {
-    throw new Error(
-      "AT-RT-BUILD-01 blocked: missing Runtime-owned Node executable.",
-    );
-  }
   const extension = target.startsWith("win32") ? ".exe" : "";
   for (const [binary, path] of [
-    ["soffice", libreofficeBinaryPath(target, extension)],
     ["pdfinfo", `dependencies/native/poppler/bin/pdfinfo${extension}`],
     ["pdftoppm", `dependencies/native/poppler/bin/pdftoppm${extension}`],
+    [
+      "officecli",
+      target.startsWith("win32")
+        ? "dependencies/native/officecli/officecli.exe"
+        : "dependencies/native/officecli/officecli",
+    ],
   ]) {
     if (!paths.has(path)) {
       throw new Error(
         `AT-RT-BUILD-01 blocked: missing Runtime-owned ${binary} executable.`,
       );
     }
-  }
-  if (
-    ![...paths].some((path) => path.startsWith("dependencies/python/packages/"))
-  ) {
-    throw new Error(
-      "AT-RT-BUILD-01 blocked: missing Runtime-owned Python package closure.",
-    );
   }
   if (
     ![...paths].some(
@@ -388,14 +351,13 @@ function assertRequiredRuntimeInputs(entries, target) {
   }
 }
 
-function libreofficeBinaryPath(target, extension) {
-  if (target.startsWith("win32")) {
-    return "dependencies/native/libreoffice/program/soffice.com";
-  }
-  const relativePath = target.startsWith("darwin")
-    ? "libreoffice/LibreOffice.app/Contents/MacOS/soffice"
-    : "libreoffice/program/soffice";
-  return `dependencies/native/${relativePath}${extension}`;
+async function collectBundledSkillEntries() {
+  const root = fileURLToPath(new URL("../skills", import.meta.url));
+  const entries = [];
+  await collectDirectory({ root, directory: root, entries });
+  return entries
+    .filter((entry) => entry.path === "officecli/SKILL.md")
+    .map((entry) => ({ ...entry, path: `skills/${entry.path}` }));
 }
 
 async function collectInputEntries(inputRoot) {
@@ -404,7 +366,6 @@ async function collectInputEntries(inputRoot) {
   return entries.filter(
     (entry) =>
       entry.path.startsWith("dependencies/") ||
-      entry.path.startsWith("plugins/") ||
       entry.path.startsWith("fonts/"),
   );
 }

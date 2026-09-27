@@ -10,8 +10,9 @@ marker, not a Runtime protocol generation and not an admission condition.
   healthy. Missing, installing, or broken Runtime recovery remains a Plugin
   Center responsibility and does not publish an unusable dynamic tool.
 - When the Runtime is healthy, workspace instructions may direct the model to
-  the loader's path-only result. `presentation-skill` becomes usable after its
-  marketplace/skill synchronization and `skills/list { forceReload: true }`.
+  the loader's path-only result. The Runtime-owned `officecli` skill becomes
+  usable after its marketplace/skill synchronization and
+  `skills/list { forceReload: true }`.
 - Thread-start `dynamicTools` remain immutable. Resuming an existing thread
   does not receive an invented tool or a Runtime-specific rejection gate.
 - Runtime-owned plugins are identified as `primary-runtime:<bundleVersion>`;

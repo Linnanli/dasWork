@@ -71,6 +71,66 @@ describe('RuntimeOwnedSkillManager', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('can roll back a replaced managed namespace after a later reload failure', async () => {
+    const fixture = await createFixture()
+    await fixture.manager().reconcile()
+    const originalSkillPath = join(
+      fixture.codexHome,
+      'skills',
+      'dascowork-primary-runtime',
+      'presentation-skill',
+      'SKILL.md'
+    )
+    await expect(readFile(originalSkillPath, 'utf8')).resolves.toBe(fixture.skill)
+
+    const replacement = await createSkill(fixture.runtimeRoot, {
+      directory: 'officecli',
+      content: '# Runtime-owned OfficeCLI skill\n'
+    })
+    const transaction = await fixture
+      .manager({ bundledSkills: [replacement] })
+      .reconcileWithRollback()
+
+    expect(transaction.result).toMatchObject({ copiedSkills: ['officecli'] })
+    await expect(
+      readFile(
+        join(fixture.codexHome, 'skills', 'dascowork-primary-runtime', 'officecli', 'SKILL.md'),
+        'utf8'
+      )
+    ).resolves.toBe('# Runtime-owned OfficeCLI skill\n')
+
+    await transaction.rollback()
+
+    await expect(readFile(originalSkillPath, 'utf8')).resolves.toBe(fixture.skill)
+    await expect(
+      readdir(join(fixture.codexHome, 'skills', 'dascowork-primary-runtime', 'officecli'))
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('does not move the current managed namespace through skillsToRemove', async () => {
+    const fixture = await createFixture()
+    await fixture.manager().reconcile()
+
+    const replacement = await createSkill(fixture.runtimeRoot, {
+      directory: 'officecli',
+      content: '# Runtime-owned OfficeCLI skill\n'
+    })
+    const result = await fixture
+      .manager({
+        bundledSkills: [replacement],
+        skillsToRemove: ['dascowork-primary-runtime/presentation-skill']
+      })
+      .reconcile()
+
+    expect(result).toEqual({ copiedSkills: ['officecli'], legacySkillsMoved: [] })
+    await expect(
+      readFile(
+        join(fixture.codexHome, 'skills', 'dascowork-primary-runtime', 'officecli', 'SKILL.md'),
+        'utf8'
+      )
+    ).resolves.toBe('# Runtime-owned OfficeCLI skill\n')
+  })
+
   it('does not remove an unmarked user namespace when the active Runtime declares no skills', async () => {
     const fixture = await createFixture()
     const userDirectory = join(fixture.codexHome, 'skills', 'dascowork-primary-runtime')
@@ -94,6 +154,7 @@ describe('RuntimeOwnedSkillManager', () => {
 
 async function createFixture(): Promise<{
   codexHome: string
+  runtimeRoot: string
   skill: string
   manager(overrides?: {
     bundledSkills?: Array<{ path: string; sha256: string }>
@@ -104,25 +165,15 @@ async function createFixture(): Promise<{
   directories.push(root)
   const codexHome = join(root, 'codex-home')
   const runtimeRoot = join(root, 'runtime')
-  const skillPath = join(
-    runtimeRoot,
-    'plugins',
-    'presentation-skill',
-    'plugins',
-    'presentation-skill',
-    'skills',
-    'presentation-skill',
-    'SKILL.md'
-  )
   const skill = '# Runtime-owned presentation skill\n'
   await mkdir(join(codexHome, 'skills'), { recursive: true })
-  await mkdir(join(skillPath, '..'), { recursive: true })
-  await writeFile(skillPath, skill)
-  const relativeSkillPath =
-    'plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill/SKILL.md'
-  const sha256 = createHash('sha256').update(skill).digest('hex')
+  const bundledSkill = await createSkill(runtimeRoot, {
+    directory: 'presentation-skill',
+    content: skill
+  })
   return {
     codexHome,
+    runtimeRoot,
     skill,
     manager: (overrides = {}) =>
       new RuntimeOwnedSkillManager({
@@ -130,9 +181,23 @@ async function createFixture(): Promise<{
         runtimeRoot,
         bundleVersion: 'test-v1',
         manifest: {
-          bundledSkills: overrides.bundledSkills ?? [{ path: relativeSkillPath, sha256 }],
+          bundledSkills: overrides.bundledSkills ?? [bundledSkill],
           skillsToRemove: overrides.skillsToRemove ?? []
         }
       })
+  }
+}
+
+async function createSkill(
+  runtimeRoot: string,
+  input: { directory: string; content: string }
+): Promise<{ path: string; sha256: string }> {
+  const relativeSkillPath = `plugins/${input.directory}/plugins/${input.directory}/skills/${input.directory}/SKILL.md`
+  const skillPath = join(runtimeRoot, relativeSkillPath)
+  await mkdir(join(skillPath, '..'), { recursive: true })
+  await writeFile(skillPath, input.content)
+  return {
+    path: relativeSkillPath,
+    sha256: createHash('sha256').update(input.content).digest('hex')
   }
 }

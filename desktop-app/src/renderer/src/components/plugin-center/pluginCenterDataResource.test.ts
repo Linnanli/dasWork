@@ -808,8 +808,8 @@ describe('pluginCenterDataResource', () => {
       id: 'plugin:primary-runtime',
       name: 'primary-runtime',
       installedAt: 400,
-      marketplaceId: 'presentation-skill',
-      marketplaceName: 'presentation-skill'
+      marketplaceId: 'officecli',
+      marketplaceName: 'officecli'
     }
     const adminDisabled = {
       ...notion,
@@ -980,11 +980,12 @@ describe('pluginCenterDataResource', () => {
       })
     ]
     const builtIn = [
-      ['documents', 'Documents', 'presentation-skill'],
-      ['pdf', 'PDF', 'presentation-skill'],
-      ['spreadsheets', 'Spreadsheets', 'presentation-skill'],
+      ['documents', 'Documents', 'officecli'],
+      ['pdf', 'PDF', 'officecli'],
+      ['spreadsheets', 'Spreadsheets', 'officecli'],
+      ['officecli', 'OfficeCLI', 'officecli'],
       ['presentation-skill', 'Presentation Skill', 'presentation-skill'],
-      ['template-creator', 'Template Creator', 'presentation-skill'],
+      ['template-creator', 'Template Creator', 'officecli'],
       ['sites', 'Sites', 'openai-bundled'],
       ['visualize', 'Visualize', 'openai-bundled']
     ].map(([name, displayName, marketplaceId]) =>
@@ -1049,11 +1050,12 @@ describe('pluginCenterDataResource', () => {
       'GitHub',
       'OpenAI Templates',
       'Plugin Management',
+      'Presentation Skill',
       'Browser',
       'Documents',
       'PDF',
       'Spreadsheets',
-      'Presentation Skill',
+      'OfficeCLI',
       'Template Creator',
       'Sites',
       'Visualize'

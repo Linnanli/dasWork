@@ -229,13 +229,19 @@ describe('BundledPluginManager', () => {
       response.marketplaces[0]!.name = entry.marketplaceName
       return response
     }
+    const order: string[] = []
     const client = catalogClient({
       listInstalledPluginsForManagement: vi.fn(async ({ cwd } = {}) =>
         cwd === retired.marketplaceRoot
           ? responseFor(retired, retiredEnabled)
           : responseFor(current, true)
       ),
+      listSkillsForManagement: vi.fn(async () => {
+        order.push('reload')
+        return []
+      }),
       setPluginEnabled: vi.fn(async ({ pluginId, enabled }) => {
+        order.push(`set-${pluginId}-${enabled}`)
         if (pluginId === 'obsolete-skill@obsolete-skill' && !enabled) retiredEnabled = false
       })
     })
@@ -254,6 +260,7 @@ describe('BundledPluginManager', () => {
       pluginId: 'obsolete-skill@obsolete-skill',
       enabled: false
     })
+    expect(order).toEqual(['reload', 'set-obsolete-skill@obsolete-skill-false'])
   })
 
   it('does not retire a Runtime plugin when the active desired set replaced the same logical plugin', async () => {
@@ -399,6 +406,65 @@ describe('BundledPluginManager', () => {
       failures: [{ stage: 'sync_skills', message: 'legacy skill move failed' }]
     })
     expect(client.listSkillsForManagement).not.toHaveBeenCalled()
+  })
+
+  it('supports a Runtime that publishes standalone skills without Runtime-owned plugins', async () => {
+    const order: string[] = []
+    const client = catalogClient({
+      listSkillsForManagement: vi.fn(async () => {
+        order.push('reload')
+        return []
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [],
+      syncRuntimeSkills: async () => {
+        order.push('sync-skills')
+      }
+    }).reconcile()
+
+    expect(result).toMatchObject({ status: 'ready', reconciled: [], failures: [] })
+    expect(order).toEqual(['sync-skills', 'reload'])
+    expect(client.listInstalledPluginsForManagement).not.toHaveBeenCalled()
+  })
+
+  it('rolls Runtime-owned skills back and keeps old plugins enabled when reload fails', async () => {
+    const retired: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'presentation-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/plugins/presentation-skill',
+      pluginName: 'presentation-skill',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:1'
+    }
+    const rollback = vi.fn(async () => undefined)
+    const client = catalogClient({
+      listSkillsForManagement: vi.fn(async () => {
+        throw new Error('reload failed')
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor],
+      retiredDescriptors: [retired],
+      syncRuntimeSkills: async () => rollback
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [{ stage: 'reload_skills', message: 'reload failed' }]
+    })
+    expect(rollback).toHaveBeenCalledOnce()
+    expect(client.setPluginEnabled).not.toHaveBeenCalledWith(
+      expect.objectContaining({ pluginId: 'presentation-skill@presentation-skill', enabled: false })
+    )
   })
 
   it('exposes deterministic internal plugin ids for UI hiding', async () => {

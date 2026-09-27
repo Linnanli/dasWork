@@ -474,31 +474,27 @@ test("macOS DMG extraction is temporary and produces only the locked application
   assert.match(source, /\["detach", mountpoint, "-force"\]/u);
 });
 
-test("P1 rendering uses only the Runtime-owned presentation plugin scripts", async () => {
+test("P1 Office smoke uses only Runtime-owned OfficeCLI without browser screenshots", async () => {
   const [materializerSource, verifierSource] = await Promise.all([
     readFile(materializeScript, "utf8"),
     readFile(verifyInputsScript, "utf8"),
   ]);
 
-  assert.match(
-    materializerSource,
-    /scripts\/design_tokens\.py[\s\S]*?scripts\/design_tokens\.py/u,
-  );
-  assert.match(verifierSource, /build_deck_pptxgenjs\.js/u);
-  assert.match(verifierSource, /layout_lint\.py/u);
-  assert.match(verifierSource, /render_slides\.py/u);
-  assert.match(verifierSource, /presentation-plugin-create-chinese-deck/u);
-  assert.match(verifierSource, /presentation-plugin-layout-lint/u);
-  assert.match(verifierSource, /presentation-plugin-render-slides/u);
-  assert.match(verifierSource, /variant: "table"/u);
-  assert.match(verifierSource, /variant: "chart"/u);
-  assert.match(verifierSource, /variant: "image-sidebar"/u);
-  assert.match(verifierSource, /PPTX_RUNTIME_SOFFICE: soffice/u);
-  assert.match(verifierSource, /PPTX_RUNTIME_PDFTOPPM: pdftoppm/u);
-  assert.match(verifierSource, /runtimeUtilityPaths\(target\)/u);
-  assert.match(verifierSource, /\["\/usr\/bin", "\/bin"\]/u);
+  assert.match(materializerSource, /async function materializeOfficeCli/u);
+  assert.match(materializerSource, /prebuilt-binary/u);
+  assert.match(verifierSource, /officecli-version/u);
+  assert.match(verifierSource, /officecli-create-\$\{kind\}-original/u);
+  assert.match(verifierSource, /officecli-add-docx-paragraph-copy/u);
+  assert.match(verifierSource, /officecli-add-xlsx-cell-copy/u);
+  assert.match(verifierSource, /officecli-validate-pptx-copy/u);
+  assert.match(verifierSource, /officecli-view-pptx-svg-copy/u);
+  assert.match(verifierSource, /jsonSuccess: parsed\.success/u);
+  assert.match(verifierSource, /warningCount: warnings\.length/u);
+  assert.match(verifierSource, /OfficeCLI smoke modified original/u);
+  assert.match(verifierSource, /OFFICECLI_SKIP_UPDATE: "1"/u);
+  assert.match(verifierSource, /OFFICECLI_NO_AUTO_RESIDENT: "1"/u);
   assert.match(verifierSource, /PYTHONDONTWRITEBYTECODE: "1"/u);
-  assert.doesNotMatch(verifierSource, /create-smoke\.cjs|pptxgenjs-create-chinese-deck/u);
+  assert.doesNotMatch(verifierSource, /screenshot|presentation-plugin|build_deck_pptxgenjs/u);
 });
 
 test("platform validation restores each archived input mode from its manifest", async () => {
@@ -545,7 +541,7 @@ test("hash-bound Runtime metadata keeps LF bytes on Windows checkouts", async ()
   }
 });
 
-test("the locked presentation-plugin archive strips only its GitHub tag wrapper", async () => {
+test("the locked OfficeCLI release asset materializes as an unstripped binary", async () => {
   const [sourceLock, toolchainsLock] = await Promise.all([
     readRuntimeSourcesLock(sourceLockPath),
     readRuntimeToolchainsLock(toolchainsLockPath),
@@ -554,8 +550,9 @@ test("the locked presentation-plugin archive strips only its GitHub tag wrapper"
     sourceLock,
     toolchainsLock,
     target: currentRuntimeTarget(),
-  }).find((artifact) => artifact.name === "presentation-skill-source");
-  assert.equal(source?.stripComponents, 1);
+  }).find((artifact) => artifact.kind === "component:native" && artifact.capability === "officecli");
+  assert.equal(source?.archiveFormat, "binary");
+  assert.equal(source?.stripComponents, undefined);
 });
 
 test("ZIP Runtime inputs without a strip rule extract from their source root", async () => {
@@ -744,60 +741,40 @@ test("P1 scripts resolve default lock paths through file URLs safely on Windows"
   }
 });
 
-test("Windows Runtime keeps the official Node ZIP executable at its extracted root", async () => {
+test("v3 Runtime no longer requires a Node ZIP executable for Office capability", async () => {
   const [verifier, builder] = await Promise.all([
     readFile(verifyInputsScript, "utf8"),
     readFile(resolve(import.meta.dirname, "../scripts/build-runtime.mjs"), "utf8"),
   ]);
 
-  assert.match(
-    verifier,
-    /target\.startsWith\("win32"\)[\s\S]*?dependencies\/node\/node\.exe/u,
-  );
-  assert.match(
-    builder,
-    /platform === "win32"[\s\S]*?dependencies\/node\/node\.exe/u,
-  );
-  assert.doesNotMatch(verifier, /dependencies\/node\/bin\/node\.exe/u);
-  assert.doesNotMatch(builder, /dependencies\/node\/bin\/node\.exe/u);
+  assert.doesNotMatch(verifier, /dependencies\/node\/node\.exe/u);
+  assert.doesNotMatch(builder, /dependencies\/node\/node\.exe/u);
+  assert.match(builder, /bundleFormatVersion: 3/u);
 });
 
-test("Windows Runtime input verification isolates LibreOffice and bounds child commands", async () => {
+
+test("v3 Runtime input verification uses OfficeCLI and does not require LibreOffice", async () => {
   const verifier = await readFile(verifyInputsScript, "utf8");
 
   assert.match(verifier, /DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS/u);
   assert.match(verifier, /primary-runtime:verify-inputs\] start/u);
-  assert.match(verifier, /libreoffice-profile/u);
-  assert.match(verifier, /primary-runtime-lo-version-/u);
-  assert.match(verifier, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
-  assert.match(verifier, /name === "soffice" && target\.startsWith\("win32"\)/u);
-  assert.match(verifier, /\? "\.com"/u);
-  assert.match(verifier, /APPDATA/u);
-  assert.match(verifier, /LOCALAPPDATA/u);
+  assert.match(verifier, /officecli-version/u);
+  assert.match(verifier, /officecli-view-pptx-svg/u);
+  assert.match(verifier, /poppler-pdfinfo-version/u);
+  assert.doesNotMatch(verifier, /libreoffice-version/u);
+  assert.doesNotMatch(verifier, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
+  assert.doesNotMatch(verifier, /name === "soffice"/u);
   assert.match(verifier, /timed out after \$\{defaultCommandTimeoutMs\}ms/u);
   assert.doesNotMatch(verifier, /runRawCommand\("(?:ldd|otool)"/u);
+
   const patch = await readFile(
     resolve(import.meta.dirname, "../patches/presentation-skill-runtime-v0.8.0.patch"),
     "utf8",
   );
   assert.match(patch, /PPTX_RUNTIME_SOFFICE_USER_INSTALLATION/u);
-  assert.match(patch, /-env:UserInstallation=file:/u);
-  assert.match(patch, /\+    if not value:\n\+        return \[\]/u);
-  assert.match(patch, /pdf:impress_pdf_Export/u);
   assert.match(patch, /Runtime LibreOffice conversion failed/u);
-  assert.match(patch, /\+    command = \[soffice, \*user_installation, \*base_args\]/u);
-  assert.match(patch, /str\(pptx_path\)/u);
-  assert.doesNotMatch(
-    patch,
-    /command_cwd|soffice_command|retry_profile|sibling_command|_windows_short_path|GetShortPathNameW/u,
-  );
-  assert.doesNotMatch(patch, /_windows_render_input/u);
-  assert.doesNotMatch(patch, /_windows_placeholder_render/u);
-  assert.doesNotMatch(patch, /non-ASCII image descriptions/u);
-  assert.doesNotMatch(patch, /ppt\/charts\/|ppt\/embeddings\/|ppt\/slides\//u);
-  assert.doesNotMatch(patch, /<p:graphicFrame|<p:pic|ImageDraw|zipfile/u);
-  assert.doesNotMatch(patch, /except RuntimeError:[\s\S]*os\.name != "nt"[\s\S]*generated =/u);
 });
+
 
 test("materialization keeps source-build intermediates outside the immutable input root", async () => {
   const source = await readFile(materializeScript, "utf8");
@@ -812,19 +789,15 @@ test("materialization keeps source-build intermediates outside the immutable inp
   );
 });
 
-test("Runtime plugin lock records the copied manifest version and archive verification binds them", async () => {
+test("Runtime manifest exposes OfficeCLI as a native binary without bundling presentation-skill", async () => {
   const [materializer, verifier] = await Promise.all([
     readFile(materializeScript, "utf8"),
     readFile(resolve(import.meta.dirname, "../scripts/verify-runtime.mjs"), "utf8"),
   ]);
 
-  assert.match(materializer, /\.codex-plugin",\s*"plugin\.json"/u);
-  assert.match(materializer, /version: pluginManifest\.version/u);
-  assert.match(
-    verifier,
-    /pluginManifest\?\.name !== item\.name \|\| pluginManifest\?\.version !== item\.version/u,
-  );
-  assert.match(verifier, /bundled plugin manifest does not match lock/u);
+  assert.match(materializer, /materializeOfficeCli/u);
+  assert.match(verifier, /for \(const binary of manifest\.binaries/u);
+  assert.doesNotMatch(materializer, /writeRuntimePluginMarketplace/u);
 });
 
 async function createInputFixture() {
@@ -843,17 +816,12 @@ async function createInputFixture() {
     toolchainsLockPath,
   };
   await mkdir(join(inputRoot, "dependencies/node/bin"), { recursive: true });
-  await mkdir(join(inputRoot, "plugins/presentation-skill"), {
-    recursive: true,
-  });
+  await mkdir(join(inputRoot, "dependencies/native/officecli"), { recursive: true });
   await writeFile(
     join(inputRoot, "dependencies/node/bin/node"),
     "fixture runtime\n",
   );
-  await writeFile(
-    join(inputRoot, "plugins/presentation-skill/fixture.txt"),
-    "fixture plugin\n",
-  );
+  await writeFile(join(inputRoot, "dependencies/native/officecli/officecli"), "fixture officecli\n");
   await createFixtureManifest(fixture);
   return fixture;
 }
@@ -874,12 +842,7 @@ async function createFixtureManifest(fixture) {
       toolchainsLock,
       target: fixture.target,
     }),
-    patches: [
-      {
-        path: sourceLock.candidate.patch.path,
-        sha256: sourceLock.candidate.patch.sha256,
-      },
-    ],
+    patches: [],
     builder: {
       name: "@dascowork/primary-runtime-materializer",
       version: toolchainsLock.materializerVersion,

@@ -1,7 +1,8 @@
 import { readFile, realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 import { z } from 'zod'
+import type { PluginInstalledResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/PluginInstalledResponse'
 
 import type { PrimaryRuntimeDiagnostic } from '../primaryRuntime'
 
@@ -11,9 +12,7 @@ const bundleFileSchema = z.object({
   mode: z.literal('executable').optional()
 })
 
-const relativeBundlePathSchema = z
-  .string()
-  .regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u)
+const relativeBundlePathSchema = z.string().regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u)
 
 const bundleProvenanceSchema = z.discriminatedUnion('kind', [
   z
@@ -255,6 +254,63 @@ export async function readPrimaryRuntimeBundledPluginDescriptors(
         owner: `primary-runtime:${diagnostic.manifest!.bundleVersion}` as const
       }))
     )
+  }
+  return descriptors
+}
+
+export async function readRetiredPrimaryRuntimeBundledPluginDescriptors(input: {
+  installed: PluginInstalledResponse
+  cacheRoot: string
+  activeDescriptors: readonly BundledPluginDescriptor[]
+}): Promise<BundledPluginDescriptor[]> {
+  const versionsRoot = await realpath(join(input.cacheRoot, 'versions')).catch(() => null)
+  if (!versionsRoot) return []
+
+  const activeMarketplacePaths = new Set<string>()
+  for (const descriptor of input.activeDescriptors) {
+    if (descriptor.sourceKind !== 'primary-runtime') continue
+    const marketplacePath = await realpath(descriptor.marketplacePath).catch(() => null)
+    if (marketplacePath) activeMarketplacePaths.add(marketplacePath)
+  }
+
+  const descriptors: BundledPluginDescriptor[] = []
+  for (const marketplace of input.installed.marketplaces) {
+    if (!marketplace.path) continue
+    const marketplacePath = await realpath(marketplace.path).catch(() => null)
+    if (!marketplacePath) continue
+    if (!isPathInside(versionsRoot, marketplacePath)) continue
+    if (activeMarketplacePaths.has(marketplacePath)) continue
+
+    const marketplaceRoot = dirname(dirname(dirname(marketplacePath)))
+    if (!isPathInside(versionsRoot, marketplaceRoot)) continue
+
+    for (const plugin of marketplace.plugins) {
+      if (!plugin.installed || plugin.source.type !== 'local') continue
+      const pluginRoot = await realpath(plugin.source.path).catch(() => null)
+      if (!pluginRoot) continue
+      if (!isPathInside(marketplaceRoot, pluginRoot)) continue
+      if (
+        input.activeDescriptors.some(
+          (descriptor) =>
+            descriptor.marketplaceName === marketplace.name && descriptor.pluginName === plugin.name
+        )
+      ) {
+        continue
+      }
+
+      descriptors.push({
+        marketplaceName: marketplace.name,
+        marketplaceRoot,
+        marketplacePath,
+        pluginRoot,
+        pluginName: plugin.name,
+        version: plugin.localVersion ?? plugin.version ?? 'unknown',
+        installWhenMissing: false,
+        internal: true,
+        sourceKind: 'primary-runtime',
+        owner: 'primary-runtime:retired-cache'
+      })
+    }
   }
   return descriptors
 }

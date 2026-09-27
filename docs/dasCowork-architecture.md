@@ -190,4 +190,4 @@ npm --prefix desktop-app run verify:real-codex-app-server-contract
 
 App Tools、Primary Runtime 或 bundled plugins 改动还需运行对应 release gate、真实 Runtime smoke 和 packaged smoke。涉及真实聊天链路时，端到端证据必须覆盖 Renderer → IPC → Main → AI-free client → Codex app server，必要时再覆盖 `item/tool/call` → Main registry。
 
-Runtime feed 与 builder 另有独立验证：`npm --prefix primary-runtime test`、`npm --prefix services/primary-runtime-feed test` 和 `npm --prefix desktop-app run verify:app-tools-release-gates`。没有授权的 Runtime source、四目标原生 P1a/P3b receipt、独立审查预算或 deterministic `presentation-skill` 产物证据时，engineering gate 必须保持关闭；普通聊天不受该功能降级影响。GitHub artifact 不是生产发布物，也不依赖平台信任回执。
+Runtime feed 与 builder 另有独立验证：`npm --prefix primary-runtime test`、`npm --prefix services/primary-runtime-feed test` 和 `npm --prefix desktop-app run verify:app-tools-release-gates`。没有授权的 Runtime source、四目标原生 P1a/P3b receipt、独立审查预算或 deterministic OfficeCLI R07 产物与预览证据时，engineering gate 必须保持关闭；普通聊天不受该功能降级影响。GitHub artifact 不是生产发布物，也不依赖平台信任回执。

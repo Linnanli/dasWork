@@ -1,9 +1,15 @@
 # ADR: Primary Runtime reference delivery
 
+> Current note, 2026-09-27: this ADR is historical for the v1/v2 rollback
+> fixture and the original presentation delivery shape. The current production
+> Office capability uses the Runtime-owned `officecli` skill plus OfficeCLI
+> binary dependencies, with release gates and smoke tests named
+> `smoke:office-runtime`.
+
 ## Status
 
-Accepted for implementation. P0 selected the immutable `siril9/presentation-skill`
-`v0.8.0` source snapshot recorded in
+Accepted for implementation. P0 originally selected the immutable
+`siril9/presentation-skill` `v0.8.0` source snapshot recorded in
 [`runtime-sources.lock.json`](../../primary-runtime/runtime-sources.lock.json).
 P1 remains responsible for creating and clean-runner validating the four target
 Runtime archives. Engineering metadata is signed only with a runner-temporary test
@@ -18,12 +24,12 @@ discovery, installation, activation, plugin reconciliation, and capability
 publication; the Renderer receives only business status and never a Runtime
 root, feed URL, keyring, certificate, or archive path.
 
-The Runtime-owned PPT plugin is the sole product-specific difference from the
-reference delivery contract. Its source snapshot is patched to permit only
-**new PPTX creation + automated QA + workspace preview**. It runs by the normal
-app-server command path after `load_workspace_dependencies` returns the
-allowlisted Runtime paths. It does not introduce a PPT-specific Main-process
-tool or execution service.
+The original Runtime-owned PPT plugin was the sole product-specific difference
+from the reference delivery contract. That v1/v2 fixture is kept for rollback
+and provenance checks. Current Office production gates use the Runtime-owned
+`officecli` skill after `load_workspace_dependencies` returns the allowlisted
+OfficeCLI path. It still runs by the normal app-server command path and does
+not introduce a PPT-specific Main-process tool or execution service.
 
 The release pipeline may write an engineering config endpoint, allowed origins, and
 role-scoped public keyrings into a test package resource. Packaged Main reads only that

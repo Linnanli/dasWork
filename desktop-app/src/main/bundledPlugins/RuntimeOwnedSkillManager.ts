@@ -27,6 +27,17 @@ export type RuntimeOwnedSkillReconcileResult = {
   legacySkillsMoved: string[]
 }
 
+export type RuntimeOwnedSkillReconcileTransaction = {
+  result: RuntimeOwnedSkillReconcileResult
+  rollback(): Promise<void>
+}
+
+type LegacySkillMove = {
+  requestedPath: string
+  target: string
+  backup: string
+}
+
 /**
  * Materializes only manifest-declared Runtime skills below a dedicated Codex
  * skills namespace. The namespace marker prevents an install from replacing a
@@ -43,18 +54,39 @@ export class RuntimeOwnedSkillManager {
   ) {}
 
   async reconcile(): Promise<RuntimeOwnedSkillReconcileResult> {
+    const transaction = await this.reconcileWithRollback()
+    return transaction.result
+  }
+
+  async reconcileWithRollback(): Promise<RuntimeOwnedSkillReconcileTransaction> {
     const skillsRoot = await this.skillsRoot()
-    const legacySkillsMoved = await this.moveLegacySkills(skillsRoot)
     const skills = await this.resolveSources()
+    const legacySkillMoves = await this.moveLegacySkills(skillsRoot)
+    let rollbackManagedSkills: (() => Promise<void>) | undefined
     if (skills.length === 0) {
-      await this.removeManagedSkills(skillsRoot)
-      return { copiedSkills: [], legacySkillsMoved }
+      rollbackManagedSkills = await this.removeManagedSkills(skillsRoot)
+      return {
+        result: {
+          copiedSkills: [],
+          legacySkillsMoved: legacySkillMoves.map((move) => move.requestedPath)
+        },
+        rollback: async () => {
+          await rollbackManagedSkills?.()
+          await restoreLegacySkills(legacySkillMoves)
+        }
+      }
     }
 
-    await this.replaceManagedSkills(skillsRoot, skills)
+    rollbackManagedSkills = await this.replaceManagedSkills(skillsRoot, skills)
     return {
-      copiedSkills: skills.map((skill) => basename(dirname(skill.path))).sort(),
-      legacySkillsMoved
+      result: {
+        copiedSkills: skills.map((skill) => basename(dirname(skill.path))).sort(),
+        legacySkillsMoved: legacySkillMoves.map((move) => move.requestedPath)
+      },
+      rollback: async () => {
+        await rollbackManagedSkills?.()
+        await restoreLegacySkills(legacySkillMoves)
+      }
     }
   }
 
@@ -64,10 +96,20 @@ export class RuntimeOwnedSkillManager {
     return realpath(root)
   }
 
-  private async moveLegacySkills(skillsRoot: string): Promise<string[]> {
-    const moved: string[] = []
+  private async moveLegacySkills(skillsRoot: string): Promise<LegacySkillMove[]> {
+    const moved: LegacySkillMove[] = []
     for (const requestedPath of this.input.manifest.skillsToRemove ?? []) {
       const target = pathInside(skillsRoot, requestedPath, 'legacy skill')
+      const managedDistance = relative(
+        pathInside(skillsRoot, MANAGED_SKILLS_DIRECTORY, 'managed skills'),
+        target
+      )
+      if (
+        managedDistance === '' ||
+        (!managedDistance.startsWith('..') && !isAbsolute(managedDistance))
+      ) {
+        continue
+      }
       const details = await lstat(target).catch((error: NodeJS.ErrnoException) => {
         if (error.code === 'ENOENT') return null
         throw error
@@ -81,7 +123,7 @@ export class RuntimeOwnedSkillManager {
       await mkdir(backupRoot, { recursive: true })
       const backup = join(backupRoot, `${basename(target)}-${Date.now()}-${randomUUID()}`)
       await rename(target, backup)
-      moved.push(requestedPath)
+      moved.push({ requestedPath, target, backup })
     }
     return moved
   }
@@ -122,22 +164,29 @@ export class RuntimeOwnedSkillManager {
     return sources
   }
 
-  private async removeManagedSkills(skillsRoot: string): Promise<void> {
+  private async removeManagedSkills(skillsRoot: string): Promise<() => Promise<void>> {
     const managedRoot = pathInside(skillsRoot, MANAGED_SKILLS_DIRECTORY, 'managed skills')
     const managedRootDetails = await lstat(managedRoot).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
       throw error
     })
-    if (!managedRootDetails) return
+    if (!managedRootDetails) return async () => undefined
 
     await assertManagedRoot(managedRoot)
-    await rm(managedRoot, { recursive: true, force: false })
+    const backupRoot = join(this.input.codexHome, '.tmp', 'primary-runtime-skills')
+    await mkdir(backupRoot, { recursive: true })
+    const backup = join(backupRoot, `previous-${randomUUID()}`)
+    await rename(managedRoot, backup)
+    return async () => {
+      await rm(managedRoot, { recursive: true, force: true }).catch(() => undefined)
+      await rename(backup, managedRoot)
+    }
   }
 
   private async replaceManagedSkills(
     skillsRoot: string,
     skills: readonly RuntimeSkillSource[]
-  ): Promise<void> {
+  ): Promise<() => Promise<void>> {
     const managedRoot = pathInside(skillsRoot, MANAGED_SKILLS_DIRECTORY, 'managed skills')
     const managedRootDetails = await lstat(managedRoot).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
@@ -183,9 +232,27 @@ export class RuntimeOwnedSkillManager {
         if (backup) await rename(backup, managedRoot).catch(() => undefined)
         throw error
       }
+      return async () => {
+        const failedRoot = join(stagingParent, `failed-${randomUUID()}`)
+        await rename(managedRoot, failedRoot).catch(async (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error
+        })
+        if (backup) {
+          await rename(backup, managedRoot)
+        }
+        await rm(failedRoot, { recursive: true, force: true }).catch(() => undefined)
+      }
     } finally {
       await rm(stagingRoot, { recursive: true, force: true }).catch(() => undefined)
     }
+  }
+}
+
+async function restoreLegacySkills(moves: readonly LegacySkillMove[]): Promise<void> {
+  for (const move of [...moves].reverse()) {
+    await mkdir(dirname(move.target), { recursive: true })
+    await rm(move.target, { recursive: true, force: true }).catch(() => undefined)
+    await rename(move.backup, move.target)
   }
 }
 

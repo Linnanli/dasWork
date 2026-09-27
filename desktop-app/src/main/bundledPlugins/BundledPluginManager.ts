@@ -31,7 +31,7 @@ export type BundledPluginReconcileItem = {
 }
 
 export type BundledPluginReconcileFailure = {
-  descriptor: BundledPluginDescriptor
+  descriptor?: BundledPluginDescriptor
   stage: 'sync_plugins' | 'sync_skills' | 'reload_skills'
   message: string
 }
@@ -75,7 +75,7 @@ export class BundledPluginManager {
       invalidateCaches?: () => Promise<void> | void
       installAttempts?: number
       /** Runtime-owned standalone skills must be reconciled after plugins and before reload. */
-      syncRuntimeSkills?: () => Promise<void>
+      syncRuntimeSkills?: () => Promise<void | (() => Promise<void>)>
     }
   ) {
     this.descriptors = input.descriptors
@@ -101,6 +101,7 @@ export class BundledPluginManager {
     const reconciled: BundledPluginReconcileItem[] = []
     const failures: BundledPluginReconcileFailure[] = []
     let catalogReadFailures = 0
+    let rollbackRuntimeSkills: (() => Promise<void>) | undefined
 
     for (const descriptor of this.descriptors) {
       if (!descriptor.installWhenMissing) continue
@@ -121,55 +122,90 @@ export class BundledPluginManager {
       }
     }
 
-    for (const descriptor of this.input.retiredDescriptors ?? []) {
-      if (this.descriptors.some((current) => sameBundledPluginIdentity(current, descriptor)))
-        continue
-      try {
-        const item = await this.retireOne(descriptor)
-        if (item) reconciled.push(item)
-      } catch (error) {
-        failures.push({ descriptor, stage: 'sync_plugins', message: messageFor(error) })
-      }
-    }
-
     // Keep the reference ordering: marketplace reconcile, Runtime-owned skill
-    // sync/removal, then an app-server skill reload. A failure at any stage
-    // prevents this active Runtime from being reported as plugin-ready.
-    if (failures.length === 0 && this.descriptors.length > 0) {
+    // sync/removal, then an app-server skill reload, then retirement of the
+    // obsolete Runtime-owned plugin. A failure at any stage prevents this active
+    // Runtime from being reported as ready.
+    if (failures.length === 0 && this.input.syncRuntimeSkills) {
       try {
-        await this.input.syncRuntimeSkills?.()
+        rollbackRuntimeSkills = (await this.input.syncRuntimeSkills()) ?? undefined
       } catch (error) {
         failures.push({
-          descriptor: this.descriptors[0]!,
+          ...(this.descriptors[0] ? { descriptor: this.descriptors[0] } : {}),
           stage: 'sync_skills',
           message: messageFor(error)
         })
       }
     }
 
-    if (failures.length === 0 && this.descriptors.length > 0) {
+    if (failures.length === 0 && (this.descriptors.length > 0 || this.input.syncRuntimeSkills)) {
       try {
         await this.input.catalogClient.listSkillsForManagement({ forceReload: true })
       } catch (error) {
         failures.push({
-          descriptor: this.descriptors[0]!,
+          ...(this.descriptors[0] ? { descriptor: this.descriptors[0] } : {}),
           stage: 'reload_skills',
           message: messageFor(error)
         })
       }
     }
 
+    if (failures.length === 0) {
+      for (const descriptor of this.input.retiredDescriptors ?? []) {
+        if (this.descriptors.some((current) => sameBundledPluginIdentity(current, descriptor)))
+          continue
+        try {
+          const item = await this.retireOne(descriptor)
+          if (item) reconciled.push(item)
+        } catch (error) {
+          await this.restoreRetiredPlugin(descriptor).catch(() => undefined)
+          failures.push({ descriptor, stage: 'sync_plugins', message: messageFor(error) })
+          break
+        }
+      }
+    }
+
+    if (failures.length > 0 && rollbackRuntimeSkills) {
+      try {
+        await rollbackRuntimeSkills()
+      } catch (error) {
+        failures.push({
+          ...(this.descriptors[0] ? { descriptor: this.descriptors[0] } : {}),
+          stage: 'sync_skills',
+          message: `Runtime-owned skill rollback failed: ${messageFor(error)}`
+        })
+      }
+      await this.input.catalogClient
+        .listSkillsForManagement({ forceReload: true })
+        .catch(() => undefined)
+    }
+
+    const installableDescriptorCount = this.descriptors.filter(
+      (entry) => entry.installWhenMissing
+    ).length
     return {
       status:
         failures.length === 0
           ? 'ready'
-          : catalogReadFailures ===
-              this.descriptors.filter((entry) => entry.installWhenMissing).length
+          : installableDescriptorCount > 0 && catalogReadFailures === installableDescriptorCount
             ? 'unavailable'
             : 'degraded',
       reconciled,
       failures
     }
+  }
+
+  private async restoreRetiredPlugin(descriptor: BundledPluginDescriptor): Promise<void> {
+    if (!descriptor.internal || descriptor.sourceKind !== 'primary-runtime') return
+    const installed = await this.readInstalled(descriptor)
+    const plugin = findInstalledPlugin(installed, descriptor)
+    if (!plugin?.installed || plugin.enabled) return
+    await this.input.catalogClient.setPluginEnabled({
+      ...(this.input.cwd ? { cwd: this.input.cwd } : {}),
+      pluginId: plugin.id,
+      enabled: true
+    })
+    await this.invalidateCaches()
   }
 
   private async reconcileOne(

@@ -700,11 +700,7 @@ export function mergePluginCatalogWithInstalled(
   return merged
 }
 
-const BUNDLED_PLUGIN_MARKETPLACES = new Set([
-  'dascowork-bundled',
-  'openai-bundled',
-  'presentation-skill'
-])
+const BUNDLED_PLUGIN_MARKETPLACES = new Set(['dascowork-bundled', 'openai-bundled', 'officecli'])
 
 const BROWSER_EXTENSION_PLUGIN_NAMES = new Set(['chrome', 'chrome-dev', 'chrome-internal'])
 const BROWSER_EXTENSION_UNIFICATION_ENABLED = true

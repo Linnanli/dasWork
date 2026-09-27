@@ -6,28 +6,57 @@
     "bundleFormatVersion",
     "bundleVersion",
     "target",
-    "node",
-    "nodePackages"
+    "binaries",
+    "bundledPlugins",
+    "bundledSkills",
+    "skillsToRemove",
+    "sourceDigests"
   ],
+  "additionalProperties": true,
   "properties": {
-    "bundleFormatVersion": { "const": 2 },
+    "bundleFormatVersion": { "const": 3 },
     "bundleVersion": { "type": "string", "minLength": 1 },
     "target": {
       "type": "object",
       "required": ["platform", "arch"],
+      "additionalProperties": false,
       "properties": {
         "platform": { "enum": ["darwin", "win32", "linux"] },
         "arch": { "enum": ["x64", "arm64"] }
       }
     },
-    "node": {
-      "type": "object",
-      "required": ["path"],
-      "properties": { "path": { "type": "string" } }
+    "binaries": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "required"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" }
+        }
+      }
     },
-    "nodePackages": { "type": "array", "minItems": 1 },
-    "bundledPlugins": { "type": "array" },
-    "bundledSkills": { "type": "array" },
-    "skillsToRemove": { "type": "array" }
+    "bundledPlugins": { "type": "array", "maxItems": 0 },
+    "bundledSkills": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "sizeBytes"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "pattern": "^skills/[A-Za-z0-9._-]+/SKILL\\.md$" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "sizeBytes": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "skillsToRemove": { "type": "array", "maxItems": 0 },
+    "node": false,
+    "nodePackages": false,
+    "python": false
   }
 }

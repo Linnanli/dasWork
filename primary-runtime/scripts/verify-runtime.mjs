@@ -50,6 +50,7 @@ verifyProvenance({
 verifyManifest({ manifest, entryMap, target });
 verifyCandidateEvidence({ provenance, entryMap, target });
 verifyBundledPlugin({ entryMap, manifest });
+verifyBundledSkills({ entryMap, manifest });
 verifySourceDigests({ entryMap, manifest });
 
 process.stdout.write(
@@ -142,34 +143,32 @@ function verifyCandidateEvidence({ provenance, entryMap, target }) {
 function verifyManifest({ manifest, entryMap, target }) {
   const [platform, arch] = target.split("-");
   if (
-    manifest.bundleFormatVersion !== 2 ||
+    manifest.bundleFormatVersion !== 3 ||
     manifest.artifactToolVersion !== undefined ||
     manifest.target?.platform !== platform ||
     manifest.target?.arch !== arch ||
-    !manifest.node?.path ||
-    !Array.isArray(manifest.nodePackages) ||
-    manifest.nodePackages.length === 0
+    manifest.node !== undefined ||
+    manifest.python !== undefined ||
+    manifest.nodePackages !== undefined
   ) {
-    throw new Error("AT-RT-BUILD-01 blocked: Runtime manifest is not generic v2.");
+    throw new Error("AT-RT-BUILD-01 blocked: Runtime manifest is not generic v3.");
   }
-  requireEntry(entryMap, manifest.node.path);
-  for (const packageEntry of manifest.nodePackages) {
-    const packageJson = readJsonEntry(entryMap, `${packageEntry.path}/package.json`);
-    if (packageJson.name !== packageEntry.name || packageJson.version !== packageEntry.version) {
-      throw new Error(
-        `AT-RT-BUILD-01 blocked: Node package ${packageEntry.name} does not match manifest.`,
-      );
+  if (!Array.isArray(manifest.binaries) || manifest.binaries.length === 0) {
+    throw new Error("AT-RT-BUILD-01 blocked: Runtime manifest lacks v3 binaries.");
+  }
+  const binaryNames = new Set(manifest.binaries.map((binary) => binary.name));
+  for (const required of ["officecli", "pdfinfo", "pdftoppm"]) {
+    if (!binaryNames.has(required)) {
+      throw new Error(`AT-RT-BUILD-01 blocked: Runtime manifest lacks ${required}.`);
     }
   }
-  if (manifest.python) {
-    requireEntry(entryMap, manifest.python.path);
-    for (const packageEntry of manifest.python.packages ?? []) {
-      if (![...entryMap.keys()].some((path) => path.startsWith(`${packageEntry.path}/`))) {
-        throw new Error(`AT-RT-BUILD-01 blocked: Python package root ${packageEntry.path} is absent.`);
-      }
-    }
+  if (binaryNames.has("soffice")) {
+    throw new Error("AT-RT-BUILD-01 blocked: v3 Runtime must not bundle LibreOffice as an Office dependency.");
   }
-  for (const binary of manifest.binaries ?? []) requireEntry(entryMap, binary.path);
+  for (const binary of manifest.binaries) requireEntry(entryMap, binary.path);
+  if (!Array.isArray(manifest.skillsToRemove) || manifest.skillsToRemove.length !== 0) {
+    throw new Error("AT-RT-BUILD-01 blocked: v3 Runtime must not remove user-installed skills by name.");
+  }
 }
 
 function verifyBundledPlugin({ entryMap, manifest }) {
@@ -198,6 +197,31 @@ function verifyBundledPlugin({ entryMap, manifest }) {
           );
         }
       }
+    }
+  }
+}
+
+function verifyBundledSkills({ entryMap, manifest }) {
+  if (!Array.isArray(manifest.bundledSkills) || manifest.bundledSkills.length === 0) {
+    throw new Error("AT-RT-BUILD-01 blocked: v3 Runtime must bundle at least one managed skill.");
+  }
+  if (!manifest.bundledSkills.some((skill) => skill.path === "skills/officecli/SKILL.md")) {
+    throw new Error("AT-RT-BUILD-01 blocked: v3 Runtime lacks the managed officecli skill.");
+  }
+  for (const skill of manifest.bundledSkills) {
+    if (
+      !skill ||
+      typeof skill.path !== "string" ||
+      !/^skills\/[A-Za-z0-9._-]+\/SKILL\.md$/u.test(skill.path) ||
+      !/^[a-f0-9]{64}$/u.test(skill.sha256 ?? "")
+    ) {
+      throw new Error("AT-RT-BUILD-01 blocked: bundled skill manifest is invalid.");
+    }
+    const data = requireEntry(entryMap, skill.path);
+    if (sha256(data) !== skill.sha256) {
+      throw new Error(
+        `AT-RT-BUILD-01 blocked: bundled skill file digest mismatch for ${skill.path}.`,
+      );
     }
   }
 }

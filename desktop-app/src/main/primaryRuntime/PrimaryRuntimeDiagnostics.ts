@@ -93,10 +93,12 @@ export class PrimaryRuntimeDiagnostics {
       }
     }
 
-    const nodePath = await resolveRuntimeFile(runtimeRoot, manifest.node.path, issues, {
-      executable: true
-    })
-    const nodePackages = await resolveNodePackages(runtimeRoot, manifest.nodePackages, issues)
+    const nodePath = manifest.node
+      ? await resolveRuntimeFile(runtimeRoot, manifest.node.path, issues, {
+          executable: true
+        })
+      : null
+    const nodePackages = await resolveNodePackages(runtimeRoot, manifest.nodePackages ?? [], issues)
 
     const pythonPath = manifest.python
       ? await resolveRuntimeFile(runtimeRoot, manifest.python.path, issues, { executable: true })
@@ -105,22 +107,27 @@ export class PrimaryRuntimeDiagnostics {
       ? await resolveDirectories(runtimeRoot, manifest.python.packages, issues)
       : []
     const binaries = await resolveBinaries(runtimeRoot, manifest.binaries ?? [], issues)
+    validateRequiredBinaries(manifest, binaries, issues)
     const fonts = await resolveFonts(runtimeRoot, manifest.fonts ?? [], issues)
     await resolveBundledPlugins(runtimeRoot, manifest.bundledPlugins ?? [], issues)
     await resolveBundledSkills(runtimeRoot, manifest.bundledSkills ?? [], issues)
     await verifySourceDigests(runtimeRoot, manifest.sourceDigests ?? [], issues)
 
-    if (issues.length > 0 || !nodePath) {
+    if (issues.length > 0 || (manifest.node && !nodePath)) {
       return { status: 'broken', root: runtimeRoot, manifest, issues }
     }
 
     const dependencies: PrimaryRuntimeDependencies = {
       root: runtimeRoot,
       bundleVersion: manifest.bundleVersion,
-      node: {
-        path: nodePath,
-        ...(manifest.node.version ? { version: manifest.node.version } : {})
-      },
+      ...(manifest.node && nodePath
+        ? {
+            node: {
+              path: nodePath,
+              ...(manifest.node.version ? { version: manifest.node.version } : {})
+            }
+          }
+        : {}),
       nodePackages,
       ...(manifest.python && pythonPath
         ? {
@@ -136,6 +143,26 @@ export class PrimaryRuntimeDiagnostics {
     }
 
     return { status: 'ready', root: runtimeRoot, manifest, dependencies, issues: [] }
+  }
+}
+
+function validateRequiredBinaries(
+  manifest: PrimaryRuntimeManifest,
+  binaries: readonly { name: string; path: string }[],
+  issues: PrimaryRuntimeDiagnosticIssue[]
+): void {
+  const requiredBinaryNames = [
+    ...(manifest.binaries ?? [])
+      .filter((entry) => entry.required === true)
+      .map((entry) => entry.name),
+    ...(manifest.bundleFormatVersion === 3 ? ['officecli'] : [])
+  ]
+  for (const name of new Set(requiredBinaryNames)) {
+    if (binaries.some((binary) => binary.name === name)) continue
+    issues.push({
+      code: 'missing-binary',
+      message: `Primary Runtime is missing required binary: ${name}.`
+    })
   }
 }
 
