@@ -71,6 +71,26 @@ test('requires an ordered, SHA-bound live trace for each live OfficeCLI gate', a
     })
 
     await rm(join(directory, 'evidence.json'))
+    const mismatchedAssetNameRuntime = runtimeBinding(true)
+    mismatchedAssetNameRuntime.officecli.nativeAssetName = 'officecli-linux-x64'
+    await writeEvidence(directory, {
+      gateId: 'AT-LIVE-01',
+      producer: 'live-office-runtime-dev',
+      commit,
+      capturedAt: new Date(now).toISOString(),
+      extra: { runtime: mismatchedAssetNameRuntime }
+    })
+    await assert.rejects(
+      verifyAppToolsReleaseGates({
+        specPath,
+        evidenceDirectory: directory,
+        commit,
+        ids: ['AT-LIVE-01'],
+        now
+      }),
+      /Invalid Runtime binding/u
+    )
+    await rm(join(directory, 'evidence.json'))
     const invalidLiveRuntime = runtimeBinding(true)
     await writeEvidence(directory, {
       gateId: 'AT-LIVE-01',
@@ -200,6 +220,14 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
     })
     const packagedEvidence = JSON.parse(await readFile(packagedResult.evidencePath, 'utf8'))
     assert.equal(packagedEvidence.assetSha256, packagedAssetSha256)
+    assert.deepEqual(packagedEvidence.runtime.officecli, {
+      candidateName: 'iOfficeAI/OfficeCLI',
+      tag: 'v1.0.152',
+      commit: 'ffa8a0a',
+      sourceLockSha256: sha256Text(fixture.sourceLockText),
+      nativeAssetName: 'officecli-linux-x64',
+      nativeAssetSha256: '2'.repeat(64)
+    })
     await assert.rejects(
       writeAppToolsReleaseEvidence({
         gateId: 'AT-LIVE-PKG-01',
@@ -295,6 +323,70 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
       }),
       /Invalid R07 live trace report.*preview\.visible/u
     )
+    const nonOfficeCliLock = structuredClone(fixture.sourceLockObject)
+    nonOfficeCliLock.candidate.name = 'example/other-cli'
+    await rebindSourceLockFixture(fixture, nonOfficeCliLock)
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    const duplicateOfficeCliAssetLock = structuredClone(fixture.sourceLockObject)
+    duplicateOfficeCliAssetLock.components.native.push({
+      ...duplicateOfficeCliAssetLock.components.native[0],
+      sha256: '6'.repeat(64)
+    })
+    await rebindSourceLockFixture(fixture, duplicateOfficeCliAssetLock)
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    const mismatchedOfficeCliVersionLock = structuredClone(fixture.sourceLockObject)
+    mismatchedOfficeCliVersionLock.components.native[0].version = '1.0.153'
+    await rebindSourceLockFixture(fixture, mismatchedOfficeCliVersionLock)
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: fixture.liveReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Runtime target evidence does not bind/u
+    )
+    await rebindSourceLockFixture(fixture, fixture.sourceLockObject)
     const badGenerationReport = join(directory, 'bad-generation-report.json')
     await writeFile(
       badGenerationReport,
@@ -449,10 +541,7 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
       /Runtime target evidence does not bind/u
     )
     await writeFile(join(fixture.targetRoot, 'runtime-budgets.json'), fixture.budgetText)
-    await writeFile(
-      fixture.sourceLock,
-      `${JSON.stringify({ candidate: fixture.sourceLockCandidate })}\n`
-    )
+    await writeFile(fixture.sourceLock, fixture.sourceLockText)
     const staleBudget = JSON.parse(fixture.budgetText)
     staleBudget.evidence.sourceLockSha256 = '0'.repeat(64)
     await writeFile(
@@ -665,10 +754,13 @@ function runtimeBinding(includeLive = false) {
     config: { sequence: 1, payloadHash: 'f'.repeat(64), keyId: 'config-test' },
     manifest: { sequence: 2, payloadHash: 'c'.repeat(64), keyId: 'manifest-test' },
     target: 'darwin-arm64',
-    plugin: {
-      commit: 'a'.repeat(40),
-      sourceArchiveSha256: '1'.repeat(64),
-      patchSha256: '2'.repeat(64)
+    officecli: {
+      candidateName: 'iOfficeAI/OfficeCLI',
+      tag: 'v1.0.152',
+      commit: 'ffa8a0a',
+      sourceLockSha256: '1'.repeat(64),
+      nativeAssetName: 'officecli-darwin-arm64',
+      nativeAssetSha256: '2'.repeat(64)
     },
     budget: {
       fileSha256: '3'.repeat(64),
@@ -737,13 +829,57 @@ async function writeAppToolsProducerFixture(directory) {
   const runtimeText = `${JSON.stringify({ bundleVersion: activeVersion })}\n`
   const performanceText = '{"ok":"performance"}\n'
   const sourceLockCandidate = {
-    commit: 'a'.repeat(40),
-    sourceArchive: { sha256: '1'.repeat(64) },
-    patch: { sha256: '2'.repeat(64) }
+    name: 'iOfficeAI/OfficeCLI',
+    repository: 'https://github.com/iOfficeAI/OfficeCLI',
+    publisher: {
+      githubAccount: 'iOfficeAI',
+      releaseActor: 'github-actions'
+    },
+    tag: 'v1.0.152',
+    commit: 'ffa8a0a',
+    license: {
+      spdx: 'Apache-2.0',
+      path: 'LICENSE'
+    },
+    runtimeScope: {
+      entryPoints: ['officecli'],
+      capabilities: ['pptx-read-write'],
+      excludedCapabilities: ['direct-model-http']
+    }
   }
-  const sourceLockText = `${JSON.stringify({
-    candidate: sourceLockCandidate
-  })}\n`
+  const sourceLockObject = {
+    schemaVersion: 'dascowork-primary-runtime-sources.v2',
+    builderVersion: '1.3.0',
+    candidate: sourceLockCandidate,
+    rejectedCandidates: [],
+    components: {
+      node: [],
+      python: [],
+      native: [
+        {
+          name: 'officecli-linux-x64',
+          capability: 'officecli',
+          version: '1.0.152',
+          source:
+            'https://github.com/iOfficeAI/OfficeCLI/releases/download/v1.0.152/officecli-linux-x64',
+          sha256: '2'.repeat(64),
+          license: 'Apache-2.0',
+          platforms: [target]
+        }
+      ],
+      fonts: [
+        {
+          name: 'test-font',
+          version: '1.0.0',
+          source: 'https://example.test/font.zip',
+          sha256: '9'.repeat(64),
+          license: 'OFL-1.1',
+          platforms: [target]
+        }
+      ]
+    }
+  }
+  const sourceLockText = `${JSON.stringify(sourceLockObject)}\n`
   const toolchainsLockText = '{"toolchains":"locked"}\n'
   const hardLimitsText = '{"limits":"locked"}\n'
   const targetBudget = {
@@ -843,8 +979,7 @@ async function writeAppToolsProducerFixture(directory) {
         runtimeManifestSha256: sha256Text(runtimeText),
         sourceLockSha256: sha256Text(sourceLockText),
         toolchainsLockSha256: sha256Text(toolchainsLockText),
-        hardLimitsSha256: sha256Text(hardLimitsText),
-        patchSha256: '2'.repeat(64)
+        hardLimitsSha256: sha256Text(hardLimitsText)
       })}\n`
     ),
     writeFile(join(targetRoot, 'primary-runtime.zip'), archiveText),
@@ -900,11 +1035,30 @@ async function writeAppToolsProducerFixture(directory) {
     sourceLock,
     toolchainsLock,
     hardLimits,
+    sourceLockObject,
+    sourceLockText,
     sourceLockCandidate,
     budgetText,
     liveReport,
     liveTrace
   }
+}
+
+async function rebindSourceLockFixture(fixture, sourceLockObject) {
+  const sourceLockText = `${JSON.stringify(sourceLockObject)}\n`
+  const sourceLockSha256 = sha256Text(sourceLockText)
+  const budget = JSON.parse(fixture.budgetText)
+  budget.evidence.sourceLockSha256 = sourceLockSha256
+  const budgetText = `${JSON.stringify(budget)}\n`
+  const provenancePath = join(fixture.targetRoot, 'provenance.json')
+  const provenance = JSON.parse(await readFile(provenancePath, 'utf8'))
+  provenance.sourceLockSha256 = sourceLockSha256
+  provenance.reviewedBudgetSha256 = sha256Text(budgetText)
+  await Promise.all([
+    writeFile(fixture.sourceLock, sourceLockText),
+    writeFile(join(fixture.targetRoot, 'runtime-budgets.json'), budgetText),
+    writeFile(provenancePath, `${JSON.stringify(provenance)}\n`)
+  ])
 }
 
 function evidenceObservation(index) {

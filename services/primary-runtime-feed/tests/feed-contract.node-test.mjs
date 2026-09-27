@@ -764,6 +764,48 @@ test("assembles only the signed metadata and four independently verified targets
   }
 });
 
+test("assembles final Runtime releases without a repository patch", async () => {
+  const source = await mkdtemp(join(tmpdir(), "primary-runtime-feed-no-patch-"));
+  const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-no-patch-staging-"));
+  try {
+    const verification = await writeReleaseTree(source);
+    const metadata = await copyMetadata(source, root);
+    const targetRoots = await copyTargetRoots(source, root);
+    for (const targetRoot of Object.values(targetRoots)) {
+      const provenancePath = join(targetRoot, "provenance.json");
+      const provenance = JSON.parse(await readFile(provenancePath, "utf8"));
+      delete provenance.patchSha256;
+      await writeFile(provenancePath, JSON.stringify(provenance));
+    }
+
+    await assert.doesNotReject(
+      assembleReleaseStaging({
+        outputRoot: join(root, "without-patch"),
+        metadataRoot: metadata,
+        targetRoots,
+        ...verification,
+      }),
+    );
+
+    const malformedPath = join(targetRoots["darwin-arm64"], "provenance.json");
+    const malformed = JSON.parse(await readFile(malformedPath, "utf8"));
+    malformed.patchSha256 = "invalid";
+    await writeFile(malformedPath, JSON.stringify(malformed));
+    await assert.rejects(
+      assembleReleaseStaging({
+        outputRoot: join(root, "malformed-patch"),
+        metadataRoot: metadata,
+        targetRoots,
+        ...verification,
+      }),
+      /darwin-arm64 has incomplete provenance/u,
+    );
+  } finally {
+    await rm(source, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("rejects structurally valid metadata when the matching role key cannot verify it", async () => {
   const root = await mkdtemp(join(tmpdir(), "primary-runtime-feed-signature-"));
   try {

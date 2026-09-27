@@ -96,11 +96,7 @@ export async function writeAppToolsReleaseEvidence(options) {
       config,
       manifest,
       target: input.target,
-      plugin: {
-        commit: sourceLock.candidate.commit,
-        sourceArchiveSha256: sourceLock.candidate.sourceArchive.sha256,
-        patchSha256: sourceLock.candidate.patch.sha256
-      },
+      officecli: officecliSourceBinding(sourceLock, sourceLockSha256, input.target),
       budget: {
         fileSha256: budgetSha256,
         performanceReportSha256
@@ -313,6 +309,7 @@ function assertRuntimeInputs({
     ? manifest.releases.find((release) => release?.platform === platform && release?.arch === arch)
     : undefined
   const selectedBudget = runtimeBudgets?.targets?.[target]
+  const selectedOfficeCliAsset = selectOfficeCliNativeAsset(sourceLock, target)
   if (
     !isRecord(provenance) ||
     provenance.schemaVersion !== 'dascowork-primary-runtime-provenance.v1' ||
@@ -342,13 +339,63 @@ function assertRuntimeInputs({
     !isRecord(selectedBudget) ||
     !isRecord(selectedRelease.budget) ||
     canonicalJson(selectedRelease.budget) !== canonicalJson(selectedBudget) ||
-    sourceLock?.candidate?.commit === undefined ||
-    !/^[a-f0-9]{40,64}$/u.test(sourceLock.candidate.commit) ||
-    !isSha256(sourceLock.candidate.sourceArchive?.sha256) ||
-    !isSha256(sourceLock.candidate.patch?.sha256)
+    !isOfficeCliSourceLock(sourceLock) ||
+    !isRecord(selectedOfficeCliAsset)
   ) {
     throw new Error('Runtime target evidence does not bind to the R07 live trace.')
   }
+}
+
+function officecliSourceBinding(sourceLock, sourceLockSha256, target) {
+  const asset = selectOfficeCliNativeAsset(sourceLock, target)
+  if (!isOfficeCliSourceLock(sourceLock) || !asset) {
+    throw new Error('Runtime target evidence does not bind to the R07 live trace.')
+  }
+  return {
+    candidateName: sourceLock.candidate.name,
+    tag: sourceLock.candidate.tag,
+    commit: sourceLock.candidate.commit,
+    sourceLockSha256,
+    nativeAssetName: asset.name,
+    nativeAssetSha256: asset.sha256
+  }
+}
+
+function isOfficeCliSourceLock(value) {
+  return (
+    isRecord(value) &&
+    value.schemaVersion === 'dascowork-primary-runtime-sources.v2' &&
+    isRecord(value.candidate) &&
+    value.candidate.name === 'iOfficeAI/OfficeCLI' &&
+    value.candidate.repository === 'https://github.com/iOfficeAI/OfficeCLI' &&
+    /^v\d+\.\d+\.\d+$/u.test(value.candidate.tag) &&
+    /^[a-f0-9]{7,40}$/u.test(value.candidate.commit) &&
+    isRecord(value.candidate.runtimeScope) &&
+    Array.isArray(value.candidate.runtimeScope.entryPoints) &&
+    value.candidate.runtimeScope.entryPoints.includes('officecli')
+  )
+}
+
+function selectOfficeCliNativeAsset(sourceLock, target) {
+  const assets = sourceLock?.components?.native
+  if (!Array.isArray(assets)) return undefined
+  const expectedVersion =
+    typeof sourceLock?.candidate?.tag === 'string' && sourceLock.candidate.tag.startsWith('v')
+      ? sourceLock.candidate.tag.slice(1)
+      : undefined
+  const matchingAssets = assets.filter(
+    (asset) =>
+      isRecord(asset) &&
+      asset.name === `officecli-${target}` &&
+      asset.capability === 'officecli' &&
+      asset.version === expectedVersion &&
+      Array.isArray(asset.platforms) &&
+      asset.platforms.includes(target) &&
+      isSha256(asset.sha256) &&
+      typeof asset.name === 'string' &&
+      asset.name.length > 0
+  )
+  return matchingAssets.length === 1 ? matchingAssets[0] : undefined
 }
 
 function signedMetadataBinding(metadata, label) {

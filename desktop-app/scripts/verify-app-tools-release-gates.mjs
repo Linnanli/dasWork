@@ -180,7 +180,7 @@ function parseRuntimeEvidence(value, filename) {
     !isSequenceBinding(value.manifest) ||
     typeof value.target !== 'string' ||
     !/^(darwin|win32|linux)-(x64|arm64)$/u.test(value.target) ||
-    !isPluginSourceBinding(value.plugin) ||
+    !isOfficeCliSourceBinding(value.officecli, value.target) ||
     !isBudgetBinding(value.budget) ||
     !isActivationBinding(value.activation)
   ) {
@@ -191,7 +191,7 @@ function parseRuntimeEvidence(value, filename) {
     config: value.config,
     manifest: value.manifest,
     target: value.target,
-    plugin: value.plugin,
+    officecli: value.officecli,
     budget: value.budget,
     activation: value.activation,
     ...(value.live !== undefined ? { live: parseLiveEvidence(value.live, filename) } : {})
@@ -220,13 +220,16 @@ function isActivationBinding(value) {
   )
 }
 
-function isPluginSourceBinding(value) {
+function isOfficeCliSourceBinding(value, target) {
   return (
     isRecord(value) &&
+    value.candidateName === 'iOfficeAI/OfficeCLI' &&
+    /^v\d+\.\d+\.\d+$/u.test(value.tag) &&
     typeof value.commit === 'string' &&
-    /^[a-f0-9]{40,64}$/u.test(value.commit) &&
-    isSha256(value.sourceArchiveSha256) &&
-    isSha256(value.patchSha256)
+    /^[a-f0-9]{7,40}$/u.test(value.commit) &&
+    isSha256(value.sourceLockSha256) &&
+    value.nativeAssetName === `officecli-${target}` &&
+    isSha256(value.nativeAssetSha256)
   )
 }
 

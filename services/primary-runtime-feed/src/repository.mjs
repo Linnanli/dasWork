@@ -1302,7 +1302,8 @@ async function validateReleaseArchiveAndProvenance({
     !isSha256(provenance.sbomSha256) ||
     !isSha256(provenance.noticesSha256) ||
     !isSha256(provenance.componentSmokeSha256) ||
-    !isSha256(provenance.patchSha256) ||
+    (provenance.patchSha256 !== undefined &&
+      !isSha256(provenance.patchSha256)) ||
     !isSha256(provenance.reviewedBudgetSha256) ||
     !isSha256(provenance.performanceReportSha256) ||
     !provenance.builderIdentity ||
