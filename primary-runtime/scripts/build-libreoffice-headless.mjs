@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readlink, readdir, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { arch, platform } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -30,11 +30,17 @@ if (make.version !== `GNU Make ${lock.bootstrapTools.gnuMake.version}`) {
   throw new Error(`GNU Make version mismatch: ${make.version}`);
 }
 env.GNUMAKE = make.command;
+const pkgConfig = spec.architecture === "x86_64" ? "/usr/local/bin/pkg-config" : "/opt/homebrew/bin/pkg-config";
+if (spec.architecture === "x86_64"
+    && !/^\.\.\/Cellar\/pkgconf\/[^/]+\/bin\/pkg-config$/.test(await readlink(pkgConfig))) {
+  throw new Error(`Unexpected Homebrew pkg-config target: ${pkgConfig}`);
+}
+env.PKG_CONFIG = pkgConfig;
 const buildTools = {
   make: make.version.trim(),
   autoconf: (await capture("autoconf", ["--version"], { env })).split("\n")[0],
   aclocal: (await capture("aclocal", ["--version"], { env })).split("\n")[0],
-  pkgConfig: (await capture("pkg-config", ["--version"], { env })).trim(),
+  pkgConfig: (await capture(pkgConfig, ["--version"], { env })).trim(),
 };
 if (buildTools.aclocal !== `aclocal (GNU automake) ${lock.bootstrapTools.automake.version}`) {
   throw new Error(`Automake version mismatch: ${buildTools.aclocal}`);
