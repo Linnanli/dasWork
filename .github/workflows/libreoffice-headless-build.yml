@@ -36,6 +36,17 @@ jobs:
           brew install make
           gmake --version | head -1
 
+      - name: Install source-locked Automake
+        shell: bash
+        run: |
+          expected_version="$(jq -r '.bootstrapTools.automake.version' primary-runtime/libreoffice-build.lock.json)"
+          expected_source="$(jq -r '.bootstrapTools.automake.sourceSha256' primary-runtime/libreoffice-build.lock.json)"
+          formula="$(brew info --json=v2 automake)"
+          test "$(jq -r '.formulae[0].versions.stable' <<< "$formula")" = "$expected_version"
+          test "$(jq -r '.formulae[0].urls.stable.checksum' <<< "$formula")" = "$expected_source"
+          brew install automake
+          test "$(aclocal --version | head -1)" = "aclocal (GNU automake) $expected_version"
+
       - name: Download pinned upstream source
         shell: bash
         run: |

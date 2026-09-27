@@ -36,6 +36,9 @@ const buildTools = {
   aclocal: (await capture("aclocal", ["--version"], { env })).split("\n")[0],
   pkgConfig: (await capture("pkg-config", ["--version"], { env })).trim(),
 };
+if (buildTools.aclocal !== `aclocal (GNU automake) ${lock.bootstrapTools.automake.version}`) {
+  throw new Error(`Automake version mismatch: ${buildTools.aclocal}`);
+}
 if (!xcode.includes(`Xcode ${spec.xcodeVersion}\nBuild version ${spec.xcodeBuild}`)
     || sdkVersion !== spec.sdk.replace("macosx", "")
     || hostArchitecture !== spec.architecture) {
