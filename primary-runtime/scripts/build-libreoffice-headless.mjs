@@ -86,6 +86,7 @@ const configureArgs = [
   "--with-distro=LibreOfficeMacOSX",
   "--without-help",
   "--without-myspell-dicts",
+  "--disable-odk",
   "--with-lang=en-US",
 ];
 await run("sh", [join(source, "autogen.sh"), ...configureArgs], { cwd: source, env });

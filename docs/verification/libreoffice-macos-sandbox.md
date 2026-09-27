@@ -96,7 +96,7 @@ passed. The source-level branch review covers the three intended cases:
 | Opt-in without `--headless` | `true` | Not tested |
 
 This patch is project-owned, not an inferred Codex patch. It has **not** been
-compiled or behaviorally tested. Both architecture artifacts, strict
+successfully compiled or behaviorally tested. Both architecture artifacts, strict
 conversions, app-server E2E, and Runtime integration remain **not tested**. No
 new Runtime source lock is published. The previous official macOS package
 remains the locked source and retains its known sandbox failure.
@@ -120,19 +120,43 @@ The script checks the archive, patch, upstream configuration, and
 `download.lst` hashes before building. It generates `sources.ver` from the
 locked tag because the GitHub tag archive has neither `.git` nor the
 release-tarball file, while LibreOffice's `Makefile.fetch` reads that file
-unconditionally. It disables help, dictionaries, and translations to avoid
-unlocked submodule downloads; Impress and the PPTX/PDF paths remain in the
+unconditionally. It disables help, dictionaries, translations, and the
+developer kit to avoid unneeded build inputs; Impress and the PPTX/PDF paths remain in the
 upstream macOS distribution configuration. `make fetch` is followed by a
 second SHA-256 check of each fetched external archive against the pinned
 `download.lst`. On success it emits `LibreOffice.app` and
 `source-build-report.json`.
 
 `.github/workflows/libreoffice-headless-build.yml` is a manual Intel build
-experiment and does not publish a Release or change Runtime locks. It has not
-run. Running the local build command on this host failed at the Xcode preflight:
+experiment and does not publish a Release or change Runtime locks. Running
+the local build command on this host failed at the Xcode preflight:
 `xcrun: missing DEVELOPER_DIR path: /Applications/Xcode_16.4.app/Contents/Developer`.
 The host has only Command Line Tools. GitHub CLI authentication succeeded
 when checked outside the local network sandbox; the earlier in-sandbox
-"invalid token" message was a network-sandbox artifact. The workflow has
-not yet produced an artifact. No binary, toolchain timing, or behavior claim
-is recorded.
+"invalid token" message was a network-sandbox artifact.
+
+The isolated branch `codex/libreoffice-macos-sandbox` has run the manual
+experiment without publishing any user document or replacing a Runtime lock:
+
+| GitHub Actions run | Result | Build evidence |
+| --- | --- | --- |
+| [36301249414](https://github.com/Linnanli/dasWork/actions/runs/36301249414) | Failed | Intel runner has no GNU Make 4+ by default. |
+| [36301519394](https://github.com/Linnanli/dasWork/actions/runs/36301519394) | Failed | Homebrew bottle fetch used an invalid flag. |
+| [36301675516](https://github.com/Linnanli/dasWork/actions/runs/36301675516) | Failed | Pinned GNU Make installed; `aclocal` was absent. |
+| [36301890885](https://github.com/Linnanli/dasWork/actions/runs/36301890885) | Failed | Runner Automake metadata had not been refreshed. |
+| [36302016187](https://github.com/Linnanli/dasWork/actions/runs/36302016187) | Failed | Locked Automake installed; direct `spawn` of upstream `autogen.sh` returned `ENOEXEC`. |
+| [36302233032](https://github.com/Linnanli/dasWork/actions/runs/36302233032) | Failed | Upstream rejected runner-selected `/usr/local/bin/pkgconf`; it accepts the Homebrew `pkg-config` symlink. |
+| [36302542386](https://github.com/Linnanli/dasWork/actions/runs/36302542386) | Failed | `pkg-config` accepted; runner `gperf 3.0.3` is below upstream's minimum. |
+| [36302901288](https://github.com/Linnanli/dasWork/actions/runs/36302901288) | Failed | `gperf 3.3` passed; upstream macOS configuration enabled the developer kit and then required absent Doxygen. The experiment now disables the unused developer kit. |
+
+No build artifact or restricted candidate conversion has been recorded yet.
+
+The repeatable strict comparison driver is
+`primary-runtime/scripts/verify-libreoffice-sandbox.mjs`. It first confirms an
+AF_UNIX bind is denied, then runs the selected binary with a fresh profile and
+output directory, retaining exit status, PDF page/text/render checks, hashes,
+and stdout/stderr in `report.json`. A local control run of the official 26.8
+binary with the repository fixture produced
+`/private/tmp/dascowork-lo-p2-comparison/official-26.8-default-5PMt8d/report.json`:
+the probe was denied with `EPERM`, conversion exited 1, and no PDF appeared.
+This is a Codex tool restricted result, not app-server restricted evidence.

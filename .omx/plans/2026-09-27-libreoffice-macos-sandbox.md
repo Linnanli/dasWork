@@ -1,6 +1,6 @@
 # macOS LibreOffice 沙箱兼容构建执行计划
 
-日期：2026-09-27。状态：计划，尚未实施。面向：按步骤执行的编码模型。
+日期：2026-09-27。状态：执行中，当前 P2。面向：按步骤执行的编码模型。
 
 ## 0. 先读这一节
 
@@ -227,7 +227,7 @@ npm --prefix desktop-app run smoke:presentation-skill-runtime
 | --- | --- | --- | --- |
 | P0 基线 | 通过 | `docs/verification/libreoffice-macos-sandbox.md`；`/private/tmp/dascowork-lo-26.8-verify/`；`/private/tmp/dascowork-lo-worktree-status-20260927.txt` | 历史结果仅为 Codex 工具沙箱，不是 app-server 受限 E2E |
 | P1 最小补丁 | 通过 | `primary-runtime/patches/libreoffice-macos-headless-no-ipc.patch`；`primary-runtime/libreoffice-build.lock.json`；`docs/verification/libreoffice-macos-sandbox.md`；固定源码上 `git apply --check` 通过 | 编译与三种行为实验属于 P2，尚未运行 |
-| P2 单架构实验 | 进行中 | `primary-runtime/scripts/build-libreoffice-headless.mjs`；`.github/workflows/libreoffice-headless-build.yml`；本机 Xcode preflight 失败；GitHub CLI 在沙箱外认证成功 | 本机只有 Command Line Tools；远端构建及同策略对照尚未运行 |
+| P2 单架构实验 | 进行中 | `primary-runtime/scripts/build-libreoffice-headless.mjs`、`verify-libreoffice-sandbox.mjs`；`.github/workflows/libreoffice-headless-build.yml`；`docs/verification/libreoffice-macos-sandbox.md` 记录 CI 及官方包受限对照；本机 Xcode preflight 失败 | 本机只有 Command Line Tools；远端尚无成功构建产物，候选包受限转换未运行 |
 | P3 统一入口 | 未开始 | | |
 | P4 双架构流水线 | 未开始 | | |
 | P5 受限验收 | 未开始 | | |
