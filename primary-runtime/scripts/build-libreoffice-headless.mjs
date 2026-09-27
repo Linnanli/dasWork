@@ -78,7 +78,7 @@ const configureArgs = [
   "--without-myspell-dicts",
   "--with-lang=en-US",
 ];
-await run(join(source, "autogen.sh"), configureArgs, { cwd: source, env });
+await run("sh", [join(source, "autogen.sh"), ...configureArgs], { cwd: source, env });
 await run(make.command, ["fetch"], { cwd: source, env });
 const externalSources = await verifyFetchedSources(source, lock);
 await run(make.command, ["test-install", `-j${args.jobs ?? 2}`], { cwd: source, env });
