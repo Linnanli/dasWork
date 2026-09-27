@@ -23,6 +23,19 @@ jobs:
           test -d /Applications/Xcode_16.4.app/Contents/Developer
           DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer xcodebuild -version
 
+      - name: Install SHA-256-locked GNU Make bottle
+        shell: bash
+        run: |
+          expected="$(jq -r '.bootstrapTools.gnuMake.bottleSha256["darwin-x64"]' primary-runtime/libreoffice-build.lock.json)"
+          formula="$(brew info --json=v2 make | jq -r '.formulae[0].bottle.stable.files.sequoia.sha256')"
+          test "$formula" = "$expected"
+          brew fetch --bottle make
+          bottle="$(brew --cache --bottle make)"
+          actual="$(shasum -a 256 "$bottle" | cut -d ' ' -f 1)"
+          test "$actual" = "$expected"
+          brew install make
+          gmake --version | head -1
+
       - name: Download pinned upstream source
         shell: bash
         run: |

@@ -25,6 +25,15 @@
       "--without-system-freetype"
     ]
   },
+  "bootstrapTools": {
+    "gnuMake": {
+      "version": "4.4.1",
+      "bottleSha256": {
+        "darwin-x64": "cd86f41f2d02a827e15380a13a055606ba2f61819ad5100e4feba0400ef685a7",
+        "darwin-arm64": "f361639a5ec1a9355e12f985c511dd6631b6790452a52057032a3a07a690ca4e"
+      }
+    }
+  },
   "targets": {
     "darwin-x64": {
       "runner": "macos-15-intel",

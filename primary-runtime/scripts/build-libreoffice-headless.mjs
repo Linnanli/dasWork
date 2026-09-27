@@ -26,6 +26,9 @@ const sdkVersion = (await capture("xcrun", ["--sdk", "macosx", "--show-sdk-versi
 const sdkPath = (await capture("xcrun", ["--sdk", "macosx", "--show-sdk-path"], { env })).trim();
 const hostArchitecture = (await capture("uname", ["-m"], { env })).trim();
 const make = await findModernMake(env);
+if (make.version !== `GNU Make ${lock.bootstrapTools.gnuMake.version}`) {
+  throw new Error(`GNU Make version mismatch: ${make.version}`);
+}
 env.GNUMAKE = make.command;
 const buildTools = {
   make: make.version.trim(),
