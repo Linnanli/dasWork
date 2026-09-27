@@ -87,6 +87,8 @@ const configureArgs = [
   "--without-help",
   "--without-myspell-dicts",
   "--disable-odk",
+  "--disable-online-update",
+  "--disable-breakpad",
   "--with-lang=en-US",
 ];
 await run("sh", [join(source, "autogen.sh"), ...configureArgs], { cwd: source, env });

@@ -121,7 +121,9 @@ The script checks the archive, patch, upstream configuration, and
 locked tag because the GitHub tag archive has neither `.git` nor the
 release-tarball file, while LibreOffice's `Makefile.fetch` reads that file
 unconditionally. It disables help, dictionaries, translations, and the
-developer kit to avoid unneeded build inputs; Impress and the PPTX/PDF paths remain in the
+developer kit to avoid unneeded build inputs. Online update and crash reporting
+are disabled because this conversion-only build has neither a release update
+service nor a privacy-policy URL; Impress and the PPTX/PDF paths remain in the
 upstream macOS distribution configuration. `make fetch` is followed by a
 second SHA-256 check of each fetched external archive against the pinned
 `download.lst`. On success it emits `LibreOffice.app` and
@@ -148,6 +150,7 @@ experiment without publishing any user document or replacing a Runtime lock:
 | [36302233032](https://github.com/Linnanli/dasWork/actions/runs/36302233032) | Failed | Upstream rejected runner-selected `/usr/local/bin/pkgconf`; it accepts the Homebrew `pkg-config` symlink. |
 | [36302542386](https://github.com/Linnanli/dasWork/actions/runs/36302542386) | Failed | `pkg-config` accepted; runner `gperf 3.0.3` is below upstream's minimum. |
 | [36302901288](https://github.com/Linnanli/dasWork/actions/runs/36302901288) | Failed | `gperf 3.3` passed; upstream macOS configuration enabled the developer kit and then required absent Doxygen. The experiment now disables the unused developer kit. |
+| [36303378766](https://github.com/Linnanli/dasWork/actions/runs/36303378766) | Failed | The unused developer kit was disabled. Configuration then required a privacy-policy URL because upstream's macOS distribution enables online update; the conversion build now disables online update and Breakpad instead of inventing a policy URL. |
 
 No build artifact or restricted candidate conversion has been recorded yet.
 
