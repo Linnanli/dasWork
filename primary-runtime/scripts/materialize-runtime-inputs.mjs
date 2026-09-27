@@ -36,6 +36,7 @@ import {
   assertNativeRuntimeTarget,
   parseRuntimeTargetOption,
 } from "./runtime-target.mjs";
+import { readStoredZipArchive } from "./zip-writer.mjs";
 
 const defaultCommandTimeoutMs = positiveIntegerEnv(
   "DASCOWORK_PRIMARY_RUNTIME_MATERIALIZE_COMMAND_TIMEOUT_MS",
@@ -663,10 +664,6 @@ async function extractArchive({
     return;
   }
   if (archiveFormat === "zip") {
-    if (!python) {
-      await extractZipWithLockedTar({ archive, output, stripComponents });
-      return;
-    }
     await extractZipArchive({ archive, output, stripComponents, python });
     return;
   }
@@ -771,16 +768,6 @@ async function clearMacosQuarantine(application) {
   });
 }
 
-/**
- * The Windows Node archive is a ZIP and is intentionally materialized before
- * the locked Runtime Python executable exists. `tar` is already a required,
- * version-recorded builder tool on every target, so use it only for this
- * bootstrap extraction rather than falling back to a runner Python runtime.
- */
-async function extractZipWithLockedTar({ archive, output, stripComponents }) {
-  await extractWithLockedTar({ archive, output, stripComponents });
-}
-
 async function extractWithLockedTar({ archive, output, stripComponents }) {
   await mkdir(output, { recursive: true });
   // Both the MSYS and inbox Windows tar implementations treat an absolute
@@ -800,6 +787,10 @@ async function extractWithLockedTar({ archive, output, stripComponents }) {
 }
 
 async function extractZipArchive({ archive, output, stripComponents, python }) {
+  if (!python) {
+    await extractZipArchiveWithNode({ archive, output, stripComponents });
+    return;
+  }
   const extractor = [
     "import pathlib, stat, sys, zipfile",
     "archive, output, strip = sys.argv[1], pathlib.Path(sys.argv[2]), int(sys.argv[3])",
@@ -835,6 +826,34 @@ async function extractZipArchive({ archive, output, stripComponents, python }) {
       PYTHONNOUSERSITE: "1",
     },
   });
+}
+
+async function extractZipArchiveWithNode({ archive, output, stripComponents }) {
+  await mkdir(output, { recursive: true });
+  const entries = readStoredZipArchive(await readFile(archive));
+  for (const entry of entries) {
+    const raw = entry.path.replaceAll("\\", "/");
+    const parts = raw.split("/").filter((part) => part !== "" && part !== ".");
+    const fileType = entry.externalMode & 0o170000;
+    if (
+      raw.startsWith("/") ||
+      raw.startsWith("\\") ||
+      parts.some((part) => part === "..")
+    ) {
+      throw new Error(`AT-RT-INPUT-01 blocked: unsafe ZIP entry ${entry.path}.`);
+    }
+    if (fileType === 0o120000) {
+      throw new Error(`AT-RT-INPUT-01 blocked: symlink ZIP entry ${entry.path}.`);
+    }
+    if (parts.length <= stripComponents) continue;
+    const target = await safeChild(output, join(...parts.slice(stripComponents)));
+    if (raw.endsWith("/")) {
+      await mkdir(target, { recursive: true });
+      continue;
+    }
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, entry.data, { flag: "wx" });
+  }
 }
 
 function runtimePythonExecutable({ outputRoot, target }) {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { chmod, mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -27,7 +27,7 @@ afterEach(async () => {
 }, realRuntimeSmokeTimeoutMs)
 
 describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', () => {
-  it('installs a target-native P1a archive before loading dependencies and its plugin marketplace', async () => {
+  it('installs a v3 Runtime with the OfficeCLI skill', async () => {
     expect(candidateArchive, 'real Runtime gate requires a P1a candidate archive').toBeTruthy()
     expect(candidateVersion, 'real Runtime gate requires a P1a candidate version').toBeTruthy()
     expect(candidateSha256, 'real Runtime gate requires a P1a candidate SHA256').toMatch(
@@ -75,9 +75,15 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
     expect(diagnostic).toMatchObject({
       status: 'ready',
       root: install.activeRoot,
-      manifest: { bundleFormatVersion: 2 }
+      manifest: { bundleFormatVersion: 3 }
     })
 
+    capabilities.updatePrimaryRuntimeState({ diagnostic, runtimePluginsSynchronized: false })
+    const beforeSkillSync = await capabilities.snapshot()
+    expect(beforeSkillSync.availableToolNames).not.toContain('load_workspace_dependencies')
+    // P3a validates the archive and loader contract; the signed Feed E2E
+    // exercises the actual app-server skill and plugin synchronization.
+    capabilities.updatePrimaryRuntimeState({ diagnostic, runtimePluginsSynchronized: true })
     const snapshot = await capabilities.snapshot()
     expect(snapshot.availableToolNames).toContain('load_workspace_dependencies')
 
@@ -95,6 +101,7 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
     const dependencies = await service.loadDependencies()
     expect(text).toBe(dependencies.text)
     expect(dependencies.bundleVersion).toBe(diagnostic.manifest?.bundleVersion)
+    expect(dependencies.binaries.officecli).toBeTruthy()
     expect(dependencies).not.toHaveProperty('root')
     expect(dependencies).not.toHaveProperty('nodePackages')
     if (dependencies.node) expectRuntimePath(install.activeRoot, dependencies.node)
@@ -111,12 +118,12 @@ describe.skipIf(!realRuntimeSmokeEnabled)('Primary Runtime real integration', ()
     }
 
     const descriptors = await readPrimaryRuntimeBundledPluginDescriptors(diagnostic)
-    expect(descriptors.length).toBeGreaterThan(0)
-    for (const descriptor of descriptors) {
-      expect(descriptor).toMatchObject({ sourceKind: 'primary-runtime', internal: true })
-      expectRuntimePath(install.activeRoot, descriptor.marketplacePath)
-      expectRuntimePath(install.activeRoot, descriptor.pluginRoot)
-    }
+    expect(descriptors).toEqual([])
+    expect(diagnostic.manifest?.bundledSkills).toEqual([
+      expect.objectContaining({ path: 'skills/officecli/SKILL.md' })
+    ])
+    const skill = await readFile(join(install.activeRoot, 'skills/officecli/SKILL.md'), 'utf8')
+    expect(skill).toContain('load_workspace_dependencies')
   }, realRuntimeSmokeTimeoutMs)
 })
 

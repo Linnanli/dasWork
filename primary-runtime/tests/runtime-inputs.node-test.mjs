@@ -388,6 +388,22 @@ test("Windows native source recipes explicitly produce release binaries", async 
       recipe.commands[0].includes("-DCMAKE_BUILD_TYPE=Release"),
       `${recipe.name}: CMake configure command must not select debug CRT`,
     );
+    assert.ok(
+      recipe.toolchain.flags.includes("-DCMAKE_POLICY_DEFAULT_CMP0091=NEW"),
+      `${recipe.name}: toolchain receipt must enable MSVC runtime selection policy`,
+    );
+    assert.ok(
+      recipe.commands[0].includes("-DCMAKE_POLICY_DEFAULT_CMP0091=NEW"),
+      `${recipe.name}: CMake configure command must enable MSVC runtime selection policy`,
+    );
+    assert.ok(
+      recipe.toolchain.flags.includes("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"),
+      `${recipe.name}: toolchain receipt must bind static MSVC runtime`,
+    );
+    assert.ok(
+      recipe.commands[0].includes("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"),
+      `${recipe.name}: CMake configure command must avoid importing host MSVC runtime DLLs`,
+    );
   }
 });
 
@@ -555,7 +571,7 @@ test("the locked OfficeCLI release asset materializes as an unstripped binary", 
   assert.equal(source?.stripComponents, undefined);
 });
 
-test("ZIP Runtime inputs without a strip rule extract from their source root", async () => {
+test("ZIP Runtime inputs without a strip rule extract without GNU tar", async () => {
   const [sourceLock, toolchainsLock, materializerSource] = await Promise.all([
     readRuntimeSourcesLock(sourceLockPath),
     readRuntimeToolchainsLock(toolchainsLockPath),
@@ -576,11 +592,12 @@ test("ZIP Runtime inputs without a strip rule extract from their source root", a
   );
   assert.match(
     materializerSource,
-    /async function extractZipWithLockedTar\(\{ archive, output, stripComponents \}\)/u,
+    /async function extractZipArchiveWithNode\(\{ archive, output, stripComponents \}\)/u,
   );
+  assert.doesNotMatch(materializerSource, /extractZipWithLockedTar/u);
   assert.match(
     materializerSource,
-    /if \(!python\) \{\s+await extractZipWithLockedTar\(\{ archive, output, stripComponents \}\);/u,
+    /await extractZipArchive\(\{ archive, output, stripComponents, python \}\);/u,
   );
   assert.match(
     materializerSource,

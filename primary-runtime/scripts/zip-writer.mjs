@@ -141,9 +141,11 @@ export function readStoredZipArchive(buffer) {
     const uncompressedSize = buffer.readUInt32LE(offset + 24);
     const localOffset = buffer.readUInt32LE(offset + 42);
     const compressionMethod = buffer.readUInt16LE(offset + 10);
+    const externalMode = buffer.readUInt32LE(offset + 38) >>> 16;
     const path = buffer.subarray(offset + 46, offset + 46 + nameLength).toString("utf8");
     output.push({
       path,
+      externalMode,
       data: readStoredLocalFile({
         buffer,
         path,
