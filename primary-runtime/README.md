@@ -13,8 +13,9 @@ each bound by SHA-256. OfficeCLI is materialized as
 `dependencies/native/officecli/officecli(.exe)` and exposed as a Runtime binary,
 not as a bundled plugin.
 
-The source lock also records the existing Node/Python/native/font artifacts used
-by the surrounding Runtime and PDF path. Every entry has an exact version,
+The source lock also records Poppler, its native build dependencies, and fonts
+for the independent PDF path. The Node and Python component lists are empty.
+Every entry has an exact version,
 immutable HTTPS source, SHA-256, SPDX license, and target coverage. Runtime input
 smoke verifies OfficeCLI can create Office documents and emit PPTX SVG output;
 browser-backed screenshot preview is deliberately excluded from this Runtime
@@ -25,11 +26,21 @@ floating version/ref, placeholder, credential-bearing URL, unknown field, or
 incomplete target coverage. `npm run create-provenance` emits a receipt bound to
 the exact source-lock bytes.
 
-## Remaining release work
+## Delivery and verification
 
-P1 must create the actual four target archives from these sources. Each archive
-will contain Runtime-owned Node/Python/native/font paths plus OfficeCLI; it must
-not execute `npm`, `pip`, setup/bootstrap code, or system dependency fallbacks.
-P3 and later phases add archive budgets, signing, component/native smoke
-evidence, and live product gates. Until then the build and verify commands
-correctly stop at `AT-RT-BUILD-01` rather than fabricating a release artifact.
+The builder creates v3 archives for all four targets containing OfficeCLI,
+Poppler, fonts, and the Runtime-owned `officecli` skill. The v3 archives do not
+bundle Node, Python, LibreOffice, or `presentation-skill`. Installation uses
+verified immutable archives and does not execute `npm`, `pip`, bootstrap code,
+or system dependency fallbacks.
+
+The GitHub workflow separates calibration, independent budget review, and final
+builds. It verifies component smoke, archive/platform integrity, unpacked size,
+reviewed budgets, real desktop installation, and sampled installation RSS. Each
+final target staging artifact preserves `install-stress-memory.json`. The final
+aggregate tests signed Feed installation and the desktop Office command/preview
+path in development and Linux packaged builds.
+
+The aggregate is engineering-only. Production trust and the existing desktop
+release gates still govern public delivery. Legacy v1/v2 manifest decoding and
+preview support remain in the desktop app for compatibility and rollback.

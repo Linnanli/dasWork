@@ -3,6 +3,12 @@
 日期：2026-09-27
 模式：`$plan` direct；本文只规划，不修改产品代码。
 
+## 实施与工程验收（2026-09-28）
+
+开发已完成。OfficeCLI v3 Runtime、独立技能、Main 诊断/loader、PPTX 预览、旧 Runtime 兼容与托管插件迁移已落地。四平台最终构建及安装压力测试、签名 Feed 与 Linux 打包版端到端门禁通过；最终运行： [36361322781](https://github.com/Linnanli/dasWork/actions/runs/36361322781)，验证提交：`316386121eb1747ca03328414279e34eae0008cc`。
+
+归档大小/哈希、四平台安装内存原始报告、预算审查、测试范围和发布边界见[迁移验收记录](../../docs/verification/officecli-runtime-migration.md)。最终 Feed 产物为工程验证用途；生产发布仍遵循既有发布门禁。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。
