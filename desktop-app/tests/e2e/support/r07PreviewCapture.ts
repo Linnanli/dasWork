@@ -1,9 +1,10 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { expect, type Page } from '@playwright/test'
+import { createCanvas, loadImage } from '@napi-rs/canvas'
 
 import { measureR07RenderedSlide, type R07SlideMetrics } from './r07RenderMetrics'
 
@@ -69,4 +70,39 @@ export function pngBufferFromDataUrl(value: string): Buffer {
   const match = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/u.exec(value)
   if (!match?.[1]) throw new Error('R07 preview slide is not a PNG data URL.')
   return Buffer.from(match[1], 'base64')
+}
+
+export async function writeR07ContactSheet(input: {
+  slides: readonly R07CapturedSlide[]
+  outputDirectory: string
+  outputPath: string
+}): Promise<void> {
+  const thumbnailWidth = 320
+  const thumbnailHeight = 180
+  const padding = 12
+  const labelHeight = 24
+  const columns = 3
+  const cellWidth = thumbnailWidth + padding * 2
+  const cellHeight = thumbnailHeight + padding * 2 + labelHeight
+  const canvas = createCanvas(
+    cellWidth * columns,
+    cellHeight * Math.ceil(input.slides.length / columns)
+  )
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.font = '16px sans-serif'
+  const images = await Promise.all(
+    input.slides.map(async (slide) =>
+      loadImage(await readFile(join(input.outputDirectory, slide.file)))
+    )
+  )
+  images.forEach((image, index) => {
+    const left = (index % columns) * cellWidth + padding
+    const top = Math.floor(index / columns) * cellHeight + padding
+    context.fillStyle = '#202124'
+    context.fillText(`Slide ${index + 1}`, left, top + 16)
+    context.drawImage(image, left, top + labelHeight, thumbnailWidth, thumbnailHeight)
+  })
+  await writeFile(input.outputPath, canvas.toBuffer('image/png'), { mode: 0o600 })
 }

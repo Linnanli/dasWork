@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-r07-live-trace.v2",
+  "capturedAt": "2026-09-28T06:29:00.791Z",
+  "threadId": "01a0e6b1-f429-79c2-a1b6-5b5920f872e8",
+  "turnId": "01a0e6b2-1100-7312-8919-692af8f9e6ff",
+  "modelEvidence": {
+    "kind": "scripted-external-model",
+    "proves": "deterministic-desktop-runtime-command-path",
+    "doesNotProve": "live-model-skill-compliance"
+  },
+  "skill": {
+    "id": "/private/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-ch-bn4uxf/skills/dascowork-primary-runtime/officecli/SKILL.md",
+    "name": "officecli",
+    "localPath": "/private/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-ch-bn4uxf/skills/dascowork-primary-runtime/officecli/SKILL.md",
+    "instructionsSha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+  },
+  "activation": {
+    "operationId": "3537f8d2-120c-4b33-ab69-6ee74dd4c3b7",
+    "activeVersion": "2f2ea382dfdf29e36b400a4432112951e9c73b9d-darwin-x64-p1a-5",
+    "manifestSequence": 1
+  },
+  "loader": {
+    "loaderCallId": "call-primary-runtime-loader",
+    "appServerLogIndex": 99,
+    "observedAt": "2026-09-28T06:27:04.888Z",
+    "monotonicNs": "442173033323122",
+    "outputSha256": "6283cd7a9576d772294e69e43452bdc85f96089c3a956ed5a225ee133ef61722"
+  },
+  "command": {
+    "commandItemId": "call-primary-runtime-presentation-command",
+    "appServerLogIndex": 106,
+    "observedAt": "2026-09-28T06:27:05.600Z",
+    "monotonicNs": "442173745159573",
+    "outputSha256": "8699c950e5202308c7263cdef393cbaafd5fc8ff4d5b9bc4292300f31fd24c13"
+  },
+  "artifact": {
+    "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+    "observedAt": "2026-09-28T06:28:07.640Z",
+    "monotonicNs": "442235784305578",
+    "generation": 1,
+    "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+  },
+  "preview": {
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "observedAt": "2026-09-28T06:29:00.739Z",
+    "monotonicNs": "442288883630610",
+    "visible": true,
+    "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 51,
+        "sha256": "e3e009959d02bf979038826d3537d5038824b309389ef6e27a1ad814ea505f75",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.17493055555555556,
+        "colorBucketCount": 214,
+        "sha256": "9851f4fe4ed3afbe03fd6ff89e7157ee26b77ce7f93ccc87bf6b63be6c9fdbce",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.013044704861111112,
+        "colorBucketCount": 17,
+        "sha256": "7cf9203d9d93457280eea549fc6e5e2feff6d54bb07c525868802047fdb30e28",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.28106999903549384,
+        "colorBucketCount": 70,
+        "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.08243742766203704,
+        "colorBucketCount": 43,
+        "sha256": "420eac096b75ea6fa19c92f9352fafbbfab1f3825ba418bcdbecc101f0665246",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.02792799961419753,
+        "colorBucketCount": 278,
+        "sha256": "165e1c4b768a882825a5b441668c18b23d6cd277b5d96fb95aef0e4045dc91c0",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      }
+    ]
+  },
+  "renderReportSha256": "4d0208cd2830397a5e5b934b4b3b7e0c66d9a723d9f84dadd130e1def3b3c691",
+  "visualArtifacts": {
+    "directory": "/private/tmp/officecli-36379148451-final-r07-visual"
+  }
+}

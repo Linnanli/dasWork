@@ -1,6 +1,7 @@
 import { access, chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import type { Readable } from 'node:stream'
 import {
   _electron as electron,
   expect,
@@ -58,8 +59,7 @@ export async function launchApp(
   logs: string[],
   options: LaunchAppOptions = {}
 ): Promise<ElectronApplication> {
-  const userDataDir =
-    options.userDataDir ?? (await mkdtemp(join(e2eTempRoot(), e2eUserDataPrefix)))
+  const userDataDir = options.userDataDir ?? (await mkdtemp(join(e2eTempRoot(), e2eUserDataPrefix)))
   const codexHomeDir =
     options.codexHomeDir ?? (await mkdtemp(join(e2eTempRoot(), e2eCodexHomePrefix)))
   const dataDirectories = [userDataDir, codexHomeDir]
@@ -92,8 +92,8 @@ export async function launchApp(
       timeout: options.launchTimeoutMs ?? 30_000
     })
     appTempDirs.set(app, options.preserveDataDirectories ? [] : dataDirectories)
-    app.process().stdout?.on('data', (chunk) => logs.push(`[main:stdout] ${String(chunk)}`))
-    app.process().stderr?.on('data', (chunk) => logs.push(`[main:stderr] ${String(chunk)}`))
+    collectMainProcessLogs(app.process().stdout, 'stdout', logs)
+    collectMainProcessLogs(app.process().stderr, 'stderr', logs)
     await expectAppReady(await app.firstWindow())
   } catch (error) {
     if (app) await terminateElectronApp(app)
@@ -346,6 +346,29 @@ async function waitForE2eLaunchCooldown(): Promise<void> {
 
 function markE2eLaunchClosed(): void {
   nextE2eLaunchAt = Date.now() + e2eLaunchCooldownMs
+}
+
+export function collectMainProcessLogs(
+  stream: Readable | null | undefined,
+  channel: 'stdout' | 'stderr',
+  logs: string[]
+): void {
+  if (!stream) return
+  let pending = ''
+  stream.setEncoding('utf8')
+  stream.on('data', (chunk: string) => {
+    pending += chunk
+    let boundary = pending.indexOf('\n')
+    while (boundary >= 0) {
+      const line = pending.slice(0, boundary).replace(/\r$/u, '')
+      if (line) logs.push(`[main:${channel}] ${line}`)
+      pending = pending.slice(boundary + 1)
+      boundary = pending.indexOf('\n')
+    }
+  })
+  stream.on('end', () => {
+    if (pending) logs.push(`[main:${channel}] ${pending}`)
+  })
 }
 
 export function collectRendererLogs(page: Page, logs: string[]): void {

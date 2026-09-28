@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { createCanvas } from '@napi-rs/canvas'
 import { expect, type Page } from '@playwright/test'
 import JSZip from 'jszip'
 
@@ -84,7 +85,7 @@ export async function withR07PresentationWorkspace(
       writeFile(join(root, fixture.inputFile), fixture.html, 'utf8'),
       // This is a workspace input image, not a pre-generated presentation or
       // renderer output. The locked plugin owns the only PPTX creation path.
-      writeFile(join(root, imageFile), tinyPng())
+      writeFile(join(root, imageFile), controlFlowPng())
     ])
     await run(workspace)
   } finally {
@@ -331,9 +332,95 @@ function hasR07PageTypes(value: unknown[]): value is R07PageType[] {
   )
 }
 
-function tinyPng(): Buffer {
-  return Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-    'base64'
-  )
+function controlFlowPng(): Buffer {
+  const canvas = createCanvas(960, 540)
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#F8FAFC'
+  context.fillRect(0, 0, 960, 540)
+
+  context.fillStyle = '#0F172A'
+  context.font = 'bold 34px sans-serif'
+  context.fillText('AI Agent Tool Control Flow', 72, 72)
+  context.fillStyle = '#475569'
+  context.font = '22px sans-serif'
+  context.fillText('Policy check -> Approval -> Isolated run -> Audit replay', 72, 112)
+
+  const steps = [
+    { title: 'Request', body: 'Intent + context', x: 70, fill: '#DBEAFE', stroke: '#2563EB' },
+    { title: 'Policy', body: 'Risk + scope', x: 280, fill: '#DCFCE7', stroke: '#16A34A' },
+    { title: 'Approval', body: 'High-risk tools', x: 490, fill: '#FEF3C7', stroke: '#D97706' },
+    { title: 'Audit', body: 'Args + owner', x: 700, fill: '#F3E8FF', stroke: '#7E22CE' }
+  ]
+
+  for (const step of steps) {
+    roundRect(context, step.x, 180, 170, 160, 18)
+    context.fillStyle = step.fill
+    context.fill()
+    context.lineWidth = 4
+    context.strokeStyle = step.stroke
+    context.stroke()
+    context.fillStyle = '#0F172A'
+    context.font = 'bold 24px sans-serif'
+    context.fillText(step.title, step.x + 26, 235)
+    context.fillStyle = '#334155'
+    context.font = '19px sans-serif'
+    context.fillText(step.body, step.x + 20, 280)
+  }
+
+  context.strokeStyle = '#64748B'
+  context.fillStyle = '#64748B'
+  context.lineWidth = 5
+  for (const x of [240, 450, 660]) drawArrow(context, x, 260, x + 55, 260)
+
+  context.fillStyle = '#E2E8F0'
+  roundRect(context, 155, 385, 650, 70, 16)
+  context.fill()
+  context.strokeStyle = '#94A3B8'
+  context.lineWidth = 2
+  context.stroke()
+  context.fillStyle = '#1E293B'
+  context.font = '20px sans-serif'
+  context.fillText('Goal: block unsafe tools; keep replayable approval evidence', 188, 429)
+
+  return canvas.toBuffer('image/png')
+}
+
+function roundRect(
+  context: ReturnType<ReturnType<typeof createCanvas>['getContext']>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  context.beginPath()
+  context.moveTo(x + radius, y)
+  context.lineTo(x + width - radius, y)
+  context.quadraticCurveTo(x + width, y, x + width, y + radius)
+  context.lineTo(x + width, y + height - radius)
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  context.lineTo(x + radius, y + height)
+  context.quadraticCurveTo(x, y + height, x, y + height - radius)
+  context.lineTo(x, y + radius)
+  context.quadraticCurveTo(x, y, x + radius, y)
+  context.closePath()
+}
+
+function drawArrow(
+  context: ReturnType<ReturnType<typeof createCanvas>['getContext']>,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number
+): void {
+  context.beginPath()
+  context.moveTo(fromX, fromY)
+  context.lineTo(toX, toY)
+  context.stroke()
+  context.beginPath()
+  context.moveTo(toX, toY)
+  context.lineTo(toX - 16, toY - 10)
+  context.lineTo(toX - 16, toY + 10)
+  context.closePath()
+  context.fill()
 }

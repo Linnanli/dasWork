@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "dascowork-local-r07-control-context.v1",
+  "target": "darwin-x64",
+  "runtimeArtifact": {
+    "runId": "36379148451",
+    "artifactId": "10952445907",
+    "version": "2f2ea382dfdf29e36b400a4432112951e9c73b9d-darwin-x64-p1a-5",
+    "archiveSha256": "602a4a5d45e43d2b57f0e31702748c0ffa3c32b62ed82c0cffd33b6d73aed3c0"
+  },
+  "desktopSource": {
+    "baseCommit": "2f2ea382dfdf29e36b400a4432112951e9c73b9d",
+    "includesUncommittedChanges": true,
+    "fileSha256": {
+      "desktop-app/src/renderer/src/components/artifacts/useArtifactSource.ts": "942fd419cd55cad086474ea0144bc9352090c0a7542ab1caf1cd3a7b047a387f",
+      "desktop-app/src/renderer/src/components/artifacts/ArtifactTabContent.test.tsx": "9090d5a34c4ff9c284e2cb8e5d0514d581c49e5eb0b78719348878a2af25d7a5",
+      "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts": "bcd94797e6f52d2b3a5c055c7d54fa89286db3c6b02597f803ba4687202757d9",
+      "desktop-app/tests/e2e/r07-preview-capture.e2e.ts": "30e3889de18f9c3067af7f523727c4e5292000dde896e9d8f219e35a9b681e09",
+      "desktop-app/tests/e2e/support/app.ts": "e4f3bb3277b3eabef8e265085d6e01d5ed08eff92dd901154279060f82de7f9b",
+      "desktop-app/tests/e2e/support/app.test.ts": "ffcc46c46628208a65822a012ec8b00c4c2ccefd6b78f4c9dac8e235b4877ce9",
+      "desktop-app/tests/e2e/support/r07Presentation.ts": "d93b5278caffd63b480af6de28cb8c51e5f99238e4be84cdf60d9cf42fb97c2c",
+      "desktop-app/tests/e2e/support/r07PreviewCapture.ts": "98b01469efcaf74d5037ff7ec6aaec140fda11bda2ee45dd1ffc86f57131d537"
+    }
+  },
+  "scope": {
+    "deterministicModelResponse": true,
+    "performanceCalibration": false,
+    "nativeWindowsExecuted": false,
+    "fourTargetAcceptance": false,
+    "oldNewVisualAcceptance": "pending"
+  }
+}

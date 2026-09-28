@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "ac11093602b04fe3a77b304021d8090f",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 51,
+        "sha256": "e3e009959d02bf979038826d3537d5038824b309389ef6e27a1ad814ea505f75",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.17493055555555556,
+        "colorBucketCount": 214,
+        "sha256": "9851f4fe4ed3afbe03fd6ff89e7157ee26b77ce7f93ccc87bf6b63be6c9fdbce",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.013044704861111112,
+        "colorBucketCount": 17,
+        "sha256": "7cf9203d9d93457280eea549fc6e5e2feff6d54bb07c525868802047fdb30e28",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.28106999903549384,
+        "colorBucketCount": 70,
+        "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.08243742766203704,
+        "colorBucketCount": 43,
+        "sha256": "420eac096b75ea6fa19c92f9352fafbbfab1f3825ba418bcdbecc101f0665246",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.02792799961419753,
+        "colorBucketCount": 278,
+        "sha256": "165e1c4b768a882825a5b441668c18b23d6cd277b5d96fb95aef0e4045dc91c0",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "ac11093602b04fe3a77b304021d8090f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "b59d43fddd06ca1049647d06a239a64a80a104f383b7d463cdf588512ab46a66"
+        }
+      }
+    ]
+  }
+}

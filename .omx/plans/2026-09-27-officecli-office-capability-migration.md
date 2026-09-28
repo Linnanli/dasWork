@@ -26,6 +26,18 @@
 
 后续证据确认三个非 Windows 目标完整 v2→v3 迁移已通过。macOS arm64 和 Linux 的 R07 在第二页取证时重新回到第一页；修复取证期间写入工作区导致刷新，以及 UI 显示版本与二进制回执的同步条件。Windows 探测改为直接读取 `CreateProcessW` 的原生错误码 367，并使用无控制台的探测程序和独立控制台启动方式；仍需原生 CI 证明。
 
+旧运行最终失败；macOS x64 的最后结果也确认是同一预览翻页重置错误。修复提交 `2f2ea382dfdf29e36b400a4432112951e9c73b9d` 已推送，本地 Runtime、发布契约、预览单元、真实 Electron 回归、类型与 lint 验证通过（原生主机相关跳过项仍待 CI）。新四目标 `calibrate` 运行 [36379148451](https://github.com/Linnanli/dasWork/actions/runs/36379148451) 已确认绑定该提交并处于 `in_progress`；按暂停点等待用户告知完成，不继续读取该运行的最终结果。A1–A9 仍未全部验收。
+
+用户报告该运行报错后恢复检查：Windows 在探测程序编译时超时，尚未执行正反对照；三个非 Windows 目标仍在 R07 第二页显示第一页。此前延迟写入 PNG 的修复不足以解决实际交互：真实组件回归已确认，面板 focus 导致父组件重绘，重新创建的 descriptor/target/callback 触发 `useArtifactSource` 重载，卸载预览并重置页码。现将加载依赖限定为实际来源与会话值，保留文件事件、来源变更和显式导航。Windows 保留宿主编译环境、规范 PATH 并补阶段日志，明确拒绝证据与原超时预算不变；该候选修复仍待原生验证。
+
+独立审查进一步确认同一 workspaceId 可能跨会话复用，来源键现同时绑定会话与线程并补回归，防止沿用旧文件授权。本机使用该运行真实 darwin-x64 归档的完整桌面控制已能捕获六页，随后发现议程测试样本正文过少（非白比例 `0.007870732060185185`），图片输入是 1×1 黑图。按原事实完善议程和控制图，保持 `0.01` 与颜色数量的原门槛；总览图由真实六页 PNG 合成，质量失败也保留实际 PPTX/PNG 附件。该本机控制不替代四目标校准与旧/新视觉验收。
+
+完善样本后的控制验证发现事件计时早于初始预览就绪，20 秒到期时尚未触发测试文件变化。取证现先等预览就绪，再安装指定 sourceId 的监听并触发变化，保留原事件等待预算与清理要求。
+
+六页实图与像素检查通过后，取证发现两条 app-server 消息合并在一个读取块中，原测试日志解析遗漏了真实 loader 调用。测试宿主改为独立缓冲 stdout/stderr 完整行并补 UTF-8/合并/拆分回归；实图检查修正输入图比例及封面配色，保持渲染器和像素门槛。
+
+最终本机完整 R07 控制通过（约 2.2 分钟），真实签名 Feed、聊天、技能/loader、正常命令、文件变化、六页实图和 app-server 证据均通过。原始 PPTX、PNG、总览、逐页哈希与上下文保存在 `docs/verification/officecli-runtime-migration/2026-09-28/darwin-x64-r07-control/`，绑定该运行的真实 darwin-x64 归档及当前工作区文件哈希。相关单元 16 项、真实 Electron 回归 2 项、Runtime 77 项（另 4 项因平台/沙箱跳过）、发布契约 44 项、构建、类型和 lint 验证通过；本机控制不替代四平台原生验证、旧/新视觉比较、十样本预算校准与最终验收。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

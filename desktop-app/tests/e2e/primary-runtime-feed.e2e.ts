@@ -3,7 +3,7 @@ import { access, copyFile, mkdir, readFile, readdir, utimes, writeFile } from 'n
 import { dirname, isAbsolute, join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
-import type { ElectronApplication, Page } from '@playwright/test'
+import type { ElectronApplication, Page, TestInfo } from '@playwright/test'
 
 import {
   attachDiagnostics,
@@ -28,7 +28,7 @@ import {
   requirePositiveDuration,
   type R07EvidenceObservations
 } from './support/primaryRuntimeEvidence'
-import { captureR07PreviewSlides } from './support/r07PreviewCapture'
+import { captureR07PreviewSlides, writeR07ContactSheet } from './support/r07PreviewCapture'
 import {
   assistantMessageResponse,
   dynamicFunctionCallResponse,
@@ -344,7 +344,11 @@ test('AT-E2E-01/OFFICECLI-RUNTIME installs a signed Feed Runtime and creates an 
       await verifyR07Presentation(join(workspace.root, workspace.outputFile))
       await expectR07QaOutputs(workspace)
       evidenceRecorder.observe('artifact')
-      const previewResult = await openR07PresentationPreviewAndReadArtifact(page, workspace)
+      const previewResult = await openR07PresentationPreviewAndReadArtifact(
+        page,
+        workspace,
+        testInfo
+      )
       evidenceRecorder.observe('preview')
       const exportedVisualArtifactDirectory = r07VisualArtifactDirectory
         ? await exportR07VisualArtifacts({
@@ -763,7 +767,6 @@ function runtimeOfficeCommandSource(
   const facts = workspace.facts.map((fact) => fact.value)
   const outputPath = join(workspace.root, workspace.outputFile)
   const renderedSlides = join(workspace.root, workspace.renderedSlidesDirectory)
-  const contactSheet = join(workspace.root, workspace.contactSheetFile)
   const layoutPath = join(workspace.root, workspace.layoutReceiptFile)
   const validationPath = join(workspace.root, 'officecli-validation.json')
   const imagePath = join(workspace.root, workspace.imageFile)
@@ -780,7 +783,7 @@ function runtimeOfficeCommandSource(
       '--prop',
       'title=封面｜AI Agent 安全市场',
       '--prop',
-      'background=0B1020'
+      'background=EAF2FF'
     ],
     [
       office,
@@ -806,7 +809,7 @@ function runtimeOfficeCommandSource(
       '--prop',
       'size=24pt',
       '--prop',
-      'color=FFFFFF'
+      'color=1F2937'
     ],
     [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=议程｜市场机会与风险'],
     [
@@ -830,6 +833,126 @@ function runtimeOfficeCommandSource(
       'font.ea=Noto Sans CJK SC',
       '--prop',
       'size=22pt'
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[2]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=01 市场规模\n2026 年市场规模\n18.4 亿元｜试点 37%',
+      '--prop',
+      'x=0.7in',
+      '--prop',
+      'y=3.1in',
+      '--prop',
+      'width=2.05in',
+      '--prop',
+      'height=2.05in',
+      '--prop',
+      'geometry=roundRect',
+      '--prop',
+      'fill=EAF2FF',
+      '--prop',
+      'line=4472C4:1.2:solid',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=16pt',
+      '--prop',
+      'color=1F2937'
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[2]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=02 需求结构\n身份与权限治理\n占需求的 46%',
+      '--prop',
+      'x=2.95in',
+      '--prop',
+      'y=3.1in',
+      '--prop',
+      'width=2.05in',
+      '--prop',
+      'height=2.05in',
+      '--prop',
+      'geometry=roundRect',
+      '--prop',
+      'fill=EEF8F2',
+      '--prop',
+      'line=2F855A:1.2:solid',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=16pt',
+      '--prop',
+      'color=1F2937'
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[2]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=03 风险优先级\n提示注入\n工具权限滥用',
+      '--prop',
+      'x=5.2in',
+      '--prop',
+      'y=3.1in',
+      '--prop',
+      'width=2.05in',
+      '--prop',
+      'height=2.05in',
+      '--prop',
+      'geometry=roundRect',
+      '--prop',
+      'fill=FFF4E6',
+      '--prop',
+      'line=DD6B20:1.2:solid',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=16pt',
+      '--prop',
+      'color=1F2937'
+    ],
+    [
+      office,
+      'add',
+      outputPath,
+      '/slide[2]',
+      '--type',
+      'shape',
+      '--prop',
+      'text=04 下一步行动\n第一优先行动\n建立工具调用审计',
+      '--prop',
+      'x=7.45in',
+      '--prop',
+      'y=3.1in',
+      '--prop',
+      'width=2.05in',
+      '--prop',
+      'height=2.05in',
+      '--prop',
+      'geometry=roundRect',
+      '--prop',
+      'fill=F3E8FF',
+      '--prop',
+      'line=7E22CE:1.2:solid',
+      '--prop',
+      'font.ea=Noto Sans CJK SC',
+      '--prop',
+      'size=16pt',
+      '--prop',
+      'color=1F2937'
     ],
     [office, 'add', outputPath, '/', '--type', 'slide', '--prop', 'title=摘要｜核心结论'],
     [
@@ -927,7 +1050,7 @@ function runtimeOfficeCommandSource(
       '--prop',
       'width=3.2in',
       '--prop',
-      'height=3.2in',
+      'height=1.8in',
       '--prop',
       `alt=${workspace.requiredImageAltText}`
     ],
@@ -982,7 +1105,6 @@ function runtimeOfficeCommandSource(
           `${powerShellInvocation(args)} | Set-Content -LiteralPath ${powerShellQuote(output)} -Encoding utf8; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
       ),
       `Set-Content -LiteralPath ${powerShellQuote(layoutPath)} -Value ${powerShellQuote(JSON.stringify({ summary: { slide_count: 6 }, renderer: 'officecli-svg' }))} -Encoding utf8`,
-      `Set-Content -LiteralPath ${powerShellQuote(contactSheet)} -Value 'officecli svg contact sheet' -Encoding utf8`,
       `Write-Output 'officecli:created:6'`
     ].join('; ')
   }
@@ -997,7 +1119,6 @@ function runtimeOfficeCommandSource(
       ({ args, output }) => `${args.map(shellQuote).join(' ')} > ${shellQuote(output)}`
     ),
     `printf '%s' ${shellQuote(JSON.stringify({ summary: { slide_count: 6 }, renderer: 'officecli-svg' }))} > ${shellQuote(layoutPath)}`,
-    `printf '%s' ${shellQuote('officecli svg contact sheet')} > ${shellQuote(contactSheet)}`,
     `printf '%s' ${shellQuote('officecli:created:6')}`
   ].join(' && ')
 }
@@ -1099,27 +1220,13 @@ async function expectR07QaOutputs(workspace: R07PresentationWorkspace): Promise<
       expect(svg).toMatch(/<(?:rect|path|foreignObject|g)\b/u)
     })
   )
-  await expect(access(join(workspace.root, workspace.contactSheetFile))).resolves.toBeUndefined()
 }
 
 async function openR07PresentationPreviewAndReadArtifact(
   page: Page,
-  workspace: R07PresentationWorkspace
+  workspace: R07PresentationWorkspace,
+  testInfo: TestInfo
 ): Promise<R07ArtifactPreviewResult> {
-  const sourceEvent = page.evaluate(
-    () =>
-      new Promise<string>((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          unsubscribe()
-          reject(new Error('Timed out waiting for the workspace artifact preview source event.'))
-        }, 20_000)
-        const unsubscribe = window.desktopApp.workspace.artifacts.onEvent((event) => {
-          window.clearTimeout(timeout)
-          unsubscribe()
-          resolve(event.sourceId)
-        })
-      })
-  )
   await openR07PresentationInWorkspace(page, workspace.outputFile)
   const receiptId = await page
     .locator('[data-slot="right-workspace-shell"]')
@@ -1127,8 +1234,45 @@ async function openR07PresentationPreviewAndReadArtifact(
     .getAttribute('data-workspace-tab-id')
   if (!receiptId) throw new Error('Workspace presentation preview tab did not expose a receipt id.')
   const presentationPath = join(workspace.root, workspace.outputFile)
-  await triggerArtifactPreviewChangeRoundTrip(presentationPath)
-  const sourceId = await sourceEvent
+  const artifact = page.locator('[data-slot="artifact-tab-content"]')
+  await expect(artifact).toHaveAttribute('data-artifact-source-id', /.+/u)
+  const sourceId = await artifact.getAttribute('data-artifact-source-id')
+  if (!sourceId) throw new Error('Workspace presentation preview did not expose a source id.')
+  // Start the change round trip after the initial render, and await the
+  // subscription before touching the file. Only this source may satisfy it.
+  await page.evaluate((artifactSourceId) => {
+    const state: { observed: boolean; unsubscribe(): void } = {
+      observed: false,
+      unsubscribe: () => undefined
+    }
+    const stateWindow = window as Window & { __r07SourceChange?: typeof state }
+    stateWindow.__r07SourceChange = state
+    state.unsubscribe = window.desktopApp.workspace.artifacts.onEvent((event) => {
+      if (event.sourceId !== artifactSourceId) return
+      state.observed = true
+      state.unsubscribe()
+    })
+  }, sourceId)
+  try {
+    await triggerArtifactPreviewChangeRoundTrip(presentationPath)
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as Window & { __r07SourceChange?: { observed: boolean } }).__r07SourceChange
+                ?.observed ?? false
+          ),
+        { timeout: 20_000, message: 'Workspace artifact preview source event was not received.' }
+      )
+      .toBe(true)
+  } finally {
+    await page.evaluate(() => {
+      const stateWindow = window as Window & { __r07SourceChange?: { unsubscribe(): void } }
+      stateWindow.__r07SourceChange?.unsubscribe()
+      delete stateWindow.__r07SourceChange
+    })
+  }
   const binary = await page.evaluate(async (artifactSourceId) => {
     return window.desktopApp.workspace.artifacts.readBinary({
       version: 1,
@@ -1144,7 +1288,6 @@ async function openR07PresentationPreviewAndReadArtifact(
   const workspacePresentationSha256 = await sha256File(presentationPath)
   expect(binary.content.checksum).toBe(workspacePresentationSha256)
   expect(binary.content.generation).toBeGreaterThan(0)
-  const artifact = page.locator('[data-slot="artifact-tab-content"]')
   await expect(artifact).toHaveAttribute('data-artifact-source-id', sourceId)
   await expect(artifact).toHaveAttribute(
     'data-artifact-preview-generation',
@@ -1167,6 +1310,21 @@ async function openR07PresentationPreviewAndReadArtifact(
     checksum: binary.content.checksum
   }
   const renderedSlideHashes = await writeDisplayedR07PreviewSlides(page, workspace)
+  // Preserve the actual inputs and displayed pages even when pixel QA fails.
+  await testInfo.attach('r07-presentation.pptx', {
+    path: presentationPath,
+    contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  })
+  for (const file of renderedSlideHashes.keys()) {
+    await testInfo.attach(`r07-preview-${file}`, {
+      path: join(workspace.root, workspace.renderedSlidesDirectory, file),
+      contentType: 'image/png'
+    })
+  }
+  await testInfo.attach('r07-contact-sheet.png', {
+    path: join(workspace.root, workspace.contactSheetFile),
+    contentType: 'image/png'
+  })
   const measuredReceipt = await verifyR07RenderedSlides(workspace)
   const slides = await Promise.all(
     measuredReceipt.slides.map(async (slide) => {
@@ -1209,6 +1367,15 @@ async function writeDisplayedR07PreviewSlides(
 ): Promise<Map<string, string>> {
   const renderedRoot = join(workspace.root, workspace.renderedSlidesDirectory)
   const slides = await captureR07PreviewSlides({ page, outputDirectory: renderedRoot })
+  await writeR07ContactSheet({
+    slides,
+    outputDirectory: renderedRoot,
+    outputPath: join(workspace.root, workspace.contactSheetFile)
+  })
+  const contactSheetMetrics = await renderedSlideMetrics(
+    join(workspace.root, workspace.contactSheetFile)
+  )
+  expect(contactSheetMetrics).toMatchObject({ width: 1032, height: 456 })
   return new Map(slides.map((slide) => [slide.file, slide.sha256]))
 }
 

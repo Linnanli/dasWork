@@ -167,7 +167,7 @@ export async function buildWindowsNativeChildProcessProbe(options = {}) {
       "-OutputPath",
       outputPath,
     ],
-    env: windowsSystemEnvironment(dirname(outputPath)),
+    env: windowsCompilerEnvironment(dirname(outputPath)),
     timeoutMs: Number(options.timeoutMs ?? 30_000),
     allowedExitCodes: [0],
     name: "officecli-windows-child-probe-build",
@@ -229,6 +229,18 @@ function sanitizeEnvironment(env) {
       .filter(([key, value]) => value !== undefined && key !== "")
       .map(([key, value]) => [String(key), String(value)]),
   );
+}
+
+function collapseWindowsPathKeys(env) {
+  const pathEntries = Object.entries(env).filter(([key]) => key.toUpperCase() === "PATH");
+  if (pathEntries.length === 0) return env;
+  const preferred = pathEntries.find(([key]) => key === "PATH") ?? pathEntries.find(([key]) => key === "Path") ?? pathEntries[0];
+  const collapsed = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toUpperCase() !== "PATH") collapsed[key] = value;
+  }
+  collapsed.PATH = preferred[1];
+  return collapsed;
 }
 
 async function runCappedCommand({ command, args, env, timeoutMs, allowedExitCodes, name }) {
@@ -324,6 +336,25 @@ function windowsSystemEnvironment(tempRoot) {
   if (!tempRoot) return env;
   return {
     ...env,
+    TEMP: tempRoot,
+    TMP: tempRoot,
+    USERPROFILE: tempRoot,
+    LOCALAPPDATA: tempRoot,
+    APPDATA: tempRoot,
+  };
+}
+
+
+export function windowsCompilerEnvironmentForTest(tempRoot, hostEnv = process.env) {
+  return windowsCompilerEnvironment(tempRoot, hostEnv);
+}
+
+function windowsCompilerEnvironment(tempRoot, hostEnv = process.env) {
+  const host = collapseWindowsPathKeys(sanitizeEnvironment(hostEnv));
+  return {
+    ...host,
+    ...windowsSystemEnvironment(tempRoot),
+    PATH: host.PATH ?? windowsSystemEnvironment().PATH,
     TEMP: tempRoot,
     TMP: tempRoot,
     USERPROFILE: tempRoot,
