@@ -54,6 +54,14 @@
 
 本轮完整本机 R07 控制通过（约 3.1 分钟），六页真实 PNG、哈希及原像素标准通过，证据含独立的字体字形报告，保存在 `docs/verification/officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/`。最终构建、Node/Web 类型检查、完整 lint（0 错误、539 条既有警告）、变更文件 lint 与 diff 检查通过。本机控制仍不替代 Windows/Linux 原生验证、十样本校准或完整计划验收。
 
+修复提交 `aa27d8fdf5b3f2a0722c075efa4b48c44df7d1ed` 已推送。新四目标 `calibrate` 运行 [36403623699](https://github.com/Linnanli/dasWork/actions/runs/36403623699) 于 2026-09-28 09:27:34 UTC 创建，已确认 `headSha` 绑定该提交、状态为 `in_progress`。按约定暂停，等待用户完成通知后再检查 Windows 旧转换、Linux 首帧与中文字形、四平台校准及后续门禁；未读取新运行最终结果，A1–A9 仍未全部接受。
+
+用户报告运行完成且有报错后，确认 `36403623699` 最终失败：四目标原生构建、四迁移矩阵通过；Linux 和 macOS ARM 的 P3 全部通过，macOS Intel 的全部验证通过但产物创建请求 `ETIMEDOUT`。Windows 旧转换已产出六页 `1921×1080` PNG；新预览却为带滚动条的 `1008×681` PNG，宽高比检查正确拦截真实裁切。
+
+本轮 Main 在隐藏首帧后显式恢复幻灯片内容区尺寸，保留字体加载及两帧等待，并在返回 PNG 前验证最低尺寸和宽高比，兼容高分屏与单像素舍入。保持比较标准和隔离边界。使用实际 Windows 失败文稿的六页 SVG，本机真实 Electron 控制强制初始窗口为 `1008×681`，修复后六页视口/滚动范围均为 `1920×1080`、PNG 为 `3840×2160`。证据保存在 `docs/verification/officecli-runtime-migration/2026-09-28/preview-viewport-control/`；Windows 原生恢复仍需新运行确认。23 项相关测试、44 项发布契约、桌面构建及 Node/Web 类型检查通过，完整 lint 为 0 错误、539 条既有警告，变更文件 lint 通过；独立只读复查未发现阻塞问题。macOS 上传网络错误在新校准中重试，四平台审查及最终门禁仍未完成。
+
+完整本机 R07 再次通过（1 项，约 3.8 分钟），真实签名 Feed、聊天/app-server 命令、文件事件及六页 PNG 通过原门槛，真实图及哈希回执已保存并检查。它仍为单次功能控制，不能替代 Windows 原生执行、四平台十样本校准、人工视觉验收或最终门禁。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

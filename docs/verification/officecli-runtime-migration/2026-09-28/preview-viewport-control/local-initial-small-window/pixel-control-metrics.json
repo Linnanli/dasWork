@@ -1,0 +1,47 @@
+{
+  "note": "Independent full-image quantized pixel control; the production R07 receipt uses its existing sampler and thresholds.",
+  "slides": [
+    {
+      "file": "slide-01.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 1,
+      "colorBucketCount": 51
+    },
+    {
+      "file": "slide-02.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 0.174931640625,
+      "colorBucketCount": 181
+    },
+    {
+      "file": "slide-03.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 0.013089072145061728,
+      "colorBucketCount": 17
+    },
+    {
+      "file": "slide-04.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 0.28106999903549384,
+      "colorBucketCount": 70
+    },
+    {
+      "file": "slide-05.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 0.08243742766203704,
+      "colorBucketCount": 43
+    },
+    {
+      "file": "slide-06.png",
+      "width": 3840,
+      "height": 2160,
+      "nonWhiteRatio": 0.028081114969135804,
+      "colorBucketCount": 278
+    }
+  ]
+}

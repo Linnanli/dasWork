@@ -110,6 +110,22 @@ Windows 改为在受限目标内通过 `CreateProcessW` 与 `GetLastError()` 记
 
 另从锁定的 v2 原始 [Windows 构建工件](https://github.com/Linnanli/dasWork/actions/runs/35977341257/artifacts/10798893686) 按绝对字节范围读取小型原生验证、清单和来源回执，核对 ZIP CRC、清单 SHA-256 与锁定归档身份。历史验证回执证明该归档完成四页真实转换；它的原生 Runtime 根短于本轮 retained 根的 152 字符。原始文件和实际根比较保存在 [v2 控制上下文](officecli-runtime-migration/2026-09-28/win32-x64-v2-baseline/source-context.json)。嵌套归档本身被压缩，未在本机完整重下或逐项读取内置 Python 文件；此处不宣称已证明 Python 缺件或长路径是唯一根因，下一轮 Windows 原生结果仍是必要证据。
 
+修复提交 `aa27d8fdf5b3f2a0722c075efa4b48c44df7d1ed` 已推送。新四目标 `calibrate` 运行 [36403623699](https://github.com/Linnanli/dasWork/actions/runs/36403623699) 于 2026-09-28 09:27:34 UTC 创建，已确认 `headSha` 与该提交一致、状态为 `in_progress`。按约定暂停，待用户完成通知后再读取 Windows 旧转换、Linux 首帧/中文实图、四平台校准以及必要的 `review`/`final` 结果；尚未读取新运行最终结果，完整计划仍未验收。
+
+### 36403623699：Windows 小桌面裁切与 macOS 产物上传超时
+
+用户通知完成且有错误后，读取绑定提交的真实任务结果：四目标原生构建/归档执行、四目标 v2/v3 迁移矩阵通过。Linux 和 macOS ARM 的 P3、六页旧/新取证与十样本校准通过；macOS Intel 的全部验证与校准通过，失败发生在上传产物 `CreateArtifact` 请求，错误为 `ETIMEDOUT`，不是预览或测量失败。
+
+Windows 旧转换已成功产出六页 `1921×1080` PNG，说明短迁移目录下旧转换恢复；不把这扩展为所有安装路径均已验证。Windows 新预览六页原始 PNG 都是 `1008×681`，含滚动条，宽高比偏差 `0.18372370016848974` 超过原单像素舍入容差 `0.003906980406377288`。此处是实际裁切，保留原比较门槛。
+
+Main 现等隐藏首帧后调用 [setContentSize](https://www.electronjs.org/docs/latest/api/browser-window#winsetcontentsizewidth-height-animate) 恢复 SVG 声明的内容区尺寸，再加载字体并等两个动画帧。启用 [enableLargerThanScreen](https://www.electronjs.org/docs/latest/api/structures/browser-window-options#enablelargerthanscreen-boolean-optional-macos) 覆盖 macOS 的大窗口限制；该选项只对 macOS 相关，Windows 修复依赖显式内容区尺寸设置。返回 PNG 前检查实际截图最低分辨率和宽高比，允许 `3840×2160` 高分屏输出与一个像素的边缘舍入，拒绝 `1008×681` 裁切图。文档脚本、Node、外部请求和原资源限制保持。
+
+真实 Electron 控制使用本次实际 Windows PPTX 的六页 SVG，测试插件只将初始隐藏窗口强制缩为 `1008×681`。六页修复后 `innerWidth/innerHeight` 和 `scrollWidth/scrollHeight` 均为 `1920×1080`，PNG 均为 `3840×2160`；逐项核对原失败 PNG、源 PPTX 与控制 PNG 哈希，并检查中文总览。单独启用 offscreen 的控制仍被裁切，因此未采用它作为修复。原始失败图、原转换旧图、实际失败日志、控制 SVG、六页完整 PNG、视口回执及控制来源保存在 [控制上下文](officecli-runtime-migration/2026-09-28/preview-viewport-control/source-context.json) 和 [修复后的六页总览](officecli-runtime-migration/2026-09-28/preview-viewport-control/local-initial-small-window/contact-sheet.png)。此为本机小窗口控制，不能替代 Windows 原生执行或旧/新人工视觉验收。
+
+相关单元 23 项通过，回归覆盖尺寸修正顺序、裁切拒绝、高分屏和单像素舍入；发布契约 44 项通过，桌面构建和 Node/Web 类型检查通过。完整 lint 为 0 错误、539 条既有警告，变更文件 lint 无输出。独立只读复查未发现安全、时序或正确性阻塞；Windows 窗口管理器实际行为仍须新 CI 确认。macOS 的产物上传网络错误在新运行重试；完整四平台校准、审查及最终门禁仍待完成，A1–A9 未全部接受。
+
+完整本机 R07 再次通过（1 项，约 3.8 分钟），覆盖真实签名 Feed 安装、普通聊天、app-server 技能/loader/命令、文件事件及宿主预览。六页 PNG 为 `3840×2160`，原非白比例/颜色门槛通过，逐项核对 PPTX 与 PNG 哈希并检查中文总览。证据包含 [本轮 R07 回执](officecli-runtime-migration/2026-09-28/preview-viewport-control/local-r07/r07-preview-render-receipt.json)、[实际六页总览](officecli-runtime-migration/2026-09-28/preview-viewport-control/local-r07/r07-contact-sheet.png) 和控制上下文中的本次工作区文件哈希及不可变归档身份。该单次功能控制使用确定性外部模型响应，不能替代 Windows/Linux 原生执行、十样本校准、旧/新人工视觉验收或最终门禁。
+
 ## 历史实现与验证版本
 
 - OfficeCLI：`v1.0.152`；四个平台的原生工件由 `primary-runtime/runtime-sources.lock.json` 锁定来源、版本、SHA-256 和许可证。

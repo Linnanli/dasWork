@@ -14,11 +14,16 @@ const electronMock = vi.hoisted(() => {
   return {
     session,
     windowOptions: vi.fn(),
+    setContentSize: vi.fn(),
     loadFile: vi.fn<(path: string) => Promise<void>>(async () => undefined),
     executeJavaScriptInIsolatedWorld: vi.fn<
       (world: number, scripts: unknown[]) => Promise<boolean>
     >(async () => true),
-    capturePage: vi.fn(async () => ({ isEmpty: () => false, toPNG: () => Buffer.from('png') })),
+    capturePage: vi.fn(async () => ({
+      isEmpty: () => false,
+      getSize: () => ({ width: 1920, height: 1080 }),
+      toPNG: () => Buffer.from('png')
+    })),
     once: vi.fn<(event: string, listener: () => void) => void>(),
     destroy: vi.fn()
   }
@@ -32,6 +37,7 @@ vi.mock('electron', () => ({
       electronMock.windowOptions(options)
     }
     loadFile = electronMock.loadFile
+    setContentSize = electronMock.setContentSize
     once = electronMock.once
     webContents = {
       executeJavaScriptInIsolatedWorld: electronMock.executeJavaScriptInIsolatedWorld,
@@ -50,6 +56,7 @@ beforeEach(() => {
   electronMock.capturePage.mockClear()
   electronMock.loadFile.mockClear()
   electronMock.windowOptions.mockClear()
+  electronMock.setContentSize.mockClear()
   electronMock.destroy.mockClear()
   electronMock.once.mockReset().mockImplementation((_event, listener) => listener())
   electronMock.executeJavaScriptInIsolatedWorld.mockReset().mockResolvedValue(true)
@@ -60,6 +67,61 @@ afterEach(async () => {
 })
 
 describe('rasterizePresentationSvg', () => {
+  it('sets the slide content size after first paint and before font layout', async () => {
+    let releasePaint!: () => void
+    electronMock.once.mockImplementationOnce((_event, listener) => (releasePaint = listener))
+    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    await vi.waitFor(() => expect(electronMock.loadFile).toHaveBeenCalled())
+    expect(electronMock.setContentSize).not.toHaveBeenCalled()
+    releasePaint()
+    await rendering
+    expect(electronMock.setContentSize).toHaveBeenCalledWith(1920, 1080)
+    expect(electronMock.setContentSize.mock.invocationCallOrder[0]).toBeLessThan(
+      electronMock.executeJavaScriptInIsolatedWorld.mock.invocationCallOrder[0]
+    )
+    expect(electronMock.windowOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ enableLargerThanScreen: true })
+    )
+  })
+
+  it('rejects a capture clipped to a smaller native window instead of publishing it', async () => {
+    electronMock.capturePage.mockResolvedValueOnce({
+      isEmpty: () => false,
+      getSize: () => ({ width: 1008, height: 681 }),
+      toPNG: () => Buffer.from('cropped png')
+    })
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).rejects.toThrow(
+      'Presentation SVG capture dimensions do not match the slide'
+    )
+    expect(electronMock.destroy).toHaveBeenCalledOnce()
+    await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
+  })
+
+  it('accepts a same-aspect high-DPI capture that is larger than the CSS slide', async () => {
+    electronMock.capturePage.mockResolvedValueOnce({
+      isEmpty: () => false,
+      getSize: () => ({ width: 3840, height: 2160 }),
+      toPNG: () => Buffer.from('retina png')
+    })
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).resolves.toEqual(
+      Buffer.from('retina png')
+    )
+  })
+
+  it.each([
+    { width: 1921, height: 1080 },
+    { width: 1919, height: 1080 }
+  ])('accepts a complete capture with one-pixel edge rounding: %o', async (size) => {
+    electronMock.capturePage.mockResolvedValueOnce({
+      isEmpty: () => false,
+      getSize: () => size,
+      toPNG: () => Buffer.from('png')
+    })
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).resolves.toEqual(
+      Buffer.from('png')
+    )
+  })
+
   it('rejects oversized SVG dimensions before creating an Electron window', async () => {
     await expect(
       rasterizePresentationSvg('<svg width="4097" height="1080"></svg>', 100, '/runtime/noto.otf')

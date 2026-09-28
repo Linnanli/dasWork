@@ -1,0 +1,64 @@
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	﻿2026-09-28T10:08:54.2839682Z ##[group]Run target_root="$RUNNER_TEMP/runtime-dist/win32-x64"
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2840749Z target_root="$RUNNER_TEMP/runtime-dist/win32-x64"
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2841841Z export DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2842593Z if [[ "win32-x64" == "linux-x64" ]]; then
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2843581Z   xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-preview-comparison -- \
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2844710Z     --migration-report "$target_root/migration-matrix.json" \
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2845507Z     --visual-directory "$target_root/r07-visual"
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2846122Z else
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2846846Z   npm --prefix desktop-app run test:e2e:primary-runtime-preview-comparison -- \
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2847836Z     --migration-report "$target_root/migration-matrix.json" \
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2848656Z     --visual-directory "$target_root/r07-visual"
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2849354Z fi
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2875031Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2875798Z env:
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2876234Z   PRIMARY_RUNTIME_MODE: calibrate
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.2876731Z ##[endgroup]
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.9982470Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.9983447Z > desktop-app@1.0.0 test:e2e:primary-runtime-preview-comparison
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.9984795Z > node scripts/run-primary-runtime-preview-comparison.mjs --migration-report D:\a\_temp/runtime-dist/win32-x64/migration-matrix.json --visual-directory D:\a\_temp/runtime-dist/win32-x64/r07-visual
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:54.9985657Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:56.3547858Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:56.3548580Z Running 1 test using 1 worker
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:56.3570531Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:08:57.0413483Z [1/1] tests\e2e\primary-runtime-preview-comparison.e2e.ts:61:5 › OFFICECLI-RUNTIME compares legacy v2 preview PNGs against OfficeCLI preview artifacts
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6316434Z   1) tests\e2e\primary-runtime-preview-comparison.e2e.ts:61:5 › OFFICECLI-RUNTIME compares legacy v2 preview PNGs against OfficeCLI preview artifacts
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6317191Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6317460Z     Error: expect(received).toBeLessThanOrEqual(expected)
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6317774Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6317954Z     Expected: <= 0.003906980406377288
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6318324Z     Received:    0.18372370016848974
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6318549Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6318697Z       299 |       expect(
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6319245Z       300 |         Math.abs(Math.log(legacy.width / legacy.height / (current.width / current.height)))
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6320690Z     > 301 |       ).toBeLessThanOrEqual(roundingTolerance)
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6321833Z           |         ^
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6322639Z       302 |       return {
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6323013Z       303 |         file: legacy.file,
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6323367Z       304 |         legacy,
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6323988Z         at map (D:\a\dasWork\dasWork\desktop-app\tests\e2e\primary-runtime-preview-comparison.e2e.ts:301:9)
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6324968Z         at comparePreviewSlides (D:\a\dasWork\dasWork\desktop-app\tests\e2e\primary-runtime-preview-comparison.e2e.ts:290:24)
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6325909Z         at D:\a\dasWork\dasWork\desktop-app\tests\e2e\primary-runtime-preview-comparison.e2e.ts:117:31
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6326365Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6326940Z     attachment #1: desktop-chat-diagnostics.json (application/json) ────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6328097Z     test-results\primary-runtime-preview-co-dcdf8-OfficeCLI-preview-artifacts\attachments\desktop-chat-diagnostics-json-45a02503182528850e34be326b7d73a265f2e356.json
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6329544Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6329860Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6330277Z     attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6333496Z     test-results\primary-runtime-preview-co-dcdf8-OfficeCLI-preview-artifacts\test-failed-1.png
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6334369Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6334714Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6335197Z     Error Context: test-results\primary-runtime-preview-co-dcdf8-OfficeCLI-preview-artifacts\error-context.md
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6335721Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6336136Z     attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6336901Z     test-results\primary-runtime-preview-co-dcdf8-OfficeCLI-preview-artifacts\trace.zip
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6337468Z     Usage:
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6337638Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6338131Z         npx playwright show-trace test-results\primary-runtime-preview-co-dcdf8-OfficeCLI-preview-artifacts\trace.zip
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6338666Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6339037Z     ────────────────────────────────────────────────────────────────────────────────────────────────
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6339360Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6339367Z
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6621642Z   1 failed
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.6623472Z     tests\e2e\primary-runtime-preview-comparison.e2e.ts:61:5 › OFFICECLI-RUNTIME compares legacy v2 preview PNGs against OfficeCLI preview artifacts
+calibrate P3 validation win32-x64	Compare six real legacy and OfficeCLI preview PNGs in the same native job	2026-09-28T10:09:18.7137107Z ##[error]Process completed with exit code 1.

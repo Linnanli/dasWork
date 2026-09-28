@@ -38,6 +38,7 @@ export async function rasterizePresentationSvg(
       width,
       height,
       useContentSize: true,
+      enableLargerThanScreen: true,
       show: false,
       paintWhenInitiallyHidden: true,
       backgroundColor: '#ffffff',
@@ -58,6 +59,9 @@ export async function rasterizePresentationSvg(
     const render = async (): Promise<Buffer> => {
       await window!.loadFile(svgPath)
       await firstPaint
+      // Native window creation can fit the initial bounds to a small desktop.
+      // Restore the slide viewport after the hidden window has initialized.
+      window!.setContentSize(width, height)
       // Only this fixed Main-owned expression executes. Document scripts stay
       // disabled. Preserve each text style's preferred fonts, and include the
       // Runtime font as its Chinese fallback. Wait for paint after font layout.
@@ -82,6 +86,12 @@ export async function rasterizePresentationSvg(
         throw new Error('Presentation preview could not load the Runtime Chinese font.')
       const image = await window!.webContents.capturePage({ x: 0, y: 0, width, height })
       if (image.isEmpty()) throw new Error('Presentation SVG rendered an empty image.')
+      const size = image.getSize()
+      if (!matchesSlideCaptureSize(size.width, size.height, width, height)) {
+        throw new Error(
+          `Presentation SVG capture dimensions do not match the slide: ${size.width}x${size.height}, expected aspect ${width}x${height}.`
+        )
+      }
       return image.toPNG()
     }
     const timedOut = new Promise<never>((_, reject) => {
@@ -125,4 +135,19 @@ function svgDimensions(svg: string): { width: number; height: number } {
     throw new Error('OfficeCLI returned unsupported presentation slide dimensions.')
   }
   return { width, height }
+}
+
+function matchesSlideCaptureSize(
+  capturedWidth: number,
+  capturedHeight: number,
+  slideWidth: number,
+  slideHeight: number
+): boolean {
+  if (capturedWidth < slideWidth - 1 || capturedHeight < slideHeight - 1) return false
+  const roundingTolerance =
+    1 / capturedWidth + 1 / capturedHeight + 1 / slideWidth + 1 / slideHeight
+  return (
+    Math.abs(Math.log(capturedWidth / capturedHeight / (slideWidth / slideHeight))) <=
+    roundingTolerance
+  )
 }
