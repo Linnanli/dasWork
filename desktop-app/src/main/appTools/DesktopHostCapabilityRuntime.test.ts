@@ -204,4 +204,44 @@ describe('DesktopHostCapabilityRuntime', () => {
       workspaceInstructionsEnabled: false
     })
   })
+
+  it('keeps ordinary chat snapshots available when Runtime activation recovery fails', async () => {
+    const diagnostic = {
+      status: 'ready' as const,
+      manifest: {
+        bundleFormatVersion: 3 as const,
+        bundleVersion: 'v3',
+        target: { platform: process.platform, arch: process.arch },
+        binaries: [{ name: 'officecli', path: 'bin/officecli', required: true }],
+        bundledSkills: [{ path: 'skills/officecli/SKILL.md', sha256: 'a'.repeat(64) }]
+      },
+      issues: []
+    }
+    let recoveryFails = false
+    const runtime = new DesktopHostCapabilityRuntime({
+      readThreadTerminal: async () => ({ terminalAttached: false }),
+      workspaceDependencies: {
+        diagnoseDependencies: async () => {
+          if (recoveryFails) throw new Error('Runtime-owned skill recovery failed')
+          return diagnostic
+        },
+        loadDependencies: async () => ({ binaries: { officecli: '/runtime/bin/officecli' } })
+      }
+    })
+    runtime.updatePrimaryRuntimeState({ diagnostic, runtimePluginsSynchronized: true })
+    const previous = await runtime.snapshot()
+    expect(previous.availableToolNames).toContain('load_workspace_dependencies')
+
+    recoveryFails = true
+    await expect(runtime.snapshot()).resolves.toMatchObject({
+      primaryRuntime: 'broken',
+      degraded: true,
+      availableToolNames: ['read_thread_terminal'],
+      workspaceInstructionsEnabled: false,
+      presentationsEligible: false
+    })
+    expect(previous.availableToolNames).toContain('load_workspace_dependencies')
+    recoveryFails = false
+    expect((await runtime.snapshot()).availableToolNames).toContain('load_workspace_dependencies')
+  })
 })

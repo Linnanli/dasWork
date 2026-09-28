@@ -14,7 +14,7 @@
     "test": "vitest run && npm run test:release-contract && npm run test:reference-analysis && npm run test:codex-verifiers",
     "test:unit": "vitest run",
     "test:unit:app-stability": "node scripts/run-app-unit-stability.mjs",
-    "test:release-contract": "node --test scripts/tests/release-workflow.node-test.mjs scripts/tests/release-artifacts.node-test.mjs scripts/tests/dev-local-feed.node-test.mjs scripts/tests/dev-with-primary-runtime-feed.node-test.mjs scripts/tests/primary-runtime-feed-e2e.node-test.mjs scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs scripts/tests/primary-runtime-synthetic-feed-e2e.node-test.mjs scripts/tests/primary-runtime-performance.node-test.mjs scripts/tests/primary-runtime-real-smoke.node-test.mjs scripts/tests/primary-runtime-legacy-surface.node-test.mjs scripts/tests/verify-live-presentation-artifact.node-test.mjs scripts/tests/write-primary-runtime-product-config.node-test.mjs",
+    "test:release-contract": "node --test scripts/tests/release-workflow.node-test.mjs scripts/tests/release-artifacts.node-test.mjs scripts/tests/dev-local-feed.node-test.mjs scripts/tests/dev-with-primary-runtime-feed.node-test.mjs scripts/tests/primary-runtime-feed-e2e.node-test.mjs scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs scripts/tests/primary-runtime-synthetic-feed-e2e.node-test.mjs scripts/tests/primary-runtime-performance.node-test.mjs scripts/tests/primary-runtime-real-smoke.node-test.mjs scripts/tests/primary-runtime-legacy-surface.node-test.mjs scripts/tests/verify-live-presentation-artifact.node-test.mjs scripts/tests/write-primary-runtime-product-config.node-test.mjs scripts/tests/primary-runtime-migration.node-test.mjs",
     "test:plan-coverage": "npm run test:plan-coverage:validator && node scripts/test-plan-coverage.mjs",
     "test:plan-coverage:validator": "node --test scripts/tests/verify-test-plan-coverage.node-test.mjs",
     "test:e2e": "npm run build && playwright test",
@@ -22,6 +22,7 @@
     "test:e2e:primary-runtime-feed:packaged": "node scripts/run-primary-runtime-packaged-feed-e2e.mjs",
     "test:e2e:primary-runtime-calibration-feed": "node scripts/run-primary-runtime-calibration-feed-e2e.mjs",
     "test:e2e:primary-runtime-synthetic-feed": "node scripts/run-primary-runtime-synthetic-feed-e2e.mjs",
+    "test:e2e:primary-runtime-preview-comparison": "node scripts/run-primary-runtime-preview-comparison.mjs",
     "test:e2e:conversation-performance": "npm run build && playwright test tests/e2e/conversation-stream-performance.e2e.ts --workers=1",
     "test:e2e:review-performance": "npm run build && playwright test tests/e2e/local-git-review-performance.e2e.ts --workers=1",
     "test:e2e:stability": "npm run build && playwright test --grep '(@terminal-failure|@recovery|@approval-retry)' --repeat-each=10 --workers=1 --retries=0",
@@ -66,7 +67,8 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:linux": "npm run build && electron-builder --linux",
+    "test:primary-runtime:migration": "node scripts/run-primary-runtime-migration.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

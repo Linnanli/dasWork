@@ -48,7 +48,7 @@ Create DOCX:
 
 ```bash
 test ! -e new.docx
-"<OFFICECLI_PATH>" create new.docx
+"<OFFICECLI_PATH>" create new.docx --json
 "<OFFICECLI_PATH>" add new.docx /body --type paragraph --prop text='Runtime 中文验证' --json
 "<OFFICECLI_PATH>" save new.docx --json
 "<OFFICECLI_PATH>" validate new.docx --json
@@ -59,7 +59,7 @@ Create XLSX:
 
 ```bash
 test ! -e new.xlsx
-"<OFFICECLI_PATH>" create new.xlsx
+"<OFFICECLI_PATH>" create new.xlsx --json
 "<OFFICECLI_PATH>" add new.xlsx /Sheet1 --type cell --prop address=A1 --prop value='Runtime 中文验证' --json
 "<OFFICECLI_PATH>" save new.xlsx --json
 "<OFFICECLI_PATH>" validate new.xlsx --json
@@ -70,7 +70,7 @@ Create PPTX and SVG preview:
 
 ```bash
 test ! -e new.pptx
-"<OFFICECLI_PATH>" create new.pptx
+"<OFFICECLI_PATH>" create new.pptx --json
 "<OFFICECLI_PATH>" add new.pptx / --type slide --json
 "<OFFICECLI_PATH>" add new.pptx '/slide[1]' --type shape --prop text='Runtime 中文验证' --prop x=1 --prop y=1 --prop w=8 --prop h=1 --json
 "<OFFICECLI_PATH>" save new.pptx --json
@@ -78,6 +78,8 @@ test ! -e new.pptx
 "<OFFICECLI_PATH>" get new.pptx '/slide[1]' --json
 "<OFFICECLI_PATH>" view new.pptx svg --start 1 --max-lines 1 > new-slide-1.svg
 ```
+
+`view ... svg` writes SVG to stdout on success. Do not parse successful SVG preview output as JSON.
 
 PowerShell path-exists check equivalent:
 

@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
 
+import { createCanvas, loadImage } from '@napi-rs/canvas'
+
 import {
   loadAppToolsReleaseGates,
   verifyAppToolsReleaseGates
@@ -442,6 +444,166 @@ test('produces verifier-consumable AT-E2E evidence from a canonical R07 trace fi
       }),
       /Invalid R07 live trace report.*renderReport/u
     )
+    const missingSlideHashReport = join(directory, 'missing-slide-hash-report.json')
+    const missingSlideHashRenderReport = {
+      ...fixture.liveTrace.renderReport,
+      slides: fixture.liveTrace.renderReport.slides.map((slide, index) => {
+        if (index !== 0) return slide
+        const withoutHash = { ...slide }
+        delete withoutHash.sha256
+        return withoutHash
+      })
+    }
+    await writeFile(
+      missingSlideHashReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: missingSlideHashRenderReport,
+        renderReportSha256: sha256Text(JSON.stringify(missingSlideHashRenderReport))
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: missingSlideHashReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace report.*renderReport/u
+    )
+    const mismatchedSlideSourceReport = join(directory, 'mismatched-slide-source-report.json')
+    const mismatchedSlideSourceRenderReport = {
+      ...fixture.liveTrace.renderReport,
+      slides: fixture.liveTrace.renderReport.slides.map((slide, index) =>
+        index === 0
+          ? {
+              ...slide,
+              source: {
+                ...slide.source,
+                artifactSourceId: 'different-artifact'
+              }
+            }
+          : slide
+      )
+    }
+    await writeFile(
+      mismatchedSlideSourceReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: mismatchedSlideSourceRenderReport,
+        renderReportSha256: sha256Text(JSON.stringify(mismatchedSlideSourceRenderReport))
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: mismatchedSlideSourceReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace report.*renderReport/u
+    )
+    const firstSlidePath = join(fixture.visualArtifactDirectory, 'slides', 'slide-01.png')
+    const visualReceiptPath = join(
+      fixture.visualArtifactDirectory,
+      'r07-preview-render-receipt.json'
+    )
+    const [originalFirstSlide, originalVisualReceipt] = await Promise.all([
+      readFile(firstSlidePath),
+      readFile(visualReceiptPath)
+    ])
+    const corruptPngReport = join(directory, 'corrupt-png-report.json')
+    const corruptPngBytes = Buffer.from('not a png')
+    const corruptPngRenderReport = replaceFirstSlide(fixture.liveTrace.renderReport, {
+      sha256: createHash('sha256').update(corruptPngBytes).digest('hex')
+    })
+    await writeFile(firstSlidePath, corruptPngBytes)
+    await writeVisualArtifactReceipt(
+      fixture.visualArtifactDirectory,
+      fixture.liveTrace,
+      corruptPngRenderReport
+    )
+    await writeFile(
+      corruptPngReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: corruptPngRenderReport,
+        renderReportSha256: sha256Text(JSON.stringify(corruptPngRenderReport))
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: corruptPngReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace report.*visualArtifacts\.slide-01\.png/u
+    )
+    const whitePngReport = join(directory, 'white-png-report.json')
+    const whitePngBytes = renderWhiteSlidePng()
+    const whitePngRenderReport = replaceFirstSlide(fixture.liveTrace.renderReport, {
+      sha256: createHash('sha256').update(whitePngBytes).digest('hex')
+    })
+    await writeFile(firstSlidePath, whitePngBytes)
+    await writeVisualArtifactReceipt(
+      fixture.visualArtifactDirectory,
+      fixture.liveTrace,
+      whitePngRenderReport
+    )
+    await writeFile(
+      whitePngReport,
+      `${JSON.stringify({
+        ...fixture.liveTrace,
+        renderReport: whitePngRenderReport,
+        renderReportSha256: sha256Text(JSON.stringify(whitePngRenderReport))
+      })}\n`
+    )
+    await assert.rejects(
+      writeAppToolsReleaseEvidence({
+        gateId: 'AT-E2E-01',
+        producer: 'primary-runtime-feed-e2e',
+        commit,
+        target: fixture.target,
+        targetRoot: fixture.targetRoot,
+        feedRoot: fixture.feedRoot,
+        channel: 'engineering',
+        liveReport: whitePngReport,
+        outputDir: fixture.outputDir,
+        sourceLock: fixture.sourceLock,
+        toolchainsLock: fixture.toolchainsLock,
+        hardLimits: fixture.hardLimits
+      }),
+      /Invalid R07 live trace report.*visualArtifacts\.slide-01\.png\.metrics/u
+    )
+    await Promise.all([
+      writeFile(firstSlidePath, originalFirstSlide),
+      writeFile(visualReceiptPath, originalVisualReceipt)
+    ])
     const unpaddedSlideReport = join(directory, 'unpadded-slide-report.json')
     const unpaddedRenderReport = {
       ...fixture.liveTrace.renderReport,
@@ -824,6 +986,7 @@ async function writeAppToolsProducerFixture(directory) {
   const toolchainsLock = join(directory, 'runtime-toolchains.lock.json')
   const hardLimits = join(directory, 'runtime-hard-limits.json')
   const liveReport = join(directory, 'r07-live-trace.json')
+  const visualArtifactDirectory = join(directory, 'r07-visual-artifacts')
   const activeVersion = '2026.9.21-r07'
   const archiveText = 'runtime archive\n'
   const runtimeText = `${JSON.stringify({ bundleVersion: activeVersion })}\n`
@@ -910,16 +1073,15 @@ async function writeAppToolsProducerFixture(directory) {
     },
     targets: { [target]: targetBudget }
   })}\n`
-  const renderReport = {
-    schemaVersion: 'dascowork-r07-render-qa.v1',
-    slides: ['01', '02', '03', '04', '05', '06'].map((number) => ({
-      file: `slide-${number}.png`,
-      width: 960,
-      height: 540,
-      nonWhiteRatio: 0.2,
-      colorBucketCount: 24
-    }))
+  const presentationSha256 = '8'.repeat(64)
+  const previewSource = {
+    kind: 'electron-host-preview',
+    artifactSourceId: 'artifact-1',
+    receiptId: 'workspace-preview:artifact-1:1',
+    generation: 1,
+    presentationSha256
   }
+  const renderReport = await writeR07VisualArtifactFixture(visualArtifactDirectory, previewSource)
   const liveTrace = {
     schemaVersion: 'dascowork-primary-runtime-r07-live-trace.v2',
     capturedAt: new Date(now).toISOString(),
@@ -953,17 +1115,33 @@ async function writeAppToolsProducerFixture(directory) {
       artifactSourceId: 'artifact-1',
       ...evidenceObservation(3),
       generation: 1,
-      presentationSha256: '8'.repeat(64)
+      presentationSha256
     },
     preview: {
       receiptId: 'workspace-preview:artifact-1:1',
       ...evidenceObservation(4),
       visible: true,
-      presentationSha256: '8'.repeat(64)
+      presentationSha256
     },
     renderReport,
-    renderReportSha256: sha256Text(JSON.stringify(renderReport))
+    renderReportSha256: sha256Text(JSON.stringify(renderReport)),
+    visualArtifacts: {
+      directory: visualArtifactDirectory
+    }
   }
+  await writeFile(
+    join(visualArtifactDirectory, 'r07-preview-render-receipt.json'),
+    `${JSON.stringify({
+      schemaVersion: 'dascowork-r07-visual-artifacts.v1',
+      previewTrace: {
+        sourceId: previewSource.artifactSourceId,
+        receiptId: previewSource.receiptId,
+        generation: previewSource.generation,
+        checksum: previewSource.presentationSha256
+      },
+      renderReport
+    })}\n`
+  )
   await mkdir(join(feedRoot, 'channels', 'engineering'), { recursive: true })
   await mkdir(targetRoot, { recursive: true })
   await Promise.all([
@@ -1040,7 +1218,105 @@ async function writeAppToolsProducerFixture(directory) {
     sourceLockCandidate,
     budgetText,
     liveReport,
-    liveTrace
+    liveTrace,
+    visualArtifactDirectory
+  }
+}
+
+async function writeR07VisualArtifactFixture(directory, previewSource) {
+  const slidesRoot = join(directory, 'slides')
+  await mkdir(slidesRoot, { recursive: true })
+  const slides = []
+  for (const number of ['01', '02', '03', '04', '05', '06']) {
+    const png = renderFixtureSlidePng(Number(number))
+    const file = `slide-${number}.png`
+    await writeFile(join(slidesRoot, file), png)
+    slides.push({
+      file,
+      ...(await measureFixtureSlide(png)),
+      sha256: createHash('sha256').update(png).digest('hex'),
+      source: previewSource
+    })
+  }
+  return {
+    schemaVersion: 'dascowork-r07-render-qa.v1',
+    slides
+  }
+}
+
+function renderFixtureSlidePng(index) {
+  const canvas = createCanvas(960, 540)
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, 960, 540)
+  for (let offset = 0; offset < 24; offset += 1) {
+    context.fillStyle = `rgb(${(index * 31 + offset * 17) % 255}, ${(index * 47 + offset * 29) % 255}, ${(index * 61 + offset * 37) % 255})`
+    context.fillRect(32 + offset * 36, 48 + (offset % 4) * 84, 28, 64)
+  }
+  context.fillStyle = '#111111'
+  context.font = '32px sans-serif'
+  context.fillText(`R07 ${index}`, 64, 480)
+  return canvas.toBuffer('image/png')
+}
+
+function renderWhiteSlidePng() {
+  const canvas = createCanvas(960, 540)
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, 960, 540)
+  return canvas.toBuffer('image/png')
+}
+
+function replaceFirstSlide(renderReport, patch) {
+  return {
+    ...renderReport,
+    slides: renderReport.slides.map((slide, index) =>
+      index === 0
+        ? {
+            ...slide,
+            ...patch
+          }
+        : slide
+    )
+  }
+}
+
+async function writeVisualArtifactReceipt(directory, liveTrace, renderReport) {
+  await writeFile(
+    join(directory, 'r07-preview-render-receipt.json'),
+    `${JSON.stringify({
+      schemaVersion: 'dascowork-r07-visual-artifacts.v1',
+      previewTrace: {
+        sourceId: liveTrace.artifact.artifactSourceId,
+        receiptId: liveTrace.preview.receiptId,
+        generation: liveTrace.artifact.generation,
+        checksum: liveTrace.artifact.presentationSha256
+      },
+      renderReport
+    })}\n`
+  )
+}
+
+async function measureFixtureSlide(bytes) {
+  const image = await loadImage(bytes)
+  const canvas = createCanvas(image.width, image.height)
+  const context = canvas.getContext('2d')
+  context.drawImage(image, 0, 0)
+  const { data } = context.getImageData(0, 0, image.width, image.height)
+  const buckets = new Set()
+  let nonWhite = 0
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const red = data[offset] ?? 0
+    const green = data[offset + 1] ?? 0
+    const blue = data[offset + 2] ?? 0
+    if (red < 245 || green < 245 || blue < 245) nonWhite += 1
+    buckets.add(`${red >> 4}:${green >> 4}:${blue >> 4}`)
+  }
+  return {
+    width: image.width,
+    height: image.height,
+    nonWhiteRatio: nonWhite / (image.width * image.height),
+    colorBucketCount: buckets.size
   }
 }
 

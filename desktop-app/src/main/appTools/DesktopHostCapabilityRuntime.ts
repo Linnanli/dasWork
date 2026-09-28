@@ -11,6 +11,7 @@ import {
 import {
   createLoadWorkspaceDependenciesTool,
   createReadThreadTerminalTool,
+  type WorkspaceDependencyDiagnostic,
   type WorkspaceDependencyLoader
 } from './desktopToolDefinitions'
 import { PrimaryRuntimeCapabilityPolicy, type PrimaryRuntimeDiagnostic } from '../primaryRuntime'
@@ -70,14 +71,23 @@ export class DesktopHostCapabilityRuntime {
   async snapshot(
     context: DesktopToolContext = { hostId: 'local' }
   ): Promise<DesktopCapabilitySnapshot> {
+    let runtimeStatus: WorkspaceDependencyDiagnostic | undefined
+    let diagnosticFailed = false
+    try {
+      runtimeStatus = await this.workspaceDependencies?.diagnoseDependencies?.()
+    } catch {
+      // Runtime recovery can fail independently of a normal chat. Close its
+      // capabilities for this snapshot while retaining unrelated host tools.
+      runtimeStatus = { status: 'broken' }
+      diagnosticFailed = true
+    }
     const runtimeCapabilities = await this.primaryRuntimeCapabilities.snapshot({
       hostId: context.hostId
     })
-    const runtimeStatus = await this.workspaceDependencies?.diagnoseDependencies?.()
     const snapshotContext = {
       ...context,
       ...(runtimeStatus ? { primaryRuntimeStatus: runtimeStatus.status } : {}),
-      workspaceDependenciesEnabled: runtimeCapabilities.loaderPublished
+      workspaceDependenciesEnabled: runtimeCapabilities.loaderPublished && !diagnosticFailed
     }
     const dynamicTools = await this.registry.nativeProjection(snapshotContext)
     const availableToolNames = await this.registry.availableToolNames(snapshotContext)
@@ -102,8 +112,9 @@ export class DesktopHostCapabilityRuntime {
       primaryRuntime,
       codexAppMcp: this.codexAppMcp,
       bundledPlugins: this.bundledPlugins,
-      workspaceInstructionsEnabled: runtimeCapabilities.workspaceInstructionsEnabled,
-      presentationsEligible: runtimeCapabilities.presentationsEligible,
+      workspaceInstructionsEnabled:
+        runtimeCapabilities.workspaceInstructionsEnabled && !diagnosticFailed,
+      presentationsEligible: runtimeCapabilities.presentationsEligible && !diagnosticFailed,
       degraded
     }
   }

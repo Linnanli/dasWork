@@ -13,6 +13,9 @@ on:
       - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/run-primary-runtime-migration.mjs"
+      - "desktop-app/scripts/run-primary-runtime-preview-comparison.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-migration.node-test.mjs"
       - "desktop-app/scripts/packaged-app-assets.mjs"
       - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
@@ -26,7 +29,10 @@ on:
       - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
       - "desktop-app/tests/app-tools-release-gates.json"
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/primary-runtime-preview-comparison.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
+      - "desktop-app/tests/e2e/support/r07PreviewCapture.ts"
+      - "desktop-app/tests/e2e/support/r07RenderMetrics*"
       - ".github/workflows/primary-runtime-build.yml"
       - ".github/workflows/primary-runtime-calibration-review.yml"
       - ".github/workflows/primary-runtime-publish.yml"
@@ -42,6 +48,9 @@ on:
       - "desktop-app/scripts/run-primary-runtime-calibration-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-packaged-feed-e2e.mjs"
       - "desktop-app/scripts/run-primary-runtime-real-smoke.mjs"
+      - "desktop-app/scripts/run-primary-runtime-migration.mjs"
+      - "desktop-app/scripts/run-primary-runtime-preview-comparison.mjs"
+      - "desktop-app/scripts/tests/primary-runtime-migration.node-test.mjs"
       - "desktop-app/scripts/packaged-app-assets.mjs"
       - "desktop-app/scripts/tests/primary-runtime-calibration-feed-e2e.node-test.mjs"
       - "desktop-app/scripts/tests/primary-runtime-performance.node-test.mjs"
@@ -55,7 +64,10 @@ on:
       - "desktop-app/scripts/tests/release-workflow.node-test.mjs"
       - "desktop-app/tests/app-tools-release-gates.json"
       - "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts"
+      - "desktop-app/tests/e2e/primary-runtime-preview-comparison.e2e.ts"
       - "desktop-app/tests/e2e/support/r07Presentation.ts"
+      - "desktop-app/tests/e2e/support/r07PreviewCapture.ts"
+      - "desktop-app/tests/e2e/support/r07RenderMetrics*"
       - ".github/workflows/primary-runtime-build.yml"
       - ".github/workflows/primary-runtime-calibration-review.yml"
       - ".github/workflows/primary-runtime-publish.yml"
@@ -328,7 +340,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/runtime-inputs/win32-x64
-          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/scripts/officecli-*.mjs', 'primary-runtime/scripts/support/officecli-*', 'primary-runtime/skills/**', 'primary-runtime/patches/**') }}
 
       - name: Materialize target-native offline Runtime inputs
         if: matrix.target != 'win32-x64' || steps.windows-runtime-inputs-cache.outputs.cache-hit != 'true'
@@ -339,6 +351,13 @@ jobs:
             --source-cache "$RUNNER_TEMP/primary-runtime-source-cache" \
             --output "$RUNNER_TEMP/runtime-inputs/${{ matrix.target }}" \
             --allow-source-build
+
+      - name: Require native Linux executable tracing
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          test -x /usr/bin/strace
+          /usr/bin/strace --version
 
       - name: Verify input manifest and native component closure
         shell: bash
@@ -355,7 +374,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ runner.temp }}/runtime-inputs/win32-x64
-          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/patches/**') }}
+          key: primary-runtime-windows-inputs-v1-${{ steps.builder-image.outputs.image_version }}-${{ hashFiles('primary-runtime/runtime-sources.lock.json', 'primary-runtime/runtime-toolchains.lock.json', 'primary-runtime/scripts/materialize-runtime-inputs.mjs', 'primary-runtime/scripts/runtime-inputs.mjs', 'primary-runtime/scripts/verify-runtime-inputs.mjs', 'primary-runtime/scripts/source-lock.mjs', 'primary-runtime/scripts/runtime-target.mjs', 'primary-runtime/scripts/officecli-*.mjs', 'primary-runtime/scripts/support/officecli-*', 'primary-runtime/skills/**', 'primary-runtime/patches/**') }}
 
       - name: Produce five P1a build and unpack measurements
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
@@ -562,6 +581,41 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_STRESS_REPORT="$target_root/install-stress-memory.json" \
           npm --prefix desktop-app run test:primary-runtime:stress
 
+      - name: Resolve the pinned verified v2 migration baseline
+        id: legacy-v2
+        shell: bash
+        run: |
+          node -e "const fs=require('node:fs'); const baseline=require('./primary-runtime/fixtures/legacy-v2-baseline.json'); const target=process.argv[1]; if(!baseline.targets[target])throw Error('missing pinned v2 target'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id='+baseline.sourceRunId+'\\nsha256='+baseline.targets[target].archiveSha256+'\\n')" "${{ matrix.target }}"
+
+      - name: Download the immutable legacy v2 target artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: primary-runtime-${{ matrix.target }}-candidate-staging
+          run-id: ${{ steps.legacy-v2.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/legacy-v2/${{ matrix.target }}
+
+      - name: Verify native v2 and v3 switching with the real app-server catalog
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          legacy_root="$RUNNER_TEMP/legacy-v2/${{ matrix.target }}"
+          v2_version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$legacy_root/runtime.json")"
+          v3_version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$target_root/runtime.json")"
+          v3_sha="$(node -e "process.stdout.write(require(process.argv[1]).archiveSha256)" "$target_root/provenance.json")"
+          npm --prefix desktop-app run test:primary-runtime:migration -- \
+            --target "${{ matrix.target }}" \
+            --v2-archive "$legacy_root/primary-runtime.zip" \
+            --v2-version "$v2_version" \
+            --v2-sha256 "${{ steps.legacy-v2.outputs.sha256 }}" \
+            --v2-provenance "$legacy_root/provenance.json" \
+            --v3-archive "$target_root/primary-runtime.zip" \
+            --v3-version "$v3_version" \
+            --v3-sha256 "$v3_sha" \
+            --v3-provenance "$target_root/provenance.json" \
+            --output "$target_root/migration-matrix.json" \
+            --retain-cache 1
+
       - name: P3b collect Main overlap performance and dev R07 through the signed local calibration feed
         if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
         shell: bash
@@ -572,6 +626,7 @@ jobs:
           version="$(node -e "process.stdout.write(require(process.argv[1]).bundleVersion)" "$runtime_json")"
           sha256="$(node -e "const { createHash } = require('node:crypto'); const { readFileSync } = require('node:fs'); process.stdout.write(createHash('sha256').update(readFileSync(process.argv[1])).digest('hex'))" "$archive")"
           export DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1
+          export DASCOWORK_R07_VISUAL_ARTIFACT_DIRECTORY="$target_root/r07-visual"
           if [[ "${{ matrix.target }}" == "linux-x64" ]]; then
             xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-calibration-feed -- \
               --target "${{ matrix.target }}" \
@@ -590,6 +645,22 @@ jobs:
               --provenance "$target_root/provenance.json" \
               --p1a-receipt "$target_root/measurements/build-unpack-5.json" \
               --output "$target_root/main-overlap-performance.json"
+          fi
+
+      - name: Compare six real legacy and OfficeCLI preview PNGs in the same native job
+        if: env.PRIMARY_RUNTIME_MODE == 'calibrate'
+        shell: bash
+        run: |
+          target_root="$RUNNER_TEMP/runtime-dist/${{ matrix.target }}"
+          export DASCOWORK_PRIMARY_RUNTIME_E2E_BUILD_READY=1
+          if [[ "${{ matrix.target }}" == "linux-x64" ]]; then
+            xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-preview-comparison -- \
+              --migration-report "$target_root/migration-matrix.json" \
+              --visual-directory "$target_root/r07-visual"
+          else
+            npm --prefix desktop-app run test:e2e:primary-runtime-preview-comparison -- \
+              --migration-report "$target_root/migration-matrix.json" \
+              --visual-directory "$target_root/r07-visual"
           fi
 
       - name: P3b measure ten cold installs and Main event-loop delay
@@ -631,6 +702,8 @@ jobs:
           cp "$target_root/component-smoke.json" "$staging_root/"
           cp "$target_root/build-unpack-measurement.json" "$staging_root/"
           cp "$target_root/install-stress-memory.json" "$staging_root/"
+          cp "$target_root/migration-matrix.json" "$staging_root/"
+          cp -R "$target_root/r07-visual" "$staging_root/"
           cp "$target_root/main-overlap-performance.json" "$staging_root/"
           cp "$target_root/performance-target-report.json" "$staging_root/"
           cp "$target_root/platform-validation.json" "$staging_root/"
@@ -654,6 +727,7 @@ jobs:
           cp "$target_root/component-smoke.json" "$staging_root/"
           cp "$target_root/build-unpack-measurement.json" "$staging_root/"
           cp "$target_root/install-stress-memory.json" "$staging_root/"
+          cp "$target_root/migration-matrix.json" "$staging_root/"
           cp "$target_root/platform-validation.json" "$staging_root/"
           cp "$target_root/runtime-inputs.manifest.json" "$staging_root/"
           cp "$target_root/source-fetch.json" "$staging_root/"
@@ -675,6 +749,17 @@ jobs:
           name: primary-runtime-${{ matrix.target }}-staging
           if-no-files-found: error
           path: ${{ runner.temp }}/primary-runtime-${{ matrix.target }}-staging
+
+      - name: Retain native migration and preview diagnostics after a failed gate
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-runtime-${{ matrix.target }}-migration-diagnostics
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/runtime-dist/${{ matrix.target }}/migration-matrix.json
+            ${{ runner.temp }}/runtime-dist/${{ matrix.target }}/r07-visual
+            desktop-app/test-results
 
   aggregate-engineering-feed:
     name: Aggregate one final run into an engineering-only feed artifact
@@ -828,6 +913,7 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
           DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT="$RUNNER_TEMP/r07-dev-live-trace.json" \
+          DASCOWORK_R07_VISUAL_ARTIFACT_DIRECTORY="$RUNNER_TEMP/feed-repository/evidence/r07-visual-dev" \
           xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-feed
 
       - name: Run packaged R07 from the same-run engineering feed and an empty cache
@@ -847,6 +933,7 @@ jobs:
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_MANIFEST_PUBLIC_KEYS_JSON="$keyring" \
           DASCOWORK_PRIMARY_RUNTIME_CONFIG_CHANNEL=engineering \
           DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT="$RUNNER_TEMP/r07-packaged-live-trace.json" \
+          DASCOWORK_R07_VISUAL_ARTIFACT_DIRECTORY="$RUNNER_TEMP/feed-repository/evidence/r07-visual-packaged" \
           DASCOWORK_PRIMARY_RUNTIME_PACKAGED_ASSET_RECEIPT="$RUNNER_TEMP/feed-repository/evidence/app-tools-release/reports/packaged-app-assets.json" \
           xvfb-run -a npm --prefix desktop-app run test:e2e:primary-runtime-feed:packaged
 

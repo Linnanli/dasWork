@@ -66,6 +66,10 @@ export type PrimaryRuntimeActivationResult = PrimaryRuntimeInstallResult & {
   operationId: string
 }
 
+export type PrimaryRuntimeActivationFinalizer = (
+  result: PrimaryRuntimeActivationResult | null
+) => Promise<void>
+
 /**
  * Activates a fully diagnosed Runtime candidate. This transaction deliberately
  * owns only Runtime publication: plugin/skill synchronization occurs after a
@@ -86,13 +90,16 @@ export class PrimaryRuntimeActivationTransaction {
   async activate(
     signal: AbortSignal,
     descriptor?: Parameters<PrimaryRuntimeInstaller['prepare']>[1],
-    requestedOperationId?: string
+    requestedOperationId?: string,
+    finalizeActivation?: PrimaryRuntimeActivationFinalizer
   ): Promise<PrimaryRuntimeActivationResult> {
     const operationId = requestedOperationId ?? randomUUID()
     if (!isUuid(operationId)) {
       throw new Error('Primary Runtime activation operation ID must be a UUID.')
     }
-    const task = this.tail.then(() => this.activateOnce(signal, descriptor, operationId))
+    const task = this.tail.then(() =>
+      this.activateOnce(signal, descriptor, operationId, finalizeActivation)
+    )
     this.tail = task.then(
       () => undefined,
       () => undefined
@@ -100,8 +107,8 @@ export class PrimaryRuntimeActivationTransaction {
     return task
   }
 
-  async recover(): Promise<void> {
-    const task = this.tail.then(() => this.recoverOnce())
+  async recover(finalizeRecoveredActivation?: PrimaryRuntimeActivationFinalizer): Promise<void> {
+    const task = this.tail.then(() => this.recoverOnce(finalizeRecoveredActivation))
     this.tail = task.then(
       () => undefined,
       () => undefined
@@ -109,22 +116,50 @@ export class PrimaryRuntimeActivationTransaction {
     return task
   }
 
-  private async recoverOnce(): Promise<void> {
+  private async recoverOnce(
+    finalizeRecoveredActivation: PrimaryRuntimeActivationFinalizer | undefined
+  ): Promise<void> {
     const journal = await this.readJournal()
     if (!journal) return
     if (journal.phase !== 'committed') {
       this.reportProgress(journal.operationId, 'rolling-back', journal)
       await this.restorePointer(journal.previousPointer)
+      await this.finalizeRestoredPointer(journal, finalizeRecoveredActivation)
     }
     await rm(this.journalPath, { force: true })
+  }
+
+  private async finalizeRestoredPointer(
+    journal: ActivationJournal,
+    finalizeRecoveredActivation: PrimaryRuntimeActivationFinalizer | undefined
+  ): Promise<void> {
+    if (!finalizeRecoveredActivation) return
+    if (!journal.previousPointer) {
+      await finalizeRecoveredActivation(null)
+      return
+    }
+    const activeRoot = join(this.input.cacheRoot, journal.previousPointer.directory)
+    const diagnostic = await this.input.diagnostics.diagnose(activeRoot)
+    if (diagnostic.status !== 'ready') {
+      throw new Error('Primary Runtime recovery readback did not find a healthy restored Runtime.')
+    }
+    const readyDiagnostic = diagnostic as PrimaryRuntimeActivationResult['diagnostic']
+    await finalizeRecoveredActivation({
+      status: 'installed',
+      version: journal.previousPointer.version,
+      activeRoot,
+      diagnostic: readyDiagnostic,
+      operationId: journal.operationId
+    })
   }
 
   private async activateOnce(
     signal: AbortSignal,
     descriptor: Parameters<PrimaryRuntimeInstaller['prepare']>[1] | undefined,
-    operationId: string
+    operationId: string,
+    finalizeActivation: PrimaryRuntimeActivationFinalizer | undefined
   ): Promise<PrimaryRuntimeActivationResult> {
-    await this.recoverOnce()
+    await this.recoverOnce(finalizeActivation)
     const previousPointer = await this.pointer.read()
     this.reportProgress(operationId, 'downloading', {
       previousPointer,
@@ -159,13 +194,16 @@ export class PrimaryRuntimeActivationTransaction {
         )
       }
       await this.transition(journal, 'readback')
+      const activationResult = { ...result, operationId }
+      await finalizeActivation?.(activationResult)
       await this.transition(journal, 'committed')
       await rm(this.journalPath, { force: true })
-      return { ...result, operationId }
+      return activationResult
     } catch (error) {
       this.reportProgress(operationId, 'rolling-back', journal)
       try {
         await this.restorePointer(previousPointer)
+        await this.finalizeRestoredPointer(journal, finalizeActivation)
         await rm(this.journalPath, { force: true })
       } catch (restoreError) {
         throw new AggregateError(

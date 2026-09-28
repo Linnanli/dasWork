@@ -39,7 +39,7 @@ export type PrimaryRuntimeServiceInput = {
   }
   activationTransaction?: Pick<PrimaryRuntimeActivationTransaction, 'activate' | 'recover'>
   /** Runs after Runtime publication to synchronize its app-server-owned plugins and skills. */
-  postActivation?: (result: PrimaryRuntimeActivationResult) => Promise<void>
+  postActivation?: (result: PrimaryRuntimeActivationResult | null) => Promise<void>
   /**
    * Main-owned telemetry sink. It receives only correlation-safe metadata and
    * an irreversible fingerprint for sensitive failure detail.
@@ -102,6 +102,7 @@ export class PrimaryRuntimeService {
     PrimaryRuntimeActivationTransaction,
     'activate' | 'recover'
   > | null
+  private recoveringActivation = false
   private inFlightInstall: {
     version: string | null
     versionPromise: Promise<string>
@@ -141,7 +142,9 @@ export class PrimaryRuntimeService {
   private updateAvailable = false
   private checkedActiveVersion: string | undefined
   private updateCheckPromise: Promise<PrimaryRuntimeUpdateCheck> | null = null
-  private postActivation: ((result: PrimaryRuntimeActivationResult) => Promise<void>) | undefined
+  private postActivation:
+    | ((result: PrimaryRuntimeActivationResult | null) => Promise<void>)
+    | undefined
   private readonly statusListeners = new Set<() => void>()
 
   constructor(private readonly input: PrimaryRuntimeServiceInput) {
@@ -174,7 +177,7 @@ export class PrimaryRuntimeService {
 
   /** Plugin/skill sync may change only between installations. */
   setPostActivationHook(
-    hook: ((result: PrimaryRuntimeActivationResult) => Promise<void>) | undefined
+    hook: ((result: PrimaryRuntimeActivationResult | null) => Promise<void>) | undefined
   ): void {
     if (this.inFlightInstall) {
       throw new Error('Primary Runtime post-activation hook cannot change during an installation.')
@@ -182,9 +185,18 @@ export class PrimaryRuntimeService {
     this.postActivation = hook
   }
 
-  async diagnoseDependencies(): Promise<PrimaryRuntimeDiagnostic> {
-    if (!this.inFlightInstall) {
-      await this.activationTransaction?.recover()
+  async diagnoseDependencies({
+    recoverActivation = true
+  }: { recoverActivation?: boolean } = {}): Promise<PrimaryRuntimeDiagnostic> {
+    if (recoverActivation && !this.inFlightInstall && !this.recoveringActivation) {
+      this.recoveringActivation = true
+      try {
+        if (this.postActivation) {
+          await this.activationTransaction?.recover((result) => this.runPostActivationHook(result))
+        }
+      } finally {
+        this.recoveringActivation = false
+      }
       await this.installer?.recoverActivation()
     }
     const candidate = await this.input.locator.locate()
@@ -516,18 +528,17 @@ export class PrimaryRuntimeService {
         return this.activationTransaction.activate(
           controller.signal,
           descriptor,
-          inFlight.operationId
+          inFlight.operationId,
+          async (result) => {
+            inFlight.state = 'configuring'
+            inFlight.runtimeActive = true
+            inFlight.pluginReady = false
+            this.notifyStatusListeners()
+            await this.runPostActivationHook(result)
+            inFlight.pluginReady = true
+            this.notifyStatusListeners()
+          }
         )
-      })
-      .then(async (result) => {
-        inFlight.state = 'configuring'
-        inFlight.runtimeActive = true
-        inFlight.pluginReady = false
-        this.notifyStatusListeners()
-        await this.postActivation?.(result)
-        inFlight.pluginReady = true
-        this.notifyStatusListeners()
-        return result
       })
       .then((result) => {
         this.lastFailure = null
@@ -535,8 +546,14 @@ export class PrimaryRuntimeService {
         this.updateAvailable = false
         return result
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const normalized = error instanceof Error ? error : new Error(String(error))
+        if (
+          inFlight.state === 'configuring' ||
+          normalized instanceof PrimaryRuntimePostInstallError
+        ) {
+          await this.refreshInFlightActiveState(inFlight)
+        }
         const failure = classifyRuntimeFailure(normalized, inFlight)
         this.lastFailure = failure
         this.emitTelemetry({
@@ -701,6 +718,33 @@ export class PrimaryRuntimeService {
   private async activeVersion(): Promise<string | undefined> {
     const diagnostic = await this.diagnoseDependencies()
     return diagnostic.status === 'ready' ? diagnostic.manifest?.bundleVersion : undefined
+  }
+
+  private async refreshInFlightActiveState(
+    inFlight: NonNullable<PrimaryRuntimeService['inFlightInstall']>
+  ): Promise<void> {
+    try {
+      const diagnostic = await this.diagnoseDependencies()
+      inFlight.activeVersion =
+        diagnostic.status === 'ready' ? diagnostic.manifest?.bundleVersion : undefined
+      inFlight.runtimeActive = diagnostic.status === 'ready'
+    } catch {
+      inFlight.activeVersion = undefined
+      inFlight.runtimeActive = false
+    }
+    inFlight.pluginReady = false
+  }
+
+  private async runPostActivationHook(
+    result: PrimaryRuntimeActivationResult | null
+  ): Promise<void> {
+    try {
+      await this.postActivation?.(result)
+    } catch (error) {
+      if (error instanceof PrimaryRuntimePostInstallError) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      throw new PrimaryRuntimePostInstallError('sync_plugins', message)
+    }
   }
 }
 

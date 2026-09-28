@@ -2,6 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { inflateRawSync } from "node:zlib";
 import { copyFile, lstat, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
@@ -10,12 +11,21 @@ import { fileURLToPath } from "node:url";
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
 import { sha256 } from "./source-lock.mjs";
 import { assertNativeRuntimeTarget, parseRuntimeTargetOption } from "./runtime-target.mjs";
+import {
+  createOfficeCliIsolationContext,
+  probeOfficeCliExecutionAudit,
+  probeOfficeCliIsolation,
+  runOfficeCliIsolated,
+} from "./officecli-isolation.mjs";
 
 const defaultCommandTimeoutMs = positiveIntegerEnv(
   "DASCOWORK_PRIMARY_RUNTIME_VERIFY_COMMAND_TIMEOUT_MS",
   5 * 60 * 1000,
 );
 const capturedCommandOutputBytes = 1024 * 1024;
+const officeCliFixtureRoot = fileURLToPath(
+  new URL("../fixtures/officecli/", import.meta.url),
+);
 
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
@@ -68,41 +78,72 @@ const font = await findLockedFont(join(options.inputRoot, "fonts"));
 
 commands.push(await runCommand("poppler-pdfinfo-version", binaries.pdfinfo, ["-v"]));
 commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["-v"]));
-commands.push(
-  await runCommand("officecli-version", binaries.officecli, ["--version"], {
-    OFFICECLI_SKIP_UPDATE: "1",
-    OFFICECLI_NO_AUTO_RESIDENT: "1",
-  }),
-);
-
-const render = await renderOfficeCliSmoke({
+const officeCliIsolationContext = await createOfficeCliIsolationContext({
   target,
-  officecli: binaries.officecli,
+  officecliPath: binaries.officecli,
 });
-commands.push(...render.commands);
+try {
+  await probeOfficeCliExecutionAudit({
+    context: officeCliIsolationContext,
+    timeoutMs: Math.min(defaultCommandTimeoutMs, 45_000),
+  });
+  const officeCliNetworkProbe = await probeOfficeCliIsolation({
+    target,
+    officecliPath: binaries.officecli,
+    context: officeCliIsolationContext,
+    timeoutMs: Math.min(defaultCommandTimeoutMs, 45_000),
+  });
+  const commandContext = createCommandExecutionContext({
+    target,
+    officecli: binaries.officecli,
+    officeCliIsolationContext,
+  });
+  commands.push(
+    await runCommand("officecli-version", binaries.officecli, ["--version"], {
+      OFFICECLI_SKIP_UPDATE: "1",
+      OFFICECLI_NO_AUTO_RESIDENT: "1",
+    }, { commandContext }),
+  );
 
-const receipt = {
-  schemaVersion: "dascowork-primary-runtime-input-validation.v1",
-  status: "verified",
-  target,
-  runner: process.env.RUNNER_IMAGE ?? manifest.builder.runner,
-  inputManifestSha256: sha256(
-    await readFile(join(options.inputRoot, "runtime-inputs.manifest.json")),
-  ),
-  sourceLockSha256: manifest.sourceLockSha256,
-  toolchainsLockSha256: manifest.toolchainsLockSha256,
-  font: {
-    path: relative(options.inputRoot, font.path).split(sep).join("/"),
-    sha256: sha256(await readFile(font.path)),
-  },
-  render,
-  commands,
-  productionTrust: false,
-};
-if (options.receiptPath) {
-  await writeFile(options.receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  const render = await renderOfficeCliSmoke({
+    target,
+    officecli: binaries.officecli,
+    commandContext,
+  });
+  commands.push(...render.commands);
+
+  const receipt = {
+    schemaVersion: "dascowork-primary-runtime-input-validation.v1",
+    status: "verified",
+    target,
+    runner: process.env.RUNNER_IMAGE ?? manifest.builder.runner,
+    inputManifestSha256: sha256(
+      await readFile(join(options.inputRoot, "runtime-inputs.manifest.json")),
+    ),
+    sourceLockSha256: manifest.sourceLockSha256,
+    toolchainsLockSha256: manifest.toolchainsLockSha256,
+    font: {
+      path: relative(options.inputRoot, font.path).split(sep).join("/"),
+      sha256: sha256(await readFile(font.path)),
+    },
+    isolation: await officeCliIsolationReceipt({
+      target,
+      officecli: binaries.officecli,
+      context: officeCliIsolationContext,
+      networkProbe: officeCliNetworkProbe,
+      commands,
+    }),
+    render,
+    commands,
+    productionTrust: false,
+  };
+  if (options.receiptPath) {
+    await writeFile(options.receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  }
+  process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+} finally {
+  await officeCliIsolationContext.cleanup();
 }
-process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
 
 async function assertTargetExecutable(path, target, label) {
   let details;
@@ -401,12 +442,17 @@ async function readFirstBytes(path, length) {
   }
 }
 
-async function renderOfficeCliSmoke({ target, officecli }) {
+async function renderOfficeCliSmoke({ target, officecli, commandContext }) {
   const directory = await mkdtemp(join(tmpdir(), "primary-runtime-officecli-"));
+  const created = {
+    docx: join(directory, "runtime-created.docx"),
+    xlsx: join(directory, "runtime-created.xlsx"),
+    pptx: join(directory, "runtime-created.pptx"),
+  };
   const originals = {
-    docx: join(directory, "runtime-original.docx"),
-    xlsx: join(directory, "runtime-original.xlsx"),
-    pptx: join(directory, "runtime-original.pptx"),
+    docx: join(directory, "runtime-complex-original.docx"),
+    xlsx: join(directory, "runtime-complex-original.xlsx"),
+    pptx: created.pptx,
   };
   const edited = {
     docx: join(directory, "runtime-edited.docx"),
@@ -420,13 +466,43 @@ async function renderOfficeCliSmoke({ target, officecli }) {
     OFFICECLI_NO_AUTO_RESIDENT: "1",
   };
   try {
-    for (const [kind, path] of Object.entries(originals)) {
+    await copyFile(join(officeCliFixtureRoot, "complex-existing.docx"), originals.docx);
+    await copyFile(join(officeCliFixtureRoot, "complex-existing.xlsx"), originals.xlsx);
+    await assertComplexDocxFixture(originals.docx, { edited: false });
+    await assertComplexXlsxFixture(originals.xlsx);
+    commands.push(
+      await runJsonCommand(
+        "officecli-read-complex-docx-original",
+        officecli,
+        ["get", originals.docx, "/body", "--depth", "4", "--json"],
+        officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["既有DOCX中文段落", "table"],
+        },
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-read-complex-xlsx-original",
+        officecli,
+        ["get", originals.xlsx, "/Sheet1", "--depth", "2", "--json"],
+        officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["SUM(B2:B3)", "chart"],
+        },
+      ),
+    );
+
+    for (const [kind, path] of Object.entries(created)) {
       commands.push(
-        await runCommand(
+        await runJsonCommand(
           `officecli-create-${kind}-original`,
           officecli,
-          ["create", path],
+          ["create", path, "--json"],
           officeCliEnvironment,
+          { commandContext, expectedTextIncludes: ["Created:"] },
         ),
       );
       commands.push(
@@ -435,10 +511,13 @@ async function renderOfficeCliSmoke({ target, officecli }) {
           officecli,
           ["get", path, "/", "--json"],
           officeCliEnvironment,
+          { commandContext },
         ),
       );
-      await copyFile(path, edited[kind]);
     }
+    await copyFile(originals.docx, edited.docx);
+    await copyFile(originals.xlsx, edited.xlsx);
+    await copyFile(originals.pptx, edited.pptx);
 
     const originalSha256 = Object.fromEntries(
       await Promise.all(
@@ -464,6 +543,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
           "--json",
         ],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -472,6 +552,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["save", edited.docx, "--json"],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -480,17 +561,22 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["validate", edited.docx, "--json"],
         officeCliEnvironment,
-        { validateNoErrors: true },
+        { commandContext, validateNoErrors: true },
       ),
     );
     commands.push(
       await runJsonCommand(
         "officecli-reread-docx-copy",
         officecli,
-        ["get", edited.docx, "/body", "--json"],
+        ["get", edited.docx, "/body", "--depth", "4", "--json"],
         officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["Runtime 中文验证", "既有DOCX中文段落", "第一季"],
+        },
       ),
     );
+    await assertComplexDocxFixture(edited.docx, { edited: true });
 
     commands.push(
       await runJsonCommand(
@@ -503,12 +589,13 @@ async function renderOfficeCliSmoke({ target, officecli }) {
           "--type",
           "cell",
           "--prop",
-          "address=A1",
+          "address=C1",
           "--prop",
           "value=Runtime 中文验证",
           "--json",
         ],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -517,6 +604,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["save", edited.xlsx, "--json"],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -525,17 +613,46 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["validate", edited.xlsx, "--json"],
         officeCliEnvironment,
-        { validateNoErrors: true },
+        { commandContext, validateNoErrors: true },
       ),
     );
     commands.push(
       await runJsonCommand(
         "officecli-reread-xlsx-copy",
         officecli,
-        ["get", edited.xlsx, "/Sheet1/A1", "--json"],
+        ["get", edited.xlsx, "/Sheet1/C1", "--json"],
         officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["Runtime 中文验证"],
+        },
       ),
     );
+    commands.push(
+      await runJsonCommand(
+        "officecli-reread-xlsx-formula-copy",
+        officecli,
+        ["get", edited.xlsx, "/Sheet1/B4", "--json"],
+        officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["SUM(B2:B3)", "25"],
+        },
+      ),
+    );
+    commands.push(
+      await runJsonCommand(
+        "officecli-reread-xlsx-chart-copy",
+        officecli,
+        ["get", edited.xlsx, "/Sheet1/chart[1]", "--json"],
+        officeCliEnvironment,
+        {
+          commandContext,
+          expectedTextIncludes: ["seriesCount", "categoriesRef"],
+        },
+      ),
+    );
+    await assertComplexXlsxFixture(edited.xlsx);
 
     commands.push(
       await runJsonCommand(
@@ -543,6 +660,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["add", edited.pptx, "/", "--type", "slide", "--json"],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -568,6 +686,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
           "--json",
         ],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -576,6 +695,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["save", edited.pptx, "--json"],
         officeCliEnvironment,
+        { commandContext },
       ),
     );
     commands.push(
@@ -584,7 +704,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["validate", edited.pptx, "--json"],
         officeCliEnvironment,
-        { validateNoErrors: true },
+        { commandContext, validateNoErrors: true },
       ),
     );
     commands.push(
@@ -593,6 +713,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
         officecli,
         ["get", edited.pptx, "/slide[1]", "--json"],
         officeCliEnvironment,
+        { commandContext, expectedTextIncludes: ["Runtime 中文验证"] },
       ),
     );
 
@@ -601,7 +722,7 @@ async function renderOfficeCliSmoke({ target, officecli }) {
       officecli,
       ["view", edited.pptx, "svg", "--start", "1", "--max-lines", "1"],
       officeCliEnvironment,
-      { captureOutput: true },
+      { commandContext, captureOutput: true },
     );
     await writeFile(svg, svgResult.output);
     commands.push(stripCommandOutput(svgResult));
@@ -640,6 +761,7 @@ async function runJsonCommand(name, file, args, environment = undefined, options
   const command = await runCommand(name, file, args, environment, {
     captureOutput: true,
     allowedExitCodes: [0, 2],
+    commandContext: options.commandContext,
   });
   let parsed;
   try {
@@ -656,6 +778,12 @@ async function runJsonCommand(name, file, args, environment = undefined, options
   if (options.validateNoErrors && Number(parsed.data?.count ?? 0) !== 0) {
     throw new Error(`AT-RT-INPUT-01 blocked: ${name} reported validation errors.`);
   }
+  const parsedText = JSON.stringify(parsed);
+  for (const expected of options.expectedTextIncludes ?? []) {
+    if (!parsedText.includes(expected)) {
+      throw new Error(`AT-RT-INPUT-01 blocked: ${name} did not report expected ${expected}.`);
+    }
+  }
   return {
     ...stripCommandOutput(command),
     jsonSuccess: parsed.success,
@@ -666,6 +794,185 @@ async function runJsonCommand(name, file, args, environment = undefined, options
 function stripCommandOutput(command) {
   const { output, ...withoutOutput } = command;
   return withoutOutput;
+}
+
+async function assertComplexDocxFixture(path, { edited }) {
+  const entries = await readZipEntries(path);
+  const documentXml = requiredZipText(entries, "word/document.xml", path);
+  for (const expected of [
+    "既有DOCX中文段落",
+    "<w:tbl>",
+    "季度",
+    "收入",
+    "第一季",
+    "128",
+  ]) {
+    assertTextIncludes(documentXml, expected, `${path}: complex DOCX fixture`);
+  }
+  if (edited) {
+    assertTextIncludes(documentXml, "Runtime 中文验证", `${path}: edited DOCX copy`);
+  } else if (documentXml.includes("Runtime 中文验证")) {
+    throw new Error(`AT-RT-INPUT-01 blocked: original DOCX fixture already contains edit marker.`);
+  }
+}
+
+async function assertComplexXlsxFixture(path) {
+  const entries = await readZipEntries(path);
+  for (const entry of [
+    "xl/worksheets/sheet1.xml",
+    "xl/worksheets/_rels/sheet1.xml.rels",
+    "xl/drawings/drawing1.xml",
+    "xl/drawings/_rels/drawing1.xml.rels",
+    "xl/drawings/charts/chart1.xml",
+  ]) {
+    requiredZipText(entries, entry, path);
+  }
+  const sheetXml = requiredZipText(entries, "xl/worksheets/sheet1.xml", path);
+  const chartXml = requiredZipText(entries, "xl/drawings/charts/chart1.xml", path);
+  const sheetRelsXml = requiredZipText(entries, "xl/worksheets/_rels/sheet1.xml.rels", path);
+  const drawingRelsXml = requiredZipText(entries, "xl/drawings/_rels/drawing1.xml.rels", path);
+  const workbookText = [...entries.values()].map((entry) => entry.toString("utf8")).join("\n");
+  for (const expected of ["项目", "收入", "甲", "乙"]) {
+    assertTextIncludes(workbookText, expected, `${path}: complex XLSX text`);
+  }
+  for (const expected of ["SUM(B2:B3)", "<x:v>25</x:v>"]) {
+    assertTextIncludes(sheetXml, expected, `${path}: complex XLSX worksheet`);
+  }
+  for (const expected of ["Sheet1!$A$2:$A$3", "Sheet1!$B$2:$B$3", "<c:barChart>"]) {
+    assertTextIncludes(chartXml, expected, `${path}: complex XLSX chart`);
+  }
+  assertTextIncludes(sheetRelsXml, "drawing1.xml", `${path}: worksheet relationships`);
+  assertTextIncludes(drawingRelsXml, "chart1.xml", `${path}: drawing relationships`);
+}
+
+async function readZipEntries(path) {
+  const bytes = await readFile(path);
+  const eocdOffset = findEndOfCentralDirectory(bytes);
+  if (eocdOffset < 0) {
+    throw new Error(`AT-RT-INPUT-01 blocked: ${path} is not a readable ZIP Office file.`);
+  }
+  const entryCount = bytes.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = bytes.readUInt32LE(eocdOffset + 16);
+  const entries = new Map();
+  let cursor = centralDirectoryOffset;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (bytes.readUInt32LE(cursor) !== 0x02014b50) {
+      throw new Error(`AT-RT-INPUT-01 blocked: ${path} has a malformed ZIP central directory.`);
+    }
+    const method = bytes.readUInt16LE(cursor + 10);
+    const compressedSize = bytes.readUInt32LE(cursor + 20);
+    const fileNameLength = bytes.readUInt16LE(cursor + 28);
+    const extraLength = bytes.readUInt16LE(cursor + 30);
+    const commentLength = bytes.readUInt16LE(cursor + 32);
+    const localHeaderOffset = bytes.readUInt32LE(cursor + 42);
+    const name = bytes.subarray(cursor + 46, cursor + 46 + fileNameLength).toString("utf8");
+    const localNameLength = bytes.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = bytes.readUInt16LE(localHeaderOffset + 28);
+    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const compressed = bytes.subarray(dataOffset, dataOffset + compressedSize);
+    entries.set(name, inflateZipEntry(method, compressed, path, name));
+    cursor += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function findEndOfCentralDirectory(bytes) {
+  const minimumOffset = Math.max(0, bytes.length - 65_557);
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (bytes.readUInt32LE(offset) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+function inflateZipEntry(method, compressed, path, name) {
+  if (method === 0) return compressed;
+  if (method === 8) return inflateRawSync(compressed);
+  throw new Error(`AT-RT-INPUT-01 blocked: ${path} entry ${name} uses unsupported ZIP method ${method}.`);
+}
+
+function requiredZipText(entries, name, path) {
+  const entry = entries.get(name);
+  if (!entry) throw new Error(`AT-RT-INPUT-01 blocked: ${path} is missing ${name}.`);
+  return entry.toString("utf8");
+}
+
+function assertTextIncludes(text, expected, context) {
+  if (!text.includes(expected)) {
+    throw new Error(`AT-RT-INPUT-01 blocked: ${context} does not preserve ${expected}.`);
+  }
+}
+
+function createCommandExecutionContext({
+  target,
+  officecli,
+  officeCliIsolationContext,
+} = {}) {
+  return {
+    baseEnvironment: process.env,
+    async run({ file, args, name, allowedExitCodes }) {
+      if (!officecli || resolve(file) !== resolve(officecli)) return null;
+      const isolated = await runOfficeCliIsolated({
+        target,
+        officecliPath: officecli,
+        executable: file,
+        args,
+        name,
+        allowedExitCodes,
+        context: officeCliIsolationContext,
+        timeoutMs: defaultCommandTimeoutMs,
+        probeNetwork: false,
+      });
+      return {
+        output: isolated.command.stdout ?? isolated.command.output,
+        stderr: isolated.command.stderr,
+        elapsedMs: isolated.command.elapsedMs,
+        exitCode: isolated.command.exitCode,
+        signal: isolated.command.signal,
+      };
+    },
+    resolveInvocation({ file, args, environment, cwd }) {
+      return { file, args, environment, cwd };
+    },
+  };
+}
+
+async function officeCliIsolationReceipt({ target, officecli, context, networkProbe, commands }) {
+  const officeCommands = commands.filter((command) => command.executable === basename(officecli));
+  if (
+    context.executionProbeReceipt?.passed !== true ||
+    officeCommands.length === 0 ||
+    context.executionCommandReceipts.length !== officeCommands.length ||
+    context.executionCommandReceipts.some((command, index) =>
+      command.passed !== true ||
+      command.name !== officeCommands[index].name ||
+      command.exitCode !== officeCommands[index].exitCode ||
+      JSON.stringify(command.args) !== JSON.stringify(officeCommands[index].args)
+    )
+  ) {
+    throw new Error("OfficeCLI input validation has no complete executable exclusion evidence.");
+  }
+  return {
+    schemaVersion: context.schemaVersion,
+    target,
+    officecliSha256: sha256(await readFile(officecli)),
+    strategy: context.strategy.kind,
+    host: context.host,
+    envReceipt: {
+      pathEntries: String(context.env.PATH ?? "").split(delimiter).filter(Boolean),
+      home: context.env.HOME,
+      userProfile: context.env.USERPROFILE,
+      xdgCacheHome: context.env.XDG_CACHE_HOME,
+      xdgConfigHome: context.env.XDG_CONFIG_HOME,
+      dotnetCliHome: context.env.DOTNET_CLI_HOME,
+      officeCliSkipUpdate: context.env.OFFICECLI_SKIP_UPDATE,
+      officeCliNoAutoResident: context.env.OFFICECLI_NO_AUTO_RESIDENT,
+    },
+    networkProbe,
+    executionAudit: {
+      probe: context.executionProbeReceipt,
+      commands: context.executionCommandReceipts,
+    },
+  };
 }
 
 
@@ -694,6 +1001,7 @@ async function runCommand(name, file, args, environment = undefined, options = {
     environment,
     name,
     allowedExitCodes: options.allowedExitCodes,
+    commandContext: options.commandContext,
   });
   process.stderr.write(`[primary-runtime:verify-inputs] ok ${name} (${elapsedMs}ms)\n`);
   return {
@@ -706,16 +1014,39 @@ async function runCommand(name, file, args, environment = undefined, options = {
   };
 }
 
-async function runRawCommand({ file, args, environment = undefined, name, allowedExitCodes = [0] }) {
+async function runRawCommand({
+  file,
+  args,
+  environment = undefined,
+  name,
+  allowedExitCodes = [0],
+  commandContext = createCommandExecutionContext(),
+}) {
+  const delegated = await commandContext.run?.({
+    file,
+    args,
+    environment,
+    name,
+    allowedExitCodes,
+  });
+  if (delegated) return delegated;
+  const invocation = await commandContext.resolveInvocation({
+    file,
+    args,
+    environment,
+    cwd: commandContext.cwd,
+    name,
+  });
   return new Promise((resolveCommand, rejectCommand) => {
     const startedAt = Date.now();
-    const child = spawn(file, args, {
-      env: {
-        ...process.env,
+    const child = spawn(invocation.file, invocation.args, {
+      env: invocation.env ?? {
+        ...commandContext.baseEnvironment,
         PYTHONDONTWRITEBYTECODE: "1",
-        ...environment,
+        ...(invocation.environment ?? environment),
         NO_PROXY: "*",
       },
+      cwd: invocation.cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const output = [];

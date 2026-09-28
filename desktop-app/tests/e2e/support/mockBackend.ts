@@ -315,7 +315,7 @@ export function functionCallOutputText(providerBody: unknown, callId: string): s
 }
 
 export function functionCallOutputCount(providerBodies: unknown[], callId: string): number {
-  return providerBodies.reduce((count, providerBody) => {
+  return providerBodies.reduce<number>((count, providerBody) => {
     if (!isRecord(providerBody) || !Array.isArray(providerBody.input)) return count
     return (
       count +

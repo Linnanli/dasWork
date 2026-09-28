@@ -263,6 +263,208 @@ describe('BundledPluginManager', () => {
     expect(order).toEqual(['reload', 'set-obsolete-skill@obsolete-skill-false'])
   })
 
+  it('reports when a retired Runtime-owned plugin cannot be restored after retirement fails', async () => {
+    const current: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'officecli',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/new/plugins/officecli',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/new/plugins/officecli/.agents/plugins/marketplace.json',
+      pluginRoot: '/app/cache/primary-runtime/versions/new/plugins/officecli/plugins/officecli',
+      pluginName: 'officecli',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:2'
+    }
+    const retired: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'presentation-skill',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/presentation-skill',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/.agents/plugins/marketplace.json',
+      pluginRoot:
+        '/app/cache/primary-runtime/versions/old/plugins/presentation-skill/plugins/presentation-skill',
+      pluginName: 'presentation-skill',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:1'
+    }
+    let retiredEnabled = true
+    const responseFor = (
+      entry: BundledPluginDescriptor,
+      enabled: boolean
+    ): PluginInstalledResponse => {
+      const response = installedResponse(
+        [
+          {
+            ...plugin({ installed: true, enabled }),
+            id: `${entry.pluginName}@${entry.marketplaceName}`,
+            name: entry.pluginName
+          }
+        ],
+        entry.marketplacePath
+      )
+      response.marketplaces[0]!.name = entry.marketplaceName
+      return response
+    }
+    const client = catalogClient({
+      listInstalledPluginsForManagement: vi.fn(async ({ cwd } = {}) =>
+        cwd === retired.marketplaceRoot
+          ? responseFor(retired, retiredEnabled)
+          : responseFor(current, true)
+      ),
+      setPluginEnabled: vi.fn(async ({ pluginId, enabled }) => {
+        if (pluginId === 'presentation-skill@presentation-skill') {
+          if (enabled) throw new Error('restore enable failed')
+          retiredEnabled = false
+        }
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [current],
+      retiredDescriptors: [retired],
+      invalidateCaches: async () => {
+        throw new Error('post-disable cache refresh failed')
+      }
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [
+        { stage: 'sync_plugins', message: 'post-disable cache refresh failed' },
+        {
+          stage: 'sync_plugins',
+          message: 'Retired Primary Runtime plugin restore failed: restore enable failed'
+        }
+      ]
+    })
+    expect(client.setPluginEnabled).toHaveBeenCalledWith({
+      pluginId: 'presentation-skill@presentation-skill',
+      enabled: false
+    })
+    expect(client.setPluginEnabled).toHaveBeenCalledWith({
+      pluginId: 'presentation-skill@presentation-skill',
+      enabled: true
+    })
+  })
+
+  it('reports when skill rollback reload fails after a reconcile failure', async () => {
+    const rollback = vi.fn(async () => undefined)
+    const client = catalogClient({
+      listSkillsForManagement: vi.fn(async () => {
+        throw new Error('reload still failed')
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [descriptor],
+      syncRuntimeSkills: async () => rollback
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [
+        { stage: 'reload_skills', message: 'reload still failed' },
+        {
+          stage: 'reload_skills',
+          message: 'Runtime-owned skill rollback reload failed: reload still failed'
+        }
+      ]
+    })
+    expect(rollback).toHaveBeenCalledOnce()
+    expect(client.listSkillsForManagement).toHaveBeenCalledTimes(2)
+  })
+
+  it('restores earlier retired Runtime-owned plugins when a later retirement fails', async () => {
+    const current: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'officecli',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/new/plugins/officecli',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/new/plugins/officecli/.agents/plugins/marketplace.json',
+      pluginRoot: '/app/cache/primary-runtime/versions/new/plugins/officecli/plugins/officecli',
+      pluginName: 'officecli',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:2'
+    }
+    const retiredOne: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'old-one',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/old-one',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/old-one/.agents/plugins/marketplace.json',
+      pluginRoot: '/app/cache/primary-runtime/versions/old/plugins/old-one/plugins/old-one',
+      pluginName: 'old-one',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:1'
+    }
+    const retiredTwo: BundledPluginDescriptor = {
+      ...descriptor,
+      marketplaceName: 'old-two',
+      marketplaceRoot: '/app/cache/primary-runtime/versions/old/plugins/old-two',
+      marketplacePath:
+        '/app/cache/primary-runtime/versions/old/plugins/old-two/.agents/plugins/marketplace.json',
+      pluginRoot: '/app/cache/primary-runtime/versions/old/plugins/old-two/plugins/old-two',
+      pluginName: 'old-two',
+      sourceKind: 'primary-runtime',
+      owner: 'primary-runtime:1'
+    }
+    const enabled = new Map([
+      ['old-one@old-one', true],
+      ['old-two@old-two', true]
+    ])
+    const responseFor = (entry: BundledPluginDescriptor): PluginInstalledResponse => {
+      const id = `${entry.pluginName}@${entry.marketplaceName}`
+      const response = installedResponse(
+        [
+          {
+            ...plugin({ installed: true, enabled: enabled.get(id) ?? true }),
+            id,
+            name: entry.pluginName
+          }
+        ],
+        entry.marketplacePath
+      )
+      response.marketplaces[0]!.name = entry.marketplaceName
+      return response
+    }
+    const order: string[] = []
+    const client = catalogClient({
+      listInstalledPluginsForManagement: vi.fn(async ({ cwd } = {}) => {
+        if (cwd === retiredOne.marketplaceRoot) return responseFor(retiredOne)
+        if (cwd === retiredTwo.marketplaceRoot) return responseFor(retiredTwo)
+        return responseFor(current)
+      }),
+      setPluginEnabled: vi.fn(async ({ pluginId, enabled: nextEnabled }) => {
+        order.push(`${pluginId}:${nextEnabled}`)
+        enabled.set(pluginId, nextEnabled)
+      })
+    })
+
+    const result = await new BundledPluginManager({
+      catalogClient: client,
+      descriptors: [current],
+      retiredDescriptors: [retiredOne, retiredTwo],
+      invalidateCaches: async () => {
+        if (enabled.get('old-two@old-two') === false) {
+          throw new Error('second cache refresh failed')
+        }
+      }
+    }).reconcile()
+
+    expect(result).toMatchObject({
+      status: 'degraded',
+      failures: [{ stage: 'sync_plugins', message: 'second cache refresh failed' }]
+    })
+    expect(order).toEqual([
+      'old-one@old-one:false',
+      'old-two@old-two:false',
+      'old-two@old-two:true',
+      'old-one@old-one:true'
+    ])
+  })
+
   it('does not retire a Runtime plugin when the active desired set replaced the same logical plugin', async () => {
     const current: BundledPluginDescriptor = {
       ...descriptor,
@@ -459,9 +661,16 @@ describe('BundledPluginManager', () => {
 
     expect(result).toMatchObject({
       status: 'degraded',
-      failures: [{ stage: 'reload_skills', message: 'reload failed' }]
+      failures: [
+        { stage: 'reload_skills', message: 'reload failed' },
+        {
+          stage: 'reload_skills',
+          message: 'Runtime-owned skill rollback reload failed: reload failed'
+        }
+      ]
     })
     expect(rollback).toHaveBeenCalledOnce()
+    expect(client.listSkillsForManagement).toHaveBeenCalledTimes(2)
     expect(client.setPluginEnabled).not.toHaveBeenCalledWith(
       expect.objectContaining({ pluginId: 'presentation-skill@presentation-skill', enabled: false })
     )

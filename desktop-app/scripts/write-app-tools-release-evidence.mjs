@@ -6,6 +6,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { createCanvas, loadImage } from '@napi-rs/canvas'
+
 import {
   canonicalJson,
   canonicalSignedPayload
@@ -57,7 +59,7 @@ export async function writeAppToolsReleaseEvidence(options) {
   const sourceLockSha256 = createHash('sha256').update(sourceLockBytes).digest('hex')
   const toolchainsLockSha256 = createHash('sha256').update(toolchainsLockBytes).digest('hex')
   const hardLimitsSha256 = createHash('sha256').update(hardLimitsBytes).digest('hex')
-  assertLiveTrace(liveTrace)
+  await assertLiveTrace(liveTrace, input.visualArtifactDirectory)
   assertRuntimeInputs({
     provenance,
     runtimeManifest,
@@ -163,6 +165,8 @@ function normalizeOptions(options) {
   if (options.gateId !== 'AT-LIVE-PKG-01' && assetSha256 !== undefined) {
     throw new Error('Only packaged App Tools evidence may bind an assetSha256.')
   }
+  const visualArtifactDirectory =
+    options.visualArtifactDirectory ?? options['visual-artifact-directory']
   return {
     gateId: options.gateId,
     producer: options.producer,
@@ -176,11 +180,15 @@ function normalizeOptions(options) {
     sourceLock: resolve(options.sourceLock ?? defaultSourceLock),
     toolchainsLock: resolve(options.toolchainsLock ?? defaultToolchainsLock),
     hardLimits: resolve(options.hardLimits ?? defaultHardLimits),
+    visualArtifactDirectory:
+      typeof visualArtifactDirectory === 'string' && visualArtifactDirectory.trim() !== ''
+        ? resolve(visualArtifactDirectory)
+        : undefined,
     assetSha256
   }
 }
 
-function assertLiveTrace(value) {
+async function assertLiveTrace(value, visualArtifactDirectoryOption) {
   const invalid = (field) => {
     throw new Error(`Invalid R07 live trace report for App Tools release evidence: ${field}.`)
   }
@@ -212,7 +220,15 @@ function assertLiveTrace(value) {
   if (value.artifact.presentationSha256 !== value.preview.presentationSha256)
     invalid('preview.presentationSha256')
   if (value.preview.visible !== true) invalid('preview.visible')
-  if (!isRenderReport(value.renderReport)) invalid('renderReport')
+  if (
+    !isRenderReport(value.renderReport, {
+      artifactSourceId: value.artifact.artifactSourceId,
+      receiptId: value.preview.receiptId,
+      generation: value.artifact.generation,
+      presentationSha256: value.artifact.presentationSha256
+    })
+  )
+    invalid('renderReport')
   if (
     !isSha256(value.renderReportSha256) ||
     value.renderReportSha256 !== sha256Text(JSON.stringify(value.renderReport))
@@ -235,9 +251,18 @@ function assertLiveTrace(value) {
   if (typeof value.skill.id !== 'string' || value.skill.id.length === 0) invalid('skill.id')
   if (value.skill.name !== 'officecli') invalid('skill.name')
   if (!isSha256(value.skill.instructionsSha256)) invalid('skill.instructionsSha256')
+  const visualArtifactDirectory =
+    visualArtifactDirectoryOption ??
+    (isRecord(value.visualArtifacts) && typeof value.visualArtifacts.directory === 'string'
+      ? value.visualArtifacts.directory
+      : undefined)
+  if (typeof visualArtifactDirectory !== 'string' || visualArtifactDirectory.length === 0) {
+    invalid('visualArtifacts.directory')
+  }
+  await assertVisualArtifacts(visualArtifactDirectory, value, invalid)
 }
 
-function isRenderReport(value) {
+function isRenderReport(value, source) {
   return (
     isRecord(value) &&
     value.schemaVersion === 'dascowork-r07-render-qa.v1' &&
@@ -254,9 +279,78 @@ function isRenderReport(value) {
         typeof slide.nonWhiteRatio === 'number' &&
         slide.nonWhiteRatio > 0.01 &&
         typeof slide.colorBucketCount === 'number' &&
-        slide.colorBucketCount > 12
+        slide.colorBucketCount > 12 &&
+        isSha256(slide.sha256) &&
+        isRecord(slide.source) &&
+        slide.source.kind === 'electron-host-preview' &&
+        slide.source.artifactSourceId === source.artifactSourceId &&
+        slide.source.receiptId === source.receiptId &&
+        slide.source.generation === source.generation &&
+        slide.source.presentationSha256 === source.presentationSha256
     )
   )
+}
+
+async function assertVisualArtifacts(directory, liveTrace, invalid) {
+  const receipt = await readJson(join(directory, 'r07-preview-render-receipt.json')).catch(() => {
+    invalid('visualArtifacts.receipt')
+  })
+  if (
+    !isRecord(receipt) ||
+    receipt.schemaVersion !== 'dascowork-r07-visual-artifacts.v1' ||
+    !isRecord(receipt.previewTrace) ||
+    receipt.previewTrace.sourceId !== liveTrace.artifact.artifactSourceId ||
+    receipt.previewTrace.receiptId !== liveTrace.preview.receiptId ||
+    receipt.previewTrace.generation !== liveTrace.artifact.generation ||
+    receipt.previewTrace.checksum !== liveTrace.artifact.presentationSha256 ||
+    canonicalJson(receipt.renderReport) !== canonicalJson(liveTrace.renderReport)
+  ) {
+    invalid('visualArtifacts.receipt')
+  }
+  for (const slide of liveTrace.renderReport.slides) {
+    const pngPath = join(directory, 'slides', slide.file)
+    const bytes = await readFile(pngPath).catch(() => {
+      invalid(`visualArtifacts.${slide.file}`)
+    })
+    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    if (sha256 !== slide.sha256) invalid(`visualArtifacts.${slide.file}.sha256`)
+    const metrics = await measureRenderedSlide(bytes).catch(() => {
+      invalid(`visualArtifacts.${slide.file}.png`)
+    })
+    if (
+      metrics.width !== slide.width ||
+      metrics.height !== slide.height ||
+      metrics.nonWhiteRatio !== slide.nonWhiteRatio ||
+      metrics.colorBucketCount !== slide.colorBucketCount ||
+      metrics.nonWhiteRatio <= 0.01 ||
+      metrics.colorBucketCount <= 12
+    ) {
+      invalid(`visualArtifacts.${slide.file}.metrics`)
+    }
+  }
+}
+
+async function measureRenderedSlide(bytes) {
+  const image = await loadImage(bytes)
+  const canvas = createCanvas(image.width, image.height)
+  const context = canvas.getContext('2d')
+  context.drawImage(image, 0, 0)
+  const { data } = context.getImageData(0, 0, image.width, image.height)
+  const buckets = new Set()
+  let nonWhite = 0
+  for (let offset = 0; offset < data.length; offset += 4) {
+    const red = data[offset] ?? 0
+    const green = data[offset + 1] ?? 0
+    const blue = data[offset + 2] ?? 0
+    if (red < 245 || green < 245 || blue < 245) nonWhite += 1
+    buckets.add(`${red >> 4}:${green >> 4}:${blue >> 4}`)
+  }
+  return {
+    width: image.width,
+    height: image.height,
+    nonWhiteRatio: nonWhite / (image.width * image.height),
+    colorBucketCount: buckets.size
+  }
 }
 
 function isObservedEventBinding(value, idKey, hashKey) {

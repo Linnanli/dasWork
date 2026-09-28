@@ -125,7 +125,7 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   )
   assert.match(
     await readFile(resolve(appRoot, 'src/main/index.ts'), 'utf8'),
-    /void bundledPluginReconciler\.run\('startup'\)[\s\S]*void primaryRuntimeUpdates\?\.start\(\)/u
+    /void primaryRuntime\s*\.diagnoseDependencies\(\)\s*\.then\(\(\) => bundledPluginReconciler\.run\('startup'\)\)[\s\S]*void primaryRuntimeUpdates\?\.start\(\)/u
   )
   assert.match(tlsPolicySource, /ca: input\.ca/u)
   assert.match(tlsPolicySource, /rejectUnauthorized: true/u)

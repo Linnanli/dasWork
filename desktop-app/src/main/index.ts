@@ -272,11 +272,15 @@ async function createCodexRuntime(
   const launch = resolveCodexAppServerLaunchOptions({ env: process.env })
   const codexHome = resolveCodexHome(launch.env)
   let bundledPluginDescriptors = uniqueBundledPluginDescriptors([...desktopToolBridge.descriptors])
-  const reconcileBundledPluginCatalog = async (): Promise<void> => {
+  const reconcileBundledPluginCatalog = async ({
+    cleanupRuntimeSkills = false
+  }: {
+    cleanupRuntimeSkills?: boolean
+  } = {}): Promise<void> => {
     const previousPrimaryRuntimeDescriptors = bundledPluginDescriptors.filter(
       (descriptor) => descriptor.sourceKind === 'primary-runtime'
     )
-    const diagnostic = await primaryRuntime.diagnoseDependencies()
+    const diagnostic = await primaryRuntime.diagnoseDependencies({ recoverActivation: false })
     const active = await reconcileBundledPlugins({
       catalogClient: requireComposerContextClient(),
       appDescriptors: desktopToolBridge.descriptors,
@@ -285,7 +289,8 @@ async function createCodexRuntime(
       retiredPrimaryRuntimeDescriptors: previousPrimaryRuntimeDescriptors,
       primaryRuntimeDiagnostic: diagnostic,
       primaryRuntimeCacheRoot,
-      codexHome
+      codexHome,
+      cleanupRuntimeSkills
     })
     // Each reconcile is a replacement of the committed desired set. Retaining
     // historical Runtime descriptors makes a new bundle look healthy while its
@@ -436,8 +441,11 @@ async function createCodexRuntime(
     warn: (message, error) => console.warn(message, error)
   })
 
-  primaryRuntime.setPostActivationHook(async () => {
-    await bundledPluginReconciler.run('primary-runtime-install', { propagateFailure: true })
+  primaryRuntime.setPostActivationHook(async (result) => {
+    await bundledPluginReconciler.run('primary-runtime-install', {
+      propagateFailure: true,
+      cleanupRuntimeSkills: result === null
+    })
   })
 
   const primaryRuntimeUpdates = primaryRuntimeReleaseProvider
@@ -465,7 +473,13 @@ async function createCodexRuntime(
   // independent, Main-owned background work. Do not make a cold Runtime
   // install wait for marketplace synchronization: post-activation still uses
   // the same serial reconciler, so plugin/skill ordering remains intact.
-  void bundledPluginReconciler.run('startup')
+  void primaryRuntime
+    .diagnoseDependencies()
+    .then(() => bundledPluginReconciler.run('startup'))
+    .catch((error) => {
+      hostCapabilities.setBundledPluginsStatus('degraded')
+      console.warn('[primary-runtime] startup activation recovery failed', error)
+    })
   if (primaryRuntimeReleaseProvider) void primaryRuntimeUpdates?.start()
 
   return new CodexChatRuntimeService({
@@ -626,6 +640,7 @@ async function reconcileBundledPlugins(input: {
   primaryRuntimeDescriptors?: readonly BundledPluginDescriptor[]
   primaryRuntimeCacheRoot?: string
   codexHome: string
+  cleanupRuntimeSkills?: boolean
   requireReady?: boolean
 }): Promise<{
   descriptors: BundledPluginDescriptor[]
@@ -646,7 +661,7 @@ async function reconcileBundledPlugins(input: {
   ])
   const hasRuntimeSkills =
     diagnostic.status === 'ready' && Boolean(diagnostic.manifest?.bundledSkills?.length)
-  if (descriptors.length === 0 && !hasRuntimeSkills) {
+  if (descriptors.length === 0 && !hasRuntimeSkills && !input.cleanupRuntimeSkills) {
     input.hostCapabilities.setBundledPluginsStatus('unavailable')
     if (input.requireReady) throw new Error('Bundled plugin desired set is empty.')
     return { descriptors: [], status: 'unavailable', failureStage: 'sync_plugins' }
@@ -665,6 +680,15 @@ async function reconcileBundledPlugins(input: {
     retiredDescriptors,
     invalidateCaches: () => input.hostCapabilities.refresh(),
     syncRuntimeSkills: async () => {
+      if (input.cleanupRuntimeSkills) {
+        const transaction = await new RuntimeOwnedSkillManager({
+          codexHome: input.codexHome,
+          runtimeRoot: input.codexHome,
+          bundleVersion: 'recovery-without-active-runtime',
+          manifest: { bundledSkills: [] }
+        }).reconcileWithRollback()
+        return transaction.rollback
+      }
       if (diagnostic.status !== 'ready' || !diagnostic.root || !diagnostic.manifest) return
       const transaction = await new RuntimeOwnedSkillManager({
         codexHome: input.codexHome,

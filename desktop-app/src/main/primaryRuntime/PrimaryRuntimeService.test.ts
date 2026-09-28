@@ -1,5 +1,15 @@
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -818,9 +828,11 @@ describe('PrimaryRuntimeService', () => {
     })
   })
 
-  it('keeps a verified Runtime active when post-install configuration fails', async () => {
+  it('restores the previous Runtime when post-install configuration fails', async () => {
     const cacheRoot = await fixtureDirectory()
+    await publishFixtureRuntime(cacheRoot, 'old-healthy')
     const archive = await releaseArchive({ bundleVersion: 'plugin-sync-failure' })
+    const postActivationVersions: Array<string | null> = []
     const service = new PrimaryRuntimeService({
       locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
       cacheRoot,
@@ -830,18 +842,22 @@ describe('PrimaryRuntimeService', () => {
         downloadArchive: (descriptor, destinationPath) =>
           writeFixtureArchive(descriptor, archive.bytes, destinationPath)
       },
-      postActivation: async () => {
-        throw new Error('Runtime plugin synchronization failed.')
+      postActivation: async (result) => {
+        postActivationVersions.push(result?.version ?? null)
+        if (result?.version === 'plugin-sync-failure') {
+          throw new Error('Runtime plugin synchronization failed.')
+        }
       }
     })
 
     await expect(service.installOrRepair()).rejects.toThrow('plugin synchronization failed')
     await expect(service.loadDependencies()).resolves.toMatchObject({
-      bundleVersion: 'plugin-sync-failure'
+      bundleVersion: 'old-healthy'
     })
+    expect(postActivationVersions).toEqual(['plugin-sync-failure', 'old-healthy'])
     await expect(service.getUserStatus()).resolves.toMatchObject({
       state: 'failed',
-      currentVersion: 'plugin-sync-failure',
+      currentVersion: 'old-healthy',
       targetVersion: 'plugin-sync-failure',
       failureCategory: 'post_install_failed',
       failureStage: 'sync_plugins',
@@ -853,8 +869,162 @@ describe('PrimaryRuntimeService', () => {
     })
   })
 
+  it('leaves fresh installs unavailable when post-install configuration fails', async () => {
+    const cacheRoot = await fixtureDirectory()
+    const archive = await releaseArchive({ bundleVersion: 'fresh-plugin-sync-failure' })
+    const service = new PrimaryRuntimeService({
+      locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+      cacheRoot,
+      diagnostics: new PrimaryRuntimeDiagnostics(),
+      releaseProvider: {
+        getRelease: async () => archive.descriptor,
+        downloadArchive: (descriptor, destinationPath) =>
+          writeFixtureArchive(descriptor, archive.bytes, destinationPath)
+      },
+      postActivation: async (result) => {
+        if (result?.version === 'fresh-plugin-sync-failure') {
+          throw new Error('Runtime plugin synchronization failed.')
+        }
+      }
+    })
+
+    await expect(service.installOrRepair()).rejects.toThrow('plugin synchronization failed')
+    await expect(service.loadDependencies()).rejects.toMatchObject({
+      name: 'PrimaryRuntimeUnavailableError'
+    })
+    await expect(service.getUserStatus()).resolves.toMatchObject({
+      state: 'failed',
+      targetVersion: 'fresh-plugin-sync-failure',
+      failureCategory: 'post_install_failed',
+      failureStage: 'sync_plugins',
+      failureDomain: 'post_install',
+      runtimeActive: false,
+      pluginReady: false
+    })
+  })
+
+  it('runs post-activation recovery before clearing an interrupted activation journal', async () => {
+    const cacheRoot = await fixtureDirectory()
+    await publishFixtureRuntime(cacheRoot, 'old-healthy')
+    const previousPointer = await new PrimaryRuntimeActivePointer(cacheRoot).read()
+    await publishFixtureRuntime(cacheRoot, 'interrupted-new-runtime')
+    const nextPointer = await new PrimaryRuntimeActivePointer(cacheRoot).read()
+    expect(previousPointer).not.toBeNull()
+    expect(nextPointer).not.toBeNull()
+    await writeFile(
+      join(cacheRoot, 'activation-journal.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        operationId: 'e9921a99-d8c3-4bb8-b7f2-6f5a19ef1ee2',
+        phase: 'readback',
+        prepared: {
+          version: nextPointer!.version,
+          archiveSha256: nextPointer!.archiveSha256,
+          versionDirectory: nextPointer!.directory,
+          manifestSha256: nextPointer!.manifestSha256
+        },
+        previousPointer
+      })}\n`,
+      'utf8'
+    )
+    const recoveredVersions: Array<string | null> = []
+    const service = new PrimaryRuntimeService({
+      locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+      cacheRoot,
+      diagnostics: new PrimaryRuntimeDiagnostics(),
+      releaseProvider: {
+        getRelease: async () => {
+          throw new Error('not used')
+        },
+        downloadArchive: vi.fn()
+      },
+      postActivation: async (result) => {
+        recoveredVersions.push(result?.version ?? null)
+        await expect(service.diagnoseDependencies()).resolves.toMatchObject({
+          status: 'ready',
+          manifest: expect.objectContaining({ bundleVersion: 'old-healthy' })
+        })
+      }
+    })
+
+    await expect(service.diagnoseDependencies()).resolves.toMatchObject({
+      status: 'ready',
+      manifest: expect.objectContaining({ bundleVersion: 'old-healthy' })
+    })
+    expect(recoveredVersions).toEqual(['old-healthy'])
+    await expect(readFile(join(cacheRoot, 'activation-journal.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
+  it('keeps an interrupted fresh activation journal until a recovery hook is registered', async () => {
+    const cacheRoot = await fixtureDirectory()
+    await publishFixtureRuntime(cacheRoot, 'interrupted-fresh-runtime')
+    const pointer = await new PrimaryRuntimeActivePointer(cacheRoot).read()
+    expect(pointer).not.toBeNull()
+    await writeFile(
+      join(cacheRoot, 'activation-journal.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        operationId: 'b513826c-fdd7-4028-9779-1cf99a7b711a',
+        phase: 'readback',
+        prepared: {
+          version: pointer!.version,
+          archiveSha256: pointer!.archiveSha256,
+          versionDirectory: pointer!.directory,
+          manifestSha256: pointer!.manifestSha256
+        },
+        previousPointer: null
+      })}\n`,
+      'utf8'
+    )
+    const service = new PrimaryRuntimeService({
+      locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+      cacheRoot,
+      diagnostics: new PrimaryRuntimeDiagnostics(),
+      releaseProvider: {
+        getRelease: async () => {
+          throw new Error('not used')
+        },
+        downloadArchive: vi.fn()
+      }
+    })
+
+    await expect(service.diagnoseDependencies()).resolves.toMatchObject({
+      status: 'ready',
+      manifest: expect.objectContaining({ bundleVersion: 'interrupted-fresh-runtime' })
+    })
+    await expect(readFile(join(cacheRoot, 'activation-journal.json'), 'utf8')).resolves.toContain(
+      'b513826c-fdd7-4028-9779-1cf99a7b711a'
+    )
+
+    const recovered: Array<string | null> = []
+    service.setPostActivationHook(async (result) => {
+      recovered.push(result?.version ?? null)
+    })
+    await expect(service.diagnoseDependencies({ recoverActivation: false })).resolves.toMatchObject(
+      {
+        status: 'ready',
+        manifest: expect.objectContaining({ bundleVersion: 'interrupted-fresh-runtime' })
+      }
+    )
+    expect(recovered).toEqual([])
+    await expect(readFile(join(cacheRoot, 'activation-journal.json'), 'utf8')).resolves.toContain(
+      'b513826c-fdd7-4028-9779-1cf99a7b711a'
+    )
+
+    await expect(service.diagnoseDependencies()).resolves.toMatchObject({
+      status: 'missing'
+    })
+    expect(recovered).toEqual([null])
+    await expect(readFile(join(cacheRoot, 'activation-journal.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
   it('preserves the precise safe stage when skill catalog reload fails', async () => {
     const cacheRoot = await fixtureDirectory()
+    await publishFixtureRuntime(cacheRoot, 'old-healthy')
     const archive = await releaseArchive({ bundleVersion: 'skill-reload-failure' })
     const service = new PrimaryRuntimeService({
       locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
@@ -865,14 +1035,18 @@ describe('PrimaryRuntimeService', () => {
         downloadArchive: (descriptor, destinationPath) =>
           writeFixtureArchive(descriptor, archive.bytes, destinationPath)
       },
-      postActivation: async () => {
-        throw new PrimaryRuntimePostInstallError('reload_skills', 'Skills catalog reload failed.')
+      postActivation: async (result) => {
+        if (result?.version === 'skill-reload-failure') {
+          throw new PrimaryRuntimePostInstallError('reload_skills', 'Skills catalog reload failed.')
+        }
       }
     })
 
     await expect(service.install()).rejects.toThrow('Skills catalog reload failed')
     await expect(service.getUserStatus()).resolves.toMatchObject({
       state: 'failed',
+      currentVersion: 'old-healthy',
+      targetVersion: 'skill-reload-failure',
       failureCategory: 'post_install_failed',
       failureStage: 'reload_skills',
       failureDomain: 'post_install',

@@ -499,18 +499,47 @@ test("P1 Office smoke uses only Runtime-owned OfficeCLI without browser screensh
   assert.match(materializerSource, /async function materializeOfficeCli/u);
   assert.match(materializerSource, /prebuilt-binary/u);
   assert.match(verifierSource, /officecli-version/u);
+  assert.match(verifierSource, /createOfficeCliIsolationContext/u);
+  assert.match(verifierSource, /probeOfficeCliIsolation/u);
+  assert.match(verifierSource, /runOfficeCliIsolated/u);
+  assert.match(verifierSource, /officeCliIsolationReceipt/u);
   assert.match(verifierSource, /officecli-create-\$\{kind\}-original/u);
+  assert.match(verifierSource, /officeCliFixtureRoot/u);
+  assert.match(verifierSource, /complex-existing\.docx/u);
+  assert.match(verifierSource, /complex-existing\.xlsx/u);
+  assert.match(verifierSource, /officecli-read-complex-docx-original/u);
+  assert.match(verifierSource, /officecli-read-complex-xlsx-original/u);
   assert.match(verifierSource, /officecli-add-docx-paragraph-copy/u);
   assert.match(verifierSource, /officecli-add-xlsx-cell-copy/u);
+  assert.match(verifierSource, /officecli-reread-xlsx-formula-copy/u);
+  assert.match(verifierSource, /officecli-reread-xlsx-chart-copy/u);
   assert.match(verifierSource, /officecli-validate-pptx-copy/u);
   assert.match(verifierSource, /officecli-view-pptx-svg-copy/u);
+  assert.match(verifierSource, /assertComplexDocxFixture/u);
+  assert.match(verifierSource, /assertComplexXlsxFixture/u);
+  assert.match(verifierSource, /readZipEntries/u);
+  assert.match(verifierSource, /resolveInvocation/u);
   assert.match(verifierSource, /jsonSuccess: parsed\.success/u);
   assert.match(verifierSource, /warningCount: warnings\.length/u);
+  assert.match(verifierSource, /expectedTextIncludes/u);
   assert.match(verifierSource, /OfficeCLI smoke modified original/u);
   assert.match(verifierSource, /OFFICECLI_SKIP_UPDATE: "1"/u);
   assert.match(verifierSource, /OFFICECLI_NO_AUTO_RESIDENT: "1"/u);
   assert.match(verifierSource, /PYTHONDONTWRITEBYTECODE: "1"/u);
   assert.doesNotMatch(verifierSource, /screenshot|presentation-plugin|build_deck_pptxgenjs/u);
+});
+
+test("P1 complex Office fixtures are checked in for copy-edit preservation smoke", async () => {
+  const fixturesRoot = resolve(import.meta.dirname, "../fixtures/officecli");
+  const [docx, xlsx] = await Promise.all([
+    readFile(join(fixturesRoot, "complex-existing.docx")),
+    readFile(join(fixturesRoot, "complex-existing.xlsx")),
+  ]);
+
+  assert.equal(docx.subarray(0, 2).toString("ascii"), "PK");
+  assert.equal(xlsx.subarray(0, 2).toString("ascii"), "PK");
+  assert.ok(docx.length > 1_000);
+  assert.ok(xlsx.length > 1_000);
 });
 
 test("platform validation restores each archived input mode from its manifest", async () => {

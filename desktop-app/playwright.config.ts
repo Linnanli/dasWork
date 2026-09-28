@@ -13,7 +13,10 @@ export default defineConfig({
       : ['primary-runtime-feed.e2e.ts']),
     ...(process.env.DASCOWORK_PRIMARY_RUNTIME_SYNTHETIC_FEED_E2E === '1'
       ? []
-      : ['primary-runtime-synthetic-feed.e2e.ts'])
+      : ['primary-runtime-synthetic-feed.e2e.ts']),
+    ...(process.env.DASCOWORK_PRIMARY_RUNTIME_PREVIEW_COMPARISON_E2E === '1'
+      ? []
+      : ['primary-runtime-preview-comparison.e2e.ts'])
   ],
   timeout: 60_000,
   expect: {

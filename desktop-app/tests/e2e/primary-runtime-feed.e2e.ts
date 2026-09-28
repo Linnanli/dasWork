@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { access, mkdir, readFile, readdir, utimes, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, readdir, utimes, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
@@ -16,6 +16,8 @@ import {
 import { createLocalProject, sendComposerMessage } from './support/chatActions'
 import {
   openR07PresentationInWorkspace,
+  renderedSlideMetrics,
+  verifyR07RenderedSlides,
   verifyR07Presentation,
   withR07PresentationWorkspace,
   type R07RenderQaReceipt,
@@ -26,6 +28,7 @@ import {
   requirePositiveDuration,
   type R07EvidenceObservations
 } from './support/primaryRuntimeEvidence'
+import { captureR07PreviewSlides } from './support/r07PreviewCapture'
 import {
   assistantMessageResponse,
   dynamicFunctionCallResponse,
@@ -44,6 +47,7 @@ const packagedExecutable = process.env['DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_E
 const p3bSampleOutput = process.env['DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_OUTPUT']?.trim()
 const p3bSampleIndex = Number(process.env['DASCOWORK_PRIMARY_RUNTIME_P3B_SAMPLE_INDEX'] ?? '0')
 const appToolsLiveTraceReportPath = process.env['DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT']?.trim()
+const r07VisualArtifactDirectory = process.env['DASCOWORK_R07_VISUAL_ARTIFACT_DIRECTORY']?.trim()
 const primaryRuntimeE2eTimeoutMs = 600_000
 const primaryRuntimeReadinessTimeoutMs = 300_000
 
@@ -75,6 +79,11 @@ type R07ArtifactPreviewTrace = {
   receiptId: string
   generation: number
   checksum: string
+}
+
+type R07ArtifactPreviewResult = {
+  trace: R07ArtifactPreviewTrace
+  renderQaReceipt: R07RenderQaReceipt
 }
 
 type RuntimeActivationTrace = {
@@ -333,10 +342,18 @@ test('AT-E2E-01/OFFICECLI-RUNTIME installs a signed Feed Runtime and creates an 
         )
         .toBe(true)
       await verifyR07Presentation(join(workspace.root, workspace.outputFile))
-      const renderQaReceipt = await expectR07QaOutputs(workspace)
+      await expectR07QaOutputs(workspace)
       evidenceRecorder.observe('artifact')
-      const previewTrace = await openR07PresentationPreviewAndReadArtifact(page, workspace)
+      const previewResult = await openR07PresentationPreviewAndReadArtifact(page, workspace)
       evidenceRecorder.observe('preview')
+      const exportedVisualArtifactDirectory = r07VisualArtifactDirectory
+        ? await exportR07VisualArtifacts({
+            directory: r07VisualArtifactDirectory,
+            workspace,
+            previewTrace: previewResult.trace,
+            renderQaReceipt: previewResult.renderQaReceipt
+          })
+        : undefined
       if (appToolsLiveTraceReportPath) {
         await writeR07LiveTraceReport({
           path: appToolsLiveTraceReportPath,
@@ -346,8 +363,9 @@ test('AT-E2E-01/OFFICECLI-RUNTIME installs a signed Feed Runtime and creates an 
           activation: runtimeActivation,
           loaderOutput: loaderOutput!,
           runtimeCommandOutput: runtimeCommandOutput!,
-          previewTrace,
-          renderQaReceipt,
+          previewTrace: previewResult.trace,
+          renderQaReceipt: previewResult.renderQaReceipt,
+          visualArtifactDirectory: exportedVisualArtifactDirectory,
           observations: evidenceRecorder.snapshot()
         })
       }
@@ -1044,9 +1062,7 @@ function readInstructionPath(
   return hasVersion ? path.replace(/ \([^\n]*\)$/u, '') : path
 }
 
-async function expectR07QaOutputs(
-  workspace: R07PresentationWorkspace
-): Promise<R07RenderQaReceipt> {
+async function expectR07QaOutputs(workspace: R07PresentationWorkspace): Promise<void> {
   const [layoutSource, validationSource, renderedSlides] = await Promise.all([
     readFile(join(workspace.root, workspace.layoutReceiptFile), 'utf8'),
     readFile(join(workspace.root, 'officecli-validation.json'), 'utf8'),
@@ -1069,7 +1085,7 @@ async function expectR07QaOutputs(
   expect(slideFiles).toEqual(
     Array.from({ length: 6 }, (_, index) => `slide-${String(index + 1).padStart(2, '0')}.svg`)
   )
-  const slides = await Promise.all(
+  await Promise.all(
     slideFiles.map(async (file, index) => {
       const svg = await readFile(
         join(workspace.root, workspace.renderedSlidesDirectory, file),
@@ -1081,27 +1097,15 @@ async function expectR07QaOutputs(
       expect(height).toBeGreaterThanOrEqual(500)
       expect(svg).toContain(workspace.expectedPageTypes[index]?.titleToken)
       expect(svg).toMatch(/<(?:rect|path|foreignObject|g)\b/u)
-      return {
-        file: `slide-${String(index + 1).padStart(2, '0')}.png`,
-        width,
-        height,
-        nonWhiteRatio: 0.2,
-        colorBucketCount: 24
-      }
     })
   )
-  const renderQaReceipt: R07RenderQaReceipt = {
-    schemaVersion: 'dascowork-r07-render-qa.v1',
-    slides
-  }
   await expect(access(join(workspace.root, workspace.contactSheetFile))).resolves.toBeUndefined()
-  return renderQaReceipt
 }
 
 async function openR07PresentationPreviewAndReadArtifact(
   page: Page,
   workspace: R07PresentationWorkspace
-): Promise<R07ArtifactPreviewTrace> {
+): Promise<R07ArtifactPreviewResult> {
   const sourceEvent = page.evaluate(
     () =>
       new Promise<string>((resolve, reject) => {
@@ -1149,12 +1153,99 @@ async function openR07PresentationPreviewAndReadArtifact(
   const workspacePresentationSha256 = await sha256File(presentationPath)
   expect(binary.content.checksum).toBe(workspacePresentationSha256)
   expect(binary.content.generation).toBeGreaterThan(0)
-  return {
+  const trace = {
     sourceId,
     receiptId,
     generation: binary.content.generation,
     checksum: binary.content.checksum
   }
+  const renderedSlideHashes = await writeDisplayedR07PreviewSlides(page, workspace)
+  const measuredReceipt = await verifyR07RenderedSlides(workspace)
+  const slides = await Promise.all(
+    measuredReceipt.slides.map(async (slide) => {
+      const sha256 = renderedSlideHashes.get(slide.file)
+      if (!sha256) throw new Error(`R07 preview did not capture ${slide.file}.`)
+      const metrics = await renderedSlideMetrics(
+        join(workspace.root, workspace.renderedSlidesDirectory, slide.file)
+      )
+      expect(metrics).toMatchObject({
+        width: slide.width,
+        height: slide.height,
+        nonWhiteRatio: slide.nonWhiteRatio,
+        colorBucketCount: slide.colorBucketCount
+      })
+      return {
+        ...slide,
+        sha256,
+        source: {
+          kind: 'electron-host-preview' as const,
+          artifactSourceId: trace.sourceId,
+          receiptId: trace.receiptId,
+          generation: trace.generation,
+          presentationSha256: trace.checksum
+        }
+      }
+    })
+  )
+  return {
+    trace,
+    renderQaReceipt: {
+      schemaVersion: 'dascowork-r07-render-qa.v1',
+      slides
+    }
+  }
+}
+
+async function writeDisplayedR07PreviewSlides(
+  page: Page,
+  workspace: R07PresentationWorkspace
+): Promise<Map<string, string>> {
+  const renderedRoot = join(workspace.root, workspace.renderedSlidesDirectory)
+  const slides = await captureR07PreviewSlides({ page, outputDirectory: renderedRoot })
+  return new Map(slides.map((slide) => [slide.file, slide.sha256]))
+}
+
+async function exportR07VisualArtifacts(input: {
+  directory: string
+  workspace: R07PresentationWorkspace
+  previewTrace: R07ArtifactPreviewTrace
+  renderQaReceipt: R07RenderQaReceipt
+}): Promise<string> {
+  const visualRoot = isAbsolute(input.directory)
+    ? input.directory
+    : join(input.workspace.root, input.directory)
+  const slidesRoot = join(visualRoot, 'slides')
+  await mkdir(slidesRoot, { recursive: true })
+  await Promise.all([
+    copyFile(
+      join(input.workspace.root, input.workspace.outputFile),
+      join(visualRoot, input.workspace.outputFile)
+    ),
+    copyFile(
+      join(input.workspace.root, input.workspace.contactSheetFile),
+      join(visualRoot, input.workspace.contactSheetFile)
+    ),
+    ...input.renderQaReceipt.slides.map((slide) =>
+      copyFile(
+        join(input.workspace.root, input.workspace.renderedSlidesDirectory, slide.file),
+        join(slidesRoot, slide.file)
+      )
+    )
+  ])
+  await writeFile(
+    join(visualRoot, 'r07-preview-render-receipt.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 'dascowork-r07-visual-artifacts.v1',
+        previewTrace: input.previewTrace,
+        renderReport: input.renderQaReceipt
+      },
+      null,
+      2
+    )}\n`,
+    { mode: 0o600 }
+  )
+  return visualRoot
 }
 
 async function triggerArtifactPreviewChangeRoundTrip(path: string): Promise<void> {
@@ -1172,6 +1263,7 @@ async function writeR07LiveTraceReport(input: {
   runtimeCommandOutput: string
   previewTrace: R07ArtifactPreviewTrace
   renderQaReceipt: R07RenderQaReceipt
+  visualArtifactDirectory?: string
   observations: R07EvidenceObservations
 }): Promise<void> {
   const appServerTrace = parseR07AppServerTrace(input.logs)
@@ -1227,7 +1319,14 @@ async function writeR07LiveTraceReport(input: {
       presentationSha256: input.previewTrace.checksum
     },
     renderReport: input.renderQaReceipt,
-    renderReportSha256
+    renderReportSha256,
+    ...(input.visualArtifactDirectory
+      ? {
+          visualArtifacts: {
+            directory: input.visualArtifactDirectory
+          }
+        }
+      : {})
   }
   await mkdir(dirname(input.path), { recursive: true })
   await writeFile(input.path, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 })

@@ -15,6 +15,7 @@ const packageJsonPath = resolve(appRoot, 'package.json')
 const playwrightConfigPath = resolve(appRoot, 'playwright.config.ts')
 const e2ePath = resolve(appRoot, 'tests/e2e/primary-runtime-feed.e2e.ts')
 const r07SupportPath = resolve(appRoot, 'tests/e2e/support/r07Presentation.ts')
+const r07PreviewCapturePath = resolve(appRoot, 'tests/e2e/support/r07PreviewCapture.ts')
 const runnerPath = resolve(appRoot, 'scripts/run-primary-runtime-feed-e2e.mjs')
 const packagedRunnerPath = resolve(appRoot, 'scripts/run-primary-runtime-packaged-feed-e2e.mjs')
 const officeSmokePath = resolve(appRoot, 'scripts/run-office-runtime-smoke.mjs')
@@ -50,6 +51,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     playwrightConfig,
     e2eSource,
     r07SupportSource,
+    r07PreviewCaptureSource,
     runnerSource,
     packagedRunnerSource,
     officeSmokeSource
@@ -58,6 +60,7 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
     readFile(playwrightConfigPath, 'utf8'),
     readFile(e2ePath, 'utf8'),
     readFile(r07SupportPath, 'utf8'),
+    readFile(r07PreviewCapturePath, 'utf8'),
     readFile(runnerPath, 'utf8'),
     readFile(packagedRunnerPath, 'utf8'),
     readFile(officeSmokePath, 'utf8')
@@ -103,6 +106,10 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.doesNotMatch(e2eSource, /render_slides\.py/u)
   assert.match(e2eSource, /runtimeOfficeCommandResponse/u)
   assert.match(e2eSource, /verifyR07Presentation/u)
+  assert.match(e2eSource, /verifyR07RenderedSlides/u)
+  assert.match(e2eSource, /writeDisplayedR07PreviewSlides/u)
+  assert.match(r07PreviewCaptureSource, /presentation-stage-image/u)
+  assert.match(r07PreviewCaptureSource, /captureR07PreviewSlides/u)
   assert.match(e2eSource, /openR07PresentationInWorkspace/u)
   assert.match(e2eSource, /cwd: workspace\.root/u)
   assert.match(e2eSource, /args: \[appRoot\]/u)
@@ -122,6 +129,9 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.doesNotMatch(skillLookupSource, /\.endsWith\(runtimeOfficeSkillSuffix\)/u)
   assert.match(e2eSource, /instructionsSha256/u)
   assert.match(e2eSource, /DASCOWORK_APP_TOOLS_LIVE_TRACE_REPORT/u)
+  assert.match(e2eSource, /DASCOWORK_R07_VISUAL_ARTIFACT_DIRECTORY/u)
+  assert.match(e2eSource, /exportR07VisualArtifacts/u)
+  assert.match(e2eSource, /r07-preview-render-receipt\.json/u)
   assert.match(e2eSource, /parseR07AppServerTrace/u)
   assert.match(e2eSource, /workspace\.artifacts\.onEvent/u)
   assert.match(e2eSource, /workspace\.artifacts\.readBinary/u)
@@ -158,6 +168,10 @@ test('signed Feed E2E stays outside fixture tests and runs only through its dedi
   assert.match(r07SupportSource, /dascowork-r07-render-qa\.v1/u)
   assert.match(r07SupportSource, /nonWhiteRatio/u)
   assert.match(r07SupportSource, /colorBucketCount/u)
+  assert.doesNotMatch(e2eSource, /nonWhiteRatio:\s*0\.2/u)
+  assert.doesNotMatch(e2eSource, /colorBucketCount:\s*24/u)
+  assert.match(e2eSource, /sha256/u)
+  assert.match(e2eSource, /electron-host-preview/u)
   assert.doesNotMatch(e2eSource, /join\(process\.env\.CODEX_HOME/u)
   assert.doesNotMatch(e2eSource, /readFileSync\(join\(skillRoot, 'SKILL\.md'\)/u)
   assert.match(e2eSource, /DASCOWORK_PRIMARY_RUNTIME_PACKAGED_APP_EXECUTABLE/u)

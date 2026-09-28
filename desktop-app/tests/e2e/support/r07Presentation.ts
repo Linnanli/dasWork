@@ -4,10 +4,10 @@ import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { expect, type Page } from '@playwright/test'
-import { createCanvas, loadImage } from '@napi-rs/canvas'
 import JSZip from 'jszip'
 
 import { appRoot, e2eTempRoot } from './app'
+import { measureR07RenderedSlide, type R07SlideMetrics } from './r07RenderMetrics'
 
 const execFile = promisify(execFileCallback)
 const r07AssertionTimeoutMs = 120_000
@@ -48,6 +48,14 @@ export type R07RenderedSlideMetric = {
   height: number
   nonWhiteRatio: number
   colorBucketCount: number
+  sha256?: string
+  source?: {
+    kind: 'electron-host-preview'
+    artifactSourceId: string
+    receiptId: string
+    generation: number
+    presentationSha256: string
+  }
 }
 
 export type R07RenderQaReceipt = {
@@ -160,10 +168,12 @@ export async function verifyR07Presentation(path: string): Promise<void> {
       hasChineseFont: true
     })
   } catch (error) {
-    const diagnostics = await readPptxRelationshipDiagnostics(path).catch((diagnosticError: unknown) => ({
-      diagnosticError:
-        diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)
-    }))
+    const diagnostics = await readPptxRelationshipDiagnostics(path).catch(
+      (diagnosticError: unknown) => ({
+        diagnosticError:
+          diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError)
+      })
+    )
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`${message}\nPPTX relationship diagnostics: ${JSON.stringify(diagnostics)}`)
   } finally {
@@ -204,32 +214,8 @@ export async function verifyR07RenderedSlides(
   }
 }
 
-async function renderedSlideMetrics(path: string): Promise<{
-  width: number
-  height: number
-  nonWhiteRatio: number
-  colorBucketCount: number
-}> {
-  const image = await loadImage(path)
-  const canvas = createCanvas(image.width, image.height)
-  const context = canvas.getContext('2d')
-  context.drawImage(image, 0, 0)
-  const { data } = context.getImageData(0, 0, image.width, image.height)
-  const buckets = new Set<string>()
-  let nonWhite = 0
-  for (let offset = 0; offset < data.length; offset += 4) {
-    const red = data[offset] ?? 0
-    const green = data[offset + 1] ?? 0
-    const blue = data[offset + 2] ?? 0
-    if (red < 245 || green < 245 || blue < 245) nonWhite += 1
-    buckets.add(`${red >> 4}:${green >> 4}:${blue >> 4}`)
-  }
-  return {
-    width: image.width,
-    height: image.height,
-    nonWhiteRatio: nonWhite / (image.width * image.height),
-    colorBucketCount: buckets.size
-  }
+export async function renderedSlideMetrics(path: string): Promise<R07SlideMetrics> {
+  return measureR07RenderedSlide(path)
 }
 
 async function readPptxRelationshipDiagnostics(path: string): Promise<{
@@ -258,12 +244,7 @@ async function readPptxRelationshipDiagnostics(path: string): Promise<{
     slides: await Promise.all(
       slidePaths.map(async (slidePath) => {
         const slideXml = await archive.file(slidePath)?.async('string')
-        const relationshipsPath = join(
-          'ppt',
-          'slides',
-          '_rels',
-          `${basename(slidePath)}.rels`
-        )
+        const relationshipsPath = join('ppt', 'slides', '_rels', `${basename(slidePath)}.rels`)
         const relationshipsXml = await archive.file(relationshipsPath)?.async('string')
         const chartTags = [...(slideXml ?? '').matchAll(/<[^>]*:chart\b[^>]*>/gu)].map(
           (match) => match[0]

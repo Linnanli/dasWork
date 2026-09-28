@@ -102,6 +102,7 @@ export class BundledPluginManager {
     const failures: BundledPluginReconcileFailure[] = []
     let catalogReadFailures = 0
     let rollbackRuntimeSkills: (() => Promise<void>) | undefined
+    const retiredDuringReconcile: BundledPluginDescriptor[] = []
 
     for (const descriptor of this.descriptors) {
       if (!descriptor.installWhenMissing) continue
@@ -156,10 +157,13 @@ export class BundledPluginManager {
           continue
         try {
           const item = await this.retireOne(descriptor)
-          if (item) reconciled.push(item)
+          if (item) {
+            reconciled.push(item)
+            retiredDuringReconcile.push(descriptor)
+          }
         } catch (error) {
-          await this.restoreRetiredPlugin(descriptor).catch(() => undefined)
           failures.push({ descriptor, stage: 'sync_plugins', message: messageFor(error) })
+          await this.restoreRetiredPlugins([...retiredDuringReconcile, descriptor], failures)
           break
         }
       }
@@ -175,9 +179,15 @@ export class BundledPluginManager {
           message: `Runtime-owned skill rollback failed: ${messageFor(error)}`
         })
       }
-      await this.input.catalogClient
-        .listSkillsForManagement({ forceReload: true })
-        .catch(() => undefined)
+      try {
+        await this.input.catalogClient.listSkillsForManagement({ forceReload: true })
+      } catch (error) {
+        failures.push({
+          ...(this.descriptors[0] ? { descriptor: this.descriptors[0] } : {}),
+          stage: 'reload_skills',
+          message: `Runtime-owned skill rollback reload failed: ${messageFor(error)}`
+        })
+      }
     }
 
     const installableDescriptorCount = this.descriptors.filter(
@@ -206,6 +216,27 @@ export class BundledPluginManager {
       enabled: true
     })
     await this.invalidateCaches()
+  }
+
+  private async restoreRetiredPlugins(
+    descriptors: readonly BundledPluginDescriptor[],
+    failures: BundledPluginReconcileFailure[]
+  ): Promise<void> {
+    const unique = new Map<string, BundledPluginDescriptor>()
+    for (const descriptor of descriptors) {
+      unique.set(`${descriptor.marketplaceName}\u0000${descriptor.pluginName}`, descriptor)
+    }
+    for (const descriptor of [...unique.values()].reverse()) {
+      try {
+        await this.restoreRetiredPlugin(descriptor)
+      } catch (restoreError) {
+        failures.push({
+          descriptor,
+          stage: 'sync_plugins',
+          message: `Retired Primary Runtime plugin restore failed: ${messageFor(restoreError)}`
+        })
+      }
+    }
   }
 
   private async reconcileOne(
