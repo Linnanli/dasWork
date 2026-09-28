@@ -371,6 +371,8 @@ test('Primary Runtime CI has only the reviewed engineering artifact path', async
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime-real/u)
   assert.match(buildWorkflow, /P3a stress-install the downloaded archive/u)
   assert.match(buildWorkflow, /npm --prefix desktop-app run test:primary-runtime:stress/u)
+  assert.match(buildWorkflow, /DASCOWORK_PRIMARY_RUNTIME_STRESS_REPORT="\$target_root\/install-stress-memory\.json"/u)
+  assert.match(buildWorkflow, /cp "\$target_root\/install-stress-memory\.json" "\$staging_root\/"/u)
   assert.ok(
     buildWorkflow.indexOf('Produce five P1a build and unpack measurements') <
       buildWorkflow.indexOf('P3a install the downloaded archive through the real desktop installer')
