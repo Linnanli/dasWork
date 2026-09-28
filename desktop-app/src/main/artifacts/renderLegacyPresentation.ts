@@ -1,5 +1,5 @@
-import { mkdir, readdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import type { ArtifactPresentationRenderResult } from '../../shared/artifactPreviewApi'
@@ -7,54 +7,102 @@ import type { ArtifactPresentationRenderResult } from '../../shared/artifactPrev
 const MAX_SLIDES = 30
 const MAX_PNG_BYTES = 30 * 1024 * 1024
 
+type LegacyProcessResult = {
+  stdout: string
+  stderr: string
+}
+
 /** Compatibility path for already-installed v1/v2 Runtime archives during rollback. */
 export async function renderLegacyPresentation(
   inputPath: string,
   root: string,
   binaries: { soffice: string; pdftoppm: string },
-  runProcess: (command: string, args: readonly string[]) => Promise<unknown>
+  runProcess: (
+    command: string,
+    args: readonly string[],
+    environment: NodeJS.ProcessEnv
+  ) => Promise<LegacyProcessResult>,
+  options: { chineseFontPath?: string; platform?: NodeJS.Platform } = {}
 ): Promise<ArtifactPresentationRenderResult['slides']> {
   const outputDirectory = join(root, 'output')
   const profileDirectory = join(root, 'libreoffice-profile')
   const slidesDirectory = join(root, 'slides')
   await Promise.all([mkdir(outputDirectory), mkdir(profileDirectory), mkdir(slidesDirectory)])
+  // Match the verified v2 skill's headless and Windows profile environment.
+  const platform = options.platform ?? process.platform
+  const environment: NodeJS.ProcessEnv = { SAL_USE_VCLPLUGIN: 'svp' }
+  if (platform === 'win32') {
+    const appData = join(profileDirectory, 'AppData')
+    environment.USERPROFILE = profileDirectory
+    environment.APPDATA = join(appData, 'Roaming')
+    environment.LOCALAPPDATA = join(appData, 'Local')
+    await Promise.all([
+      mkdir(environment.APPDATA, { recursive: true }),
+      mkdir(environment.LOCALAPPDATA, { recursive: true })
+    ])
+  }
+  if (platform === 'linux' && options.chineseFontPath) {
+    const fontDirectory = dirname(options.chineseFontPath)
+    const fontCache = join(root, 'font-cache')
+    const fontConfig = join(root, 'fonts.conf')
+    await mkdir(fontCache)
+    await writeFile(
+      fontConfig,
+      `<?xml version="1.0"?><fontconfig><include ignore_missing="yes">/etc/fonts/fonts.conf</include><dir>${escapeXml(fontDirectory)}</dir><cachedir>${escapeXml(fontCache)}</cachedir></fontconfig>`
+    )
+    environment.FONTCONFIG_FILE = fontConfig
+    environment.FONTCONFIG_PATH = fontDirectory
+  }
 
-  await runProcess(binaries.soffice, [
-    '--headless',
-    '--nologo',
-    '--nodefault',
-    '--nofirststartwizard',
-    '--norestore',
-    `-env:UserInstallation=${pathToFileURL(profileDirectory).toString()}`,
-    '--convert-to',
-    'pdf',
-    '--outdir',
-    outputDirectory,
-    inputPath
-  ])
+  const conversion = await runProcess(
+    binaries.soffice,
+    [
+      '--headless',
+      '--nologo',
+      '--nodefault',
+      '--nofirststartwizard',
+      '--norestore',
+      `-env:UserInstallation=${pathToFileURL(profileDirectory).toString()}`,
+      '--convert-to',
+      'pdf:impress_pdf_Export',
+      '--outdir',
+      outputDirectory,
+      inputPath
+    ],
+    environment
+  )
 
-  const pdfPath = await findConvertedPdf(outputDirectory)
+  const pdfPath = await findConvertedPdf(outputDirectory, inputPath, conversion)
   const slidePrefix = join(slidesDirectory, 'slide')
-  await runProcess(binaries.pdftoppm, [
-    '-png',
-    '-r',
-    '144',
-    '-f',
-    '1',
-    '-l',
-    String(MAX_SLIDES + 1),
-    pdfPath,
-    slidePrefix
-  ])
+  await runProcess(
+    binaries.pdftoppm,
+    ['-png', '-r', '144', '-f', '1', '-l', String(MAX_SLIDES + 1), pdfPath, slidePrefix],
+    environment
+  )
   return readRenderedSlides(slidesDirectory)
 }
 
-async function findConvertedPdf(outputDirectory: string): Promise<string> {
-  const files = await readdir(outputDirectory)
-  const pdfs = files.filter((file) => file.toLowerCase().endsWith('.pdf')).sort()
-  if (pdfs.length === 0)
-    throw new Error('LibreOffice did not produce a PDF for presentation preview.')
-  return join(outputDirectory, pdfs[0])
+async function findConvertedPdf(
+  outputDirectory: string,
+  inputPath: string,
+  conversion: LegacyProcessResult
+): Promise<string> {
+  const outputFiles = await readdir(outputDirectory)
+  const outputPdfs = outputFiles.filter((file) => file.toLowerCase().endsWith('.pdf')).sort()
+  if (outputPdfs.length > 0) return join(outputDirectory, outputPdfs[0])
+
+  const siblingFiles = await readdir(dirname(inputPath)).catch(() => [])
+
+  throw new Error(
+    [
+      'LibreOffice did not produce a PDF for presentation preview.',
+      `outputDirectory=${outputDirectory}`,
+      `outputFiles=${formatDirectoryEntries(outputFiles)}`,
+      `inputDirectoryFiles=${formatDirectoryEntries(siblingFiles)}`,
+      `stdout=${safeProcessOutput(conversion.stdout)}`,
+      `stderr=${safeProcessOutput(conversion.stderr)}`
+    ].join(' ')
+  )
 }
 
 async function readRenderedSlides(
@@ -93,4 +141,27 @@ async function readRenderedSlides(
 function slideNumber(file: string): number | null {
   const match = /^slide-(\d+)\.png$/u.exec(file)
   return match ? Number.parseInt(match[1], 10) : null
+}
+
+function formatDirectoryEntries(entries: readonly string[]): string {
+  return entries.length > 0 ? entries.slice(0, 20).join(',') : '<empty>'
+}
+
+function safeProcessOutput(value: string | undefined): string {
+  const trimmed = value?.trim()
+  if (!trimmed) return '<empty>'
+  return JSON.stringify(trimmed.slice(-1000))
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[<>&"']/gu, (character) => {
+    const escaped: Record<string, string> = {
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      '"': '&quot;',
+      "'": '&apos;'
+    }
+    return escaped[character]
+  })
 }

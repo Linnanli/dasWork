@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -12,7 +12,11 @@ const allowedDocuments = new Set<string>()
 let previewSession: Session | undefined
 
 /** Renders OfficeCLI's browser-independent SVG using the Chromium already bundled with Electron. */
-export async function rasterizePresentationSvg(svg: string, timeoutMs: number): Promise<Buffer> {
+export async function rasterizePresentationSvg(
+  svg: string,
+  timeoutMs: number,
+  chineseFontPath: string
+): Promise<Buffer> {
   const { width, height } = svgDimensions(svg)
   const directory = await mkdtemp(join(tmpdir(), 'dascowork-office-svg-'))
   const svgPath = join(directory, 'slide.svg')
@@ -20,7 +24,12 @@ export async function rasterizePresentationSvg(svg: string, timeoutMs: number): 
   let window: import('electron').BrowserWindow | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    await writeFile(svgPath, svg)
+    // The path comes only from the verified Main-owned Runtime dependency
+    // snapshot. Embed its bytes so the isolated document needs no file or
+    // network access for fonts, and keeps the deck's existing font choices.
+    const font = await readFile(chineseFontPath)
+    const fontStyle = `<style>@font-face{font-family:"Noto Sans CJK SC";src:url("data:font/otf;base64,${font.toString('base64')}") format("opentype");font-style:normal;font-weight:normal;}</style>`
+    await writeFile(svgPath, svg.replace(/(<svg\b[^>]*>)/u, `$1${fontStyle}`))
     const electron = await import('electron')
     await electron.app.whenReady()
     const isolatedSession = getPreviewSession(electron.session)
@@ -47,6 +56,18 @@ export async function rasterizePresentationSvg(svg: string, timeoutMs: number): 
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     const render = async (): Promise<Buffer> => {
       await window!.loadFile(svgPath)
+      // Only this fixed Main-owned expression executes. Document scripts stay
+      // disabled; font loading and its layout must finish before capture.
+      const fontLoaded = await window!.webContents.executeJavaScriptInIsolatedWorld(1001, [
+        {
+          code: `document.fonts.load('16px "Noto Sans CJK SC"', '中文').then(async faces => {
+          await document.fonts.ready;
+          return faces.length > 0 && faces.every(face => face.status === 'loaded');
+        })`
+        }
+      ])
+      if (!fontLoaded)
+        throw new Error('Presentation preview could not load the Runtime Chinese font.')
       const image = await window!.webContents.capturePage({ x: 0, y: 0, width, height })
       if (image.isEmpty()) throw new Error('Presentation SVG rendered an empty image.')
       return image.toPNG()

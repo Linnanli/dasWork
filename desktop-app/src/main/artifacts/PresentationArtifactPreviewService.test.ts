@@ -65,6 +65,7 @@ describe('PresentationArtifactPreviewService', () => {
       expect.any(Object)
     )
     expect(rasterizeSvg).toHaveBeenCalledTimes(2)
+    expect(rasterizeSvg).toHaveBeenCalledWith(slideSvg, expect.any(Number), '/runtime/noto.otf')
     await expect(access(root)).rejects.toThrow()
   })
 
@@ -73,6 +74,13 @@ describe('PresentationArtifactPreviewService', () => {
     await expect(service.render(sourceId)).rejects.toThrow(
       'Primary Runtime is missing the required presentation preview binary: officecli.'
     )
+  })
+
+  it('requires the verified Runtime Chinese font before rendering OfficeCLI slides', async () => {
+    const runProcess = vi.fn()
+    const service = createService({ fonts: {}, runProcess })
+    await expect(service.render(sourceId)).rejects.toThrow('preview font: noto-sans-cjk-sc')
+    expect(runProcess).not.toHaveBeenCalled()
   })
 
   it('preserves the v2 LibreOffice preview path for rollback archives', async () => {
@@ -185,6 +193,7 @@ async function tempDirectory(): Promise<string> {
 function createService(
   input: {
     binaries?: Record<string, string>
+    fonts?: Record<string, string>
     runProcess?: NonNullable<
       ConstructorParameters<typeof PresentationArtifactPreviewService>[0]['runProcess']
     >
@@ -213,7 +222,7 @@ function createService(
       node: '/runtime/node',
       nodeModules: '/runtime/node_modules',
       binaries: input.binaries ?? { officecli: '/runtime/officecli' },
-      fonts: {},
+      fonts: input.fonts ?? { 'noto-sans-cjk-sc': '/runtime/noto.otf' },
       text: ''
     }),
     runProcess:

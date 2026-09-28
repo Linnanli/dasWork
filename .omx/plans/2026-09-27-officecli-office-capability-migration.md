@@ -38,6 +38,14 @@
 
 最终本机完整 R07 控制通过（约 2.2 分钟），真实签名 Feed、聊天、技能/loader、正常命令、文件变化、六页实图和 app-server 证据均通过。原始 PPTX、PNG、总览、逐页哈希与上下文保存在 `docs/verification/officecli-runtime-migration/2026-09-28/darwin-x64-r07-control/`，绑定该运行的真实 darwin-x64 归档及当前工作区文件哈希。相关单元 16 项、真实 Electron 回归 2 项、Runtime 77 项（另 4 项因平台/沙箱跳过）、发布契约 44 项、构建、类型和 lint 验证通过；本机控制不替代四平台原生验证、旧/新视觉比较、十样本预算校准与最终验收。
 
+修复提交 `4aedacd81e715ccbe4692e3088faa14d46c33f15` 已推送。新四目标 `calibrate` 运行 [36387113375](https://github.com/Linnanli/dasWork/actions/runs/36387113375) 于 2026-09-28 06:34:04 UTC 创建，已确认绑定该提交并处于 `in_progress`。按约定在此暂停，等待用户告知完成后再读取原生 Windows、四平台产物、实图与预算结果；A1–A9 仍未全部接受。
+
+用户再次报告报错后，运行 `36387113375` 确认四目标原生构建/输入/归档验证、Windows 正反对照及四目标完整迁移矩阵均通过；macOS 两目标 P3 通过。Linux R07 的真实图片中文显示为方框，摘要非白比例只有 `0.0026649305555555554`；Main SVG 现加载健康 Runtime 的锁定中文字体，在固定隔离脚本中等待字体与布局后截图，保持文档脚本/Node/外部请求禁用。Windows R07 通过，但旧预览没有转换出 PDF；对齐历史 v2 已验证的 Impress 导出格式、headless 与 Windows profile 环境，并补 stdout/stderr/目录诊断，不增加无证据的成功兜底。旧 Linux 转换也配置 Runtime 字体与隔离缓存。
+
+本机实际 Electron 字体控制及完整 R07（约 3.3 分钟）通过；摘要真实非白比例为 `0.018167558834876543`，原六页 PNG 标准保持。打开预览等待与 Main 120 秒多页预算对齐，文件事件仍为 20 秒。原始证据保存在 `docs/verification/officecli-runtime-migration/2026-09-28/darwin-x64-r07-font-control/`；相关单元 15 项、发布契约 44 项通过。Windows/Linux 的新原生预览、旧/新人工视觉检查、新四目标校准审查和最终门禁仍待完成，不能宣布 A1–A9 完成。
+
+本轮最终桌面构建与 Node/Web 类型检查通过；完整 lint 为 0 错误、539 条既有警告，变更文件 lint 和 `git diff --check` 通过。上述验证覆盖当前修复；四平台原生结果仍须由新 `calibrate` 运行确认。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

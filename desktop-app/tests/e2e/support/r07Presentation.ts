@@ -312,7 +312,11 @@ export async function openR07PresentationInWorkspace(
     rightPanel.locator(`[role="tab"][data-workspace-tab-id="artifact:workspace:${outputFile}"]`)
   ).toBeVisible()
   await expect(rightPanel.locator('[data-slot="artifact-tab-content"]')).toBeVisible()
-  await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toBeVisible()
+  // Main permits up to 120 seconds for a complete multi-slide render. Wait
+  // for that result rather than applying Playwright's 20-second UI default.
+  await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toBeVisible({
+    timeout: r07AssertionTimeoutMs
+  })
   await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 6')
 }
 

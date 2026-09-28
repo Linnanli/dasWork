@@ -72,6 +72,24 @@ Windows 改为在受限目标内通过 `CreateProcessW` 与 `GetLastError()` 记
 
 本轮最终相关单元 4 文件、16 项通过，真实 Electron 交互回归 2 项通过；Runtime 77 项通过、4 项因主机/沙箱限制跳过，其中原生 Windows 2 项仍待 CI；Windows 相关本地测试为 11 项通过、2 项跳过。发布契约 44 项、桌面构建、Node/Web 类型检查、完整 lint、变更文件 lint 与 diff 检查通过。完整 lint 有既有格式警告。该本机控制使用确定性外部模型响应，仅复验 darwin-x64 功能，不是十样本性能校准、四平台验收或旧/新视觉比较；A1–A9 仍未全部接受。
 
+修复提交 `4aedacd81e715ccbe4692e3088faa14d46c33f15` 已推送。新的四目标 `calibrate` 运行 [36387113375](https://github.com/Linnanli/dasWork/actions/runs/36387113375) 于 2026-09-28 06:34:04 UTC 创建，已确认 `headSha` 与该提交一致，状态为 `in_progress`。按约定在此暂停，待用户告知运行完成后再检查 Windows 原生正反对照、四平台真实 R07/迁移、图片与校准结果；未读取新运行的最终结果，完整计划尚未验收。
+
+### 36387113375：字体与旧预览转换修复
+
+用户报告报错后恢复检查，确认该运行最终失败。四目标原生构建、隔离输入验证与归档执行均通过，Windows 子进程正反对照也已进入通过的验证步骤；四目标完整 v2/v3 迁移矩阵全部通过。macOS 两目标的 P3 校准、真实 R07 和旧/新预览自动取证通过。Windows R07 通过，随后旧预览失败；Linux R07 在实际像素检查失败，不能据此接受完整四平台结果。
+
+- Linux：保留的六页 PNG 显示中文为方框；摘要页实际非白比例为 `0.0026649305555555554`，低于原 `0.01`。Main 的 SVG 截图未载入 Runtime 自带字体，依赖宿主字体。现由健康 Runtime 的 `fonts` 路径读取 Noto Sans CJK SC，以数据字体放入隔离 SVG；Main 固定表达式在独立脚本环境等待字体及排版就绪，再截图。文档脚本、Node、外部请求仍禁用，字体路径不接受 Renderer 输入，原像素门槛和 Main 渲染预算保持。
+- 字体等待控制：真实 Electron 证明在文档脚本禁用时，Main 普通脚本调用不能完成该等待，而固定隔离脚本可以；采用 [Electron 隔离脚本接口](https://www.electronjs.org/docs/latest/api/web-contents#contentsexecutejavascriptinisolatedworldworldid-scripts-usergesture) 与 [FontFaceSet.ready](https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/ready) 的字体/排版完成条件。真实截图中的中文已检查，不能用模拟 API 返回成功替代渲染证明。
+- Windows：Main 明确报 `LibreOffice did not produce a PDF for presentation preview.`，不是单纯界面等待。旧 generic v2 的真实入口是 `soffice.com`。转换现使用历史 v2 技能验证过的 `pdf:impress_pdf_Export`，复用 `SAL_USE_VCLPLUGIN=svp` 与隔离 Windows profile/AppData 环境；无 PDF 时保留实际目录、stdout/stderr。未加入没有证据支持的 PDF 路径兜底；原生 Windows 是否恢复仍待下一运行验证。
+- 旧版 Linux 预览也须加载 Runtime 字体：仅为旧转换进程提供隔离 fontconfig 和可写字体缓存，沿用历史 v2 原生验证的字体配置方式。
+- 本机完整 R07 初次在 20 秒时仍显示“正在生成预览”，未出现 Main 转换错误。打开预览的等待现使用已有 120 秒 R07 预算，与 Main 的完整多页渲染预算一致；文件变化事件仍保持原 20 秒。
+
+完整本机 R07 控制随后通过（1 项，约 3.3 分钟）：签名 Feed、普通聊天、实际 app-server 技能/loader/命令、文件事件、六页 PNG、哈希、真实像素与总览均通过。摘要页非白比例为 `0.018167558834876543`，六页均通过原像素标准。原始 [总览图](officecli-runtime-migration/2026-09-28/darwin-x64-r07-font-control/r07-contact-sheet.png)、[逐页回执](officecli-runtime-migration/2026-09-28/darwin-x64-r07-font-control/r07-preview-render-receipt.json)、PPTX/PNG 与 [控制上下文](officecli-runtime-migration/2026-09-28/darwin-x64-r07-font-control/control-context.json) 已保存并核对哈希。控制使用此前真实 darwin-x64 归档和确定性外部模型响应，证明本机字体及桌面链路；不替代 Windows/Linux 原生复跑、十样本预算、旧/新逐页视觉验收或最终门禁。完整 A1–A9 仍未全部接受。
+
+相关单元 3 文件、15 项通过，发布契约 44 项通过；后者含真实 HTTPS 握手，需要允许本地回环端口。字体加载失败时不截图、字体加载完成前不截图、外部请求阻断、临时文件清理、旧转换 filter/环境/fontconfig 与错误输出有针对性回归。Windows 分支的独立复查未发现新实质缺陷，仍保留原生 CI 验证缺口。
+
+最终桌面构建、Node/Web 类型检查通过；完整 lint 为 0 错误、539 条既有警告，所有变更 TypeScript 文件单独 lint 无输出，`git diff --check` 通过。工作流路径过滤已包含 Main 预览实现，后续预览代码变化会进入 Runtime 验证。当前验证不能替代新的四平台原生预览、校准审查与最终发布门禁。
+
 ## 历史实现与验证版本
 
 - OfficeCLI：`v1.0.152`；四个平台的原生工件由 `primary-runtime/runtime-sources.lock.json` 锁定来源、版本、SHA-256 和许可证。

@@ -41,13 +41,13 @@ export type PresentationArtifactPreviewServiceOptions = {
   artifacts: Pick<ArtifactPreviewSourceService, 'readBinary'>
   loadDependencies(): Promise<WorkspaceDependencyLoadResult>
   runProcess?: ProcessRunner
-  rasterizeSvg?: (svg: string, timeoutMs: number) => Promise<Buffer>
+  rasterizeSvg?: typeof rasterizePresentationSvg
   createTempDirectory?: () => Promise<string>
 }
 
 export class PresentationArtifactPreviewService {
   private readonly runProcess: ProcessRunner
-  private readonly rasterizeSvg: (svg: string, timeoutMs: number) => Promise<Buffer>
+  private readonly rasterizeSvg: typeof rasterizePresentationSvg
   private readonly createTempDirectory: () => Promise<string>
 
   constructor(private readonly options: PresentationArtifactPreviewServiceOptions) {
@@ -82,6 +82,12 @@ export class PresentationArtifactPreviewService {
         'Primary Runtime is missing the required presentation preview binary: officecli.'
       )
     }
+    const chineseFont = dependencies.fonts['noto-sans-cjk-sc']
+    if (officecli && !chineseFont) {
+      throw new Error(
+        'Primary Runtime is missing the required presentation preview font: noto-sans-cjk-sc.'
+      )
+    }
 
     const root = await this.createTempDirectory()
     const deadline = Date.now() + PRESENTATION_RENDER_TOTAL_TIMEOUT_MS
@@ -93,7 +99,9 @@ export class PresentationArtifactPreviewService {
           inputPath,
           root,
           legacyBinaries,
-          (command, args) => this.runProcess(command, args, processOptions(root, deadline))
+          (command, args, environment) =>
+            this.runProcess(command, args, processOptions(root, deadline, environment)),
+          { chineseFontPath: chineseFont }
         )
         return artifactPresentationRenderResultSchema.parse({
           version: ARTIFACT_PREVIEW_API_VERSION,
@@ -117,7 +125,11 @@ export class PresentationArtifactPreviewService {
           ['view', inputPath, 'svg', '--start', String(number), '--end', String(number)],
           processOptions(root, deadline)
         )
-        const png = await this.rasterizeSvg(readSlideSvg(result.stdout), remainingTime(deadline))
+        const png = await this.rasterizeSvg(
+          readSlideSvg(result.stdout),
+          remainingTime(deadline),
+          chineseFont!
+        )
         if (!png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
           throw new Error(`Presentation renderer produced an invalid PNG for slide ${number}.`)
         }
@@ -182,7 +194,11 @@ function remainingTime(deadline: number): number {
   return Math.min(remaining, PRESENTATION_RENDER_TIMEOUT_MS)
 }
 
-function processOptions(root: string, deadline: number): Parameters<ProcessRunner>[2] {
+function processOptions(
+  root: string,
+  deadline: number,
+  environment: NodeJS.ProcessEnv = {}
+): Parameters<ProcessRunner>[2] {
   return {
     cwd: root,
     env: {
@@ -195,7 +211,8 @@ function processOptions(root: string, deadline: number): Parameters<ProcessRunne
       TEMP: root,
       TMP: root,
       OFFICECLI_SKIP_UPDATE: '1',
-      OFFICECLI_NO_AUTO_RESIDENT: '1'
+      OFFICECLI_NO_AUTO_RESIDENT: '1',
+      ...environment
     },
     timeoutMs: remainingTime(deadline),
     maxOutputBytes: PRESENTATION_RENDER_MAX_OUTPUT_BYTES
