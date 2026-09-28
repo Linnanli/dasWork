@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-p1a-build-unpack-measurement.v1",
+  "target": "linux-x64",
+  "archiveSha256": "bf280a29ee8ab325712bf4e984f67092b8b0e1fffab7604a0cb7c01245cc3a28",
+  "archiveBytes": 179820851,
+  "unpackedBytes": 351018639,
+  "entryCount": 132,
+  "sourceLockSha256": "1a16a06ac2e4978314c7d2484dc879cf2f8bac71bb94bf138535c4a838f34420",
+  "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+  "inputManifestSha256": "00b49ad313e9ba51f0625d69036f2851932c4726989383eb9fc479930a183010",
+  "inputFileManifestSha256": "26ecc2a4d5355b8bdb9dc083e9afbddb52bc6079863ed5d8b1993e76ca32d553",
+  "canonicalFileManifestSha256": "c2a710b7055116619b7657210d242d945b433e45ebe0e9f50cf4a53959192488",
+  "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+  "runner": "ubuntu-24.04",
+  "releaseClass": "engineering-candidate",
+  "productionTrust": false
+}

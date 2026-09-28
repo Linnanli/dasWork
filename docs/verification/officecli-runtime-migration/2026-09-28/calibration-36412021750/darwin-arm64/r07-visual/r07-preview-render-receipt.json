@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "c72412742f9b4beba62874cf76b764b9",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 50,
+        "sha256": "04e2c0be52e881a892a6eb17f8d179edcd465434a35624dba9ee78aab1a5e9f9",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.17847463348765433,
+        "colorBucketCount": 179,
+        "sha256": "e06c0e778bd0392acda513cbc112276877df961d1ba4b785db129c1224016c37",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.020218460648148147,
+        "colorBucketCount": 16,
+        "sha256": "6b8bba6d64efb1271d3ef8dadb4a4a5f6751c92c33e2c7a642e63a51f6b78cc2",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.28249903549382716,
+        "colorBucketCount": 64,
+        "sha256": "b4260a24276e6785d6bc6be6fed7af4cca45ce7272ea828b91534ca86aec4de6",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08654803240740741,
+        "colorBucketCount": 37,
+        "sha256": "f89ae9f55c5821b9ebf3f3ebe5992777d7f90bfc63abd2b024ee13d15e6814e3",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.03252797067901234,
+        "colorBucketCount": 241,
+        "sha256": "507da0b9e7f9abcdaaf5198b7e50dc0058113b4dee51d7f36bc9c79b01e78b39",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "c72412742f9b4beba62874cf76b764b9",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+        }
+      }
+    ]
+  }
+}

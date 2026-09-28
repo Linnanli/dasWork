@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-performance-target.v1",
+  "target": "darwin-x64",
+  "evidence": {
+    "sourceRunId": "36412021750",
+    "sourceCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+    "installerCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "1a16a06ac2e4978314c7d2484dc879cf2f8bac71bb94bf138535c4a838f34420",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "runner": "macos-15-intel"
+  },
+  "runner": "macos-15-intel",
+  "candidateArchiveSha256": "d889b4f10d61f165985da11666ee97c92645d1c3b1c9706cf4ce7f8f3271b4fa",
+  "p1aBuildUnpackReceiptSha256": "77d00c902f7bcfa9df398422fe0cc956819244310d3e7a4b6512908ec58a45e5",
+  "archiveBytes": [
+    116313330,
+    116313331,
+    116313331,
+    116313330,
+    116313331
+  ],
+  "unpackedBytes": [
+    174667171,
+    174667171,
+    174667171,
+    174667171,
+    174667171
+  ],
+  "minimumAvailableDiskBytes": [
+    108981596160,
+    108949938176,
+    108920815616,
+    108961148928,
+    108928962560,
+    108912635904,
+    108902309888,
+    108902047744,
+    108900319232,
+    108878147584
+  ],
+  "coldInstallMs": [
+    40525,
+    20952,
+    21770,
+    26724,
+    21681,
+    21280,
+    22175,
+    21270,
+    23460,
+    22333
+  ],
+  "mainEventLoopDelayP99Ms": [
+    16,
+    11,
+    11,
+    11,
+    9,
+    10,
+    10,
+    9,
+    13,
+    9
+  ],
+  "mainEventLoopDelayMaxMs": [
+    326,
+    126,
+    174,
+    171,
+    126,
+    84,
+    127,
+    154,
+    137,
+    159
+  ],
+  "chatInstallOverlapMs": [
+    4049,
+    1948,
+    2515,
+    2582,
+    1673,
+    2280,
+    1442,
+    3092,
+    3235,
+    3134
+  ]
+}

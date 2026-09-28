@@ -8,7 +8,13 @@ import { expect, type Page } from '@playwright/test'
 import JSZip from 'jszip'
 
 import { appRoot, e2eTempRoot } from './app'
-import { measureR07RenderedSlide, type R07SlideMetrics } from './r07RenderMetrics'
+import {
+  assertR07ChartLabelMetrics,
+  measureR07RenderedSlide,
+  type R07ChartLabelRatios,
+  type R07RenderMetricOptions,
+  type R07SlideMetrics
+} from './r07RenderMetrics'
 
 const execFile = promisify(execFileCallback)
 const r07AssertionTimeoutMs = 120_000
@@ -49,6 +55,7 @@ export type R07RenderedSlideMetric = {
   height: number
   nonWhiteRatio: number
   colorBucketCount: number
+  chartLabelRatios?: R07ChartLabelRatios
   sha256?: string
   source?: {
     kind: 'electron-host-preview'
@@ -208,6 +215,9 @@ export async function verifyR07RenderedSlides(
     expect(metric.height).toBeGreaterThanOrEqual(500)
     expect(metric.nonWhiteRatio).toBeGreaterThan(0.01)
     expect(metric.colorBucketCount).toBeGreaterThan(12)
+    if (metric.file === 'slide-05.png') {
+      expect(() => assertR07ChartLabelMetrics(metric)).not.toThrow()
+    }
   }
   return {
     schemaVersion: 'dascowork-r07-render-qa.v1',
@@ -215,8 +225,13 @@ export async function verifyR07RenderedSlides(
   }
 }
 
-export async function renderedSlideMetrics(path: string): Promise<R07SlideMetrics> {
-  return measureR07RenderedSlide(path)
+export async function renderedSlideMetrics(
+  path: string,
+  options: R07RenderMetricOptions = {}
+): Promise<R07SlideMetrics> {
+  return measureR07RenderedSlide(path, {
+    includeChartLabelRatios: options.includeChartLabelRatios ?? basename(path) === 'slide-05.png'
+  })
 }
 
 async function readPptxRelationshipDiagnostics(path: string): Promise<{

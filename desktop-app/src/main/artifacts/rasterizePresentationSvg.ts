@@ -68,8 +68,10 @@ export async function rasterizePresentationSvg(
       const fontLoaded = await window!.webContents.executeJavaScriptInIsolatedWorld(1001, [
         {
           code: `(async () => {
-          for (const element of document.querySelectorAll('[style]')) {
-            const family = element.style.fontFamily;
+          for (const element of document.querySelectorAll('[style], text, tspan')) {
+            const family = element.style.fontFamily ||
+              (element.localName === 'text' || element.localName === 'tspan'
+                ? getComputedStyle(element).fontFamily : '');
             if (family && !family.includes('Noto Sans CJK SC')) {
               element.style.fontFamily = family + ', "Noto Sans CJK SC"';
             }

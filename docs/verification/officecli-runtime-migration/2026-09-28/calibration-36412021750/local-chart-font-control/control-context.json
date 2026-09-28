@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "dascowork-officecli-local-control.v1",
+  "sourceRunId": "36412021750",
+  "baselineSourceCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+  "sourceDeckTarget": "linux-x64",
+  "sourceDeckSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50",
+  "controlHost": {
+    "platform": "darwin",
+    "architecture": "x64"
+  },
+  "scope": "Single functional Electron six-slide font/layout control; not native Linux recovery, performance calibration or visual acceptance",
+  "nativeLinuxRecoveryVerified": false,
+  "currentFileSha256": {
+    "desktop-app/src/main/artifacts/rasterizePresentationSvg.ts": "47f7eaa7c67f0fbea1a16136dd1a0510042687e8a2dd4d259cc523518fdfb0f4",
+    "desktop-app/src/main/artifacts/rasterizePresentationSvg.test.ts": "1310b45d4f558cc5f0bd1d6e6a55ff727b9c052854d882008e2a68f159caf424"
+  },
+  "officecliSha256": "5071abef56c1d4a4d60e28ed12bc66183d8dc6a9783529c3f1a9cf6bdfe6c2dd",
+  "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+  "slides": [
+    {
+      "file": "slide-01.png",
+      "sha256": "9ebccc0f87c9633647e8d032892f5e69eda25db6514196bb60adf0332a993277",
+      "svgTextCount": 0
+    },
+    {
+      "file": "slide-02.png",
+      "sha256": "10b1b10e18de4caf4e17e7ae872ff666c85001d98a0ef4afc5aca81e8ddb9017",
+      "svgTextCount": 0
+    },
+    {
+      "file": "slide-03.png",
+      "sha256": "c74d9a65e4b1aa98977c550b429aaf58b0fc4e657fc396a8a0ccb52d7ed0bdb9",
+      "svgTextCount": 0
+    },
+    {
+      "file": "slide-04.png",
+      "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba",
+      "svgTextCount": 0
+    },
+    {
+      "file": "slide-05.png",
+      "sha256": "420eac096b75ea6fa19c92f9352fafbbfab1f3825ba418bcdbecc101f0665246",
+      "svgTextCount": 15
+    },
+    {
+      "file": "slide-06.png",
+      "sha256": "805abf6f31d9e9b8aff03125f700154e17bf5be5d972d1443e43e0dd7e680227",
+      "svgTextCount": 0
+    }
+  ]
+}

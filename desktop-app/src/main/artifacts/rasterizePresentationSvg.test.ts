@@ -224,6 +224,36 @@ describe('rasterizePresentationSvg', () => {
     expect(electronMock.destroy).toHaveBeenCalledOnce()
     await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
   })
+
+  it('adds the Runtime font to SVG chart text that inherits its family without an inline style', async () => {
+    const chartText = { localName: 'text', style: { fontFamily: '' } }
+    const chartSpan = { localName: 'tspan', style: { fontFamily: '' } }
+    const elements = [chartText, chartSpan]
+    const document = {
+      querySelectorAll: (selector: string) =>
+        selector.includes('text') && selector.includes('tspan') ? elements : [],
+      fonts: {
+        load: async () => [{ status: 'loaded' }],
+        ready: Promise.resolve()
+      }
+    }
+    const getComputedStyle = (element: typeof chartText): { fontFamily: string } => ({
+      fontFamily: element === chartText ? 'Arial, serif' : 'serif'
+    })
+    electronMock.executeJavaScriptInIsolatedWorld.mockImplementationOnce((_world, scripts) => {
+      const [{ code }] = scripts as Array<{ code: string }>
+      return new Function(
+        'document',
+        'requestAnimationFrame',
+        'getComputedStyle',
+        `return ${code}`
+      )(document, (callback: () => void) => callback(), getComputedStyle) as Promise<boolean>
+    })
+    await rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    expect(chartText.style.fontFamily).toBe('Arial, serif, "Noto Sans CJK SC"')
+    expect(chartSpan.style.fontFamily).toBe('serif, "Noto Sans CJK SC"')
+    expect(electronMock.capturePage).toHaveBeenCalledOnce()
+  })
 })
 
 async function fontFixture(): Promise<string> {

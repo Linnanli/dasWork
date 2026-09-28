@@ -62,6 +62,14 @@
 
 完整本机 R07 再次通过（1 项，约 3.8 分钟），真实签名 Feed、聊天/app-server 命令、文件事件及六页 PNG 通过原门槛，真实图及哈希回执已保存并检查。它仍为单次功能控制，不能替代 Windows 原生执行、四平台十样本校准、人工视觉验收或最终门禁。
 
+修复提交 `84732005a79c559c2111b1764efc0a13d0ca2cc8` 已推送到规范仓库地址；首次推送 HTTP 400 后重试成功。新四目标 `calibrate` 运行 [36412021750](https://github.com/Linnanli/dasWork/actions/runs/36412021750) 于 2026-09-28 10:49:59 UTC 创建，已确认 `headSha` 绑定该提交、状态为 `in_progress`。按约定暂停，等待用户完成通知后再读取 Windows 全尺寸预览、macOS 产物上传、四平台校准及后续门禁结果；未读取新运行最终结果，A1–A9 仍未全部接受。
+
+最新校准 [36412021750](https://github.com/Linnanli/dasWork/actions/runs/36412021750) 的四平台原生构建及 P3 自动门禁全部通过，预算提取 [36417936943](https://github.com/Linnanli/dasWork/actions/runs/36417936943) 也成功。四平台各 12 个迁移场景、各 25 条隔离命令、四份内存回执及 48 张旧/新 PNG 的来源、哈希、尺寸均已核对，独立预算审查通过。但实图审查发现 Linux 第 5 页图表中文分类和图例丢失，A6 被阻塞，不能以自动门禁成功宣布计划完成。
+
+已修复 Main 遗漏无 inline style 的 SVG 图表文字：固定隔离脚本覆盖 `text/tspan` 并按继承字体追加 Runtime Noto。回归修改前失败、修改后通过，真实 Electron 六页控制及图表文字字体检查通过；另补实际缺字/完整 PNG 的局部文字门禁。原生 Linux 恢复仍待新校准，因此本轮候选预算仅保留审查记录，正式预算未更新，final 尚未启动。完整证据见 [本轮验收记录](../../docs/verification/officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md)。
+
+本轮本地验证完成：23 个相关单元、44 个发布契约和 10 个预算/硬上限测试通过；完整桌面 build、Node/Web typecheck、原生运行时边界和 bundled plugins 检查通过，完整 lint 为 0 错误、539 个既有警告。独立只读审查未发现字体优先级、安全边界或局部文字门禁阻塞。待新四目标校准确认 Linux 实图，A1–A9 仍未全部接受。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 317,
+        "sha256": "ed2761e6faef2e17976cd788b35714bf41f3fc029bdd0534e525b62f3abe3718",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.18122974537037037,
+        "colorBucketCount": 757,
+        "sha256": "29847becfbc65f8e0b4e12bea1e59dc62bf2227eeead2520e5114638d934c150",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.021965663580246913,
+        "colorBucketCount": 637,
+        "sha256": "44888550c430ebe42c50c414d59a033eb01a2fc9a466f18fc36b83bf39205255",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.2852391975308642,
+        "colorBucketCount": 615,
+        "sha256": "6eeb33dd8d960e30dd92a02bc2632193d961c2fec15697e0156172cbe1188546",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08877025462962963,
+        "colorBucketCount": 237,
+        "sha256": "f4030251d66043955091eb449f2816c1b85812e0f4b1414bf6e9a76f89aae8ac",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.03510030864197531,
+        "colorBucketCount": 653,
+        "sha256": "94bc9583af51aba79ef18a9de8dedf71dcd10216e157699102bb76aaf274cf6b",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+        }
+      }
+    ]
+  }
+}

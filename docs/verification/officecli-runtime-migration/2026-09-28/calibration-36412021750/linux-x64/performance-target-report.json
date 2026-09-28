@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-performance-target.v1",
+  "target": "linux-x64",
+  "evidence": {
+    "sourceRunId": "36412021750",
+    "sourceCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+    "installerCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "1a16a06ac2e4978314c7d2484dc879cf2f8bac71bb94bf138535c4a838f34420",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "runner": "ubuntu-24.04"
+  },
+  "runner": "ubuntu-24.04",
+  "candidateArchiveSha256": "e4779e3249135867bc21e62c57f1d565ddef4c0cd8fe3459df5bb94f839e5d2e",
+  "p1aBuildUnpackReceiptSha256": "60113e1fbd1847244da5fd4deb0bd6a134964658b38a7c119aded02676fe6045",
+  "archiveBytes": [
+    179820851,
+    179820851,
+    179820851,
+    179820851,
+    179820851
+  ],
+  "unpackedBytes": [
+    351018639,
+    351018639,
+    351018639,
+    351018639,
+    351018639
+  ],
+  "minimumAvailableDiskBytes": [
+    84456742912,
+    84456755200,
+    84456730624,
+    84456722432,
+    84456681472,
+    84456738816,
+    84456734720,
+    84456747008,
+    84456771584,
+    84456783872
+  ],
+  "coldInstallMs": [
+    10663,
+    10141,
+    9792,
+    9886,
+    9833,
+    9974,
+    9704,
+    10003,
+    9935,
+    9949
+  ],
+  "mainEventLoopDelayP99Ms": [
+    4,
+    4,
+    4,
+    4,
+    4,
+    4,
+    3,
+    4,
+    4,
+    4
+  ],
+  "mainEventLoopDelayMaxMs": [
+    18,
+    28,
+    46,
+    22,
+    18,
+    28,
+    23,
+    21,
+    18,
+    40
+  ],
+  "chatInstallOverlapMs": [
+    736,
+    859,
+    674,
+    762,
+    722,
+    785,
+    699,
+    787,
+    743,
+    834
+  ]
+}

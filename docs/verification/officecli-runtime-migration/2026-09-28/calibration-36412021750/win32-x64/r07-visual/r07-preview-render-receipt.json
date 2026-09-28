@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 305,
+        "sha256": "79b6a311db88001669b6f93b9ccac490e7caf53d5266fcfbea988dd61ffa8692",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.1770973186728395,
+        "colorBucketCount": 862,
+        "sha256": "e24877510c88b245629c329eee73e9925590aa363eb988089a0774c5c5f88a2a",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.01834297839506173,
+        "colorBucketCount": 618,
+        "sha256": "293931b205252a191c0de6494fe68b7dee43cb4b9e946419858519bf26de3e12",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.28087480709876544,
+        "colorBucketCount": 618,
+        "sha256": "e294e958d0953ff2cead52e19018afa8ecaa02a85c768a7451870e7bda638471",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08473958333333333,
+        "colorBucketCount": 309,
+        "sha256": "afb0421d4d802701b5f659b3501999c80ec829bbb4c5899bb96b5685131df96d",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.03079861111111111,
+        "colorBucketCount": 619,
+        "sha256": "b04554184db7d3a465d9fc0aa63a4c7ba996732920f5edd4636ed1447ce18d1d",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+        }
+      }
+    ]
+  }
+}
