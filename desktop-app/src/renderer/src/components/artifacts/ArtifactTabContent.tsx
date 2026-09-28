@@ -200,7 +200,12 @@ export function ArtifactTabContent({
     })
   }
   return (
-    <section data-slot="artifact-tab-content" className="flex h-full min-h-0 flex-col">
+    <section
+      data-slot="artifact-tab-content"
+      data-artifact-source-id={source.binary?.sourceId}
+      data-artifact-preview-generation={renderedSlides ? source.binary?.generation : undefined}
+      className="flex h-full min-h-0 flex-col"
+    >
       <header className="flex min-h-13 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-medium">{artifact.title}</h2>

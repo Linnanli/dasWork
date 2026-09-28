@@ -20,6 +20,12 @@
 
 修复提交 `432e0c6e2423151f83961a20c042da7240a67cc3` 的校准运行 [36373185725](https://github.com/Linnanli/dasWork/actions/runs/36373185725) 已失败：Windows 输入验证的进程隔离 helper 超时，macOS 两平台迁移 Feed 证书验证失败，Linux 迁移测试的 v2 能力断言错误被丢失内部错误列表后的 `map` 报错掩盖。继续修复，并补齐真实控制测试发现的冷启动旧 marketplace 查询范围；完整计划仍未验收通过。
 
+后续修复已提交并推送为 `26a06788e6fd4299a53c6c43cedc23c19a633473`。本地 82 项桌面回归、44 项发布契约、类型/lint/边界检查通过；临时小归档的真实 app-server +签名 Feed 控制验证通过 12 个迁移场景，不替代完整历史 v2/本轮 v3 四平台验证。新校准运行 [36376506303](https://github.com/Linnanli/dasWork/actions/runs/36376506303) 已确认 `in_progress`，现按暂停点等待用户告知完成。
+
+用户报告该运行报错后已恢复检查：Windows 无限制对照通过，受限 PowerShell 对照以 `0xC0000142` 退出且无探测输出；不能将其计作成功限制证据。其余三平台原生构建通过，继续核对 P3 后续结果并修复 Windows 探测。
+
+后续证据确认三个非 Windows 目标完整 v2→v3 迁移已通过。macOS arm64 和 Linux 的 R07 在第二页取证时重新回到第一页；修复取证期间写入工作区导致刷新，以及 UI 显示版本与二进制回执的同步条件。Windows 探测改为直接读取 `CreateProcessW` 的原生错误码 367，并使用无控制台的探测程序和独立控制台启动方式；仍需原生 CI 证明。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

@@ -13,28 +13,17 @@ const helperDirectory = dirname(fileURLToPath(import.meta.url));
 const supportDirectory = join(helperDirectory, "support");
 const powershellHelperPath = join(supportDirectory, "officecli-exec-audit-windows.ps1");
 const csharpHelperPath = join(supportDirectory, "officecli-exec-audit-windows.cs");
+const childProbeSourcePath = join(supportDirectory, "officecli-exec-audit-windows-child-probe.cs");
+const childProbeCompilerPath = join(supportDirectory, "officecli-exec-audit-windows-build-child-probe.ps1");
 const defaultWindowsSystemRoot = "C:\\Windows";
-
-const childProcessProbeScript = [
-  "$ErrorActionPreference = 'Stop'",
-  "$systemRoot = $env:SystemRoot",
-  "if ([string]::IsNullOrWhiteSpace($systemRoot)) { $systemRoot = 'C:\\Windows' }",
-  "$cmd = Join-Path $systemRoot 'System32\\cmd.exe'",
-  "$info = New-Object System.Diagnostics.ProcessStartInfo",
-  "$info.FileName = $cmd",
-  "$info.Arguments = '/d /q /c exit 0'",
-  "$info.UseShellExecute = $false",
-  "$info.CreateNoWindow = $true",
-  "$child = [System.Diagnostics.Process]::Start($info)",
-  "$child.WaitForExit()",
-  "if ($child.ExitCode -ne 0) { exit 17 }",
-  "Write-Output 'child-started'",
-].join("; ");
+const childProcessRestrictedExitCode = 23;
 
 export function windowsExecAuditSupportFiles() {
   return {
     powershell: powershellHelperPath,
     csharp: csharpHelperPath,
+    childProbe: childProbeSourcePath,
+    childProbeCompiler: childProbeCompilerPath,
   };
 }
 
@@ -100,7 +89,7 @@ export async function runWindowsExecAuditUnchecked(options = {}) {
     });
     const receipt = parseReceipt(raw.stdout);
     if (!allowedExitCodes.includes(receipt.command.exitCode)) {
-      throw new Error(`${input.name} failed with ${receipt.command.exitCode}: ${receipt.command.stderr || receipt.command.stdout || "no command output"}`);
+      throw new Error(`${input.name} failed with ${receipt.command.exitCode}: ${receipt.command.stderr || receipt.command.stdout || "no command output"}${helperDiagnosticSuffix(raw.stderr)}`);
     }
     return receipt;
   } finally {
@@ -109,57 +98,92 @@ export async function runWindowsExecAuditUnchecked(options = {}) {
 }
 
 export async function probeWindowsChildProcessRestriction(options = {}) {
-  const powershellPath = options.powershellPath ?? defaultWindowsPowerShellPath();
-  const positive = await runWindowsExecAuditUnchecked({
-    executable: powershellPath,
-    args: [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      childProcessProbeScript,
-    ],
-    env: options.env ?? windowsSystemEnvironment(),
-    timeoutMs: Number(options.timeoutMs ?? 15_000),
-    restrictChildProcesses: false,
-    allowedExitCodes: [0],
-    name: "officecli-windows-child-process-positive-control",
-    tempParent: options.tempParent,
-    powershellPath,
-  });
-  const restricted = await runWindowsExecAuditUnchecked({
-    executable: powershellPath,
-    args: [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      childProcessProbeScript,
-    ],
-    env: options.env ?? windowsSystemEnvironment(),
-    timeoutMs: Number(options.timeoutMs ?? 15_000),
-    restrictChildProcesses: true,
-    allowedExitCodes: [1],
-    name: "officecli-windows-child-process-restricted-control",
-    tempParent: options.tempParent,
-    powershellPath,
-  });
-  const restrictedOutput = `${restricted.command.stdout}\n${restricted.command.stderr}`;
-  const passed = positive.command.exitCode === 0
-    && /child-started/u.test(positive.command.stdout)
-    && restricted.command.exitCode !== 0
-    && /child process|process creation|access is denied|0x800704ec|This program is blocked/iu.test(restrictedOutput);
-  const receipt = {
-    schemaVersion: officeCliWindowsExecAuditSchemaVersion,
-    probe: "windows-child-process-policy",
-    positive,
-    restricted,
-    passed,
-  };
-  if (!passed) {
-    throw new Error(`Windows child process restriction probe failed: ${JSON.stringify(receipt)}`);
+  const probeRoot = await mkdtemp(join(resolve(options.tempParent ?? tmpdir()), "officecli-windows-child-probe-"));
+  try {
+    const probe = await buildWindowsNativeChildProcessProbe({
+      tempParent: probeRoot,
+      powershellPath: options.powershellPath,
+    });
+    const probeTempParent = options.tempParent ?? probeRoot;
+    const positive = await runWindowsExecAuditUnchecked({
+      executable: probe.executable,
+      args: probe.args,
+      env: options.env ?? windowsSystemEnvironment(),
+      timeoutMs: Number(options.timeoutMs ?? 15_000),
+      restrictChildProcesses: false,
+      allowedExitCodes: [0],
+      name: "officecli-windows-child-process-positive-control",
+      tempParent: probeTempParent,
+      powershellPath: options.powershellPath,
+    });
+    const restricted = await runWindowsExecAuditUnchecked({
+      executable: probe.executable,
+      args: probe.args,
+      env: options.env ?? windowsSystemEnvironment(),
+      timeoutMs: Number(options.timeoutMs ?? 15_000),
+      restrictChildProcesses: true,
+      allowedExitCodes: [childProcessRestrictedExitCode],
+      name: "officecli-windows-child-process-restricted-control",
+      tempParent: probeTempParent,
+      powershellPath: options.powershellPath,
+    });
+    const restrictedOutput = `${restricted.command.stdout}
+${restricted.command.stderr}`;
+    const passed = positive.command.exitCode === 0
+      && /child-started/u.test(positive.command.stdout)
+      && restricted.command.exitCode === childProcessRestrictedExitCode
+      && /child-blocked win32=367/u.test(restrictedOutput);
+    const receipt = {
+      schemaVersion: officeCliWindowsExecAuditSchemaVersion,
+      probe: "windows-child-process-policy",
+      positive,
+      restricted,
+      passed,
+    };
+    if (!passed) {
+      throw new Error(`Windows child process restriction probe failed: ${JSON.stringify(receipt)}`);
+    }
+    return receipt;
+  } finally {
+    await rm(probeRoot, { recursive: true, force: true });
   }
-  return receipt;
+}
+
+export async function buildWindowsNativeChildProcessProbe(options = {}) {
+  const outputPath = join(resolve(options.tempParent ?? tmpdir()), "officecli-windows-child-probe.exe");
+  const powershellPath = options.powershellPath ?? defaultWindowsPowerShellPath();
+  await runCappedCommand({
+    command: powershellPath,
+    args: [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      childProbeCompilerPath,
+      "-SourcePath",
+      childProbeSourcePath,
+      "-OutputPath",
+      outputPath,
+    ],
+    env: windowsSystemEnvironment(dirname(outputPath)),
+    timeoutMs: Number(options.timeoutMs ?? 30_000),
+    allowedExitCodes: [0],
+    name: "officecli-windows-child-probe-build",
+  });
+  return windowsNativeChildProcessProbe(outputPath, options.systemRoot);
+}
+
+export function windowsNativeChildProcessProbe(
+  executable,
+  systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? defaultWindowsSystemRoot,
+) {
+  const cmdPath = `${systemRoot}\\System32\\cmd.exe`;
+  return {
+    executable: resolve(requireNonEmptyString(executable, "executable")),
+    args: [cmdPath],
+  };
 }
 
 export async function assertOfficeCliDoesNotExecuteSystemTools(options = {}) {
@@ -189,6 +213,14 @@ function parseReceipt(stdout) {
   } catch (error) {
     throw new Error(`Windows OfficeCLI execution audit helper emitted invalid JSON: ${String(error.message ?? error)} output=${text.slice(-500)}`);
   }
+}
+
+function helperDiagnosticSuffix(stderr) {
+  const diagnostic = stderr.toString("utf8").trim().split(/\r?\n/u)
+    .filter((line) => /^\[officecli-exec-audit\] stage=/u.test(line))
+    .slice(-12)
+    .join("\n");
+  return diagnostic ? ` helperStages=${JSON.stringify(diagnostic)}` : "";
 }
 
 function sanitizeEnvironment(env) {
@@ -316,5 +348,7 @@ export async function readWindowsExecAuditHelperSourceForTest() {
   return {
     powershell: await readFile(powershellHelperPath, "utf8"),
     csharp: await readFile(csharpHelperPath, "utf8"),
+    childProbe: await readFile(childProbeSourcePath, "utf8"),
+    childProbeCompiler: await readFile(childProbeCompilerPath, "utf8"),
   };
 }

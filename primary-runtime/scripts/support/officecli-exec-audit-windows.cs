@@ -17,7 +17,7 @@ namespace Dascowork.OfficeCli
         private const int STARTF_USESTDHANDLES = 0x00000100;
         private const int EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
         private const int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-        private const int CREATE_NO_WINDOW = 0x08000000;
+        private const int DETACHED_PROCESS = 0x00000008;
         private const int CREATE_SUSPENDED = 0x00000004;
         private const int PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY = 0x0002000E;
         private const int PROCESS_CREATION_CHILD_PROCESS_RESTRICTED = 0x00000001;
@@ -101,7 +101,7 @@ namespace Dascowork.OfficeCli
                 startup.StartupInfo.hStdError = stderrWrite;
                 startup.StartupInfo.hStdInput = stdinRead;
 
-                var creationFlags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | CREATE_SUSPENDED;
+                var creationFlags = CREATE_UNICODE_ENVIRONMENT | DETACHED_PROCESS | CREATE_SUSPENDED;
                 if (restrictChildProcesses)
                 {
                     Stage("prepare-child-process-policy");

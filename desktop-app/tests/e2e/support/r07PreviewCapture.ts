@@ -16,11 +16,10 @@ export async function captureR07PreviewSlides(input: {
   page: Page
   outputDirectory: string
 }): Promise<R07CapturedSlide[]> {
-  await mkdir(input.outputDirectory, { recursive: true })
   const rightPanel = input.page.locator('[data-slot="right-workspace-shell"]')
   const stageImage = rightPanel.locator('.presentation-stage-image[src^="data:image/png;base64,"]')
   const nextSlide = rightPanel.getByRole('button', { name: '下一页', exact: true })
-  const slides: R07CapturedSlide[] = []
+  const captures: { file: string; png: Buffer }[] = []
   for (let index = 0; index < 6; index += 1) {
     await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText(
       `${index + 1} / 6`
@@ -47,16 +46,23 @@ export async function captureR07PreviewSlides(input: {
     expect(dataUrl.height).toBeGreaterThanOrEqual(500)
     const png = pngBufferFromDataUrl(dataUrl.src)
     const file = `slide-${String(index + 1).padStart(2, '0')}.png`
-    const path = join(input.outputDirectory, file)
-    await writeFile(path, png, { mode: 0o600 })
-    slides.push({
-      file,
-      ...(await measureR07RenderedSlide(path)),
-      sha256: createHash('sha256').update(png).digest('hex')
-    })
+    captures.push({ file, png })
     if (index < 5) await nextSlide.click()
   }
-  return slides
+  // The destination can be inside the watched workspace. Writing while
+  // navigating would refresh the artifact panel and reset its current page.
+  await mkdir(input.outputDirectory, { recursive: true })
+  return Promise.all(
+    captures.map(async ({ file, png }) => {
+      const path = join(input.outputDirectory, file)
+      await writeFile(path, png, { mode: 0o600 })
+      return {
+        file,
+        ...(await measureR07RenderedSlide(path)),
+        sha256: createHash('sha256').update(png).digest('hex')
+      }
+    })
+  )
 }
 
 export function pngBufferFromDataUrl(value: string): Buffer {

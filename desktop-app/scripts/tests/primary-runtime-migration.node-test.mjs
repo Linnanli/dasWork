@@ -44,7 +44,7 @@ test('native migration HTTPS fixture trusts a separate CA and rejects default tr
     assert.equal(await request({ ca }), 'verified local fixture')
     await assert.rejects(request({}), /certificate|issuer/u)
   } finally {
-    if (server) {
+    if (server?.listening) {
       server.closeAllConnections()
       await new Promise((resolveClose, reject) =>
         server.close((error) => (error ? reject(error) : resolveClose()))

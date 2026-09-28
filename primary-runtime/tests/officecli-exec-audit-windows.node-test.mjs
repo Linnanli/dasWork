@@ -6,10 +6,12 @@ import test from "node:test";
 
 import {
   buildWindowsExecAuditInvocation,
+  buildWindowsNativeChildProcessProbe,
   officeCliWindowsExecAuditSchemaVersion,
   probeWindowsChildProcessRestriction,
   readWindowsExecAuditHelperSourceForTest,
   runWindowsOfficeCliExecAudit,
+  windowsNativeChildProcessProbe,
   windowsExecAuditSupportFiles,
 } from "../scripts/officecli-exec-audit-windows.mjs";
 
@@ -19,6 +21,10 @@ test("Windows OfficeCLI exec audit exposes stable support files and invocation",
   assert.equal(support.csharp.endsWith(join("support", "officecli-exec-audit-windows.cs")), true);
   await access(support.powershell);
   await access(support.csharp);
+  assert.equal(support.childProbe.endsWith(join("support", "officecli-exec-audit-windows-child-probe.cs")), true);
+  assert.equal(support.childProbeCompiler.endsWith(join("support", "officecli-exec-audit-windows-build-child-probe.ps1")), true);
+  await access(support.childProbe);
+  await access(support.childProbeCompiler);
 
   const invocation = buildWindowsExecAuditInvocation({
     inputJsonPath: "C:\\Temp\\officecli-input.json",
@@ -42,22 +48,66 @@ test("Windows OfficeCLI exec audit exposes stable support files and invocation",
   assert.match(defaultInvocation.command, /^C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/u);
 });
 
-test("Windows OfficeCLI child probe uses direct ProcessStartInfo without shell execution", async () => {
+test("Windows OfficeCLI child probe uses native Win32 target and exact 367 evidence", async () => {
   const source = await readWindowsExecAuditHelperSourceForTest();
   const moduleText = await import("../scripts/officecli-exec-audit-windows.mjs").then(async () => {
     const { readFile } = await import("node:fs/promises");
     const { fileURLToPath } = await import("node:url");
     return await readFile(fileURLToPath(new URL("../scripts/officecli-exec-audit-windows.mjs", import.meta.url)), "utf8");
   });
-  assert.match(moduleText, /New-Object System\.Diagnostics\.ProcessStartInfo/u);
-  assert.match(moduleText, /\$info\.FileName = \$cmd/u);
-  assert.match(moduleText, /\$info\.UseShellExecute = \$false/u);
-  assert.match(moduleText, /\$info\.CreateNoWindow = \$true/u);
-  assert.match(moduleText, /\[System\.Diagnostics\.Process\]::Start\(\$info\)/u);
+  const probe = windowsNativeChildProcessProbe("C:\\Temp\\officecli-windows-child-probe.exe", "C:\\Windows");
+  assert.equal(probe.executable, process.platform === "win32" ? "C:\\Temp\\officecli-windows-child-probe.exe" : join(process.cwd(), "C:\\Temp\\officecli-windows-child-probe.exe"));
+  assert.deepEqual(probe.args, ["C:\\Windows\\System32\\cmd.exe"]);
+
+  assert.match(moduleText, /buildWindowsNativeChildProcessProbe/u);
+  assert.match(moduleText, /"-File",[\s\S]*?childProbeCompilerPath/u);
+  assert.match(moduleText, /"-SourcePath",[\s\S]*?childProbeSourcePath/u);
+  assert.match(moduleText, /"-OutputPath",[\s\S]*?outputPath/u);
+  assert.doesNotMatch(moduleText, /"-Command",[\s\S]*?compileCommand/u);
+  assert.match(moduleText, /allowedExitCodes: \[childProcessRestrictedExitCode\]/u);
+  assert.match(moduleText, /child-blocked win32=367/u);
+  assert.doesNotMatch(moduleText, /childProcessProbeScript/u);
+  assert.doesNotMatch(moduleText, /spawnSync\(cmd/u);
+  assert.doesNotMatch(moduleText, /error\.win32Code === 367/u);
+  assert.doesNotMatch(moduleText, /error\.code === "UNKNOWN"/u);
   assert.doesNotMatch(moduleText, /Start-Process/u);
+
+  assert.match(source.childProbe, /ERROR_CHILD_PROCESS_BLOCKED\s*=\s*367/u);
+  assert.match(source.childProbe, /Marshal\.GetLastWin32Error\(\)/u);
+  assert.match(source.childProbe, /error == ERROR_CHILD_PROCESS_BLOCKED/u);
+  assert.match(source.childProbe, /child-blocked win32=367/u);
+  assert.match(source.childProbe, /child-unexpected win32=/u);
+  assert.match(source.childProbe, /\? ChildProcessRestrictedExitCode : UnexpectedExitCode/u);
+  assert.match(source.childProbe, /return UnexpectedExitCode/u);
+  assert.match(source.childProbe, /CreateProcessW\(/u);
+  assert.match(source.childProbe, /DETACHED_PROCESS/u);
+  assert.match(source.childProbe, /private static int EmitStdout/u);
+  assert.match(source.childProbe, /WriteFile\(GetStdHandle\(STD_OUTPUT_HANDLE\)/u);
+  assert.match(source.childProbe, /written != bytes\.Length/u);
+  assert.match(source.childProbeCompiler, /param\(\s*\[Parameter\(Mandatory = \$true\)\]\s*\[string\]\$SourcePath/u);
+  assert.match(source.childProbeCompiler, /\[string\]\$OutputPath/u);
+  assert.match(source.childProbeCompiler, /Get-Content -LiteralPath \$SourcePath -Raw -Encoding UTF8/u);
+  assert.match(source.childProbeCompiler, /-OutputAssembly \$OutputPath -OutputType WindowsApplication/u);
   assert.match(source.powershell, /"System\.dll"/u);
   assert.match(source.powershell, /"System\.Core\.dll"/u);
   assert.match(source.powershell, /"System\.Web\.Extensions\.dll"/u);
+});
+
+test("Windows OfficeCLI child probe compiles on native Windows", async (t) => {
+  if (platform() !== "win32") {
+    t.skip("requires native Windows PowerShell/.NET Framework compiler");
+    return;
+  }
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(join(tmpdir(), "officecli-windows-child-probe-test-"));
+  try {
+    const probe = await buildWindowsNativeChildProcessProbe({ tempParent: root });
+    assert.equal(probe.args.length, 1);
+    assert.match(probe.executable, /officecli-windows-child-probe\.exe$/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Windows OfficeCLI exec audit helper has bounded cleanup budget and temp profile", async () => {
@@ -93,6 +143,8 @@ test("Windows OfficeCLI exec audit helper sets child process policy at process c
   assert.match(source.csharp, /startup\.StartupInfo\.cb = restrictChildProcesses\s*\?\s*Marshal\.SizeOf\(typeof\(STARTUPINFOEX\)\)\s*:\s*Marshal\.SizeOf\(typeof\(STARTUPINFO\)\)/u);
   assert.match(source.csharp, /CreateProcessW\(/u);
   assert.match(source.csharp, /CREATE_SUSPENDED/u);
+  assert.match(source.csharp, /DETACHED_PROCESS/u);
+  assert.doesNotMatch(source.csharp, /CREATE_NO_WINDOW/u);
   assert.match(source.csharp, /AssignProcessToJobObject/u);
   assert.match(source.csharp, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/u);
   assert.match(source.csharp, /ChildProcessPolicyAttributeList/u);
@@ -131,6 +183,18 @@ test("Windows OfficeCLI exec audit timeout cleanup is bounded and diagnostic", a
   assert.match(source.csharp, /TerminateProcess\(pi\.hProcess, 124\)/u);
   assert.match(source.csharp, /WaitForSingleObject\(pi\.hProcess, 5000\)/u);
   assert.doesNotMatch(source.csharp, /WaitForSingleObject\(pi\.hProcess, INFINITE\)/u);
+});
+
+test("Windows OfficeCLI exec audit preserves helper stage diagnostics on target exit failure", async () => {
+  const moduleText = await import("../scripts/officecli-exec-audit-windows.mjs").then(async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    return await readFile(fileURLToPath(new URL("../scripts/officecli-exec-audit-windows.mjs", import.meta.url)), "utf8");
+  });
+  assert.match(moduleText, /helperDiagnosticSuffix\(raw\.stderr\)/u);
+  assert.match(moduleText, /^\s*function helperDiagnosticSuffix\(stderr\)/mu);
+  assert.match(moduleText, /\^\s*\\\[officecli-exec-audit\\\] stage=/u);
+  assert.match(moduleText, /\.slice\(-12\)/u);
 });
 
 test("Windows OfficeCLI exec audit refuses non-Windows hosts", async () => {

@@ -1129,15 +1129,6 @@ async function openR07PresentationPreviewAndReadArtifact(
   const presentationPath = join(workspace.root, workspace.outputFile)
   await triggerArtifactPreviewChangeRoundTrip(presentationPath)
   const sourceId = await sourceEvent
-  const previewImages = page.locator(
-    '[data-slot="presentation-panel"] img[src^="data:image/png;base64,"]'
-  )
-  await expect(previewImages).toHaveCount(7, { timeout: 120_000 })
-  await expect
-    .poll(async () =>
-      previewImages.first().evaluate((image: HTMLImageElement) => image.naturalWidth)
-    )
-    .toBeGreaterThan(0)
   const binary = await page.evaluate(async (artifactSourceId) => {
     return window.desktopApp.workspace.artifacts.readBinary({
       version: 1,
@@ -1153,6 +1144,22 @@ async function openR07PresentationPreviewAndReadArtifact(
   const workspacePresentationSha256 = await sha256File(presentationPath)
   expect(binary.content.checksum).toBe(workspacePresentationSha256)
   expect(binary.content.generation).toBeGreaterThan(0)
+  const artifact = page.locator('[data-slot="artifact-tab-content"]')
+  await expect(artifact).toHaveAttribute('data-artifact-source-id', sourceId)
+  await expect(artifact).toHaveAttribute(
+    'data-artifact-preview-generation',
+    String(binary.content.generation),
+    { timeout: 120_000 }
+  )
+  const previewImages = artifact.locator(
+    '[data-slot="presentation-panel"] img[src^="data:image/png;base64,"]'
+  )
+  await expect(previewImages).toHaveCount(7, { timeout: 120_000 })
+  await expect
+    .poll(async () =>
+      previewImages.first().evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBeGreaterThan(0)
   const trace = {
     sourceId,
     receiptId,
