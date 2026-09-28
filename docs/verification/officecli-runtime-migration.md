@@ -90,6 +90,26 @@ Windows 改为在受限目标内通过 `CreateProcessW` 与 `GetLastError()` 记
 
 最终桌面构建、Node/Web 类型检查通过；完整 lint 为 0 错误、539 条既有警告，所有变更 TypeScript 文件单独 lint 无输出，`git diff --check` 通过。工作流路径过滤已包含 Main 预览实现，后续预览代码变化会进入 Runtime 验证。当前验证不能替代新的四平台原生预览、校准审查与最终发布门禁。
 
+修复提交 `c49c334253650c7fc650a2d1f7ca5e99dbb4ba38` 已推送。新四目标 `calibrate` 运行 [36395096696](https://github.com/Linnanli/dasWork/actions/runs/36395096696) 于 2026-09-28 08:03:26 UTC 创建，已确认 `headSha` 绑定该提交、状态为 `in_progress`。按约定在此暂停，等待用户告知完成后再检查 Windows 旧预览转换、Linux 中文实图、四平台原生预览与校准证据，并继续必要的 `review`/`final` 门禁。未读取新运行的最终结果，完整计划尚未验收。
+
+### 36395096696：首帧、字体后备与旧迁移短目录
+
+用户报告运行完成且有报错后恢复检查，确认该提交的运行最终失败。四目标原生构建/归档执行、四目标完整 v2/v3 迁移矩阵均通过；macOS 两目标 P3、旧/新 PNG 自动取证和校准通过。Windows 新 R07 通过，旧预览未产出 PDF；Linux R07 在实际 PNG 检查失败。
+
+- Linux 原始 PNG：封面为 1920×1080 单色背景，颜色数量为 1；另外五页有内容但中文仍显示为方框。失败 [原始诊断产物](https://github.com/Linnanli/dasWork/actions/runs/36395096696/artifacts/10958804581) 已读取，不能将上轮加载字体的本机控制当成 Linux 验收。
+- Main 原先在 `loadFile` 和字体布局返回后立即截图，没有等隐藏窗口首帧和后续绘制。现先注册并等待 [Electron 首帧事件](https://www.electronjs.org/docs/latest/api/browser-window#using-ready-to-show-event)，为已有字体样式追加 Runtime 中文后备字体（OfficeCLI 的部分 `Aptos` 样式没有中文后备），再等待字体布局和两个动画帧后截图。仅固定 Main 表达式执行；文档脚本、Node、外部请求和原资源/像素限制保持。
+- 实际 Electron 独立控制通过：把测试 SVG 的首选字体改为不存在的名字后，Chromium 的实际字形报告仍确认标题和正文使用 `NotoSansCJKsc-Regular` 数据字体，分别为 16 个字形、`isCustomFont: true`；实际中文 PNG 已检查。该控制证明本机字体使用与首帧等待，不是 Linux 原生执行证明。
+- Windows 新诊断：旧转换 stderr 为 `Could not find platform independent libraries <prefix>`，输出目录为空。实际 retained v2 根是系统 `C:\Users\runneradmin\AppData\Local\Temp\primary-runtime-migration-...\cache\versions\<sha256>`，而已下载归档在短根 `D:\a\_temp`。迁移测试现与桌面 E2E 一致优先用 `RUNNER_TEMP`、缩短前缀为 `dsc-mig-`，保留/清理/真实根回执逻辑保持。短根是当前证据支持的候选，不能在原生复跑前宣布解决。
+- 旧转换失败诊断补充 `soffice` 路径长度、最多两个内置 `python-core-*` 中 `lib/os.py` 的真实存在状态及路径长度，便于原生运行区分安装路径与缺件；不输出整个宿主环境，不加入没有存在证据的 Python 变量清理。
+
+相关单元 3 文件、18 项通过，新增首帧等待、实际执行固定字体/动画帧表达式的回归以及旧 Python 文件诊断回归；发布契约 44 项通过。Windows 独立只读复查未发现迁移 retained cache、清理或报告链路的实质破坏。新四目标预览、校准审查、旧/新人工视觉验收及最终门禁仍待完成，A1–A9 尚未全部接受。
+
+完整本机 R07 控制通过（1 项，约 3.1 分钟）：真实签名 Feed、聊天、app-server 技能/loader/命令、文件事件和六页 PNG 均通过。六页为 3840×2160，摘要非白比例为 `0.018167558834876543`，原像素门槛保持；PPTX 与六页哈希逐项核对，实际中文总览已检查。证据保存在 [PNG 总览](officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/r07-contact-sheet.png)、[预览回执](officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/r07-preview-render-receipt.json)、[字体字形报告](officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/font-platform-glyphs.json) 和 [控制上下文](officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/control-context.json)。控制绑定此前真实 darwin-x64 归档和本次工作区文件哈希，使用确定性外部模型响应；不将它当作 Windows/Linux 原生执行、十样本性能校准或旧/新人工视觉验收。
+
+最终桌面构建、Node/Web 类型检查通过；完整 lint 为 0 错误、539 条既有警告，变更文件单独 lint 无输出，`git diff --check` 通过。
+
+另从锁定的 v2 原始 [Windows 构建工件](https://github.com/Linnanli/dasWork/actions/runs/35977341257/artifacts/10798893686) 按绝对字节范围读取小型原生验证、清单和来源回执，核对 ZIP CRC、清单 SHA-256 与锁定归档身份。历史验证回执证明该归档完成四页真实转换；它的原生 Runtime 根短于本轮 retained 根的 152 字符。原始文件和实际根比较保存在 [v2 控制上下文](officecli-runtime-migration/2026-09-28/win32-x64-v2-baseline/source-context.json)。嵌套归档本身被压缩，未在本机完整重下或逐项读取内置 Python 文件；此处不宣称已证明 Python 缺件或长路径是唯一根因，下一轮 Windows 原生结果仍是必要证据。
+
 ## 历史实现与验证版本
 
 - OfficeCLI：`v1.0.152`；四个平台的原生工件由 `primary-runtime/runtime-sources.lock.json` 锁定来源、版本、SHA-256 和许可证。

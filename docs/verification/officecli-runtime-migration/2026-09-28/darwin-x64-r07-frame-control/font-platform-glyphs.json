@@ -1,0 +1,24 @@
+[
+  [
+    {
+      "fonts": [
+        {
+          "familyName": "Noto Sans CJK SC",
+          "glyphCount": 16,
+          "isCustomFont": true,
+          "postScriptName": "NotoSansCJKsc-Regular"
+        }
+      ]
+    },
+    {
+      "fonts": [
+        {
+          "familyName": "Noto Sans CJK SC",
+          "glyphCount": 16,
+          "isCustomFont": true,
+          "postScriptName": "NotoSansCJKsc-Regular"
+        }
+      ]
+    }
+  ]
+]

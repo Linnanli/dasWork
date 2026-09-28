@@ -110,6 +110,26 @@ describe('renderLegacyPresentation', () => {
     await expect(promise).rejects.toThrow(/no export happened/u)
     await expect(promise).rejects.toThrow(/warn only/u)
   })
+
+  it('reports the embedded Python library presence and path length on a failed export', async () => {
+    const root = await tempDirectory()
+    const programDirectory = join(root, 'program')
+    const libraryDirectory = join(programDirectory, 'python-core-test', 'lib')
+    await mkdir(libraryDirectory, { recursive: true })
+    await writeFile(join(libraryDirectory, 'os.py'), '# Runtime stdlib landmark')
+    const promise = renderLegacyPresentation(
+      join(root, 'source.pptx'),
+      root,
+      { soffice: join(programDirectory, 'soffice.com'), pdftoppm: 'pdftoppm.exe' },
+      async () => ({
+        stdout: '',
+        stderr: 'Could not find platform independent libraries <prefix>'
+      }),
+      { platform: 'win32' }
+    )
+    await expect(promise).rejects.toThrow('python-core-test:os.py=present:pathLength=')
+    await expect(promise).rejects.toThrow('sofficePathLength=')
+  })
 })
 
 async function tempDirectory(): Promise<string> {

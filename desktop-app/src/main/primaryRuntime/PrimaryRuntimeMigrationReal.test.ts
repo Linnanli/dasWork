@@ -79,7 +79,10 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
         process.env.DASCOWORK_PRIMARY_RUNTIME_MIGRATION_OPTIONS!
       ) as Options
       expect(options.target).toBe(`${process.platform}-${process.arch}`)
-      const root = await realpath(await mkdtemp(join(tmpdir(), 'primary-runtime-migration-')))
+      // Retained v2 previews include LibreOffice's deeply nested Python files.
+      // Match the desktop E2E fixture's short Windows runner temp root.
+      const tempRoot = process.env.RUNNER_TEMP?.trim() || tmpdir()
+      const root = await realpath(await mkdtemp(join(tempRoot, 'dsc-mig-')))
       const cacheRoot = join(root, 'cache')
       const codexHome = join(root, 'codex-home')
       const workspace = join(root, 'workspace')

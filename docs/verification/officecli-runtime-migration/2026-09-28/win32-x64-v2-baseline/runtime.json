@@ -1,0 +1,185 @@
+{
+  "bundleFormatVersion": 2,
+  "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-win32-x64-p1a-5",
+  "target": {
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "node": {
+    "path": "dependencies/node/node.exe",
+    "version": "22.16.0"
+  },
+  "nodePackages": [
+    {
+      "name": "pptxgenjs",
+      "version": "4.0.1",
+      "path": "dependencies/node/node_modules/pptxgenjs"
+    },
+    {
+      "name": "jszip",
+      "version": "3.10.1",
+      "path": "dependencies/node/node_modules/jszip"
+    },
+    {
+      "name": "image-size",
+      "version": "1.2.1",
+      "path": "dependencies/node/node_modules/image-size"
+    },
+    {
+      "name": "queue",
+      "version": "6.0.2",
+      "path": "dependencies/node/node_modules/queue"
+    },
+    {
+      "name": "@types/node",
+      "version": "22.19.17",
+      "path": "dependencies/node/node_modules/@types/node"
+    },
+    {
+      "name": "undici-types",
+      "version": "6.21.0",
+      "path": "dependencies/node/node_modules/undici-types"
+    },
+    {
+      "name": "https",
+      "version": "1.0.0",
+      "path": "dependencies/node/node_modules/https",
+      "entryRequired": false
+    },
+    {
+      "name": "lie",
+      "version": "3.3.0",
+      "path": "dependencies/node/node_modules/lie"
+    },
+    {
+      "name": "pako",
+      "version": "1.0.11",
+      "path": "dependencies/node/node_modules/pako"
+    },
+    {
+      "name": "readable-stream",
+      "version": "2.3.8",
+      "path": "dependencies/node/node_modules/readable-stream"
+    },
+    {
+      "name": "setimmediate",
+      "version": "1.0.5",
+      "path": "dependencies/node/node_modules/setimmediate"
+    },
+    {
+      "name": "core-util-is",
+      "version": "1.0.3",
+      "path": "dependencies/node/node_modules/core-util-is"
+    },
+    {
+      "name": "inherits",
+      "version": "2.0.4",
+      "path": "dependencies/node/node_modules/inherits"
+    },
+    {
+      "name": "isarray",
+      "version": "1.0.0",
+      "path": "dependencies/node/node_modules/isarray"
+    },
+    {
+      "name": "process-nextick-args",
+      "version": "2.0.1",
+      "path": "dependencies/node/node_modules/process-nextick-args"
+    },
+    {
+      "name": "safe-buffer",
+      "version": "5.1.2",
+      "path": "dependencies/node/node_modules/safe-buffer"
+    },
+    {
+      "name": "string_decoder",
+      "version": "1.1.1",
+      "path": "dependencies/node/node_modules/string_decoder"
+    },
+    {
+      "name": "util-deprecate",
+      "version": "1.0.2",
+      "path": "dependencies/node/node_modules/util-deprecate"
+    }
+  ],
+  "python": {
+    "path": "dependencies/python/python.exe",
+    "packages": [
+      {
+        "name": "python-pptx",
+        "version": "1.0.2",
+        "path": "dependencies/python/packages"
+      },
+      {
+        "name": "Pillow",
+        "version": "11.3.0",
+        "path": "dependencies/python/packages"
+      },
+      {
+        "name": "lxml",
+        "version": "6.1.3",
+        "path": "dependencies/python/packages"
+      },
+      {
+        "name": "XlsxWriter",
+        "version": "3.2.9",
+        "path": "dependencies/python/packages"
+      },
+      {
+        "name": "typing_extensions",
+        "version": "4.16.0",
+        "path": "dependencies/python/packages"
+      }
+    ]
+  },
+  "binaries": [
+    {
+      "name": "soffice",
+      "path": "dependencies/native/libreoffice/program/soffice.com",
+      "required": true
+    },
+    {
+      "name": "pdfinfo",
+      "path": "dependencies/native/poppler/bin/pdfinfo.exe",
+      "required": true
+    },
+    {
+      "name": "pdftoppm",
+      "path": "dependencies/native/poppler/bin/pdftoppm.exe",
+      "required": true
+    }
+  ],
+  "fonts": [
+    {
+      "name": "noto-sans-cjk-sc",
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Black.otf"
+    }
+  ],
+  "bundledPlugins": [
+    {
+      "marketplace": "presentation-skill",
+      "path": "plugins/presentation-skill"
+    }
+  ],
+  "bundledSkills": [
+    {
+      "path": "plugins/presentation-skill/plugins/presentation-skill/skills/presentation-skill/SKILL.md",
+      "sha256": "90ec3ff1c9a633a4b0ad87e7ab22f9d2640369d01219ca1050e95bc3b1cbd32f"
+    }
+  ],
+  "skillsToRemove": [],
+  "sourceDigests": [
+    {
+      "path": "provenance/source-lock.json",
+      "sha256": "54efc2fc6d877eec5cddad954ae8ecbfa4df73291088a45bb53c76792e3aa283"
+    },
+    {
+      "path": "provenance/THIRD_PARTY_NOTICES.txt",
+      "sha256": "a2a4b2398bcb5d8b6553e611e8374c069c3121f08937faa240d3f2bb606dcaf8"
+    },
+    {
+      "path": "provenance/toolchains-lock.json",
+      "sha256": "95a990efabdf170f4dfb8504baf70407772889538c43d96b330c0e6809a0d560"
+    }
+  ]
+}

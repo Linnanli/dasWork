@@ -54,16 +54,28 @@ export async function rasterizePresentationSvg(
       }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    const firstPaint = new Promise<void>((resolve) => window!.once('ready-to-show', resolve))
     const render = async (): Promise<Buffer> => {
       await window!.loadFile(svgPath)
+      await firstPaint
       // Only this fixed Main-owned expression executes. Document scripts stay
-      // disabled; font loading and its layout must finish before capture.
+      // disabled. Preserve each text style's preferred fonts, and include the
+      // Runtime font as its Chinese fallback. Wait for paint after font layout.
       const fontLoaded = await window!.webContents.executeJavaScriptInIsolatedWorld(1001, [
         {
-          code: `document.fonts.load('16px "Noto Sans CJK SC"', '中文').then(async faces => {
+          code: `(async () => {
+          for (const element of document.querySelectorAll('[style]')) {
+            const family = element.style.fontFamily;
+            if (family && !family.includes('Noto Sans CJK SC')) {
+              element.style.fontFamily = family + ', "Noto Sans CJK SC"';
+            }
+          }
+          const faces = await document.fonts.load('16px "Noto Sans CJK SC"', '中文');
           await document.fonts.ready;
-          return faces.length > 0 && faces.every(face => face.status === 'loaded');
-        })`
+          if (!faces.length || faces.some(face => face.status !== 'loaded')) return false;
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          return true;
+        })()`
         }
       ])
       if (!fontLoaded)

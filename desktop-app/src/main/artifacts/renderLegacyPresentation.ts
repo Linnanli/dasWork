@@ -72,7 +72,7 @@ export async function renderLegacyPresentation(
     environment
   )
 
-  const pdfPath = await findConvertedPdf(outputDirectory, inputPath, conversion)
+  const pdfPath = await findConvertedPdf(outputDirectory, inputPath, binaries.soffice, conversion)
   const slidePrefix = join(slidesDirectory, 'slide')
   await runProcess(
     binaries.pdftoppm,
@@ -85,6 +85,7 @@ export async function renderLegacyPresentation(
 async function findConvertedPdf(
   outputDirectory: string,
   inputPath: string,
+  sofficePath: string,
   conversion: LegacyProcessResult
 ): Promise<string> {
   const outputFiles = await readdir(outputDirectory)
@@ -92,6 +93,19 @@ async function findConvertedPdf(
   if (outputPdfs.length > 0) return join(outputDirectory, outputPdfs[0])
 
   const siblingFiles = await readdir(dirname(inputPath)).catch(() => [])
+  const programDirectory = dirname(sofficePath)
+  const pythonCores = (await readdir(programDirectory).catch(() => []))
+    .filter((entry) => entry.startsWith('python-core-'))
+    .slice(0, 2)
+  const pythonLibraries = await Promise.all(
+    pythonCores.map(async (core) => {
+      const library = join(programDirectory, core, 'lib', 'os.py')
+      const present = await stat(library)
+        .then((entry) => entry.isFile())
+        .catch(() => false)
+      return `${core}:os.py=${present ? 'present' : 'missing'}:pathLength=${library.length}`
+    })
+  )
 
   throw new Error(
     [
@@ -99,6 +113,8 @@ async function findConvertedPdf(
       `outputDirectory=${outputDirectory}`,
       `outputFiles=${formatDirectoryEntries(outputFiles)}`,
       `inputDirectoryFiles=${formatDirectoryEntries(siblingFiles)}`,
+      `sofficePathLength=${sofficePath.length}`,
+      `pythonLibraries=${pythonLibraries.join(',') || '<none>'}`,
       `stdout=${safeProcessOutput(conversion.stdout)}`,
       `stderr=${safeProcessOutput(conversion.stderr)}`
     ].join(' ')

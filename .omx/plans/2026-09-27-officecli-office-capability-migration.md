@@ -46,6 +46,14 @@
 
 本轮最终桌面构建与 Node/Web 类型检查通过；完整 lint 为 0 错误、539 条既有警告，变更文件 lint 和 `git diff --check` 通过。上述验证覆盖当前修复；四平台原生结果仍须由新 `calibrate` 运行确认。
 
+修复提交 `c49c334253650c7fc650a2d1f7ca5e99dbb4ba38` 已推送。新四目标 `calibrate` 运行 [36395096696](https://github.com/Linnanli/dasWork/actions/runs/36395096696) 于 2026-09-28 08:03:26 UTC 创建，已确认 `headSha` 与该提交一致、状态为 `in_progress`。按约定暂停，等待用户完成通知后再读取 Windows 旧转换、Linux 中文实图、四平台校准与后续门禁结果；尚未读取新运行最终结果，A1–A9 仍未全部接受。
+
+用户报告该运行完成且有报错后，确认 `36395096696` 最终失败：四目标构建/原生归档执行和完整迁移矩阵通过，macOS 两目标 P3 全部通过；Windows 新 R07 通过、旧转换未产出 PDF，stderr 为 `Could not find platform independent libraries <prefix>`；Linux 封面实际 PNG 只有一种颜色，其他页仍有中文方框。上次字体加载等待不足以接受 Linux 预览。
+
+本轮 Main 预览在加载前注册隐藏窗口首帧事件，首帧后为每个已有字体样式追加 Runtime 中文后备字体，等待字体布局及两个动画帧后再截取；文档脚本、Node 和外部请求仍禁用。真实 Electron 控制通过，Chromium 字形报告确认标题与正文均使用 Runtime 数据字体（`isCustomFont: true`），不再仅凭“字体加载成功”判断。Windows 迁移测试此前将旧 Runtime 保留在系统长临时根，现改用 `RUNNER_TEMP` 优先及 `dsc-mig-` 短前缀；这是有路径证据的修复候选，仍须原生 Windows 验证，不把未经证实的 Python 环境污染写为根因。旧转换失败同时报告内置 Python `os.py` 的真实存在状态和路径长度。相关单元 18 项、发布契约 44 项通过；新四目标原生预览与 A1–A9 全部验收仍待完成。
+
+本轮完整本机 R07 控制通过（约 3.1 分钟），六页真实 PNG、哈希及原像素标准通过，证据含独立的字体字形报告，保存在 `docs/verification/officecli-runtime-migration/2026-09-28/darwin-x64-r07-frame-control/`。最终构建、Node/Web 类型检查、完整 lint（0 错误、539 条既有警告）、变更文件 lint 与 diff 检查通过。本机控制仍不替代 Windows/Linux 原生验证、十样本校准或完整计划验收。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

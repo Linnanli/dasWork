@@ -19,6 +19,7 @@ const electronMock = vi.hoisted(() => {
       (world: number, scripts: unknown[]) => Promise<boolean>
     >(async () => true),
     capturePage: vi.fn(async () => ({ isEmpty: () => false, toPNG: () => Buffer.from('png') })),
+    once: vi.fn<(event: string, listener: () => void) => void>(),
     destroy: vi.fn()
   }
 })
@@ -31,6 +32,7 @@ vi.mock('electron', () => ({
       electronMock.windowOptions(options)
     }
     loadFile = electronMock.loadFile
+    once = electronMock.once
     webContents = {
       executeJavaScriptInIsolatedWorld: electronMock.executeJavaScriptInIsolatedWorld,
       capturePage: electronMock.capturePage,
@@ -49,6 +51,7 @@ beforeEach(() => {
   electronMock.loadFile.mockClear()
   electronMock.windowOptions.mockClear()
   electronMock.destroy.mockClear()
+  electronMock.once.mockReset().mockImplementation((_event, listener) => listener())
   electronMock.executeJavaScriptInIsolatedWorld.mockReset().mockResolvedValue(true)
 })
 
@@ -102,6 +105,52 @@ describe('rasterizePresentationSvg', () => {
     const callback = vi.fn()
     onRequest({ url: 'https://example.com/font.otf' }, callback)
     expect(callback).toHaveBeenCalledWith({ cancel: true })
+  })
+
+  it('waits for the hidden window first paint before loading fonts and capturing', async () => {
+    let releasePaint!: () => void
+    electronMock.once.mockImplementationOnce((_event, listener) => (releasePaint = listener))
+    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    await vi.waitFor(() => expect(electronMock.loadFile).toHaveBeenCalled())
+    expect(electronMock.once).toHaveBeenCalledWith('ready-to-show', expect.any(Function))
+    expect(electronMock.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
+    expect(electronMock.capturePage).not.toHaveBeenCalled()
+    releasePaint()
+    await expect(rendering).resolves.toEqual(Buffer.from('png'))
+  })
+
+  it('includes the Runtime fallback and waits for two frames after font layout', async () => {
+    const elements = [
+      { style: { fontFamily: 'Aptos' } },
+      { style: { fontFamily: '"Noto Sans CJK SC"' } },
+      { style: { fontFamily: '' } }
+    ]
+    const document = {
+      querySelectorAll: () => elements,
+      fonts: {
+        load: async () => [{ status: 'loaded' }],
+        ready: Promise.resolve()
+      }
+    }
+    const frames: Array<() => void> = []
+    electronMock.executeJavaScriptInIsolatedWorld.mockImplementationOnce((_world, scripts) => {
+      const [{ code }] = scripts as Array<{ code: string }>
+      return new Function('document', 'requestAnimationFrame', `return ${code}`)(
+        document,
+        (callback: () => void) => frames.push(callback)
+      ) as Promise<boolean>
+    })
+    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    await vi.waitFor(() => expect(frames).toHaveLength(1))
+    expect(elements[0].style.fontFamily).toBe('Aptos, "Noto Sans CJK SC"')
+    expect(elements[1].style.fontFamily).toBe('"Noto Sans CJK SC"')
+    expect(elements[2].style.fontFamily).toBe('')
+    expect(electronMock.capturePage).not.toHaveBeenCalled()
+    frames.shift()!()
+    expect(electronMock.capturePage).not.toHaveBeenCalled()
+    expect(frames).toHaveLength(1)
+    frames.shift()!()
+    await expect(rendering).resolves.toEqual(Buffer.from('png'))
   })
 
   it('rejects a failed font load before capture and removes the temporary SVG', async () => {
