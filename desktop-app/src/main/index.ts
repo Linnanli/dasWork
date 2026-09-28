@@ -123,6 +123,7 @@ import {
   readAppBundledPluginDescriptors,
   readPrimaryRuntimeBundledPluginDescriptors,
   readRetiredPrimaryRuntimeBundledPluginDescriptors,
+  readInstalledPrimaryRuntimePluginCatalog,
   RuntimeOwnedSkillManager,
   type BundledPluginDescriptor
 } from './bundledPlugins'
@@ -724,7 +725,11 @@ async function retiredPrimaryRuntimeDescriptorsForReconcile(input: {
   if (!input.cacheRoot) return [...input.committedDescriptors]
 
   try {
-    const installed = await input.catalogClient.listInstalledPluginsForManagement()
+    const installed = await readInstalledPrimaryRuntimePluginCatalog({
+      cacheRoot: input.cacheRoot,
+      listInstalledPluginsForManagement: (query) =>
+        input.catalogClient.listInstalledPluginsForManagement(query)
+    })
     return uniqueBundledPluginDescriptors([
       ...input.committedDescriptors,
       ...(await readRetiredPrimaryRuntimeBundledPluginDescriptors({

@@ -8,6 +8,7 @@ export const officeCliWindowsExecAuditSchemaVersion = "dascowork-officecli-exec-
 
 const capturedOutputBytes = 16_384;
 const defaultTimeoutMs = 45_000;
+const helperCleanupGraceMs = 30_000;
 const helperDirectory = dirname(fileURLToPath(import.meta.url));
 const supportDirectory = join(helperDirectory, "support");
 const powershellHelperPath = join(supportDirectory, "officecli-exec-audit-windows.ps1");
@@ -81,8 +82,9 @@ export async function runWindowsExecAuditUnchecked(options = {}) {
   };
   const root = await mkdtemp(join(resolve(options.tempParent ?? tmpdir()), "officecli-windows-exec-audit-"));
   const inputJsonPath = join(root, "input.json");
+  const helperTemp = join(root, "helper-temp");
   try {
-    await mkdir(root, { recursive: true });
+    await mkdir(helperTemp, { recursive: true });
     await writeFile(inputJsonPath, `${JSON.stringify(input, null, 2)}\n`);
     const invocation = buildWindowsExecAuditInvocation({
       inputJsonPath,
@@ -91,8 +93,8 @@ export async function runWindowsExecAuditUnchecked(options = {}) {
     const raw = await runCappedCommand({
       command: invocation.command,
       args: invocation.args,
-      env: windowsSystemEnvironment(),
-      timeoutMs: timeoutMs + 5_000,
+      env: windowsSystemEnvironment(helperTemp),
+      timeoutMs: timeoutMs + helperCleanupGraceMs,
       allowedExitCodes: [0],
       name: "officecli-windows-exec-audit-helper",
     });
@@ -279,13 +281,22 @@ function createCappedCapture(label) {
   };
 }
 
-function windowsSystemEnvironment() {
+function windowsSystemEnvironment(tempRoot) {
   const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? defaultWindowsSystemRoot;
   const powershellDirectory = `${systemRoot}\\System32\\WindowsPowerShell\\v1.0`;
-  return {
+  const env = {
     SystemRoot: systemRoot,
     WINDIR: process.env.WINDIR ?? systemRoot,
     PATH: `${powershellDirectory};${systemRoot}\\System32;${systemRoot}`,
+  };
+  if (!tempRoot) return env;
+  return {
+    ...env,
+    TEMP: tempRoot,
+    TMP: tempRoot,
+    USERPROFILE: tempRoot,
+    LOCALAPPDATA: tempRoot,
+    APPDATA: tempRoot,
   };
 }
 

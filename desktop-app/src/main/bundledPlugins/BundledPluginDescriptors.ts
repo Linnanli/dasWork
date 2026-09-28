@@ -1,10 +1,14 @@
-import { readFile, realpath } from 'node:fs/promises'
+import { readdir, readFile, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 import { z } from 'zod'
 import type { PluginInstalledResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/PluginInstalledResponse'
 
-import type { PrimaryRuntimeDiagnostic } from '../primaryRuntime'
+import type { PrimaryRuntimeDiagnostic, PrimaryRuntimeManifest } from '../primaryRuntime'
+import {
+  PRIMARY_RUNTIME_MANIFEST_FILENAME,
+  readPrimaryRuntimeManifest
+} from '../primaryRuntime/PrimaryRuntimeManifest'
 
 const bundleFileSchema = z.object({
   path: z.string().min(1),
@@ -99,6 +103,10 @@ type LocalMarketplace = {
   path: string
   manifest: z.infer<typeof marketplaceSchema>
 }
+
+export type PrimaryRuntimePluginCatalogReader = (input?: {
+  cwd?: string
+}) => Promise<PluginInstalledResponse>
 
 export async function readBundledPluginDescriptorsFromMarketplaceRoot(
   marketplacePath: string,
@@ -313,6 +321,79 @@ export async function readRetiredPrimaryRuntimeBundledPluginDescriptors(input: {
     }
   }
   return descriptors
+}
+
+export async function readInstalledPrimaryRuntimePluginCatalog(input: {
+  cacheRoot: string
+  listInstalledPluginsForManagement: PrimaryRuntimePluginCatalogReader
+}): Promise<PluginInstalledResponse> {
+  const installed = await input.listInstalledPluginsForManagement()
+  const marketplaceRoots = await discoverCachedPrimaryRuntimeMarketplaceRoots(input.cacheRoot)
+  const catalogs = [installed]
+  for (const marketplaceRoot of marketplaceRoots) {
+    catalogs.push(await input.listInstalledPluginsForManagement({ cwd: marketplaceRoot }))
+  }
+  return mergeInstalledPluginCatalogs(catalogs)
+}
+
+async function discoverCachedPrimaryRuntimeMarketplaceRoots(cacheRoot: string): Promise<string[]> {
+  const versionsRoot = await realpath(join(cacheRoot, 'versions')).catch(() => null)
+  if (!versionsRoot) return []
+
+  const entries = await readdir(versionsRoot, { withFileTypes: true }).catch(() => [])
+  const marketplaceRoots = new Set<string>()
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    const versionRoot = await realpath(join(versionsRoot, entry.name)).catch(() => null)
+    if (!versionRoot || !isPathInside(versionsRoot, versionRoot)) continue
+
+    const manifest = await readCachedPrimaryRuntimeManifest(versionRoot).catch(() => null)
+    if (!manifest?.bundledPlugins?.length) continue
+
+    for (const bundledPlugin of manifest.bundledPlugins) {
+      const marketplaceRoot = await realpath(resolve(versionRoot, bundledPlugin.path)).catch(
+        () => null
+      )
+      if (!marketplaceRoot || !isPathInside(versionRoot, marketplaceRoot)) continue
+      const descriptors = await readBundledPluginDescriptorsFromMarketplaceRoot(
+        marketplaceRoot,
+        'primary-runtime'
+      ).catch(() => [])
+      if (descriptors.length > 0) marketplaceRoots.add(marketplaceRoot)
+    }
+  }
+  return [...marketplaceRoots].sort()
+}
+
+async function readCachedPrimaryRuntimeManifest(
+  versionRoot: string
+): Promise<PrimaryRuntimeManifest> {
+  const manifestPath = await realpath(join(versionRoot, PRIMARY_RUNTIME_MANIFEST_FILENAME))
+  if (!isPathInside(versionRoot, manifestPath)) {
+    throw new Error('Primary Runtime manifest escapes version root.')
+  }
+  return readPrimaryRuntimeManifest(manifestPath)
+}
+
+function mergeInstalledPluginCatalogs(
+  catalogs: readonly PluginInstalledResponse[]
+): PluginInstalledResponse {
+  const marketplaces = new Map<string, PluginInstalledResponse['marketplaces'][number]>()
+  const anonymousMarketplaces: PluginInstalledResponse['marketplaces'] = []
+  for (const catalog of catalogs) {
+    for (const marketplace of catalog.marketplaces) {
+      if (!marketplace.path) {
+        anonymousMarketplaces.push(marketplace)
+        continue
+      }
+      const key = marketplace.path
+      if (!marketplaces.has(key)) marketplaces.set(key, marketplace)
+    }
+  }
+  return {
+    marketplaces: [...anonymousMarketplaces, ...marketplaces.values()],
+    marketplaceLoadErrors: catalogs.flatMap((catalog) => catalog.marketplaceLoadErrors)
+  }
 }
 
 function isPathInside(root: string, candidate: string): boolean {

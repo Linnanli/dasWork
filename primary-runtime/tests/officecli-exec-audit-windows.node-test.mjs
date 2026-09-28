@@ -60,6 +60,31 @@ test("Windows OfficeCLI child probe uses direct ProcessStartInfo without shell e
   assert.match(source.powershell, /"System\.Web\.Extensions\.dll"/u);
 });
 
+test("Windows OfficeCLI exec audit helper has bounded cleanup budget and temp profile", async () => {
+  const moduleText = await import("../scripts/officecli-exec-audit-windows.mjs").then(async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    return await readFile(fileURLToPath(new URL("../scripts/officecli-exec-audit-windows.mjs", import.meta.url)), "utf8");
+  });
+  assert.match(moduleText, /const helperCleanupGraceMs = 30_000/u);
+  assert.match(moduleText, /const helperTemp = join\(root, "helper-temp"\)/u);
+  assert.match(moduleText, /await mkdir\(helperTemp, \{ recursive: true \}\)/u);
+  assert.match(moduleText, /env: windowsSystemEnvironment\(helperTemp\)/u);
+  assert.match(moduleText, /timeoutMs: timeoutMs \+ helperCleanupGraceMs/u);
+  assert.match(moduleText, /TEMP: tempRoot/u);
+  assert.match(moduleText, /TMP: tempRoot/u);
+  assert.match(moduleText, /LOCALAPPDATA: tempRoot/u);
+});
+
+test("Windows OfficeCLI exec audit passes a valid inherited stdin handle", async () => {
+  const source = await readWindowsExecAuditHelperSourceForTest();
+  assert.match(source.csharp, /OpenInheritedNullInput/u);
+  assert.match(source.csharp, /CreateFileW\("NUL"/u);
+  assert.match(source.csharp, /startup\.StartupInfo\.hStdInput = stdinRead/u);
+  assert.doesNotMatch(source.csharp, /startup\.StartupInfo\.hStdInput = IntPtr\.Zero/u);
+  assert.match(source.csharp, /CloseHandleIfNeeded\(stdinRead\)/u);
+});
+
 test("Windows OfficeCLI exec audit helper sets child process policy at process creation", async () => {
   const source = await readWindowsExecAuditHelperSourceForTest();
   assert.match(source.csharp, /PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY\s*=\s*0x0002000E/u);
@@ -93,6 +118,19 @@ test("Windows OfficeCLI exec audit preserves UTF-8 and validates argv contract",
   assert.match(source.csharp, /var items = value as IEnumerable/u);
   assert.match(source.csharp, /throw new ArgumentException\(key \+ " must be an array/u);
   assert.doesNotMatch(source.csharp, /if \(array == null\) return new string\[0\]/u);
+});
+
+test("Windows OfficeCLI exec audit timeout cleanup is bounded and diagnostic", async () => {
+  const source = await readWindowsExecAuditHelperSourceForTest();
+  assert.match(source.powershell, /stage=powershell-start/u);
+  assert.match(source.powershell, /stage=compile-helper/u);
+  assert.match(source.powershell, /stage=run-helper/u);
+  assert.match(source.csharp, /private static void Stage\(string name\)/u);
+  assert.match(source.csharp, /Stage\("timeout-terminate-job"\)/u);
+  assert.match(source.csharp, /TerminateJobObject\(job, 124\)/u);
+  assert.match(source.csharp, /TerminateProcess\(pi\.hProcess, 124\)/u);
+  assert.match(source.csharp, /WaitForSingleObject\(pi\.hProcess, 5000\)/u);
+  assert.doesNotMatch(source.csharp, /WaitForSingleObject\(pi\.hProcess, INFINITE\)/u);
 });
 
 test("Windows OfficeCLI exec audit refuses non-Windows hosts", async () => {

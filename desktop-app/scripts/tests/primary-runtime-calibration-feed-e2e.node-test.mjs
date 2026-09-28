@@ -13,12 +13,14 @@ const e2ePath = resolve(appRoot, 'tests/e2e/primary-runtime-feed.e2e.ts')
 const tlsPolicyPath = resolve(appRoot, 'src/main/primaryRuntime/PrimaryRuntimeTlsPolicy.ts')
 
 test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a test app-server', async () => {
-  const [packageJsonSource, runnerSource, e2eSource, tlsPolicySource] = await Promise.all([
-    readFile(packageJsonPath, 'utf8'),
-    readFile(runnerPath, 'utf8'),
-    readFile(e2ePath, 'utf8'),
-    readFile(tlsPolicyPath, 'utf8')
-  ])
+  const [packageJsonSource, runnerSource, e2eSource, tlsPolicySource, tlsFixtureSource] =
+    await Promise.all([
+      readFile(packageJsonPath, 'utf8'),
+      readFile(runnerPath, 'utf8'),
+      readFile(e2ePath, 'utf8'),
+      readFile(tlsPolicyPath, 'utf8'),
+      readFile(resolve(appRoot, 'scripts/lib/primary-runtime-local-tls.mjs'), 'utf8')
+    ])
   const packageJson = JSON.parse(packageJsonSource)
 
   assert.equal(
@@ -47,13 +49,13 @@ test('P3b calibration feed runner is local-only, P1a-bound, and cannot use a tes
   assert.match(runnerSource, /process\.platform === 'win32' \? 'Path' : 'PATH'/u)
   assert.match(runnerSource, /join\(appRoot, 'node_modules', '\.bin'\)/u)
   assert.match(runnerSource, /key\.toUpperCase\(\) !== 'PATH'/u)
-  assert.match(runnerSource, /extendedKeyUsage=serverAuth/u)
-  assert.match(runnerSource, /basicConstraints=critical,CA:TRUE/u)
-  assert.match(runnerSource, /basicConstraints=critical,CA:FALSE/u)
-  assert.match(runnerSource, /subjectAltName=IP:127\.0\.0\.1/u)
-  assert.match(runnerSource, /'-CAcreateserial'/u)
-  assert.match(runnerSource, /'-extensions',\s*'v3_leaf'/u)
-  assert.match(runnerSource, /'verify', '-CAfile'/u)
+  assert.match(tlsFixtureSource, /extendedKeyUsage=serverAuth/u)
+  assert.match(tlsFixtureSource, /basicConstraints=critical,CA:TRUE/u)
+  assert.match(tlsFixtureSource, /basicConstraints=critical,CA:FALSE/u)
+  assert.match(tlsFixtureSource, /subjectAltName=IP:127\.0\.0\.1/u)
+  assert.match(tlsFixtureSource, /'-CAcreateserial'/u)
+  assert.match(tlsFixtureSource, /'-extensions',\s*'v3_leaf'/u)
+  assert.match(tlsFixtureSource, /'verify', '-CAfile'/u)
   assert.doesNotMatch(runnerSource, /NODE_TLS_REJECT_UNAUTHORIZED/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ROOT/u)
   assert.doesNotMatch(runnerSource, /DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL/u)

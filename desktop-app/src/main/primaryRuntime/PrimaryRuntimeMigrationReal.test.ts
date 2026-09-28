@@ -22,6 +22,7 @@ import {
   StdioTransport
 } from '@dascowork/codex-app-server-client'
 import type { ThreadStartResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/ThreadStartResponse'
+import type { TurnCompletedNotification } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/TurnCompletedNotification'
 import { describe, expect, it } from 'vitest'
 
 import { assistantMessageResponse, startMockBackend } from '../../../tests/e2e/support/mockBackend'
@@ -34,6 +35,7 @@ import {
   type BundledPluginCatalogClient
 } from '../bundledPlugins/BundledPluginManager'
 import {
+  readInstalledPrimaryRuntimePluginCatalog,
   readPrimaryRuntimeBundledPluginDescriptors,
   readRetiredPrimaryRuntimeBundledPluginDescriptors
 } from '../bundledPlugins/BundledPluginDescriptors'
@@ -114,11 +116,13 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
       let archiveRequests = 0
       const receipt: unknown[] = []
       const reloads: unknown[] = []
+      let lastPluginCatalog: unknown
       let service: PrimaryRuntimeService | undefined
       let client: AppServerClient | undefined
       let fault: Fault = 'none'
       let origin = ''
       let succeeded = false
+      let phase = 'start-feed'
       const issuedAt = new Date(Date.now() - 1000).toISOString()
       const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString()
       const feed = createServer(
@@ -200,7 +204,7 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
         origin = `https://127.0.0.1:${address.port}`
         const tls = await PrimaryRuntimeTlsPolicy.create({
           production: false,
-          localTestCaPath: process.env.DASCOWORK_PRIMARY_RUNTIME_MIGRATION_CERT!,
+          localTestCaPath: process.env.DASCOWORK_PRIMARY_RUNTIME_MIGRATION_CA!,
           allowedOrigins: [origin]
         })
         const httpClient = new PrimaryRuntimeHttpClient({
@@ -221,12 +225,32 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
           // An absolute codex.cmd cannot be spawned without a Windows shell.
           const cliEntryPoint = resolve('node_modules', '@openai', 'codex', 'bin', 'codex.js')
           expect((await stat(cliEntryPoint)).isFile()).toBe(true)
+          const appServerEnvironment = {
+            ...process.env,
+            CODEX_HOME: codexHome,
+            NO_PROXY: '127.0.0.1,localhost,::1',
+            no_proxy: '127.0.0.1,localhost,::1'
+          }
+          // This fixture's provider is an in-process loopback server. A host
+          // proxy must not route its requests outside the test process.
+          for (const name of Object.keys(appServerEnvironment)) {
+            if (/^(http|https|all)_proxy$/iu.test(name)) {
+              Reflect.deleteProperty(appServerEnvironment, name)
+            }
+          }
           client = new AppServerClient(
             new StdioTransport({
               command: process.execPath,
-              args: [cliEntryPoint, 'app-server', '--listen', 'stdio://'],
+              args: [
+                cliEntryPoint,
+                '-c',
+                'features.respect_system_proxy=false',
+                'app-server',
+                '--listen',
+                'stdio://'
+              ],
               cwd: workspace,
-              env: { ...process.env, CODEX_HOME: codexHome }
+              env: appServerEnvironment
             }),
             { requestTimeoutMs: 60_000 }
           )
@@ -240,8 +264,11 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
             acquireClient: async () => ({ client: client!, release: async () => undefined })
           })
           return {
-            listInstalledPluginsForManagement: (input) =>
-              catalog.listInstalledPluginsForManagement(input),
+            listInstalledPluginsForManagement: async (input) => {
+              const installed = await catalog.listInstalledPluginsForManagement(input)
+              lastPluginCatalog = { cwd: input?.cwd, installed }
+              return installed
+            },
             installPlugin: (input) => catalog.installPlugin(input),
             listSkillsForManagement: async (input) => {
               if (fault === 'reload_skills') {
@@ -262,6 +289,7 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
             }
           }
         }
+        phase = 'start-app-server'
         let catalog = await startAppServer()
         const createService = (): PrimaryRuntimeService =>
           new PrimaryRuntimeService({
@@ -278,18 +306,31 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
         })
         const pointer = new PrimaryRuntimeActivePointer(cacheRoot)
         const reconcile = async (): Promise<void> => {
+          phase = `reconcile-${selected}-diagnose`
           const diagnostic = await service!.diagnoseDependencies()
           capabilities.updatePrimaryRuntimeState({ diagnostic, runtimePluginsSynchronized: false })
           const blocked = await capabilities.snapshot()
-          expect(blocked.availableToolNames).not.toContain('load_workspace_dependencies')
+          if (diagnostic.manifest?.bundleFormatVersion === 3) {
+            expect(blocked.availableToolNames).not.toContain('load_workspace_dependencies')
+          } else if (diagnostic.status === 'ready') {
+            // Legacy v2 keeps its established dependency-loader behavior.
+            expect(blocked.availableToolNames).toContain('load_workspace_dependencies')
+          }
+          phase = `reconcile-${selected}-blocked-chat`
           await chat(blocked)
+          phase = `reconcile-${selected}-read-plugins`
           const descriptors = await readPrimaryRuntimeBundledPluginDescriptors(diagnostic)
-          const installed = await catalog.listInstalledPluginsForManagement({ cwd: workspace })
+          const installed = await readInstalledPrimaryRuntimePluginCatalog({
+            cacheRoot,
+            listInstalledPluginsForManagement: (input) =>
+              catalog.listInstalledPluginsForManagement(input)
+          })
           const retiredDescriptors = await readRetiredPrimaryRuntimeBundledPluginDescriptors({
             installed,
             cacheRoot,
             activeDescriptors: descriptors
           })
+          phase = `reconcile-${selected}-sync-catalog`
           const result = await new BundledPluginManager({
             catalogClient: catalog,
             descriptors,
@@ -301,9 +342,9 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
               }
               const transaction = await new RuntimeOwnedSkillManager({
                 codexHome,
-                runtimeRoot: diagnostic.root!,
-                bundleVersion: diagnostic.manifest!.bundleVersion,
-                manifest: diagnostic.manifest!
+                runtimeRoot: diagnostic.root ?? cacheRoot,
+                bundleVersion: diagnostic.manifest?.bundleVersion ?? 'none',
+                manifest: diagnostic.manifest ?? { bundledSkills: [] }
               }).reconcileWithRollback()
               return transaction.rollback
             }
@@ -331,14 +372,20 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
             complete = resolveDone
             reject = rejectDone
           })
+          void completed.catch(() => undefined)
           const offItem = client!.onNotification('item/completed', (value) => {
             const item = (value as { item?: { type?: string; text?: string } }).item
             if (item?.type === 'agentMessage' && item.text) messages.push(item.text)
           })
           const offTurn = client!.onNotification('turn/completed', (value) => {
-            const turn = (value as { turn: { status: string } }).turn
+            const turn = (value as TurnCompletedNotification).turn
             if (turn.status === 'completed') complete!()
-            else reject!(new Error(`Migration chat failed: ${turn.status}`))
+            else
+              reject!(
+                new Error(
+                  `Migration chat failed: ${turn.status}: ${turn.error?.message ?? 'no turn error details'}`
+                )
+              )
           })
           const deadline = setTimeout(() => reject!(new Error('Migration chat timed out')), 60_000)
           try {
@@ -358,7 +405,10 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
                     base_url: backend.baseUrl,
                     wire_api: 'responses',
                     experimental_bearer_token: 'sk-e2e-test-key',
-                    requires_openai_auth: false
+                    requires_openai_auth: false,
+                    supports_websockets: false,
+                    request_max_retries: 0,
+                    stream_max_retries: 0
                   }
                 }
               }
@@ -385,6 +435,7 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
           scenario: string,
           expected: Version
         ): Promise<DesktopCapabilitySnapshot> => {
+          phase = `record-${scenario}`
           const diagnostic = await service!.diagnoseDependencies()
           expect(diagnostic.status).toBe('ready')
           expect(diagnostic.manifest!.bundleVersion).toBe(archives[expected].version)
@@ -398,7 +449,11 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
           expect(marker.bundleVersion).toBe(archives[expected].version)
           const names = (await readdir(managedRoot)).filter((name) => !name.startsWith('.')).sort()
           expect(names).toEqual([expected === 'v2' ? 'presentation-skill' : 'officecli'])
-          const installed = await catalog.listInstalledPluginsForManagement({ cwd: workspace })
+          const installed = await readInstalledPrimaryRuntimePluginCatalog({
+            cacheRoot,
+            listInstalledPluginsForManagement: (input) =>
+              catalog.listInstalledPluginsForManagement(input)
+          })
           const oldPlugins = installed.marketplaces
             .filter((marketplace) => marketplace.path?.startsWith(cacheRoot))
             .flatMap((marketplace) => marketplace.plugins)
@@ -419,37 +474,47 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
           })
           return snapshot
         }
+        phase = 'install-v2-initial'
         const legacyInstall = await service.install()
         const oldSnapshot = await record('v2-initial', 'v2')
         const immutableOldSnapshot = structuredClone(oldSnapshot)
 
         select('v3')
         interruptDownload = true
+        phase = 'interrupt-v3-download'
         await expect(service.install()).rejects.toThrow()
         interruptDownload = false
         await record('interrupted-v3-download', 'v2')
         feedOffline = true
+        phase = 'feed-unavailable'
         await expect(service.install()).rejects.toThrow('503')
         feedOffline = false
         await record('feed-unavailable', 'v2')
 
         for (const injected of ['sync_skills', 'reload_skills', 'retire_plugin'] as const) {
           fault = injected
+          phase = `inject-${injected}`
           await expect(service.install()).rejects.toThrow()
           await record(`failed-v2-to-v3-${injected}`, 'v2')
           expect(oldSnapshot).toEqual(immutableOldSnapshot)
         }
+        phase = 'install-v3'
         await service.install()
         await record('v2-to-v3', 'v3')
         // A fresh app-server has no in-process descriptor history. Re-enable the
         // retained old plugin to prove startup retirement uses installed ownership.
-        const installed = await catalog.listInstalledPluginsForManagement({ cwd: workspace })
+        const installed = await readInstalledPrimaryRuntimePluginCatalog({
+          cacheRoot,
+          listInstalledPluginsForManagement: (input) =>
+            catalog.listInstalledPluginsForManagement(input)
+        })
         const old = installed.marketplaces
           .flatMap((marketplace) => marketplace.plugins)
           .find((plugin) => plugin.name === 'presentation-skill')!
         await catalog.setPluginEnabled({ pluginId: old.id, enabled: true })
         service.dispose()
         await client!.disconnect()
+        phase = 'cold-start-app-server'
         catalog = await startAppServer()
         service = createService()
         service.setPostActivationHook(reconcile)
@@ -459,10 +524,12 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           const downloadsBefore = archiveRequests
           select('v2')
+          phase = `rollback-v2-${attempt}`
           await service.install()
           await record(`retained-v2-rollback-${attempt}`, 'v2')
           expect(archiveRequests).toBe(downloadsBefore)
           select('v3')
+          phase = `repeat-v3-${attempt}`
           await service.install()
           await record(`repeat-v2-to-v3-${attempt}`, 'v3')
         }
@@ -473,6 +540,7 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
             {
               schemaVersion: 'dascowork-primary-runtime-migration.v1',
               target: options.target,
+              status: 'passed',
               realAppServer: true,
               signedLoopbackFeed: true,
               evidenceScope:
@@ -495,6 +563,22 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
           )}\n`
         )
         succeeded = true
+      } catch (error) {
+        const failure = {
+          schemaVersion: 'dascowork-primary-runtime-migration.v1',
+          target: options.target,
+          status: 'failed',
+          phase,
+          error: describeMigrationError(error),
+          archiveIdentities: archives,
+          providerRequests: backend.requests.map(({ method, url }) => ({ method, url })),
+          lastPluginCatalog,
+          transitions: receipt
+        }
+        console.error(JSON.stringify(failure, null, 2))
+        await mkdir(dirname(options.output), { recursive: true })
+        await writeFile(options.output, `${JSON.stringify(failure, null, 2)}\n`)
+        throw error
       } finally {
         service?.dispose()
         await client?.disconnect()
@@ -513,8 +597,31 @@ describe.skipIf(!enabled)('native signed-Feed Runtime migration', () => {
   )
 })
 
+function describeMigrationError(error: unknown): unknown {
+  if (error === null || typeof error !== 'object') return String(error)
+  const value = error as {
+    name?: string
+    message?: string
+    code?: string
+    stack?: string
+    cause?: unknown
+    errors?: unknown[]
+  }
+  return {
+    name: value.name,
+    message: value.message,
+    code: value.code,
+    stack: value.stack,
+    ...(value.cause ? { cause: describeMigrationError(value.cause) } : {}),
+    ...(Array.isArray(value.errors) ? { errors: value.errors.map(describeMigrationError) } : {})
+  }
+}
+
 async function makeWritable(root: string): Promise<void> {
   for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    // The real app-server creates executable symlinks under CODEX_HOME.
+    // Cleanup must never chmod their targets outside this temporary fixture.
+    if (entry.isSymbolicLink()) continue
     const path = join(root, entry.name)
     if (entry.isDirectory()) await makeWritable(path)
     await chmod(path, entry.isDirectory() ? 0o700 : 0o600)

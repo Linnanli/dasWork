@@ -25,7 +25,11 @@ import { PrimaryRuntimeDiagnostics } from './PrimaryRuntimeDiagnostics'
 import { PrimaryRuntimeLocator } from './PrimaryRuntimeLocator'
 import { parsePrimaryRuntimeManifest } from './PrimaryRuntimeManifest'
 import { PrimaryRuntimePostInstallError } from './PrimaryRuntimePostInstallError'
-import { PrimaryRuntimeService, type PrimaryRuntimeTelemetryEvent } from './PrimaryRuntimeService'
+import {
+  PrimaryRuntimeService,
+  type PrimaryRuntimeInstallCallError,
+  type PrimaryRuntimeTelemetryEvent
+} from './PrimaryRuntimeService'
 import type {
   PrimaryRuntimeDiagnostic,
   PrimaryRuntimeManifest,
@@ -1387,6 +1391,61 @@ describe('PrimaryRuntimeService', () => {
     expect(releaseDownloads).toBe(1)
   })
 
+  it('preserves AggregateError details and Error cause for each joined caller', async () => {
+    const cacheRoot = await fixtureDirectory()
+    const archive = await releaseArchive({ bundleVersion: 'correlated-failure-runtime' })
+    const activationEntered = deferred()
+    const releaseActivation = deferred()
+    const innerFailure = new Error('candidate sync failed')
+    const rootCause = new Error('rollback restore failed')
+    const aggregate = new AggregateError([innerFailure], 'post activation failed')
+    Object.defineProperty(aggregate, 'cause', {
+      value: rootCause,
+      configurable: true,
+      writable: true
+    })
+    const service = new PrimaryRuntimeService({
+      locator: new PrimaryRuntimeLocator({ appCacheRoot: cacheRoot }),
+      cacheRoot,
+      diagnostics: new PrimaryRuntimeDiagnostics(),
+      activationTransaction: {
+        activate: vi.fn(async () => {
+          activationEntered.resolve()
+          await releaseActivation.promise
+          throw aggregate
+        }),
+        recover: vi.fn()
+      },
+      releaseProvider: {
+        getRelease: async () => archive.descriptor,
+        downloadArchive: vi.fn()
+      }
+    })
+
+    const first = service.install().catch((error: unknown) => error)
+    await activationEntered.promise
+    const second = service.install().catch((error: unknown) => error)
+    releaseActivation.resolve()
+    const errors = await Promise.all([first, second])
+
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(AggregateError)
+      expect((error as AggregateError).errors).toEqual([innerFailure])
+      expect((error as Error & { cause?: unknown }).cause).toBe(rootCause)
+      expect(error).toMatchObject({
+        callId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+        operationId: expect.stringMatching(/^[0-9a-f-]{36}$/u)
+      })
+    }
+    expect(errors[0]).not.toBe(errors[1])
+    expect((errors[0] as PrimaryRuntimeInstallCallError).callId).not.toBe(
+      (errors[1] as PrimaryRuntimeInstallCallError).callId
+    )
+    expect((errors[0] as PrimaryRuntimeInstallCallError).operationId).toBe(
+      (errors[1] as PrimaryRuntimeInstallCallError).operationId
+    )
+  })
+
   it('cancels an in-flight download and removes its incomplete file', async () => {
     const cacheRoot = await fixtureDirectory()
     const archive = await releaseArchive({ bundleVersion: 'cancelled-runtime' })
@@ -1424,6 +1483,17 @@ describe('PrimaryRuntimeService', () => {
     expect((await readdir(cacheRoot)).filter((entry) => entry.includes('.part-'))).toEqual([])
   })
 })
+
+function deferred(): {
+  promise: Promise<void>
+  resolve(): void
+} {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
 
 async function fixtureDirectory(): Promise<string> {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-primary-runtime-')))

@@ -18,6 +18,8 @@
 5. 四平台执行真实旧 v2→v3、冷启动、回滚及同步失败恢复矩阵，归档指针、技能、插件、能力快照与 reload 记录；旧/新预览逐页对比并记录视觉检查。
 6. 先跑目标回归、类型和边界检查，再重新校准、审查预算并执行最终构建；按用户约定在触发 Runtime 打包后暂停等待运行结果。只有取得上述真实证据后才恢复“开发完成”声明。
 
+修复提交 `432e0c6e2423151f83961a20c042da7240a67cc3` 的校准运行 [36373185725](https://github.com/Linnanli/dasWork/actions/runs/36373185725) 已失败：Windows 输入验证的进程隔离 helper 超时，macOS 两平台迁移 Feed 证书验证失败，Linux 迁移测试的 v2 能力断言错误被丢失内部错误列表后的 `map` 报错掩盖。继续修复，并补齐真实控制测试发现的冷启动旧 marketplace 查询范围；完整计划仍未验收通过。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

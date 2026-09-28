@@ -2,13 +2,14 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BundledPluginManager,
   parseBundledPluginLock,
   readAppBundledPluginDescriptors,
   readBundledPluginDescriptorsFromMarketplaceRoot,
+  readInstalledPrimaryRuntimePluginCatalog,
   readRetiredPrimaryRuntimeBundledPluginDescriptors
 } from './index'
 
@@ -26,6 +27,7 @@ describe('BundledPluginDescriptors', () => {
     expect(parseBundledPluginLock).toBeTypeOf('function')
     expect(readAppBundledPluginDescriptors).toBeTypeOf('function')
     expect(readBundledPluginDescriptorsFromMarketplaceRoot).toBeTypeOf('function')
+    expect(readInstalledPrimaryRuntimePluginCatalog).toBeTypeOf('function')
   })
 
   it('parses locked marketplace descriptors into data-driven install inputs', async () => {
@@ -254,6 +256,186 @@ describe('BundledPluginDescriptors', () => {
       })
     ])
   })
+
+  it('queries installed plugin catalog for declared cached Runtime marketplaces', async () => {
+    const cacheRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-cache-')))
+    directories.push(cacheRoot)
+    const v1Marketplace = join(cacheRoot, 'versions', 'v1', 'plugins', 'legacy-one')
+    const v2Marketplace = join(cacheRoot, 'versions', 'v2', 'plugins', 'presentation-skill')
+    const v3Marketplace = join(cacheRoot, 'versions', 'v3', 'plugins', 'officecli')
+    await writeRuntimeMarketplace(v1Marketplace, {
+      marketplaceName: 'legacy-one',
+      pluginName: 'legacy-one',
+      version: '0.1.0'
+    })
+    await writeRuntimeManifest(join(cacheRoot, 'versions', 'v1'), {
+      bundleFormatVersion: 1,
+      bundledPlugins: [{ marketplace: 'legacy-one', path: 'plugins/legacy-one' }]
+    })
+    await writeRuntimeMarketplace(v2Marketplace, {
+      marketplaceName: 'presentation-skill',
+      pluginName: 'presentation-skill',
+      version: '0.8.0'
+    })
+    await writeLegacyV2RuntimeManifest(join(cacheRoot, 'versions', 'v2'), [
+      'plugins/presentation-skill'
+    ])
+    await writeRuntimeMarketplace(v3Marketplace, {
+      marketplaceName: 'officecli',
+      pluginName: 'officecli',
+      version: '1.0.0'
+    })
+    await writeRuntimeManifest(join(cacheRoot, 'versions', 'v3'), {
+      bundleFormatVersion: 3,
+      bundledPlugins: [{ marketplace: 'officecli', path: 'plugins/officecli' }]
+    })
+
+    const marketplacesByRoot = new Map([
+      [v1Marketplace, installedMarketplace(v1Marketplace, 'legacy-one', 'legacy-one')],
+      [
+        v2Marketplace,
+        installedMarketplace(v2Marketplace, 'presentation-skill', 'presentation-skill')
+      ],
+      [v3Marketplace, installedMarketplace(v3Marketplace, 'officecli', 'officecli')]
+    ])
+    const listInstalledPluginsForManagement = vi.fn(async (input?: { cwd?: string }) => ({
+      marketplaceLoadErrors: [],
+      marketplaces: input?.cwd ? [marketplacesByRoot.get(input.cwd)!] : []
+    }))
+
+    const installed = await readInstalledPrimaryRuntimePluginCatalog({
+      cacheRoot,
+      listInstalledPluginsForManagement
+    })
+
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith()
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith({ cwd: v1Marketplace })
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith({ cwd: v2Marketplace })
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith({ cwd: v3Marketplace })
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledTimes(4)
+    expect(installed.marketplaces.map((marketplace) => marketplace.path)).toEqual([
+      join(v1Marketplace, '.agents', 'plugins', 'marketplace.json'),
+      join(v2Marketplace, '.agents', 'plugins', 'marketplace.json'),
+      join(v3Marketplace, '.agents', 'plugins', 'marketplace.json')
+    ])
+  })
+
+  it('keeps the ordinary installed catalog query when cache versions are missing', async () => {
+    const cacheRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-cache-')))
+    directories.push(cacheRoot)
+    const installedMarketplaceRoot = await fixtureRuntimeMarketplace()
+    const ordinaryInstalled = installedMarketplace(
+      installedMarketplaceRoot,
+      'presentation-skill',
+      'presentation-skill'
+    )
+    const listInstalledPluginsForManagement = vi.fn(async () => ({
+      marketplaceLoadErrors: [],
+      marketplaces: [ordinaryInstalled]
+    }))
+
+    await expect(
+      readInstalledPrimaryRuntimePluginCatalog({ cacheRoot, listInstalledPluginsForManagement })
+    ).resolves.toEqual({ marketplaceLoadErrors: [], marketplaces: [ordinaryInstalled] })
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledTimes(1)
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith()
+  })
+
+  it('does not query untrusted cached Runtime marketplace declarations', async () => {
+    const cacheRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-cache-')))
+    const outside = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-outside-')))
+    directories.push(cacheRoot, outside)
+    const externalMarketplace = join(outside, 'plugins', 'presentation-skill')
+    await writeRuntimeMarketplace(externalMarketplace, {
+      marketplaceName: 'presentation-skill',
+      pluginName: 'presentation-skill',
+      version: '0.8.0'
+    })
+    await writeRuntimeManifest(join(outside, 'escaped-version'), {
+      bundleFormatVersion: 1,
+      bundledPlugins: [{ marketplace: 'presentation-skill', path: '../plugins/presentation-skill' }]
+    })
+    await mkdir(join(cacheRoot, 'versions'), { recursive: true })
+    await symlink(join(outside, 'escaped-version'), join(cacheRoot, 'versions', 'escaped-version'))
+
+    const invalidVersionRoot = join(cacheRoot, 'versions', 'invalid-manifest')
+    await mkdir(invalidVersionRoot, { recursive: true })
+    await writeFile(
+      join(invalidVersionRoot, 'runtime.json'),
+      JSON.stringify({ bundleFormatVersion: 3 })
+    )
+
+    const escapingMarketplaceVersionRoot = join(cacheRoot, 'versions', 'escaping-marketplace')
+    await mkdir(escapingMarketplaceVersionRoot, { recursive: true })
+    await symlink(
+      externalMarketplace,
+      join(escapingMarketplaceVersionRoot, 'marketplace-link'),
+      'dir'
+    )
+    await writeRuntimeManifest(escapingMarketplaceVersionRoot, {
+      bundleFormatVersion: 1,
+      bundledPlugins: [{ marketplace: 'presentation-skill', path: 'marketplace-link' }]
+    })
+
+    const badMarketplaceRoot = join(cacheRoot, 'versions', 'bad-marketplace', 'plugins', 'broken')
+    await writeRuntimeMarketplace(badMarketplaceRoot, {
+      marketplaceName: 'broken',
+      pluginName: 'broken',
+      version: '0.1.0'
+    })
+    await writeFile(join(badMarketplaceRoot, '.agents', 'plugins', 'marketplace.json'), '{')
+    await writeRuntimeManifest(join(cacheRoot, 'versions', 'bad-marketplace'), {
+      bundleFormatVersion: 1,
+      bundledPlugins: [{ marketplace: 'broken', path: 'plugins/broken' }]
+    })
+
+    const externalManifestRoot = join(outside, 'external-manifest')
+    await mkdir(externalManifestRoot, { recursive: true })
+    await writeRuntimeManifest(externalManifestRoot, {
+      bundleFormatVersion: 1,
+      bundledPlugins: [{ marketplace: 'presentation-skill', path: '../plugins/presentation-skill' }]
+    })
+    const manifestLinkVersionRoot = join(cacheRoot, 'versions', 'manifest-link')
+    await mkdir(manifestLinkVersionRoot, { recursive: true })
+    await symlink(
+      join(externalManifestRoot, 'runtime.json'),
+      join(manifestLinkVersionRoot, 'runtime.json')
+    )
+
+    const listInstalledPluginsForManagement = vi.fn(async () => ({
+      marketplaceLoadErrors: [],
+      marketplaces: []
+    }))
+
+    await expect(
+      readInstalledPrimaryRuntimePluginCatalog({ cacheRoot, listInstalledPluginsForManagement })
+    ).resolves.toEqual({ marketplaceLoadErrors: [], marketplaces: [] })
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledTimes(1)
+    expect(listInstalledPluginsForManagement).toHaveBeenCalledWith()
+  })
+
+  it('reports catalog read failures for discovered cached Runtime marketplaces', async () => {
+    const cacheRoot = await realpath(await mkdtemp(join(tmpdir(), 'dascowork-runtime-cache-')))
+    directories.push(cacheRoot)
+    const marketplaceRoot = join(cacheRoot, 'versions', 'v2', 'plugins', 'presentation-skill')
+    await writeRuntimeMarketplace(marketplaceRoot, {
+      marketplaceName: 'presentation-skill',
+      pluginName: 'presentation-skill',
+      version: '0.8.0'
+    })
+    await writeLegacyV2RuntimeManifest(join(cacheRoot, 'versions', 'v2'), [
+      'plugins/presentation-skill'
+    ])
+    const error = new Error('catalog cwd failed')
+    const listInstalledPluginsForManagement = vi.fn(async (input?: { cwd?: string }) => {
+      if (input?.cwd) throw error
+      return { marketplaceLoadErrors: [], marketplaces: [] }
+    })
+
+    await expect(
+      readInstalledPrimaryRuntimePluginCatalog({ cacheRoot, listInstalledPluginsForManagement })
+    ).rejects.toBe(error)
+  })
 })
 
 async function fixtureMarketplace(): Promise<string> {
@@ -357,6 +539,50 @@ async function writeRuntimeMarketplace(
   await writeFile(
     join(root, 'plugins', input.pluginName, '.codex-plugin', 'plugin.json'),
     JSON.stringify({ name: input.pluginName, version: input.version })
+  )
+}
+
+async function writeRuntimeManifest(
+  root: string,
+  input: {
+    bundleFormatVersion: 1 | 3
+    bundledPlugins: Array<{ marketplace: string; path: string }>
+  }
+): Promise<void> {
+  await mkdir(root, { recursive: true })
+  await writeFile(
+    join(root, 'runtime.json'),
+    JSON.stringify({
+      bundleFormatVersion: input.bundleFormatVersion,
+      bundleVersion: `test-v${input.bundleFormatVersion}`,
+      target: { platform: process.platform, arch: process.arch },
+      bundledPlugins: input.bundledPlugins,
+      ...(input.bundleFormatVersion === 3
+        ? {
+            binaries: [{ name: 'officecli', path: 'bin/officecli' }],
+            bundledSkills: [{ path: 'skills/officecli/SKILL.md', sha256: 'a'.repeat(64) }]
+          }
+        : {
+            node: { path: 'node/bin/node', version: '20.0.0' },
+            nodePackages: [{ name: '@dascowork/test-runtime', path: 'node_modules/test-runtime' }]
+          })
+    })
+  )
+}
+
+async function writeLegacyV2RuntimeManifest(root: string, bundledPlugins: string[]): Promise<void> {
+  await mkdir(root, { recursive: true })
+  await writeFile(
+    join(root, 'runtime.json'),
+    JSON.stringify({
+      artifactToolVersion: '0.8.0',
+      bundleFormatVersion: 2,
+      bundleVersion: 'test-v2',
+      bundledPlugins,
+      nodeVersion: '20.0.0',
+      targetArch: process.arch,
+      targetPlatform: process.platform
+    })
   )
 }
 

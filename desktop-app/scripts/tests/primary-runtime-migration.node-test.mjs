@@ -1,14 +1,58 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Node integration test uses JavaScript callbacks. */
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { X509Certificate } from 'node:crypto'
+import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer, get } from 'node:https'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import test from 'node:test'
 
+import { createPrimaryRuntimeLocalTls } from '../lib/primary-runtime-local-tls.mjs'
+
 const executeFile = promisify(execFile)
 const root = resolve(import.meta.dirname, '../../..')
 const launcher = join(root, 'desktop-app/scripts/run-primary-runtime-migration.mjs')
+
+test('native migration HTTPS fixture trusts a separate CA and rejects default trust', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'runtime-migration-tls-'))
+  let server
+  try {
+    const tls = await createPrimaryRuntimeLocalTls(temp)
+    const ca = await readFile(tls.caPath)
+    const cert = await readFile(tls.certPath)
+    assert.equal(new X509Certificate(ca).ca, true)
+    assert.equal(new X509Certificate(cert).ca, false)
+    assert.notEqual(new X509Certificate(cert).issuer, new X509Certificate(cert).subject)
+    server = createServer({ key: await readFile(tls.keyPath), cert }, (_request, response) => {
+      response.end('verified local fixture')
+    })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const url = `https://127.0.0.1:${server.address().port}`
+    const request = (options) =>
+      new Promise((resolveResponse, reject) => {
+        get(url, { ...options, rejectUnauthorized: true }, (response) => {
+          let body = ''
+          response.on('data', (chunk) => (body += chunk))
+          response.on('end', () => resolveResponse(body))
+          response.on('error', reject)
+        }).on('error', reject)
+      })
+    assert.equal(await request({ ca }), 'verified local fixture')
+    await assert.rejects(request({}), /certificate|issuer/u)
+  } finally {
+    if (server) {
+      server.closeAllConnections()
+      await new Promise((resolveClose, reject) =>
+        server.close((error) => (error ? reject(error) : resolveClose()))
+      )
+    }
+    await rm(temp, { recursive: true, force: true })
+  }
+})
 
 test('migration launcher fails closed for missing or cross-target archive identities', async () => {
   await assert.rejects(

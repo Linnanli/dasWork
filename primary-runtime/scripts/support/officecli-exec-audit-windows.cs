@@ -22,10 +22,13 @@ namespace Dascowork.OfficeCli
         private const int PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY = 0x0002000E;
         private const int PROCESS_CREATION_CHILD_PROCESS_RESTRICTED = 0x00000001;
         private const int HANDLE_FLAG_INHERIT = 0x00000001;
+        private const uint GENERIC_READ = 0x80000000;
+        private const uint FILE_SHARE_READ = 0x00000001;
+        private const uint FILE_SHARE_WRITE = 0x00000002;
+        private const uint OPEN_EXISTING = 3;
         private const int STARTUPINFOEX_ATTRIBUTE_COUNT = 1;
         private const uint WAIT_OBJECT_0 = 0x00000000;
         private const uint WAIT_TIMEOUT = 0x00000102;
-        private const uint INFINITE = 0xFFFFFFFF;
         private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
         private const int JobObjectExtendedLimitInformation = 9;
 
@@ -70,6 +73,7 @@ namespace Dascowork.OfficeCli
             var stdoutWrite = IntPtr.Zero;
             var stderrRead = IntPtr.Zero;
             var stderrWrite = IntPtr.Zero;
+            var stdinRead = IntPtr.Zero;
             var childProcessPolicy = ChildProcessPolicyAttributeList.Empty;
             var environmentBlock = IntPtr.Zero;
             var job = IntPtr.Zero;
@@ -82,9 +86,12 @@ namespace Dascowork.OfficeCli
 
             try
             {
+                Stage("create-pipes");
                 CreatePipePair(out stdoutRead, out stdoutWrite);
                 CreatePipePair(out stderrRead, out stderrWrite);
+                stdinRead = OpenInheritedNullInput();
 
+                Stage("prepare-startup-info");
                 var startup = new STARTUPINFOEX();
                 startup.StartupInfo.cb = restrictChildProcesses
                     ? Marshal.SizeOf(typeof(STARTUPINFOEX))
@@ -92,11 +99,12 @@ namespace Dascowork.OfficeCli
                 startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
                 startup.StartupInfo.hStdOutput = stdoutWrite;
                 startup.StartupInfo.hStdError = stderrWrite;
-                startup.StartupInfo.hStdInput = IntPtr.Zero;
+                startup.StartupInfo.hStdInput = stdinRead;
 
                 var creationFlags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | CREATE_SUSPENDED;
                 if (restrictChildProcesses)
                 {
+                    Stage("prepare-child-process-policy");
                     childProcessPolicy = CreateChildProcessPolicyAttributeList();
                     startup.lpAttributeList = childProcessPolicy.AttributeList;
                     creationFlags |= EXTENDED_STARTUPINFO_PRESENT;
@@ -105,6 +113,7 @@ namespace Dascowork.OfficeCli
                 var commandLine = new StringBuilder(QuoteCommandLine(executable, args));
                 environmentBlock = BuildEnvironmentBlock(env);
 
+                Stage("create-process");
                 var created = CreateProcessW(
                     executable,
                     commandLine,
@@ -127,6 +136,7 @@ namespace Dascowork.OfficeCli
                 CloseHandleIfNeeded(stderrWrite);
                 stderrWrite = IntPtr.Zero;
 
+                Stage("assign-job");
                 job = CreateKillOnCloseJob();
                 if (job == IntPtr.Zero)
                 {
@@ -142,30 +152,56 @@ namespace Dascowork.OfficeCli
                 stdoutRead = IntPtr.Zero;
                 stderrRead = IntPtr.Zero;
 
+                Stage("resume-process");
                 if (ResumeThread(pi.hThread) == 0xFFFFFFFF)
                 {
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "ResumeThread failed");
                 }
                 processResumed = true;
 
+                Stage("wait-process");
                 var waitResult = WaitForSingleObject(pi.hProcess, (uint)Math.Max(1, timeoutMs));
                 var timedOut = waitResult == WAIT_TIMEOUT;
                 if (timedOut)
                 {
-                    TerminateJobObject(job, 124);
-                    WaitForSingleObject(pi.hProcess, INFINITE);
+                    Stage("timeout-terminate-job");
+                    if (job == IntPtr.Zero || !TerminateJobObject(job, 124))
+                    {
+                        var terminateJobError = Marshal.GetLastWin32Error();
+                        Stage("timeout-terminate-process");
+                        if (!TerminateProcess(pi.hProcess, 124))
+                        {
+                            throw new Win32Exception(Marshal.GetLastWin32Error(), "Timed out and failed to terminate process after TerminateJobObject failed with " + terminateJobError);
+                        }
+                    }
+                    var terminatedWait = WaitForSingleObject(pi.hProcess, 5000);
+                    if (terminatedWait != WAIT_OBJECT_0)
+                    {
+                        Stage("timeout-process-still-running");
+                        if (!TerminateProcess(pi.hProcess, 124))
+                        {
+                            throw new Win32Exception(Marshal.GetLastWin32Error(), "Timed out and failed to terminate still-running process");
+                        }
+                        terminatedWait = WaitForSingleObject(pi.hProcess, 5000);
+                        if (terminatedWait != WAIT_OBJECT_0)
+                        {
+                            throw new TimeoutException("Timed out process did not exit after termination requests");
+                        }
+                    }
                 }
                 else if (waitResult != WAIT_OBJECT_0)
                 {
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed");
                 }
 
+                Stage("get-exit-code");
                 uint exitCode;
                 if (!GetExitCodeProcess(pi.hProcess, out exitCode))
                 {
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "GetExitCodeProcess failed");
                 }
 
+                Stage("join-capture");
                 if (!stdoutThread.Join(5000))
                 {
                     throw new TimeoutException("stdout capture thread did not finish after process exit");
@@ -177,6 +213,7 @@ namespace Dascowork.OfficeCli
                 if (stdoutThreadResult.Error != null) throw stdoutThreadResult.Error;
                 if (stderrThreadResult.Error != null) throw stderrThreadResult.Error;
 
+                Stage("emit-receipt");
                 startedAt.Stop();
                 return new Dictionary<string, object>
                 {
@@ -210,6 +247,7 @@ namespace Dascowork.OfficeCli
             {
                 if (processCreated && !processResumed && pi.hProcess != IntPtr.Zero)
                 {
+                    Stage("cleanup-suspended-process");
                     TerminateProcess(pi.hProcess, 125);
                 }
                 if (job != IntPtr.Zero) CloseHandle(job);
@@ -221,7 +259,13 @@ namespace Dascowork.OfficeCli
                 CloseHandleIfNeeded(stdoutWrite);
                 CloseHandleIfNeeded(stderrRead);
                 CloseHandleIfNeeded(stderrWrite);
+                CloseHandleIfNeeded(stdinRead);
             }
+        }
+
+        private static void Stage(string name)
+        {
+            Console.Error.WriteLine("[officecli-exec-audit] stage=" + name);
         }
 
         private static ChildProcessPolicyAttributeList CreateChildProcessPolicyAttributeList()
@@ -328,6 +372,20 @@ namespace Dascowork.OfficeCli
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "SetHandleInformation failed");
             }
+        }
+
+        private static IntPtr OpenInheritedNullInput()
+        {
+            var security = new SECURITY_ATTRIBUTES();
+            security.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+            security.bInheritHandle = true;
+            security.lpSecurityDescriptor = IntPtr.Zero;
+            var handle = CreateFileW("NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, ref security, OPEN_EXISTING, 0, IntPtr.Zero);
+            if (handle == IntPtr.Zero || handle == new IntPtr(-1))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateFileW NUL stdin failed");
+            }
+            return handle;
         }
 
         private static IntPtr BuildEnvironmentBlock(Dictionary<string, string> env)
@@ -584,6 +642,9 @@ namespace Dascowork.OfficeCli
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool SetHandleInformation(IntPtr hObject, int dwMask, int dwFlags);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr CreateFileW(string lpFileName, uint dwDesiredAccess, uint dwShareMode, ref SECURITY_ATTRIBUTES lpSecurityAttributes, uint dwCreationDisposition, uint dwFlagsAndAttributes, IntPtr hTemplateFile);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool CreateProcessW(string lpApplicationName, StringBuilder lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, int dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFOEX lpStartupInfo, out PROCESS_INFORMATION lpProcessInformation);

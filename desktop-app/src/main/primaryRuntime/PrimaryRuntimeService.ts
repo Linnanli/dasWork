@@ -757,7 +757,13 @@ function correlateInstallError(
   // errors) while giving each joining caller a separate correlation record.
   const error = new Error(cause.message) as PrimaryRuntimeInstallCallError
   Object.setPrototypeOf(error, Object.getPrototypeOf(cause))
-  Object.assign(error, cause)
+  const descriptors = Object.getOwnPropertyDescriptors(cause)
+  Reflect.deleteProperty(descriptors, 'name')
+  Reflect.deleteProperty(descriptors, 'message')
+  Reflect.deleteProperty(descriptors, 'stack')
+  Reflect.deleteProperty(descriptors, 'callId')
+  Reflect.deleteProperty(descriptors, 'operationId')
+  Object.defineProperties(error, descriptors)
   Object.defineProperties(error, {
     name: { value: cause.name, enumerable: false, configurable: true },
     message: { value: cause.message, enumerable: false, configurable: true },

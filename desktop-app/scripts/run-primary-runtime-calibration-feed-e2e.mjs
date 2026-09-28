@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- The runner's options and receipts are covered by its Node contract test. */
 
-import { execFile, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import { once } from 'node:events'
 import { createReadStream } from 'node:fs'
@@ -9,7 +9,8 @@ import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
-import { promisify } from 'node:util'
+
+import { createPrimaryRuntimeLocalTls } from './lib/primary-runtime-local-tls.mjs'
 
 import { signFeedMetadata } from '../../services/primary-runtime-feed/src/repository.mjs'
 
@@ -19,7 +20,6 @@ import {
   startPrimaryRuntimeFeed
 } from './dev-with-primary-runtime-feed.mjs'
 
-const executeFile = promisify(execFile)
 const appRoot = resolve(import.meta.dirname, '..')
 const channel = 'p3b-calibration'
 const options = parseOptions(process.argv.slice(2))
@@ -182,7 +182,7 @@ async function createP1aCalibrationFeedFixture(root, input) {
   await mkdir(archiveRoot, { recursive: true })
   await copyFile(input.archive, join(archiveRoot, 'primary-runtime.zip'))
   await copyFile(input.provenance, join(archiveRoot, 'provenance.json'))
-  const tls = await createLocalTls(root)
+  const tls = await createPrimaryRuntimeLocalTls(root)
   return {
     archiveSha256,
     host,
@@ -322,101 +322,6 @@ function generateFeedKey() {
     privateKey,
     publicKey: publicKey.export({ type: 'spki', format: 'pem' }).toString()
   }
-}
-
-async function createLocalTls(root) {
-  const directory = join(root, 'tls')
-  const caKeyPath = join(directory, 'ca-key.pem')
-  const caCertPath = join(directory, 'ca-cert.pem')
-  const caConfigurationPath = join(directory, 'ca.cnf')
-  const keyPath = join(directory, 'server-key.pem')
-  const certificateRequestPath = join(directory, 'server.csr')
-  const certPath = join(directory, 'server-cert.pem')
-  const leafConfigurationPath = join(directory, 'server.cnf')
-  await mkdir(directory, { recursive: true })
-  // Keep this local-only test surface to one ephemeral trust anchor and one
-  // loopback-only leaf. P3b verifies it through Electron Main's dedicated TLS
-  // policy, rather than changing any process-wide or production trust
-  // configuration.
-  await writeFile(
-    caConfigurationPath,
-    [
-      '[req]',
-      'prompt=no',
-      'distinguished_name=subject',
-      'x509_extensions=v3_ca',
-      '[subject]',
-      'CN=DasCowork Primary Runtime P3b Test CA',
-      '[v3_ca]',
-      'basicConstraints=critical,CA:TRUE',
-      'keyUsage=critical,keyCertSign,cRLSign',
-      'subjectKeyIdentifier=hash'
-    ].join('\n') + '\n',
-    { mode: 0o600 }
-  )
-  await executeFile('openssl', [
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-keyout',
-    caKeyPath,
-    '-out',
-    caCertPath,
-    '-days',
-    '1',
-    '-config',
-    caConfigurationPath,
-    '-sha256'
-  ])
-  await executeFile('openssl', [
-    'req',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-keyout',
-    keyPath,
-    '-out',
-    certificateRequestPath,
-    '-subj',
-    '/CN=127.0.0.1'
-  ])
-  await writeFile(
-    leafConfigurationPath,
-    [
-      '[v3_leaf]',
-      'basicConstraints=critical,CA:FALSE',
-      'keyUsage=critical,digitalSignature,keyEncipherment',
-      'extendedKeyUsage=serverAuth',
-      'subjectAltName=IP:127.0.0.1',
-      'subjectKeyIdentifier=hash',
-      'authorityKeyIdentifier=keyid:always,issuer:always'
-    ].join('\n') + '\n',
-    { mode: 0o600 }
-  )
-  await executeFile('openssl', [
-    'x509',
-    '-req',
-    '-in',
-    certificateRequestPath,
-    '-CA',
-    caCertPath,
-    '-CAkey',
-    caKeyPath,
-    '-CAcreateserial',
-    '-out',
-    certPath,
-    '-days',
-    '1',
-    '-sha256',
-    '-extfile',
-    leafConfigurationPath,
-    '-extensions',
-    'v3_leaf'
-  ])
-  await executeFile('openssl', ['verify', '-CAfile', caCertPath, certPath])
-  return { keyPath, certPath, caPath: caCertPath }
 }
 
 async function reserveLoopbackPort(host) {

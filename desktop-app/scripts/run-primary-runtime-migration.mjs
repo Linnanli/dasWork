@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Native integration launcher validates its inputs before spawning Vitest. */
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+
+import { createPrimaryRuntimeLocalTls } from './lib/primary-runtime-local-tls.mjs'
 
 const appRoot = resolve(import.meta.dirname, '..')
 const options = parseOptions(process.argv.slice(2))
@@ -36,31 +38,7 @@ for (const version of ['v2', 'v3']) {
 
 const root = await mkdtemp(join(tmpdir(), 'primary-runtime-migration-tls-'))
 try {
-  const cert = join(root, 'cert.pem')
-  const key = join(root, 'key.pem')
-  execFileSync(
-    'openssl',
-    [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-days',
-      '1',
-      '-keyout',
-      key,
-      '-out',
-      cert,
-      '-subj',
-      '/CN=127.0.0.1',
-      '-addext',
-      'subjectAltName=IP:127.0.0.1',
-      '-addext',
-      'basicConstraints=critical,CA:TRUE'
-    ],
-    { stdio: 'ignore' }
-  )
+  const tls = await createPrimaryRuntimeLocalTls(root)
   await mkdir(resolve(options.output, '..'), { recursive: true })
   const result = spawnSync(
     process.execPath,
@@ -75,8 +53,9 @@ try {
         ...process.env,
         DASCOWORK_PRIMARY_RUNTIME_MIGRATION: '1',
         DASCOWORK_PRIMARY_RUNTIME_MIGRATION_OPTIONS: JSON.stringify(options),
-        DASCOWORK_PRIMARY_RUNTIME_MIGRATION_CERT: cert,
-        DASCOWORK_PRIMARY_RUNTIME_MIGRATION_KEY: key
+        DASCOWORK_PRIMARY_RUNTIME_MIGRATION_CERT: tls.certPath,
+        DASCOWORK_PRIMARY_RUNTIME_MIGRATION_CA: tls.caPath,
+        DASCOWORK_PRIMARY_RUNTIME_MIGRATION_KEY: tls.keyPath
       },
       stdio: 'inherit'
     }
