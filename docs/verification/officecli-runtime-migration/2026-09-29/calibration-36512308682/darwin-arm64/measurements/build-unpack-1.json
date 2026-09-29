@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-p1a-build-unpack-measurement.v1",
+  "target": "darwin-arm64",
+  "archiveSha256": "5d98386765d71be422fd3c9d6aa0d4f1ffe1255bc51cc17606a0ff7a3ebb51e1",
+  "archiveBytes": 115377520,
+  "unpackedBytes": 173626167,
+  "entryCount": 149,
+  "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+  "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+  "inputManifestSha256": "3c2626b555d1ed4538eb2bd43e76c06e11f87b215b40d6addfde492bd0fff7a8",
+  "inputFileManifestSha256": "6867c219aca814c668902a9ec0bb38e6dc001d850167a9b5ca6e4840d2f7e805",
+  "canonicalFileManifestSha256": "dce96a57b8b657e004a1e9fb7797641759c67cddb42f97f435f725a75d048885",
+  "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+  "runner": "macos-15",
+  "releaseClass": "engineering-candidate",
+  "productionTrust": false
+}

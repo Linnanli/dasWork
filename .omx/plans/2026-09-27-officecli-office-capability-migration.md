@@ -80,6 +80,8 @@
 
 最终完整桌面构建、Node/Web 类型、原生运行时边界和 bundled plugins 检查通过；完整 lint 为 0 错误、539 条既有警告，变更 TypeScript 文件单独 lint 无输出，diff 检查通过。
 
+修复提交 `48e1a5ed1095a536e4c8b492065536dfcc5af47e` 已推送。新四目标 `calibrate` 运行 [36512308682](https://github.com/Linnanli/dasWork/actions/runs/36512308682) 已成功完成，预算证据提取 [36517699704](https://github.com/Linnanli/dasWork/actions/runs/36517699704) 通过；新源锁预算已审查并写入 `primary-runtime/runtime-budgets.json`。四平台实图复查未见缺字复发，但用户人工接受和 final 工程 Feed 门禁仍未完成，A1–A9 仍未全部接受。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

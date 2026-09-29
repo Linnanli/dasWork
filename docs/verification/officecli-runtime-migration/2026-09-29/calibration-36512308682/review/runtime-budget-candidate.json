@@ -1,5 +1,6 @@
 {
-  "schemaVersion": "dascowork-primary-runtime-budgets.v1",
+  "schemaVersion": "dascowork-primary-runtime-budget-candidate.v1",
+  "generatedFrom": "dascowork-primary-runtime-budget-measurements.v1",
   "evidence": {
     "sourceRunId": "36512308682",
     "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
@@ -7,14 +8,7 @@
     "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
     "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
     "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
-    "measurementsFingerprint": "1508f62ca733546ace4656588ff75ea3a858ea24b32c1560f965bbb4dadd21fc",
-    "reviewed": true,
-    "candidateArchiveSha256": {
-      "darwin-x64": "0840ce3eb836cb75fd89a37ced8e7a7efaf139a4b1810a252f126baefc2be49e",
-      "darwin-arm64": "1d710784b7fd62e4cd107a808bceb104bc6778d1615963b486fd1083d7b1f681",
-      "win32-x64": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
-      "linux-x64": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499"
-    }
+    "measurementsFingerprint": "1508f62ca733546ace4656588ff75ea3a858ea24b32c1560f965bbb4dadd21fc"
   },
   "targets": {
     "darwin-x64": {

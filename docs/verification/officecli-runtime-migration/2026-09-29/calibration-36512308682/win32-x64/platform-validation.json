@@ -1,0 +1,781 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-platform-validation.v1",
+  "status": "verified",
+  "target": "win32-x64",
+  "runner": "windows-2025",
+  "archiveSha256": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+  "archiveSizeBytes": 112773712,
+  "runtimeManifestSha256": "dc878a4a648a44a025bca22cb66a7787eb7844cb53ec57e243552fd2e3e4b2f8",
+  "componentSmokeSha256": "febc956ffc1eb6d7542d3a40ce3ba8af242873f09a0ae3e728565ce0fb537083",
+  "inputValidationSha256": "bc71c34b2ec16ef5f462b4433f38267c015e4413dc14e71a2a32364c2a5ee933",
+  "commands": [
+    {
+      "name": "native-dependency-closure",
+      "executable": "internal-pe-import-parser",
+      "args": [
+        "3",
+        "native-pe-entrypoints"
+      ],
+      "resultSha256": "8deacffea0cf6b7a42804f9d676a0d1e554de4007fda25f19fc1983a03011689"
+    },
+    {
+      "name": "poppler-pdfinfo-version",
+      "executable": "pdfinfo.exe",
+      "args": [
+        "-v"
+      ],
+      "exitCode": 0,
+      "resultSha256": "2a402f408ca5698d9f86893cdfd1ec8042bb3f37042f245e302c6ada7f66f437"
+    },
+    {
+      "name": "poppler-pdftoppm-version",
+      "executable": "pdftoppm.exe",
+      "args": [
+        "-v"
+      ],
+      "exitCode": 0,
+      "resultSha256": "d33271bacd78e227d0285bd42790aaf6c4f211f651d39eaf7948a0524f63af09"
+    },
+    {
+      "name": "officecli-version",
+      "executable": "officecli.exe",
+      "args": [
+        "--version"
+      ],
+      "exitCode": 0,
+      "resultSha256": "3332b7cc773289dfb79aafb3ef9785410df756a6b5f18cf7fdb08002951ea402"
+    },
+    {
+      "name": "officecli-read-complex-docx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-complex-original.docx",
+        "/body",
+        "--depth",
+        "4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "18795988d324367823faa5c68f133df389e6634c14e8064babf44c9499d48742",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-complex-xlsx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-complex-original.xlsx",
+        "/Sheet1",
+        "--depth",
+        "2",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "4d2544d8107fc1f0bb6dced88d79d89fa7ec55f8df98666d40cf695af5866ae0",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-docx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "create",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "9d95e2ef1c7040d58eda4fcfa024aa64092dd100e5a5f7ce29ed804a808f9359",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-docx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.docx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "64c67db2895faa8d7ce179a0c7de6effd7aeec7e4f31061d3c749290443d72e7",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-xlsx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "create",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "7935bfe72d792b8eeac5e3ceecec52efd06d4b1a137e9b1f301900e86bdf0dff",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-xlsx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.xlsx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "0d7ab7df16b80b1d95db79e1f95b6f6782b973d1d8a8cce51381cf161b44ec29",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-pptx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "create",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "49b5f08cb58aba1f472997a48e5abf7c706fcf1f9809933a4790432abc30c087",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-pptx-original",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.pptx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "de40c5b56960e9431a8edf2a7309a7ee05b1b488becfa301ade305bdbb2bb3f5",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-docx-paragraph-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "add",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+        "/body",
+        "--type",
+        "paragraph",
+        "--prop",
+        "text=Runtime 中文验证",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "250952884a0425ade983b16f075f5df811d1bbd1d07528361ab39dd5ff75ae36",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-docx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "save",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "f17eb7917971a1558323b8093c44339025addad98da0a28bebf6607d37221c84",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-docx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "validate",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-docx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+        "/body",
+        "--depth",
+        "4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "a4a2bdfea04dcbbc2586524f7bb0ceebd5972ea77fa20e54dad02c5f152d7e5c",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-xlsx-cell-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "add",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "/Sheet1",
+        "--type",
+        "cell",
+        "--prop",
+        "address=C1",
+        "--prop",
+        "value=Runtime 中文验证",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "d25ffd80af7a7adeb5e61a5b63470f83843fa9eca133c8c4d20b103b33d9472e",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-xlsx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "save",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "ae099b773354a4efd0dbc546bafa85172d5504179dbe6d9f66bff17772b50285",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-xlsx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "validate",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "/Sheet1/C1",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "7759d08736cd8d2c4b51c5db4c677915d927aebf1db02577e5026889e3e55c78",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-formula-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "/Sheet1/B4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "fef4aa2f00b37c0daea0d9217cf1d1a8dcc608aa0b5ece579a0d5ff3d75916a6",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-chart-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+        "/Sheet1/chart[1]",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "6b801c3c25ea53d2c822aece81d8a934f409ad6f477daf9e66b69aa13681e7d4",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-pptx-slide-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "add",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "/",
+        "--type",
+        "slide",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "39dbd4e0ec3d92bdb6929f3cf14dfebfe88765ef2856254ec6eb0abb1a362c09",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-pptx-text-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "add",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "/slide[1]",
+        "--type",
+        "shape",
+        "--prop",
+        "text=Runtime 中文验证",
+        "--prop",
+        "x=1",
+        "--prop",
+        "y=1",
+        "--prop",
+        "w=8",
+        "--prop",
+        "h=1",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "1d97d2fa7143a39ce5ee834ce3f9a2f965bd052b77631c539be81fa6c7537aa5",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-pptx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "save",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "8a52d85555d6db9216a5e2b887fa3525dab8e06ea79f75b123baa42bd4bf22bd",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-pptx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "validate",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-pptx-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "get",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "/slide[1]",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "2d7fe60a59e0ea1174ce79f109d1f93bd1c7543bf8707b7a5a9d34ff5a039141",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-view-pptx-svg-copy",
+      "executable": "officecli.exe",
+      "args": [
+        "view",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+        "svg",
+        "--start",
+        "1",
+        "--max-lines",
+        "1"
+      ],
+      "exitCode": 0,
+      "resultSha256": "d429ff6c9286b8d5b57e4e96da961fbe7e93006b52c3cadc9665db763098128b"
+    }
+  ],
+  "render": {
+    "target": "win32-x64",
+    "engine": "officecli",
+    "originalSha256": {
+      "docx": "b7fd0a374a9f7c6c7081d98637a2db5376da6d9a253917a9013edfa814910d84",
+      "xlsx": "1cca0a8c9015085fb633b6bc4d6f006d2e4bb320bf671d9e1402a5c5ec7bbf1d",
+      "pptx": "0ce2b0b3f991b8aef5054d74e70a8a21691824235e3a38619cd9ee8a9fe4e8e2"
+    },
+    "docxSha256": "c1467cde786a2270e2b7c5dc23dc38e01996a303f6d351700308e395c43b793d",
+    "xlsxSha256": "4adc5132b0b94546ea0ce0133a8f22840b42e0953aaebe6f3bbd4b06e21d946f",
+    "pptxSha256": "7dd8ed3d60a8033d53cbec7a0cd402968e48262bd63d1a5c0e02e1103ad00219",
+    "svgSha256": "d429ff6c9286b8d5b57e4e96da961fbe7e93006b52c3cadc9665db763098128b",
+    "commands": [
+      {
+        "name": "officecli-read-complex-docx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-complex-original.docx",
+          "/body",
+          "--depth",
+          "4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "18795988d324367823faa5c68f133df389e6634c14e8064babf44c9499d48742",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-complex-xlsx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-complex-original.xlsx",
+          "/Sheet1",
+          "--depth",
+          "2",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "4d2544d8107fc1f0bb6dced88d79d89fa7ec55f8df98666d40cf695af5866ae0",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-docx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "create",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "9d95e2ef1c7040d58eda4fcfa024aa64092dd100e5a5f7ce29ed804a808f9359",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-docx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.docx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "64c67db2895faa8d7ce179a0c7de6effd7aeec7e4f31061d3c749290443d72e7",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-xlsx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "create",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "7935bfe72d792b8eeac5e3ceecec52efd06d4b1a137e9b1f301900e86bdf0dff",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-xlsx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.xlsx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "0d7ab7df16b80b1d95db79e1f95b6f6782b973d1d8a8cce51381cf161b44ec29",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-pptx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "create",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "49b5f08cb58aba1f472997a48e5abf7c706fcf1f9809933a4790432abc30c087",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-pptx-original",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-created.pptx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "de40c5b56960e9431a8edf2a7309a7ee05b1b488becfa301ade305bdbb2bb3f5",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-docx-paragraph-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "add",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+          "/body",
+          "--type",
+          "paragraph",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "250952884a0425ade983b16f075f5df811d1bbd1d07528361ab39dd5ff75ae36",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-docx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "save",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "f17eb7917971a1558323b8093c44339025addad98da0a28bebf6607d37221c84",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-docx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "validate",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-docx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.docx",
+          "/body",
+          "--depth",
+          "4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "a4a2bdfea04dcbbc2586524f7bb0ceebd5972ea77fa20e54dad02c5f152d7e5c",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-xlsx-cell-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "add",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "/Sheet1",
+          "--type",
+          "cell",
+          "--prop",
+          "address=C1",
+          "--prop",
+          "value=Runtime 中文验证",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "d25ffd80af7a7adeb5e61a5b63470f83843fa9eca133c8c4d20b103b33d9472e",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-xlsx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "save",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "ae099b773354a4efd0dbc546bafa85172d5504179dbe6d9f66bff17772b50285",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-xlsx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "validate",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "/Sheet1/C1",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "7759d08736cd8d2c4b51c5db4c677915d927aebf1db02577e5026889e3e55c78",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-formula-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "/Sheet1/B4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "fef4aa2f00b37c0daea0d9217cf1d1a8dcc608aa0b5ece579a0d5ff3d75916a6",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-chart-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.xlsx",
+          "/Sheet1/chart[1]",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "6b801c3c25ea53d2c822aece81d8a934f409ad6f477daf9e66b69aa13681e7d4",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-pptx-slide-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "add",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "/",
+          "--type",
+          "slide",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "39dbd4e0ec3d92bdb6929f3cf14dfebfe88765ef2856254ec6eb0abb1a362c09",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-pptx-text-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "add",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "/slide[1]",
+          "--type",
+          "shape",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--prop",
+          "x=1",
+          "--prop",
+          "y=1",
+          "--prop",
+          "w=8",
+          "--prop",
+          "h=1",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "1d97d2fa7143a39ce5ee834ce3f9a2f965bd052b77631c539be81fa6c7537aa5",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-pptx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "save",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "8a52d85555d6db9216a5e2b887fa3525dab8e06ea79f75b123baa42bd4bf22bd",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-pptx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "validate",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "44ba71cd08a9f3ea4773ba07731d669546e5fdc439c9eac2fe1564f39096a35f",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-pptx-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "get",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "/slide[1]",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "2d7fe60a59e0ea1174ce79f109d1f93bd1c7543bf8707b7a5a9d34ff5a039141",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-view-pptx-svg-copy",
+        "executable": "officecli.exe",
+        "args": [
+          "view",
+          "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-officecli-alswPZ\\runtime-edited.pptx",
+          "svg",
+          "--start",
+          "1",
+          "--max-lines",
+          "1"
+        ],
+        "exitCode": 0,
+        "resultSha256": "d429ff6c9286b8d5b57e4e96da961fbe7e93006b52c3cadc9665db763098128b"
+      }
+    ]
+  },
+  "productionTrust": false
+}

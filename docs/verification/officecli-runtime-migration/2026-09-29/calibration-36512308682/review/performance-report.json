@@ -1,0 +1,329 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-budget-measurements.v1",
+  "evidence": {
+    "sourceRunId": "36512308682",
+    "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "installerCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6"
+  },
+  "targets": {
+    "darwin-x64": {
+      "runner": "macos-15-intel",
+      "candidateArchiveSha256": "0840ce3eb836cb75fd89a37ced8e7a7efaf139a4b1810a252f126baefc2be49e",
+      "p1aBuildUnpackReceiptSha256": "0c34ee8f55fa888e527ea175c8dbcf73e112d25fac87d07dba8345e38f6f1544",
+      "chatInstallOverlapMs": [
+        3218,
+        5557,
+        2335,
+        2150,
+        4111,
+        1473,
+        3297,
+        1357,
+        1441,
+        2341
+      ],
+      "archiveBytes": [
+        116313428,
+        116313429,
+        116313429,
+        116313428,
+        116313429
+      ],
+      "unpackedBytes": [
+        174667526,
+        174667526,
+        174667526,
+        174667526,
+        174667526
+      ],
+      "minimumAvailableDiskBytes": [
+        109540921344,
+        109536964608,
+        109529473024,
+        109528412160,
+        109528182784,
+        109504065536,
+        109505736704,
+        109504475136,
+        109502922752,
+        109469175808
+      ],
+      "coldInstallMs": [
+        50143,
+        28715,
+        26751,
+        24610,
+        21911,
+        20439,
+        18918,
+        15988,
+        16048,
+        16317
+      ],
+      "mainEventLoopDelayP99Ms": [
+        11,
+        13,
+        13,
+        12,
+        12,
+        10,
+        13,
+        9,
+        9,
+        9
+      ],
+      "mainEventLoopDelayMaxMs": [
+        324,
+        1478,
+        263,
+        129,
+        253,
+        130,
+        129,
+        39,
+        59,
+        152
+      ]
+    },
+    "darwin-arm64": {
+      "runner": "macos-15",
+      "candidateArchiveSha256": "1d710784b7fd62e4cd107a808bceb104bc6778d1615963b486fd1083d7b1f681",
+      "p1aBuildUnpackReceiptSha256": "677468d50a35e3c14660ae66f7b3c9072df9a6a1809167f4ddaf140cf3031d6b",
+      "chatInstallOverlapMs": [
+        3867,
+        1424,
+        1573,
+        1749,
+        1990,
+        1331,
+        1686,
+        1166,
+        1656,
+        1644
+      ],
+      "archiveBytes": [
+        115377520,
+        115377521,
+        115377521,
+        115377520,
+        115377521
+      ],
+      "unpackedBytes": [
+        173626167,
+        173626167,
+        173626167,
+        173626167,
+        173626167
+      ],
+      "minimumAvailableDiskBytes": [
+        38247419904,
+        38232584192,
+        38229082112,
+        38223130624,
+        38200041472,
+        38188032000,
+        38186131456,
+        38254075904,
+        38184992768,
+        38184087552
+      ],
+      "coldInstallMs": [
+        13274,
+        6505,
+        6873,
+        7539,
+        7082,
+        6289,
+        7111,
+        5160,
+        6682,
+        6665
+      ],
+      "mainEventLoopDelayP99Ms": [
+        18,
+        11,
+        10,
+        12,
+        12,
+        10,
+        12,
+        10,
+        10,
+        13
+      ],
+      "mainEventLoopDelayMaxMs": [
+        468,
+        117,
+        105,
+        114,
+        73,
+        84,
+        66,
+        37,
+        38,
+        127
+      ]
+    },
+    "win32-x64": {
+      "runner": "windows-2025",
+      "candidateArchiveSha256": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+      "p1aBuildUnpackReceiptSha256": "76cc4c61168ba0397ac7049231fc14b82caac5e86e635a44a1fd88a6646cac7c",
+      "chatInstallOverlapMs": [
+        721,
+        714,
+        698,
+        726,
+        797,
+        840,
+        734,
+        693,
+        750,
+        739
+      ],
+      "archiveBytes": [
+        112773711,
+        112773710,
+        112773712,
+        112773711,
+        112773712
+      ],
+      "unpackedBytes": [
+        162905404,
+        162905404,
+        162905404,
+        162905404,
+        162905404
+      ],
+      "minimumAvailableDiskBytes": [
+        151611543552,
+        151611514880,
+        151611514880,
+        151611449344,
+        151611449344,
+        151611318272,
+        151611416576,
+        151611383808,
+        151611449344,
+        151611432960
+      ],
+      "coldInstallMs": [
+        9393,
+        8885,
+        9019,
+        9969,
+        9009,
+        10105,
+        10108,
+        9046,
+        10048,
+        10049
+      ],
+      "mainEventLoopDelayP99Ms": [
+        3,
+        4,
+        3,
+        7,
+        3,
+        4,
+        7,
+        3,
+        4,
+        5
+      ],
+      "mainEventLoopDelayMaxMs": [
+        31,
+        30,
+        23,
+        23,
+        18,
+        59,
+        17,
+        25,
+        20,
+        22
+      ]
+    },
+    "linux-x64": {
+      "runner": "ubuntu-24.04",
+      "candidateArchiveSha256": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499",
+      "p1aBuildUnpackReceiptSha256": "5b8092cc9548ab35bc6b1d97a2ed9d98e407e5117c79d4ccc704934cdc6b296f",
+      "chatInstallOverlapMs": [
+        611,
+        664,
+        677,
+        698,
+        750,
+        734,
+        588,
+        754,
+        806,
+        727
+      ],
+      "archiveBytes": [
+        179820974,
+        179820974,
+        179820974,
+        179820974,
+        179820974
+      ],
+      "unpackedBytes": [
+        351018995,
+        351018995,
+        351018995,
+        351018995,
+        351018995
+      ],
+      "minimumAvailableDiskBytes": [
+        84443680768,
+        84443668480,
+        84443656192,
+        84443656192,
+        84443652096,
+        84443643904,
+        84443631616,
+        84443582464,
+        84443574272,
+        84443623424
+      ],
+      "coldInstallMs": [
+        12385,
+        8686,
+        8665,
+        8582,
+        8718,
+        8711,
+        8638,
+        8886,
+        8885,
+        8757
+      ],
+      "mainEventLoopDelayP99Ms": [
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "mainEventLoopDelayMaxMs": [
+        20,
+        21,
+        14,
+        18,
+        19,
+        16,
+        19,
+        23,
+        25,
+        18
+      ]
+    }
+  }
+}

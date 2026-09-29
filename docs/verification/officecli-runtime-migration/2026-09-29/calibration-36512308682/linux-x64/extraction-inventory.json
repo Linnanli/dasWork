@@ -1,0 +1,293 @@
+{
+  "artifactId": 11009879512,
+  "artifactZipBytes": 180341885,
+  "entries": [
+    {
+      "name": "SBOM.json",
+      "bytes": 17001
+    },
+    {
+      "name": "THIRD_PARTY_NOTICES.txt",
+      "bytes": 3602
+    },
+    {
+      "name": "build-unpack-measurement.json",
+      "bytes": 939
+    },
+    {
+      "name": "canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "install-stress-memory.json",
+      "bytes": 392
+    },
+    {
+      "name": "main-overlap-performance.json",
+      "bytes": 8790
+    },
+    {
+      "name": "measurements/build-unpack-1.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-2.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-3.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-4.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-5.json",
+      "bytes": 939
+    },
+    {
+      "name": "migration-matrix.json",
+      "bytes": 158594
+    },
+    {
+      "name": "performance-target-report.json",
+      "bytes": 1692
+    },
+    {
+      "name": "platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "primary-runtime.zip",
+      "bytes": 179820974
+    },
+    {
+      "name": "provenance.json",
+      "bytes": 2961
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-01.png",
+      "bytes": 44364
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-02.png",
+      "bytes": 132268
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-03.png",
+      "bytes": 99507
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-04.png",
+      "bytes": 97862
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-05.png",
+      "bytes": 62156
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-06.png",
+      "bytes": 79973
+    },
+    {
+      "name": "r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 70211
+    },
+    {
+      "name": "r07-visual/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 125714
+    },
+    {
+      "name": "r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8828
+    },
+    {
+      "name": "r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "r07-visual/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "r07-visual/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "r07-visual/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "r07-visual/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "r07-visual/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "r07-visual/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "source-fetch.json",
+      "bytes": 1797
+    }
+  ],
+  "extracted": [
+    {
+      "name": "SBOM.json",
+      "bytes": 17001
+    },
+    {
+      "name": "build-unpack-measurement.json",
+      "bytes": 939
+    },
+    {
+      "name": "component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "install-stress-memory.json",
+      "bytes": 392
+    },
+    {
+      "name": "main-overlap-performance.json",
+      "bytes": 8790
+    },
+    {
+      "name": "measurements/build-unpack-1.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-2.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-3.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-4.json",
+      "bytes": 939
+    },
+    {
+      "name": "measurements/build-unpack-5.json",
+      "bytes": 939
+    },
+    {
+      "name": "migration-matrix.json",
+      "bytes": 158594
+    },
+    {
+      "name": "performance-target-report.json",
+      "bytes": 1692
+    },
+    {
+      "name": "platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "provenance.json",
+      "bytes": 2961
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-01.png",
+      "bytes": 44364
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-02.png",
+      "bytes": 132268
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-03.png",
+      "bytes": 99507
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-04.png",
+      "bytes": 97862
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-05.png",
+      "bytes": 62156
+    },
+    {
+      "name": "r07-visual/legacy-slides/slide-06.png",
+      "bytes": 79973
+    },
+    {
+      "name": "r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 70211
+    },
+    {
+      "name": "r07-visual/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 125714
+    },
+    {
+      "name": "r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8828
+    },
+    {
+      "name": "r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "r07-visual/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "r07-visual/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "r07-visual/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "r07-visual/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "r07-visual/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "r07-visual/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "source-fetch.json",
+      "bytes": 1797
+    }
+  ],
+  "method": "bounded byte-range extraction with ZIP CRC/length checks; large Runtime ZIP not downloaded or locally hashed"
+}

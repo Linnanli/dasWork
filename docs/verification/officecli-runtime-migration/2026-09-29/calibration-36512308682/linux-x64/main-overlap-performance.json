@@ -1,0 +1,317 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-main-overlap-performance.v1",
+  "target": "linux-x64",
+  "candidateArchiveSha256": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499",
+  "installAttempts": [
+    {
+      "sampleIndex": 1,
+      "minimumAvailableDiskBytes": 84443680768,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443680768,
+        "sampleCount": 24
+      },
+      "coldInstallMs": 12385,
+      "chatInstallOverlapMs": 611,
+      "installWindow": {
+        "launchStartedAtMs": 1790650735992,
+        "firstObservedInstallingAtMs": 1790650742792,
+        "readyAtMs": 1790650748377
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650742793,
+        "completedAtMs": 1790650743404,
+        "responseMs": 611,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 6464,
+        "stoppedAtMs": 12178,
+        "p99Ms": 4,
+        "maxMs": 20
+      }
+    },
+    {
+      "sampleIndex": 2,
+      "minimumAvailableDiskBytes": 84443668480,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443668480,
+        "sampleCount": 28
+      },
+      "coldInstallMs": 8686,
+      "chatInstallOverlapMs": 664,
+      "installWindow": {
+        "launchStartedAtMs": 1790650750894,
+        "firstObservedInstallingAtMs": 1790650752941,
+        "readyAtMs": 1790650759580
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650752942,
+        "completedAtMs": 1790650753606,
+        "responseMs": 664,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1942,
+        "stoppedAtMs": 8649,
+        "p99Ms": 4,
+        "maxMs": 21
+      }
+    },
+    {
+      "sampleIndex": 3,
+      "minimumAvailableDiskBytes": 84443656192,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443656192,
+        "sampleCount": 28
+      },
+      "coldInstallMs": 8665,
+      "chatInstallOverlapMs": 677,
+      "installWindow": {
+        "launchStartedAtMs": 1790650761798,
+        "firstObservedInstallingAtMs": 1790650763830,
+        "readyAtMs": 1790650770463
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650763832,
+        "completedAtMs": 1790650764509,
+        "responseMs": 677,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1881,
+        "stoppedAtMs": 8631,
+        "p99Ms": 4,
+        "maxMs": 14
+      }
+    },
+    {
+      "sampleIndex": 4,
+      "minimumAvailableDiskBytes": 84443656192,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443656192,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8582,
+      "chatInstallOverlapMs": 698,
+      "installWindow": {
+        "launchStartedAtMs": 1790650772754,
+        "firstObservedInstallingAtMs": 1790650774664,
+        "readyAtMs": 1790650781336
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650774666,
+        "completedAtMs": 1790650775364,
+        "responseMs": 698,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1778,
+        "stoppedAtMs": 8551,
+        "p99Ms": 4,
+        "maxMs": 18
+      }
+    },
+    {
+      "sampleIndex": 5,
+      "minimumAvailableDiskBytes": 84443652096,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443652096,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8718,
+      "chatInstallOverlapMs": 750,
+      "installWindow": {
+        "launchStartedAtMs": 1790650783621,
+        "firstObservedInstallingAtMs": 1790650785614,
+        "readyAtMs": 1790650792339
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650785615,
+        "completedAtMs": 1790650786365,
+        "responseMs": 750,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1840,
+        "stoppedAtMs": 8685,
+        "p99Ms": 4,
+        "maxMs": 19
+      }
+    },
+    {
+      "sampleIndex": 6,
+      "minimumAvailableDiskBytes": 84443643904,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443643904,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8711,
+      "chatInstallOverlapMs": 734,
+      "installWindow": {
+        "launchStartedAtMs": 1790650794558,
+        "firstObservedInstallingAtMs": 1790650796581,
+        "readyAtMs": 1790650803269
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650796582,
+        "completedAtMs": 1790650797316,
+        "responseMs": 734,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1899,
+        "stoppedAtMs": 8678,
+        "p99Ms": 4,
+        "maxMs": 16
+      }
+    },
+    {
+      "sampleIndex": 7,
+      "minimumAvailableDiskBytes": 84443631616,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443631616,
+        "sampleCount": 28
+      },
+      "coldInstallMs": 8638,
+      "chatInstallOverlapMs": 588,
+      "installWindow": {
+        "launchStartedAtMs": 1790650805478,
+        "firstObservedInstallingAtMs": 1790650807560,
+        "readyAtMs": 1790650814116
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650807564,
+        "completedAtMs": 1790650808152,
+        "responseMs": 588,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1928,
+        "stoppedAtMs": 8606,
+        "p99Ms": 4,
+        "maxMs": 19
+      }
+    },
+    {
+      "sampleIndex": 8,
+      "minimumAvailableDiskBytes": 84443582464,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443582464,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8886,
+      "chatInstallOverlapMs": 754,
+      "installWindow": {
+        "launchStartedAtMs": 1790650816387,
+        "firstObservedInstallingAtMs": 1790650818543,
+        "readyAtMs": 1790650825273
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650818544,
+        "completedAtMs": 1790650819298,
+        "responseMs": 754,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 2003,
+        "stoppedAtMs": 8854,
+        "p99Ms": 4,
+        "maxMs": 23
+      }
+    },
+    {
+      "sampleIndex": 9,
+      "minimumAvailableDiskBytes": 84443574272,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443574272,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8885,
+      "chatInstallOverlapMs": 806,
+      "installWindow": {
+        "launchStartedAtMs": 1790650827497,
+        "firstObservedInstallingAtMs": 1790650829599,
+        "readyAtMs": 1790650836382
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650829599,
+        "completedAtMs": 1790650830405,
+        "responseMs": 806,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1980,
+        "stoppedAtMs": 8852,
+        "p99Ms": 4,
+        "maxMs": 25
+      }
+    },
+    {
+      "sampleIndex": 10,
+      "minimumAvailableDiskBytes": 84443623424,
+      "diskProbe": {
+        "source": "electron-main",
+        "pathKind": "userData",
+        "minimumAvailableDiskBytes": 84443623424,
+        "sampleCount": 29
+      },
+      "coldInstallMs": 8757,
+      "chatInstallOverlapMs": 727,
+      "installWindow": {
+        "launchStartedAtMs": 1790650838615,
+        "firstObservedInstallingAtMs": 1790650840685,
+        "readyAtMs": 1790650847372
+      },
+      "normalChat": {
+        "passed": true,
+        "requestedAtMs": 1790650840686,
+        "completedAtMs": 1790650841413,
+        "responseMs": 727,
+        "completedDuringInstall": true
+      },
+      "mainEventLoop": {
+        "source": "electron-main",
+        "startedAtMs": 1890,
+        "stoppedAtMs": 8724,
+        "p99Ms": 4,
+        "maxMs": 18
+      }
+    }
+  ]
+}

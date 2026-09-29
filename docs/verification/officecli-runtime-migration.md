@@ -6,7 +6,7 @@
 
 ## 复审结论
 
-**尚未完成全部计划验收。** 最新校准 [36420932977](https://github.com/Linnanli/dasWork/actions/runs/36420932977) 的四目标原生构建成功，但 Linux P3b 真实预览失败：表格文字和图表中文丢失。当前已修复字体契约和 Main 图像生成路径，本地真实 Linux 两轮及 macOS 六页均通过原门槛；A6/A9 仍等待新四目标校准、实图接受、预算审查与 final。
+**尚未完成全部计划验收。** 校准 [36512308682](https://github.com/Linnanli/dasWork/actions/runs/36512308682) 已在修复提交 `48e1a5ed1095a536e4c8b492065536dfcc5af47e` 上完成，四目标 native build、P3 迁移、真实 R07 预览和小型预算证据提取均通过。四平台实图复查未发现中文、表格或图表缺字复发；预算候选已按新源锁审查并写入 `primary-runtime/runtime-budgets.json`。A6 的用户人工接受和 A9 的 final 工程 Feed 仍未完成。
 
 | 条件 | 当前状态 | 尚缺的证据 |
 | --- | --- | --- |
@@ -15,12 +15,12 @@
 | A3：v3 清单及 v1/v2 兼容 | 四平台实际 v2/v3 归档与迁移已通过 | 最终构建复验 |
 | A4：健康 Runtime 路径及能力发布 | 四平台失败恢复后保留健康旧 Runtime，快照与聊天已通过 | 新提交及最终门禁 |
 | A5：技能、插件与 Runtime 整体切换 | 四平台各 12 个真实迁移场景通过 | 新提交及最终门禁 |
-| A6：六页真实 PNG 预览 | 最新校准 Linux 缺字失败；修复后本地 Linux 两轮、macOS 六页通过，Linux 重跑逐页 SHA 相同 | 新四目标原生实图、重新逐页视觉审查与接受 |
+| A6：六页真实 PNG 预览 | 新校准四平台 R07 自动门禁通过；四平台实图复查未见阻塞性缺字、方框、空白页或裁切复发 | 用户人工接受仍待完成 |
 | A7：三格式技能与命令结果检查 | 四平台复杂副本修改、保存、重新读取及 JSON/退出码检查通过 | 最终构建复验 |
 | A8：生产路径退役旧插件 | v3 清单不含旧插件；四平台冷启动与受管技能/插件切换记录通过 | 最终构建复验 |
-| A9：全部门禁及性能预算 | 上次完整候选预算已审查；本轮显式 Regular 改变源锁哈希，需重新校准 | 新四目标校准/预算审查、final 打包与签名工程 Feed 门禁 |
+| A9：全部门禁及性能预算 | 新源锁预算已按 run 36512308682 审查并写入正式预算；四目标校准通过 | final 打包与签名工程 Feed 门禁 |
 
-上一轮完整报告与图片见 [36412021750 证据](officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md)。它们使用真实旧 v2 归档、签名 HTTPS Feed、真实 app-server 和逐页 PNG；通过自动取证不代表视觉质量已经接受。下方早期验证与失败记录按历史顺序保留，当前状态以上表为准。
+最新四平台证据见 [36512308682 证据](officecli-runtime-migration/2026-09-29/calibration-36512308682/README.md)。上一轮完整报告与图片见 [36412021750 证据](officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md)。它们使用真实旧 v2 归档、签名 HTTPS Feed、真实 app-server 和逐页 PNG；通过自动取证不代表视觉质量已经接受。下方早期验证与失败记录按历史顺序保留，当前状态以上表为准。
 
 离线 smoke 使用临时用户目录和受限环境，先验证网络连接正向对照成功且隔离后失败，再检查系统程序执行：macOS 仅允许 OfficeCLI 绝对路径执行；Linux 在网络隔离内以 strace 逐次核对 execve/execveat；Windows 在 CreateProcessW 启动时设置禁止创建子进程策略。正反探测必须实际执行，缺少工具或不完整记录均失败。本轮四平台的正反探测与各 25 条隔离命令已通过，并核对实际回执；最终归档继续复验这些约束。
 
@@ -49,6 +49,8 @@
 最终真实 Linux 两轮和本机 macOS 各输出完整六页，全部通过原检查；Linux 六页两轮 SHA 逐页一致。表格颜色桶为 68，图表分类和图例可见；字体诊断确认中文 Regular 与 Latin 既有字体分别被选中。Linux 控制使用 Debian 13 与校验过 SHA 的 Electron 39.8.10、OfficeCLI 1.0.152；不能替代原生 Ubuntu/Windows/macOS 四目标新校准及完整签名 Feed 验收。[原始失败、修复实图、来源与逐页回执](officecli-runtime-migration/2026-09-29/calibration-36420932977/README.md) 已保存。
 
 针对性桌面回归 27 项、Runtime 77 项（4 项平台跳过）、发布契约 44 项通过。独立只读审查确认直接 SVG 解码路径移除了已复现的窗口截图时序依赖，未发现本轮生产阻塞；完整桌面 build、Node/Web typecheck、原生运行时边界、bundled plugins 和 diff 检查通过。完整 lint 为 0 错误、539 条既有警告，变更 TypeScript 文件单独 lint 无输出。新原生 Runtime 清单和新源锁预算尚未接受，A1–A9 仍未全部完成。
+
+修复提交 `48e1a5ed1095a536e4c8b492065536dfcc5af47e` 已推送。四目标 `calibrate` 运行 [36512308682](https://github.com/Linnanli/dasWork/actions/runs/36512308682) 已成功完成并绑定该提交；小型预算证据提取运行 [36517699704](https://github.com/Linnanli/dasWork/actions/runs/36517699704) 通过。审查确认四目标 Runtime 清单均使用 Regular 中文字体、源锁 SHA 为 `5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d`，48 张旧/新 PNG、48 个迁移场景、100 条隔离命令和四份安装内存回执均已绑定。预算已写入正式文件；用户视觉接受和 final 仍待完成。
 
 ## 校准失败与后续修复（历史）
 
