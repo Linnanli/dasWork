@@ -259,6 +259,14 @@ async function writeRealArtifactPreviewBundle({
       {
         name: 'r07-real-artifact-preview-test-aliases',
         setup(build) {
+          build.onResolve({ filter: /\.css\?(?:inline|raw)$/ }, (args) => ({
+            path: resolve(args.resolveDir, args.path.replace(/\?(?:inline|raw)$/u, '')),
+            namespace: 'r07-inline-css'
+          }))
+          build.onLoad({ filter: /.*/, namespace: 'r07-inline-css' }, async (args) => ({
+            loader: 'text',
+            contents: await readFile(args.path, 'utf8')
+          }))
           build.onResolve({ filter: /^@\// }, (args) => ({
             path: resolveModulePath(resolve(rendererRoot, args.path.slice(2)))
           }))

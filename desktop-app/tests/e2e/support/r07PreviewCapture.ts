@@ -19,33 +19,48 @@ export async function captureR07PreviewSlides(input: {
 }): Promise<R07CapturedSlide[]> {
   const rightPanel = input.page.locator('[data-slot="right-workspace-shell"]')
   const stageImage = rightPanel.locator('.presentation-stage-image[src^="data:image/png;base64,"]')
+  const htmlFrame = rightPanel.locator('iframe.presentation-html-frame')
+  const htmlPreview = (await htmlFrame.count()) > 0
+  const frame = htmlFrame.contentFrame()
   const nextSlide = rightPanel.getByRole('button', { name: '下一页', exact: true })
   const captures: { file: string; png: Buffer }[] = []
   for (let index = 0; index < 6; index += 1) {
     await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText(
       `${index + 1} / 6`
     )
-    await expect(stageImage).toBeVisible({ timeout: 120_000 })
-    await expect
-      .poll(
-        async () =>
-          stageImage.evaluate(
-            (image: HTMLImageElement) =>
-              image.complete && image.naturalWidth >= 900 && image.naturalHeight >= 500
-          ),
-        { timeout: 120_000 }
-      )
-      .toBe(true)
-    const dataUrl = await stageImage.evaluate((image: HTMLImageElement) => ({
-      src: image.src,
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-      complete: image.complete
-    }))
-    expect(dataUrl.complete).toBe(true)
-    expect(dataUrl.width).toBeGreaterThanOrEqual(900)
-    expect(dataUrl.height).toBeGreaterThanOrEqual(500)
-    const png = pngBufferFromDataUrl(dataUrl.src)
+    let png: Buffer
+    if (htmlPreview) {
+      await expect(frame.locator('body')).toHaveAttribute('data-preview-ready', 'true', {
+        timeout: 120_000
+      })
+      await expect(frame.locator('.main > .slide-container:visible')).toHaveCount(1)
+      const slide = frame.locator('.main > .slide-container:visible .slide-wrapper > .slide')
+      await expect(slide).toBeVisible()
+      // QA captures the displayed HTML; the application itself does not generate PNG previews.
+      png = await slide.screenshot({ animations: 'disabled' })
+    } else {
+      await expect(stageImage).toBeVisible({ timeout: 120_000 })
+      await expect
+        .poll(
+          async () =>
+            stageImage.evaluate(
+              (image: HTMLImageElement) =>
+                image.complete && image.naturalWidth >= 900 && image.naturalHeight >= 500
+            ),
+          { timeout: 120_000 }
+        )
+        .toBe(true)
+      const dataUrl = await stageImage.evaluate((image: HTMLImageElement) => ({
+        src: image.src,
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        complete: image.complete
+      }))
+      expect(dataUrl.complete).toBe(true)
+      expect(dataUrl.width).toBeGreaterThanOrEqual(900)
+      expect(dataUrl.height).toBeGreaterThanOrEqual(500)
+      png = pngBufferFromDataUrl(dataUrl.src)
+    }
     const file = `slide-${String(index + 1).padStart(2, '0')}.png`
     captures.push({ file, png })
     if (index < 5) await nextSlide.click()

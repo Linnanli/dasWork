@@ -1294,15 +1294,15 @@ async function openR07PresentationPreviewAndReadArtifact(
     String(binary.content.generation),
     { timeout: 120_000 }
   )
-  const previewImages = artifact.locator(
-    '[data-slot="presentation-panel"] img[src^="data:image/png;base64,"]'
-  )
-  await expect(previewImages).toHaveCount(7, { timeout: 120_000 })
-  await expect
-    .poll(async () =>
-      previewImages.first().evaluate((image: HTMLImageElement) => image.naturalWidth)
-    )
-    .toBeGreaterThan(0)
+  const htmlFrame = artifact.locator('iframe.presentation-html-frame')
+  await expect(htmlFrame).toBeVisible({ timeout: 120_000 })
+  const frame = htmlFrame.contentFrame()
+  await expect(frame.locator('body')).toHaveAttribute('data-preview-ready', 'true', {
+    timeout: 120_000
+  })
+  await expect(frame.locator('.sidebar > .thumb')).toHaveCount(6)
+  await expect(frame.locator('.main > .slide-container:visible')).toHaveCount(1)
+  await expect(artifact.locator('.presentation-stage-image')).toHaveCount(0)
   const trace = {
     sourceId,
     receiptId,

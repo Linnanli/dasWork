@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
@@ -12,14 +12,14 @@ import {
 import type { WorkspaceDependencyLoadResult } from '../primaryRuntime'
 import type { ArtifactPreviewSourceService } from './ArtifactPreviewSourceService'
 import { renderLegacyPresentation } from './renderLegacyPresentation'
-import { rasterizePresentationSvg } from './rasterizePresentationSvg'
 
 const PRESENTATION_RENDER_TIMEOUT_MS = 45_000
 const PRESENTATION_RENDER_TOTAL_TIMEOUT_MS = 120_000
 const PRESENTATION_RENDER_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 const PRESENTATION_RENDER_MAX_SLIDES = 30
-const PRESENTATION_RENDER_MAX_PNG_BYTES = 30 * 1024 * 1024
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const PRESENTATION_RENDER_MAX_HTML_BYTES = 30 * 1024 * 1024
+const PRESENTATION_RENDER_MAX_FONT_BYTES = 32 * 1024 * 1024
+const PRESENTATION_RENDER_MAX_RESULT_BYTES = 48 * 1024 * 1024
 
 type ProcessResult = {
   stdout: string
@@ -41,18 +41,15 @@ export type PresentationArtifactPreviewServiceOptions = {
   artifacts: Pick<ArtifactPreviewSourceService, 'readBinary'>
   loadDependencies(): Promise<WorkspaceDependencyLoadResult>
   runProcess?: ProcessRunner
-  rasterizeSvg?: typeof rasterizePresentationSvg
   createTempDirectory?: () => Promise<string>
 }
 
 export class PresentationArtifactPreviewService {
   private readonly runProcess: ProcessRunner
-  private readonly rasterizeSvg: typeof rasterizePresentationSvg
   private readonly createTempDirectory: () => Promise<string>
 
   constructor(private readonly options: PresentationArtifactPreviewServiceOptions) {
     this.runProcess = options.runProcess ?? runProcess
-    this.rasterizeSvg = options.rasterizeSvg ?? rasterizePresentationSvg
     this.createTempDirectory =
       options.createTempDirectory ?? (() => mkdtemp(join(tmpdir(), 'dascowork-presentation-')))
   }
@@ -117,36 +114,21 @@ export class PresentationArtifactPreviewService {
         processOptions(root, deadline)
       )
       const slideCount = readSlideCount(stats.stdout)
-      const slides: ArtifactPresentationRenderResult['slides'] = []
-      let totalPngBytes = 0
-      for (let number = 1; number <= slideCount; number += 1) {
-        const result = await this.runProcess(
-          officecli!,
-          ['view', inputPath, 'svg', '--start', String(number), '--end', String(number)],
-          processOptions(root, deadline)
-        )
-        const png = await this.rasterizeSvg(
-          readSlideSvg(result.stdout),
-          remainingTime(deadline),
-          chineseFont!
-        )
-        if (!png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
-          throw new Error(`Presentation renderer produced an invalid PNG for slide ${number}.`)
-        }
-        totalPngBytes += png.byteLength
-        if (totalPngBytes > PRESENTATION_RENDER_MAX_PNG_BYTES) {
-          throw new Error(
-            `Presentation preview images exceed ${PRESENTATION_RENDER_MAX_PNG_BYTES} bytes.`
-          )
-        }
-        slides.push({ number, base64: png.toString('base64') })
-      }
+      const htmlPath = join(root, 'preview.html')
+      await this.runProcess(
+        officecli!,
+        ['view', inputPath, 'html', '--out', htmlPath],
+        processOptions(root, deadline)
+      )
+      const html = await readPresentationHtml(htmlPath, chineseFont!)
+      remainingTime(deadline)
 
       return artifactPresentationRenderResultSchema.parse({
         version: ARTIFACT_PREVIEW_API_VERSION,
         sourceId,
         generation: source.content.generation,
-        slides
+        html,
+        slideCount
       })
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -177,15 +159,58 @@ function readSlideCount(stdout: string): number {
   return count
 }
 
-function readSlideSvg(stdout: string): string {
-  const svg = stdout.trim()
+async function readPresentationHtml(htmlPath: string, fontPath: string): Promise<string> {
+  const html = (
+    await readBoundedFile(htmlPath, PRESENTATION_RENDER_MAX_HTML_BYTES, 'Presentation preview HTML')
+  ).toString('utf8')
   if (
-    !/^<svg\s[^>]*\bxmlns="http:\/\/www\.w3\.org\/2000\/svg"/u.test(svg) ||
-    !svg.endsWith('</svg>')
+    !/^\s*<!doctype html>/iu.test(html) ||
+    !/<html\b/iu.test(html) ||
+    !/<head\b/iu.test(html) ||
+    !/<\/head\s*>/iu.test(html) ||
+    !/<body\b/iu.test(html) ||
+    !/<\/body\s*>\s*<\/html\s*>\s*$/iu.test(html)
   ) {
-    throw new Error('OfficeCLI did not produce a valid presentation slide SVG.')
+    throw new Error('OfficeCLI did not produce a valid presentation HTML document.')
   }
-  return svg
+  // The verified Runtime font is embedded once for the entire deck. The isolated
+  // renderer prepends this private CJK face while preserving each text's Latin font.
+  const font = await readBoundedFile(
+    fontPath,
+    PRESENTATION_RENDER_MAX_FONT_BYTES,
+    'Presentation preview font'
+  )
+  if (!font.byteLength) throw new Error('Presentation preview font is empty.')
+  const fontStyle = `<style data-dascowork-preview-font>@font-face{font-family:"Dascowork Preview CJK";src:url("data:font/otf;base64,${font.toString('base64')}") format("opentype");font-style:normal;font-weight:400;unicode-range:U+2E80-33FF,U+3400-4DBF,U+4E00-9FFF,U+F900-FAFF,U+FF00-FFEF,U+20000-2FA1F;}</style>`
+  const result = html.replace(/<\/head\s*>/iu, `${fontStyle}</head>`)
+  if (Buffer.byteLength(result) > PRESENTATION_RENDER_MAX_RESULT_BYTES) {
+    throw new Error(
+      `Presentation preview HTML with font exceeds ${PRESENTATION_RENDER_MAX_RESULT_BYTES} bytes.`
+    )
+  }
+  return result
+}
+
+async function readBoundedFile(path: string, maxBytes: number, label: string): Promise<Buffer> {
+  const file = await open(path, 'r')
+  try {
+    const info = await file.stat()
+    if (!info.isFile()) throw new Error(`${label} is not a regular file.`)
+    if (info.size > maxBytes) throw new Error(`${label} exceeds ${maxBytes} bytes.`)
+    // Read at most the inspected size plus one byte, so file growth cannot turn
+    // the output limit into an unbounded read.
+    const buffer = Buffer.alloc(info.size + 1)
+    let length = 0
+    while (length < buffer.byteLength) {
+      const { bytesRead } = await file.read(buffer, length, buffer.byteLength - length)
+      if (!bytesRead) break
+      length += bytesRead
+    }
+    if (length > info.size) throw new Error(`${label} changed while reading.`)
+    return buffer.subarray(0, length)
+  } finally {
+    await file.close()
+  }
 }
 
 function remainingTime(deadline: number): number {

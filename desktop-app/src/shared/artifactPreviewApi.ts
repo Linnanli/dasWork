@@ -143,21 +143,29 @@ export const artifactPreviewReadBinaryResultSchema = z.union([
 ])
 export type ArtifactPreviewReadBinaryResult = z.infer<typeof artifactPreviewReadBinaryResultSchema>
 
-export const artifactPresentationRenderResultSchema = artifactPreviewSuccessSchema
-  .extend({
-    generation: z.number().int().nonnegative(),
-    slides: z
-      .array(
-        z
-          .object({
-            number: z.number().int().min(1),
-            base64: z.string()
-          })
-          .strict()
-      )
-      .min(1)
-  })
+const artifactPresentationRenderSuccessSchema = artifactPreviewSuccessSchema
+  .extend({ generation: z.number().int().nonnegative() })
   .strict()
+
+export const artifactPresentationRenderResultSchema = z.union([
+  artifactPresentationRenderSuccessSchema
+    .extend({ html: z.string().min(1), slideCount: z.number().int().min(1).max(30) })
+    .strict(),
+  artifactPresentationRenderSuccessSchema
+    .extend({
+      slides: z
+        .array(
+          z
+            .object({
+              number: z.number().int().min(1),
+              base64: z.string()
+            })
+            .strict()
+        )
+        .min(1)
+    })
+    .strict()
+])
 export type ArtifactPresentationRenderResult = z.infer<
   typeof artifactPresentationRenderResultSchema
 >

@@ -425,6 +425,7 @@ test('ARTIFACT-E2E-01 opens a workspace PPTX in its own Artifact tab and adds an
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
+  test.setTimeout(180_000)
 
   const projectRoot = await mkdtemp(join(tmpdir(), 'dascowork-e2e-artifact-pptx-'))
   const backend = await startMockBackend({
@@ -435,7 +436,12 @@ test('ARTIFACT-E2E-01 opens a workspace PPTX in its own Artifact tab and adds an
 
   try {
     await initializeProject(projectRoot)
-    await writePresentationFixture(join(projectRoot, 'deck.pptx'))
+    // Optional real R07 deck covers Chinese text, tables, charts and pictures through public IPC.
+    const htmlPresentationFixture = process.env.DASCOWORK_HTML_PRESENTATION_FIXTURE?.trim()
+    const expectedSlideCount = htmlPresentationFixture ? 6 : 1
+    if (htmlPresentationFixture)
+      await copyFile(htmlPresentationFixture, join(projectRoot, 'deck.pptx'))
+    else await writePresentationFixture(join(projectRoot, 'deck.pptx'))
     app = await launchApp(backend, logs)
     const page = await app.firstWindow()
     await page.evaluate(() => window.localStorage.clear())
@@ -446,32 +452,130 @@ test('ARTIFACT-E2E-01 opens a workspace PPTX in its own Artifact tab and adds an
     await page.getByRole('button', { name: 'Open Files', exact: true }).click()
 
     const rightPanel = page.locator('[data-slot="right-workspace-shell"]')
+    const previewStartedAt = Date.now()
     await rightPanel.getByRole('treeitem', { name: 'deck.pptx', exact: true }).click()
     await expect(
       rightPanel.locator('[role="tab"][data-workspace-tab-id="artifact:workspace:deck.pptx"]')
     ).toBeVisible()
     await expect(rightPanel.locator('[data-slot="artifact-tab-content"]')).toBeVisible()
     const slideImage = rightPanel.locator('.presentation-stage-image')
+    const htmlFrame = rightPanel.locator('iframe.presentation-html-frame')
     const runtimeUnavailable = rightPanel.getByText('Primary Runtime is not installed.')
     if (process.env.DASCOWORK_PRIMARY_RUNTIME_ROOT) {
-      await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 1')
-      await expect(slideImage).toBeVisible()
-      await expect(slideImage).toHaveAttribute('src', /^data:image\/png;base64,/u)
+      await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText(
+        `1 / ${expectedSlideCount}`,
+        { timeout: 120_000 }
+      )
+      await expect(htmlFrame).toBeVisible()
+      await expect(htmlFrame).toHaveAttribute('sandbox', 'allow-same-origin')
+      const frame = htmlFrame.contentFrame()
+      await expect(frame.locator('body')).toHaveAttribute('data-preview-ready', 'true', {
+        timeout: 60_000
+      })
+      const timingPath = testInfo.outputPath('presentation-html-ready-timing.json')
+      await writeFile(
+        timingPath,
+        JSON.stringify({
+          slideCount: expectedSlideCount,
+          previewReadyMs: Date.now() - previewStartedAt
+        })
+      )
+      await testInfo.attach('presentation-html-ready-timing.json', {
+        path: timingPath,
+        contentType: 'application/json'
+      })
+      await expect(frame.locator('.sidebar > .thumb')).toHaveCount(expectedSlideCount)
+      await expect(frame.locator('.main > .slide-container:visible')).toHaveCount(1)
+      await expect(slideImage).toHaveCount(0)
+      if (htmlPresentationFixture) {
+        await expect(frame.locator('.main')).toContainText(/\p{Script=Han}/u)
+        const expectedTitles = ['封面', '议程', '摘要', '数据表', '数据图', '图片']
+        for (let index = 0; index < expectedSlideCount; index += 1) {
+          await frame.locator('.sidebar > .thumb').nth(index).click()
+          await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText(
+            `${index + 1} / 6`
+          )
+          await expect(frame.locator('.main > .slide-container:visible')).toHaveCount(1)
+          await expect(frame.locator('.main > .slide-container:visible .slide')).toBeVisible()
+          await expect(frame.locator('.main > .slide-container:visible')).toContainText(
+            expectedTitles[index]
+          )
+          if (index === 3 || index === 4) {
+            const screenshotName = `officecli-real-six-page-html-${index === 3 ? 'table' : 'chart'}`
+            const screenshotPath = testInfo.outputPath(`${screenshotName}.png`)
+            await rightPanel.screenshot({ path: screenshotPath })
+            await testInfo.attach(screenshotName, {
+              path: screenshotPath,
+              contentType: 'image/png'
+            })
+          }
+        }
+      }
     } else {
-      await expect(slideImage.or(runtimeUnavailable)).toBeVisible()
+      await expect(htmlFrame.or(slideImage).or(runtimeUnavailable)).toBeVisible()
       if (await runtimeUnavailable.isVisible()) {
         await expect(
           rightPanel.getByRole('button', { name: '使用系统应用打开' }).last()
         ).toBeVisible()
       } else {
-        await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 1')
-        await expect(slideImage).toHaveAttribute('src', /^data:image\/png;base64,/u)
+        await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText(
+          `1 / ${expectedSlideCount}`
+        )
+        if (await htmlFrame.count()) {
+          await expect(htmlFrame.contentFrame().locator('body')).toHaveAttribute(
+            'data-preview-ready',
+            'true'
+          )
+          await expect(slideImage).toHaveCount(0)
+        } else {
+          await expect(slideImage).toHaveAttribute('src', /^data:image\/png;base64,/u)
+        }
       }
     }
 
     await rightPanel.getByRole('button', { name: '添加到会话上下文', exact: true }).click()
     await expect(page.locator('[data-attachment-name="deck.pptx"]')).toBeVisible()
     await captureWorkspaceScreenshot(page, testInfo, 'RW-09-artifact-pptx')
+
+    if (htmlPresentationFixture && process.env.DASCOWORK_PRIMARY_RUNTIME_ROOT) {
+      const artifact = rightPanel.locator('[data-slot="artifact-tab-content"]')
+      const initialGeneration = await artifact.getAttribute('data-artifact-preview-generation')
+      const sourceId = await artifact.getAttribute('data-artifact-source-id')
+      expect(sourceId).toBeTruthy()
+      expect(initialGeneration).toBeTruthy()
+      await writePresentationFixture(join(projectRoot, 'deck.pptx'))
+      await expect(artifact).not.toHaveAttribute(
+        'data-artifact-preview-generation',
+        initialGeneration!,
+        { timeout: 120_000 }
+      )
+      await expect(rightPanel.locator('[data-slot="presentation-panel"]')).toContainText('1 / 1', {
+        timeout: 120_000
+      })
+      await expect(htmlFrame.contentFrame().locator('body')).toHaveAttribute(
+        'data-preview-ready',
+        'true',
+        { timeout: 60_000 }
+      )
+      await expect(htmlFrame.contentFrame().locator('.sidebar > .thumb')).toHaveCount(1)
+      const binary = await page.evaluate(async (artifactSourceId) => {
+        return window.desktopApp.workspace.artifacts.readBinary({
+          version: 1,
+          sourceId: artifactSourceId
+        })
+      }, sourceId!)
+      expect('unavailable' in binary).toBe(false)
+      if ('unavailable' in binary)
+        throw new Error(`Refreshed source unavailable: ${binary.unavailable}`)
+      expect(binary.content.kind).toBe('binary')
+      if (binary.content.kind !== 'binary')
+        throw new Error('Refreshed PPTX was not binary content.')
+      await expect(artifact).toHaveAttribute(
+        'data-artifact-preview-generation',
+        String(binary.content.generation)
+      )
+      await expect(slideImage).toHaveCount(0)
+    }
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)

@@ -26,6 +26,14 @@ vi.mock('./presentation/PresentationRendererAdapter', () => ({
   }))
 }))
 
+// jsdom does not load srcDoc. Frame rendering and interaction are covered by
+// PresentationHtmlView tests and the Electron presentation HTML test.
+vi.mock('./presentation/PresentationHtmlView', () => ({
+  PresentationHtmlView: ({ html }: { html: string }) => (
+    <iframe className="presentation-html-frame" srcDoc={html} sandbox="allow-same-origin" />
+  )
+}))
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 describe('ArtifactTabContent source lifecycle', () => {
@@ -162,6 +170,40 @@ describe('ArtifactTabContent source lifecycle', () => {
     expect(metadata).toHaveBeenCalledTimes(1)
     expect(readBinary).toHaveBeenCalledTimes(1)
     expect(renderPresentation).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the HTML preview without generating image pages and reloads changed generations', async () => {
+    const html = `<style>.slide{width:960px;height:540px}</style>
+      <div class="sidebar">${slides.map((_, index) => `<div class="thumb" data-slide="${index + 1}"><div class="thumb-inner"></div></div>`).join('')}</div>
+      <div class="main">${slides.map((_, index) => `<div class="slide-container" data-slide="${index + 1}"><div class="slide-wrapper"><div class="slide">页面 ${index + 1}</div></div></div>`).join('')}</div>`
+    renderPresentation.mockImplementation(async ({ sourceId }: { sourceId: string }) => ({
+      version: 1,
+      sourceId,
+      generation,
+      html,
+      slideCount: 6
+    }))
+
+    await act(async () => root.render(<Harness />))
+    const frame = container.querySelector<HTMLIFrameElement>('.presentation-html-frame')
+    expect(frame).not.toBeNull()
+    expect(frame?.getAttribute('srcdoc')).toContain('页面 1')
+    expect(frame?.getAttribute('sandbox')).toBe('allow-same-origin')
+    expect(container.querySelector('.presentation-stage-image')).toBeNull()
+    await nextSlide()
+    expect(container.textContent).toContain('2 / 6')
+    expect(container.querySelector('.presentation-html-frame')).toBe(frame)
+    expect(renderPresentation).toHaveBeenCalledTimes(1)
+
+    generation = 2
+    await act(async () => sourceEvent?.({ version: 1, sourceId }))
+    expect(container.textContent).toContain('1 / 6')
+    expect(
+      container
+        .querySelector('[data-artifact-preview-generation]')
+        ?.getAttribute('data-artifact-preview-generation')
+    ).toBe('2')
+    expect(renderPresentation).toHaveBeenCalledTimes(2)
   })
 
   it('reloads an actual source generation change and still honors explicit page navigation', async () => {

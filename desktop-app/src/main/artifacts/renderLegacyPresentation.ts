@@ -4,6 +4,11 @@ import { pathToFileURL } from 'node:url'
 
 import type { ArtifactPresentationRenderResult } from '../../shared/artifactPreviewApi'
 
+type PresentationImageSlides = Extract<
+  ArtifactPresentationRenderResult,
+  { slides: unknown }
+>['slides']
+
 const MAX_SLIDES = 30
 const MAX_PNG_BYTES = 30 * 1024 * 1024
 
@@ -23,7 +28,7 @@ export async function renderLegacyPresentation(
     environment: NodeJS.ProcessEnv
   ) => Promise<LegacyProcessResult>,
   options: { chineseFontPath?: string; platform?: NodeJS.Platform } = {}
-): Promise<ArtifactPresentationRenderResult['slides']> {
+): Promise<PresentationImageSlides> {
   const outputDirectory = join(root, 'output')
   const profileDirectory = join(root, 'libreoffice-profile')
   const slidesDirectory = join(root, 'slides')
@@ -121,9 +126,7 @@ async function findConvertedPdf(
   )
 }
 
-async function readRenderedSlides(
-  slidesDirectory: string
-): Promise<ArtifactPresentationRenderResult['slides']> {
+async function readRenderedSlides(slidesDirectory: string): Promise<PresentationImageSlides> {
   const files = await readdir(slidesDirectory)
   const slides = files
     .map((file) => ({ file, number: slideNumber(file) }))

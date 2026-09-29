@@ -55,6 +55,8 @@ export function ArtifactTabContent({
   const [renderState, setRenderState] = useState<{
     key: string
     slides?: readonly string[]
+    html?: string
+    slideCount?: number
     error?: string
   }>()
   const [annotationState, dispatchAnnotation] = useReducer(
@@ -77,9 +79,14 @@ export function ArtifactTabContent({
   const parsed = activeParseState?.parsed
   const activeRenderState = renderState?.key === presentationKey ? renderState : undefined
   const renderedSlides = activeRenderState?.slides
+  const renderedHtml = activeRenderState?.html
+  const hasPreview = Boolean(renderedHtml || renderedSlides)
   const renderError = activeRenderState?.error
-  const document = renderedSlides
-    ? presentationDocumentForRender(parsed?.document, renderedSlides.length)
+  const document = hasPreview
+    ? presentationDocumentForRender(
+        parsed?.document,
+        activeRenderState?.slideCount ?? renderedSlides?.length ?? 0
+      )
     : undefined
 
   useEffect(() => {
@@ -131,6 +138,10 @@ export function ArtifactTabContent({
         if (!active) return
         if (result.generation !== binary.generation) {
           setRenderState({ key: presentationKey, error: '文件已更新，请刷新演示文稿预览。' })
+          return
+        }
+        if ('html' in result) {
+          setRenderState({ key: presentationKey, html: result.html, slideCount: result.slideCount })
           return
         }
         const slides = result.slides.map((slide, index) => {
@@ -203,7 +214,7 @@ export function ArtifactTabContent({
     <section
       data-slot="artifact-tab-content"
       data-artifact-source-id={source.binary?.sourceId}
-      data-artifact-preview-generation={renderedSlides ? source.binary?.generation : undefined}
+      data-artifact-preview-generation={hasPreview ? source.binary?.generation : undefined}
       className="flex h-full min-h-0 flex-col"
     >
       <header className="flex min-h-13 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4">
@@ -326,7 +337,7 @@ export function ArtifactTabContent({
           action={openWithSystem}
         />
       ) : null}
-      {!source.loading && !source.tooLarge && !source.error && !renderedSlides && !renderError ? (
+      {!source.loading && !source.tooLarge && !source.error && !hasPreview && !renderError ? (
         <StateView
           icon={<LoaderCircleIcon className="size-5 animate-spin" />}
           message="正在生成演示文稿预览…"
@@ -339,12 +350,14 @@ export function ArtifactTabContent({
           action={openWithSystem}
         />
       ) : null}
-      {document && renderedSlides ? (
+      {document && hasPreview && !renderError ? (
         <div className="min-h-0 flex-1">
           <PresentationPanel
             key={`${presentationKey ?? 'presentation'}:${artifact.navigation?.requestId ?? ''}`}
             document={document}
             renderedSlides={renderedSlides}
+            html={renderedHtml}
+            onPreviewError={(error) => setRenderState({ key: presentationKey!, error })}
             navigation={artifact.navigation}
             annotations={annotationState.annotations.filter(
               (annotation) =>

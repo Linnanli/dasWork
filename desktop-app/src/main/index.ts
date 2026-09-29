@@ -131,6 +131,7 @@ import {
   registerRightWorkspaceIpc,
   type RightWorkspaceIpcRegistration
 } from './rightWorkspace/registerRightWorkspaceIpc'
+import { bindRightWorkspaceWindowLifecycle } from './rightWorkspace/bindRightWorkspaceWindowLifecycle'
 import { createMainWindowOptions } from './windowOptions'
 import {
   codexChatAttachPayloadSchema,
@@ -986,17 +987,7 @@ function createWindow(runtime: CodexChatRuntimeService): void {
     })
   )
   const ownerWebContentsId = mainWindow.webContents.id
-  rightWorkspaceIpc?.attachWindow(mainWindow)
-
-  mainWindow.webContents.on('did-start-loading', () => {
-    rightWorkspaceIpc?.detachWindow(ownerWebContentsId)
-  })
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (!mainWindow.isDestroyed()) rightWorkspaceIpc?.attachWindow(mainWindow)
-  })
-  mainWindow.webContents.on('render-process-gone', () => {
-    rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
-  })
+  if (rightWorkspaceIpc) bindRightWorkspaceWindowLifecycle(mainWindow, rightWorkspaceIpc)
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -1020,7 +1011,6 @@ function createWindow(runtime: CodexChatRuntimeService): void {
   mainWindow.on('closed', () => {
     unsubscribeApprovals()
     unsubscribeSettledApprovals()
-    rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
   })
   mainWindow.webContents.once('destroyed', () => {
     void composerContextSearch?.stopOwnedBy(ownerWebContentsId)
