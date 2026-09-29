@@ -1,12 +1,12 @@
 # OfficeCLI Runtime 迁移验收记录
 
-日期：2026-09-28
+日期：2026-09-29
 
 计划：`.omx/plans/2026-09-27-officecli-office-capability-migration.md`
 
 ## 复审结论
 
-**尚未完成全部计划验收。** 最新校准 [36412021750](https://github.com/Linnanli/dasWork/actions/runs/36412021750) 的四平台原生构建及 P3 自动门禁全部通过，预算提取 [36417936943](https://github.com/Linnanli/dasWork/actions/runs/36417936943) 也通过。但真实图片复查发现 Linux 图表中文标签丢失，A6 仍被阻塞；新的字体修复需要重新校准。旧 R07 的固定像素指标不能作为视觉验收证据。
+**尚未完成全部计划验收。** 最新校准 [36420932977](https://github.com/Linnanli/dasWork/actions/runs/36420932977) 的四目标原生构建成功，但 Linux P3b 真实预览失败：表格文字和图表中文丢失。当前已修复字体契约和 Main 图像生成路径，本地真实 Linux 两轮及 macOS 六页均通过原门槛；A6/A9 仍等待新四目标校准、实图接受、预算审查与 final。
 
 | 条件 | 当前状态 | 尚缺的证据 |
 | --- | --- | --- |
@@ -15,12 +15,12 @@
 | A3：v3 清单及 v1/v2 兼容 | 四平台实际 v2/v3 归档与迁移已通过 | 最终构建复验 |
 | A4：健康 Runtime 路径及能力发布 | 四平台失败恢复后保留健康旧 Runtime，快照与聊天已通过 | 新提交及最终门禁 |
 | A5：技能、插件与 Runtime 整体切换 | 四平台各 12 个真实迁移场景通过 | 新提交及最终门禁 |
-| A6：六页真实 PNG 预览 | 四平台自动取证通过，48 张旧/新 PNG 哈希与尺寸已核对；Linux 图表缺字阻塞验收 | 新字体修复的原生 Linux 实图、重新逐页视觉审查 |
+| A6：六页真实 PNG 预览 | 最新校准 Linux 缺字失败；修复后本地 Linux 两轮、macOS 六页通过，Linux 重跑逐页 SHA 相同 | 新四目标原生实图、重新逐页视觉审查与接受 |
 | A7：三格式技能与命令结果检查 | 四平台复杂副本修改、保存、重新读取及 JSON/退出码检查通过 | 最终构建复验 |
 | A8：生产路径退役旧插件 | v3 清单不含旧插件；四平台冷启动与受管技能/插件切换记录通过 | 最终构建复验 |
-| A9：全部门禁及性能预算 | 最新实测与独立预算审查通过，四平台内存回执已核对 | 修复后的新校准/预算审查、final 打包与签名工程 Feed 门禁 |
+| A9：全部门禁及性能预算 | 上次完整候选预算已审查；本轮显式 Regular 改变源锁哈希，需重新校准 | 新四目标校准/预算审查、final 打包与签名工程 Feed 门禁 |
 
-原始本轮报告与图片见 [36412021750 证据](officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md)。它们使用真实旧 v2 归档、签名 HTTPS Feed、真实 app-server 和逐页 PNG；通过自动取证不代表视觉质量已经接受。下方早期验证与失败记录按历史顺序保留，当前状态以上表为准。
+上一轮完整报告与图片见 [36412021750 证据](officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md)。它们使用真实旧 v2 归档、签名 HTTPS Feed、真实 app-server 和逐页 PNG；通过自动取证不代表视觉质量已经接受。下方早期验证与失败记录按历史顺序保留，当前状态以上表为准。
 
 离线 smoke 使用临时用户目录和受限环境，先验证网络连接正向对照成功且隔离后失败，再检查系统程序执行：macOS 仅允许 OfficeCLI 绝对路径执行；Linux 在网络隔离内以 strace 逐次核对 execve/execveat；Windows 在 CreateProcessW 启动时设置禁止创建子进程策略。正反探测必须实际执行，缺少工具或不完整记录均失败。本轮四平台的正反探测与各 25 条隔离命令已通过，并核对实际回执；最终归档继续复验这些约束。
 
@@ -37,6 +37,18 @@
 继承字体回归在修改前失败、修改后通过。本机真实 Electron 使用这次 Linux 失败运行的 PPTX 输出完整六页 3840×2160，图表 15 个 SVG 文字节点全部带 Runtime 字体回退，两个分类和图例可见。新增图片门禁使用实际失败/正常 PNG 对照，检查固定 R07 图表的三个文字区域，保留实测值，原整页像素门槛保持。该 Mac 控制不能替代原生 Linux 恢复证据；A6 仍未接受，修复后需要新 calibrate，再做预算审查与 final。
 
 本轮本地验证：23 个相关单元、44 个发布契约、10 个预算/硬上限测试通过；完整桌面 build、Node/Web typecheck、原生运行时边界和 bundled plugins 检查通过；完整 lint 为 0 错误、539 个既有警告。发布契约首次被沙箱端口限制阻断，允许临时本地 HTTPS 服务后 44 项全量通过。独立只读审查未发现字体优先级、安全边界或门禁接入阻塞。[实测与 Mac 控制证据](officecli-runtime-migration/2026-09-28/calibration-36412021750/README.md) 明确保留原生 Linux 和最终工程 Feed 的验证缺口。
+
+修复提交 `45a4e151b3e83c772f3ff58ae83756cde29377fd` 已推送。新四目标 `calibrate` 运行 [36420932977](https://github.com/Linnanli/dasWork/actions/runs/36420932977) 于 2026-09-28 12:17:53 UTC 创建，已确认绑定该提交并处于 `in_progress`。按约定暂停，待用户完成通知后再检查原生 Linux 图表文字、四平台实图、校准和后续预算/final 门禁；未读取新运行最终结果，A1–A9 仍未全部接受。
+
+## 36420932977：真实 Linux 复现与图像生成路径修复
+
+用户报告报错后，确认四目标原生构建与三个非 Linux P3 成功；Linux P3b 在原门槛 `colorBucketCount > 12` 失败，表格 PNG 实测为 12。实际 PPTX 与 SVG 的文字完整，问题在 Main 预览：表格截图早于文字绘制；图表的系统字体优先于 Runtime 字体，等待也不能恢复中文。直接运行旧 Main 的 Linux 控制已复现两者。
+
+本轮改为私有 CJK face 与按字符范围的优先字体，保留 Latin 原字体；Runtime 源锁明确 Regular/400/normal，构建与输入验证按同一精确路径选择，缺失时失败。随后删除隐藏窗口截图和 offscreen 首帧完成条件，由隔离的 Chromium 完整解码 SVG 后绘制到白底 canvas 并导出 PNG，Main 继续校验空图及尺寸。没有修改 R07 原像素门槛、图表文字区域或输入样本。
+
+最终真实 Linux 两轮和本机 macOS 各输出完整六页，全部通过原检查；Linux 六页两轮 SHA 逐页一致。表格颜色桶为 68，图表分类和图例可见；字体诊断确认中文 Regular 与 Latin 既有字体分别被选中。Linux 控制使用 Debian 13 与校验过 SHA 的 Electron 39.8.10、OfficeCLI 1.0.152；不能替代原生 Ubuntu/Windows/macOS 四目标新校准及完整签名 Feed 验收。[原始失败、修复实图、来源与逐页回执](officecli-runtime-migration/2026-09-29/calibration-36420932977/README.md) 已保存。
+
+针对性桌面回归 27 项、Runtime 77 项（4 项平台跳过）、发布契约 44 项通过。独立只读审查确认直接 SVG 解码路径移除了已复现的窗口截图时序依赖，未发现本轮生产阻塞；完整桌面 build、Node/Web typecheck、原生运行时边界、bundled plugins 和 diff 检查通过。完整 lint 为 0 错误、539 条既有警告，变更 TypeScript 文件单独 lint 无输出。新原生 Runtime 清单和新源锁预算尚未接受，A1–A9 仍未全部完成。
 
 ## 校准失败与后续修复（历史）
 

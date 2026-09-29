@@ -53,6 +53,8 @@ const componentKeys = new Set([
   "platforms",
   "entryRequired",
 ]);
+const fontComponentKeys = new Set([...componentKeys, "defaultFace"]);
+const fontDefaultFaceKeys = new Set(["path", "family", "weight", "style"]);
 const componentGroups = Object.freeze(["node", "python", "native", "fonts"]);
 const componentGroupKeys = new Set(componentGroups);
 const unresolvedValue = /^(?:unresolved|pending|awaiting|unknown|tbd|latest|main|master|head)$/iu;
@@ -82,7 +84,7 @@ export function validateRuntimeSourcesLock(value) {
     let hasInvalidEntry = false;
     if (Array.isArray(entries)) {
       for (const entry of entries) {
-        if (!isComponent(entry) || groupNames.has(entry.name)) {
+        if (!isComponent(entry, group) || groupNames.has(entry.name)) {
           hasInvalidEntry = true;
           break;
         }
@@ -159,6 +161,10 @@ export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function runtimeFontPathForComponent(component) {
+  return `fonts/${component.name}/${component.defaultFace.path}`;
+}
+
 function isValidCandidate(candidate) {
   return (
     isPlainObject(candidate) &&
@@ -198,10 +204,11 @@ function isRuntimeScope(scope) {
   );
 }
 
-function isComponent(component) {
+function isComponent(component, group) {
+  const allowedKeys = group === "fonts" ? fontComponentKeys : componentKeys;
   return (
     isPlainObject(component) &&
-    !hasUnexpectedKeys(component, componentKeys) &&
+    !hasUnexpectedKeys(component, allowedKeys) &&
     isResolvedValue(component.name) &&
     (component.capability === undefined || isResolvedValue(component.capability)) &&
     isExactVersion(component.version) &&
@@ -212,7 +219,21 @@ function isComponent(component) {
     Array.isArray(component.platforms) &&
     component.platforms.length > 0 &&
     component.platforms.every((target) => supportedTargets.has(target)) &&
-    new Set(component.platforms).size === component.platforms.length
+    new Set(component.platforms).size === component.platforms.length &&
+    (group === "fonts"
+      ? isFontDefaultFace(component.defaultFace)
+      : component.defaultFace === undefined)
+  );
+}
+
+function isFontDefaultFace(value) {
+  return (
+    isPlainObject(value) &&
+    !hasUnexpectedKeys(value, fontDefaultFaceKeys) &&
+    isOtfRelativePath(value.path) &&
+    isResolvedValue(value.family) &&
+    value.weight === 400 &&
+    value.style === "normal"
   );
 }
 
@@ -262,8 +283,16 @@ function isRelativePath(value) {
     typeof value === "string" &&
     value.length > 0 &&
     !value.startsWith("/") &&
+    !/^[A-Za-z]:/u.test(value) &&
+    !value.includes("\\") &&
+    !value.split("/").includes("") &&
+    !value.split("/").includes(".") &&
     !value.split("/").includes("..")
   );
+}
+
+function isOtfRelativePath(value) {
+  return isRelativePath(value) && /\.otf$/iu.test(value);
 }
 
 function isHttpsUrl(value) {

@@ -144,6 +144,12 @@
         "source": "https://github.com/notofonts/noto-cjk/releases/download/Sans2.004/08_NotoSansCJKsc.zip",
         "sha256": "a927e56f53bd6c3b920bc139c0b94aa36c7d9ad0cf009b159437a1a003581140",
         "license": "OFL-1.1",
+        "defaultFace": {
+          "path": "NotoSansCJKsc-Regular.otf",
+          "family": "Noto Sans CJK SC",
+          "weight": 400,
+          "style": "normal"
+        },
         "platforms": [
           "darwin-x64",
           "darwin-arm64",

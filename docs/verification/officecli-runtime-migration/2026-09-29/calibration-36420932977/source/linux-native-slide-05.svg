@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1920" height="1080"
+     viewBox="0 0 1920 1080">
+
+<rect width="1920" height="1080" fill="white"/>
+<g transform="translate(132,57.5)"><rect width="1656" height="208" fill="none"/><foreignObject x="14.4" y="7.2" width="1627.2" height="193.6"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-start;line-height:1"><div style="white-space:pre-wrap;word-wrap:break-word;margin:0;font-size:44pt;line-height:1.2"><span style="font-family:'Calibri','PingFang SC', 'Hiragino Sans', 'Yu Gothic', 'Apple SD Gothic Neo', 'Microsoft YaHei', 'Noto Sans CJK SC',sans-serif;font-size:44pt;color:#000000">数据图｜市场规模与渗透率</span></div></div></foreignObject></g>
+<g transform="translate(144,216)"><rect width="1152" height="576" fill="white" fill-opacity="0"/><text x="576" y="12" text-anchor="middle" font-size="18" font-weight="bold" fill="#000000">市场指标</text><svg x="0" y="16" width="1152" height="560" viewBox="0 0 731 345" preserveAspectRatio="xMidYMid meet">
+        <line x1="40" y1="320" x2="716" y2="320" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="281.3" x2="716" y2="281.3" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="242.5" x2="716" y2="242.5" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="203.8" x2="716" y2="203.8" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="165" x2="716" y2="165" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="126.3" x2="716" y2="126.3" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="87.5" x2="716" y2="87.5" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="48.8" x2="716" y2="48.8" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="10" x2="716" y2="10" stroke="#ccc" stroke-width="0.5"/>
+        <line x1="40" y1="10" x2="40" y2="320" stroke="#aaa" stroke-width="1"/>
+        <line x1="40" y1="320" x2="716" y2="320" stroke="#aaa" stroke-width="1"/>
+        <rect x="141.4" y="177.4" width="135.2" height="142.6" fill="#4472C4" opacity="1"/>
+        <text class="chart-data-label" x="209" y="174.4" fill="#000000" font-size="8" text-anchor="middle">18.4</text>
+        <rect x="479.4" y="33.3" width="135.2" height="286.8" fill="#4472C4" opacity="1"/>
+        <text class="chart-data-label" x="547" y="30.3" fill="#000000" font-size="8" text-anchor="middle">37</text>
+        <line x1="209" y1="320" x2="209" y2="324" stroke="#aaa" stroke-width="1"/>
+        <text x="209" y="336" fill="#000000" font-size="9" text-anchor="middle">市场规模（亿元）</text>
+        <line x1="547" y1="320" x2="547" y2="324" stroke="#aaa" stroke-width="1"/>
+        <text x="547" y="336" fill="#000000" font-size="9" text-anchor="middle">企业试点渗透率（%）</text>
+        <line x1="36" y1="320" x2="40" y2="320" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="320" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">0</text>
+        <line x1="36" y1="281.3" x2="40" y2="281.3" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="281.3" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">5</text>
+        <line x1="36" y1="242.5" x2="40" y2="242.5" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="242.5" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">10</text>
+        <line x1="36" y1="203.8" x2="40" y2="203.8" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="203.8" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">15</text>
+        <line x1="36" y1="165" x2="40" y2="165" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="165" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">20</text>
+        <line x1="36" y1="126.3" x2="40" y2="126.3" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="126.3" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">25</text>
+        <line x1="36" y1="87.5" x2="40" y2="87.5" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="87.5" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">30</text>
+        <line x1="36" y1="48.8" x2="40" y2="48.8" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="48.8" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">35</text>
+        <line x1="36" y1="10" x2="40" y2="10" stroke="#aaa" stroke-width="1"/>
+        <text x="36" y="10" fill="#000000" font-size="9" text-anchor="end" dominant-baseline="middle">40</text>
+      </svg><rect x="536" y="562" width="8" height="8" fill="#4472C4"/><text x="546" y="569" font-size="8" fill="#000000">市场指标</text></g>
+</svg>

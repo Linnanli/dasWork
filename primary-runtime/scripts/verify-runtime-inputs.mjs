@@ -9,7 +9,7 @@ import { basename, delimiter, dirname, join, relative, resolve, sep } from "node
 import { fileURLToPath } from "node:url";
 
 import { assertRuntimeInputsManifest } from "./runtime-inputs.mjs";
-import { sha256 } from "./source-lock.mjs";
+import { readRuntimeSourcesLock, runtimeFontPathForComponent, sha256 } from "./source-lock.mjs";
 import { assertNativeRuntimeTarget, parseRuntimeTargetOption } from "./runtime-target.mjs";
 import {
   createOfficeCliIsolationContext,
@@ -29,6 +29,7 @@ const officeCliFixtureRoot = fileURLToPath(
 
 const options = parseArgs(process.argv.slice(2));
 const target = assertNativeRuntimeTarget(options.target);
+const sourceLock = await readRuntimeSourcesLock(options.sourceLock);
 const { manifest } = await assertRuntimeInputsManifest({
   inputRoot: options.inputRoot,
   target,
@@ -74,7 +75,11 @@ commands.push(
     entrypoints: nativeClosureEntrypoints,
   }),
 );
-const font = await findLockedFont(join(options.inputRoot, "fonts"));
+const fonts = await findLockedFonts({
+  inputRoot: options.inputRoot,
+  sourceLock,
+});
+const font = fonts[0];
 
 commands.push(await runCommand("poppler-pdfinfo-version", binaries.pdfinfo, ["-v"]));
 commands.push(await runCommand("poppler-pdftoppm-version", binaries.pdftoppm, ["-v"]));
@@ -396,21 +401,30 @@ function hasExpectedExecutableHeader(header, target, label) {
 
 
 
-async function findLockedFont(root) {
+async function findLockedFonts({ inputRoot, sourceLock }) {
   const fonts = [];
-  await walk(root, async (path) => {
-    if (/\.(?:ttf|otf)$/iu.test(path)) fonts.push(path);
-  });
+  for (const component of sourceLock.components.fonts) {
+    const path = join(inputRoot, runtimeFontPathForComponent(component));
+    const header = await readFirstBytes(path, 4).catch((error) => {
+      if (error && error.code === "ENOENT") {
+        throw new Error(
+          `AT-RT-INPUT-01 blocked: locked Runtime default font is missing: ${runtimeFontPathForComponent(component)}.`,
+        );
+      }
+      throw error;
+    });
+    const signature = header.toString("ascii");
+    if (!["\u0000\u0001\u0000\u0000", "OTTO", "true", "typ1"].includes(signature)) {
+      throw new Error(
+        `AT-RT-INPUT-01 blocked: locked Runtime default font is not a supported OpenType payload: ${runtimeFontPathForComponent(component)}.`,
+      );
+    }
+    fonts.push({ name: component.name, path });
+  }
   if (fonts.length === 0) {
-    throw new Error("AT-RT-INPUT-01 blocked: no locked Chinese font was materialized.");
+    throw new Error("AT-RT-INPUT-01 blocked: no locked Chinese font was declared.");
   }
-  const path = fonts.sort((left, right) => left.localeCompare(right))[0];
-  const header = await readFirstBytes(path, 4);
-  const signature = header.toString("ascii");
-  if (!["\u0000\u0001\u0000\u0000", "OTTO", "true", "typ1"].includes(signature)) {
-    throw new Error("AT-RT-INPUT-01 blocked: locked font is not a supported OpenType payload.");
-  }
-  return { path };
+  return fonts;
 }
 
 async function walk(root, onFile) {

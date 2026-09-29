@@ -28,7 +28,7 @@ export async function rasterizePresentationSvg(
     // snapshot. Embed its bytes so the isolated document needs no file or
     // network access for fonts, and keeps the deck's existing font choices.
     const font = await readFile(chineseFontPath)
-    const fontStyle = `<style>@font-face{font-family:"Noto Sans CJK SC";src:url("data:font/otf;base64,${font.toString('base64')}") format("opentype");font-style:normal;font-weight:normal;}</style>`
+    const fontStyle = `<style>@font-face{font-family:"Dascowork Preview CJK";src:url("data:font/otf;base64,${font.toString('base64')}") format("opentype");font-style:normal;font-weight:400;unicode-range:U+2E80-33FF,U+3400-4DBF,U+4E00-9FFF,U+F900-FAFF,U+FF00-FFEF,U+20000-2FA1F;}</style>`
     await writeFile(svgPath, svg.replace(/(<svg\b[^>]*>)/u, `$1${fontStyle}`))
     const electron = await import('electron')
     await electron.app.whenReady()
@@ -40,7 +40,6 @@ export async function rasterizePresentationSvg(
       useContentSize: true,
       enableLargerThanScreen: true,
       show: false,
-      paintWhenInitiallyHidden: true,
       backgroundColor: '#ffffff',
       webPreferences: {
         session: isolatedSession,
@@ -55,38 +54,61 @@ export async function rasterizePresentationSvg(
       }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    const firstPaint = new Promise<void>((resolve) => window!.once('ready-to-show', resolve))
     const render = async (): Promise<Buffer> => {
       await window!.loadFile(svgPath)
-      await firstPaint
       // Native window creation can fit the initial bounds to a small desktop.
       // Restore the slide viewport after the hidden window has initialized.
       window!.setContentSize(width, height)
       // Only this fixed Main-owned expression executes. Document scripts stay
-      // disabled. Preserve each text style's preferred fonts, and include the
-      // Runtime font as its Chinese fallback. Wait for paint after font layout.
-      const fontLoaded = await window!.webContents.executeJavaScriptInIsolatedWorld(1001, [
+      // disabled. The private face owns only CJK code points, so a system font
+      // cannot swallow Chinese glyphs and Latin text keeps its preferred face.
+      const rendered = await window!.webContents.executeJavaScriptInIsolatedWorld(1001, [
         {
           code: `(async () => {
-          for (const element of document.querySelectorAll('[style], text, tspan')) {
-            const family = element.style.fontFamily ||
-              (element.localName === 'text' || element.localName === 'tspan'
-                ? getComputedStyle(element).fontFamily : '');
-            if (family && !family.includes('Noto Sans CJK SC')) {
-              element.style.fontFamily = family + ', "Noto Sans CJK SC"';
+          const elements = new Set();
+          const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+          for (let node; (node = walker.nextNode());) {
+            const element = node.parentElement;
+            if (!element || !node.textContent.trim()) continue;
+            if (element.namespaceURI === 'http://www.w3.org/1999/xhtml' &&
+                element.localName !== 'style' && element.localName !== 'script' ||
+                element.namespaceURI === 'http://www.w3.org/2000/svg' && element.closest('text')) {
+              elements.add(element);
             }
           }
-          const faces = await document.fonts.load('16px "Noto Sans CJK SC"', '中文');
+          const families = [...elements].map(element => [element, getComputedStyle(element).fontFamily]);
+          for (const [element, family] of families) {
+            element.style.fontFamily = '"Dascowork Preview CJK", ' + family;
+          }
+          const faces = await document.fonts.load('16px "Dascowork Preview CJK"', '中文');
+          // Flush changed text styles so fonts.ready covers their actual layout,
+          // including font sizes and synthesized weights used by this slide.
+          document.documentElement.getBoundingClientRect();
           await document.fonts.ready;
           if (!faces.length || faces.some(face => face.status !== 'loaded')) return false;
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          return true;
+          // Decode the complete SVG as an image. Canvas export synchronizes its
+          // pixels without depending on a hidden window's compositor frames.
+          const image = new Image();
+          image.src = 'data:image/svg+xml;charset=utf-8,' +
+            encodeURIComponent(new XMLSerializer().serializeToString(document.documentElement));
+          await image.decode();
+          const canvas = document.createElementNS('http://www.w3.org/1999/xhtml', 'canvas');
+          canvas.width = ${width};
+          canvas.height = ${height};
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Presentation preview could not create a canvas.');
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/png');
         })()`
         }
       ])
-      if (!fontLoaded)
+      if (rendered === false)
         throw new Error('Presentation preview could not load the Runtime Chinese font.')
-      const image = await window!.webContents.capturePage({ x: 0, y: 0, width, height })
+      if (typeof rendered !== 'string' || !rendered.startsWith('data:image/png;base64,'))
+        throw new Error('Presentation preview could not produce a decoded SVG image.')
+      const image = electron.nativeImage.createFromDataURL(rendered)
       if (image.isEmpty()) throw new Error('Presentation SVG rendered an empty image.')
       const size = image.getSize()
       if (!matchesSlideCaptureSize(size.width, size.height, width, height)) {

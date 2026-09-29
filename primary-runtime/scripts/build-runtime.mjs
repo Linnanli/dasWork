@@ -18,6 +18,7 @@ import {
   assertRepositoryPatchMatchesLock,
   canonicalFileManifest,
   readRuntimeSourcesLock,
+  runtimeFontPathForComponent,
   sha256,
 } from "./source-lock.mjs";
 import {
@@ -227,16 +228,11 @@ function buildRuntimeManifest({
       ? "dependencies/native/officecli/officecli.exe"
       : "dependencies/native/officecli/officecli";
   const fonts = lock.components.fonts.map((component) => {
-    const prefix = `fonts/${component.name}/`;
-    const font = inputEntries
-      .filter(
-        (entry) =>
-          entry.path.startsWith(prefix) && /\.(?:ttf|otf)$/iu.test(entry.path),
-      )
-      .sort((left, right) => left.path.localeCompare(right.path))[0];
+    const fontPath = runtimeFontPathForComponent(component);
+    const font = inputEntries.find((entry) => entry.path === fontPath);
     if (!font) {
       throw new Error(
-        `AT-RT-BUILD-01 blocked: missing locked Runtime font for ${component.name}.`,
+        `AT-RT-BUILD-01 blocked: missing locked Runtime default font ${fontPath}.`,
       );
     }
     return { name: component.name, path: font.path };

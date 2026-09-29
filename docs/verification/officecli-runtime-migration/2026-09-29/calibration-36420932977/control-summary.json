@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "dascowork-officecli-preview-control.v1",
+  "date": "2026-09-29",
+  "failedCalibrationRunId": 36420932977,
+  "failedCommit": "45a4e151b3e83c772f3ff58ae83756cde29377fd",
+  "failedJob": {
+    "id": 108933194007,
+    "step": "P3b collect Main overlap performance and dev R07 through the signed local calibration feed",
+    "colorBucketExpectedGreaterThan": 12,
+    "actualTableColorBuckets": 12
+  },
+  "controlScope": "Real Electron with CI failed PPTX and verified locked binaries; no capture hooks or diagnostic delays in after/repeat images; this is not the native Ubuntu CI/full Feed acceptance.",
+  "environments": {
+    "linux": {
+      "os": "Debian 13 trixie",
+      "electron": "39.8.10",
+      "electronZipSha256": "92e8b031fa5327c78a972279fd75fc8503fcd1773401809f4557e4de583eabd1",
+      "officecliVersion": "1.0.152",
+      "officecliSha256": "e54d3c1d248372365f0634aac56d6f1918bd04d6e71afc792ad50e075f56cfe9"
+    },
+    "mac": {
+      "os": "macOS",
+      "target": "darwin-x64",
+      "electron": "39.8.10"
+    }
+  },
+  "runtimeFonts": {
+    "before": {
+      "path": "NotoSansCJKsc-Black.otf",
+      "sha256": "2267c4a0312d267dff8c0d1609948f7d949a3da8be3e126f5e2690cb9cc883b4"
+    },
+    "after": {
+      "path": "NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+    },
+    "newNativeRuntimeManifestVerified": false
+  },
+  "source": {
+    "presentationSha256": "6ce32767eb414d612ac7f43ed966e35d04f166b9029120aa4fd546baad1a1a61",
+    "svgEvidence": [
+      {
+        "slide": 1,
+        "controlInput": "slide-01.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-01.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      },
+      {
+        "slide": 2,
+        "controlInput": "slide-02.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-02.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      },
+      {
+        "slide": 3,
+        "controlInput": "slide-03.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-03.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      },
+      {
+        "slide": 4,
+        "controlInput": "slide-04.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-04.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      },
+      {
+        "slide": 5,
+        "controlInput": "slide-05.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-05.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      },
+      {
+        "slide": 6,
+        "controlInput": "slide-06.svg",
+        "linuxOfficeCliOutput": "linux-native-slide-06.svg",
+        "equalAfterTrimmingOuterWhitespace": true
+      }
+    ]
+  },
+  "code": {
+    "baselineMainSha256": "47f7eaa7c67f0fbea1a16136dd1a0510042687e8a2dd4d259cc523518fdfb0f4",
+    "candidateMainSha256": "03199f264aafe03d43c2043cd5b5ca271889914646acdbbd9ae54fe0e6d1e5a2",
+    "candidateSourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+    "finalLinuxBundleSha256": "fcdc6bd6645a0639b200c2c9a7270c8b10f12df919238362e75962be5f909656",
+    "repeatLinuxBundleSha256": "b7fcfad6b449e76a8cb57840075520b44449a7c0ccd2a7e4b32a5ffe1724755c",
+    "macBundleSha256": "25a715c6c3d96ef437916ab41ec92e1dd260aed5bef5f75d14bc3ebabaca7af2"
+  },
+  "checks": {
+    "unchangedR07MetricsAndRegions": true,
+    "linuxAfterSixPagesPassed": true,
+    "linuxRepeatSixPagesPassed": true,
+    "macSixPagesPassed": true,
+    "linuxAfterRepeatBytesEqual": true,
+    "visualReview": "Agent checked the six Linux pages; table text, Chinese categories/legend and numerals visible. Four native targets and human acceptance pending."
+  },
+  "remaining": [
+    "New four-target calibrate with actual Regular runtime manifest",
+    "Independent budget review using new sourceLock hash",
+    "Four-target image review and A6 acceptance",
+    "Final packaged engineering Feed gates; no production release"
+  ]
+}

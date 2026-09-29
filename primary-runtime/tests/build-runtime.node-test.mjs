@@ -105,12 +105,58 @@ test("rejects missing candidate provenance and every floating or placeholder val
         ],
       },
     },
+    {
+      ...lock,
+      components: {
+        ...lock.components,
+        fonts: [{ ...lock.components.fonts[0], defaultFace: undefined }],
+      },
+    },
+    {
+      ...lock,
+      components: {
+        ...lock.components,
+        native: [
+          {
+            ...lock.components.native[0],
+            defaultFace: {
+              path: "NotoSansCJKsc-Regular.otf",
+              family: "Noto Sans CJK SC",
+              weight: 400,
+              style: "normal",
+            },
+          },
+        ],
+      },
+    },
+    ...[
+      { path: "C:/Windows/Fonts/NotoSansCJKsc-Regular.otf" },
+      { path: "faces/./NotoSansCJKsc-Regular.otf" },
+      { path: "NotoSansCJKsc-Regular.ttf" },
+      { family: "pending" },
+      { weight: 700 },
+      { style: "italic" },
+    ].map((override) => ({
+      ...lock,
+      components: {
+        ...lock.components,
+        fonts: [
+          {
+            ...lock.components.fonts[0],
+            defaultFace: {
+              ...lock.components.fonts[0].defaultFace,
+              ...override,
+            },
+          },
+        ],
+      },
+    })),
     { ...lock, components: { ...lock.components, fonts: [] } },
     { ...lock, candidate: { ...lock.candidate, unexpected: "mutable-claim" } },
   ]) {
     assert.throws(
       () => validateRuntimeSourcesLock(invalid),
-      /invalid schema|invalid (node|python|fonts) components/u,
+      /invalid schema|invalid (node|python|native|fonts) components/u,
     );
   }
   assert.throws(
@@ -619,7 +665,7 @@ function validApprovedLock() {
       node: [],
       python: [],
       native: [{ ...component("officecli", "1.0.152"), capability: "officecli" }],
-      fonts: [component("noto-sans-cjk-sc", "2.004")],
+      fonts: [fontComponent("noto-sans-cjk-sc", "2.004")],
     },
   };
 }
@@ -632,6 +678,18 @@ function component(name, version) {
     sha256: "1".repeat(64),
     license: "MIT",
     platforms: releaseTargets,
+  };
+}
+
+function fontComponent(name, version) {
+  return {
+    ...component(name, version),
+    defaultFace: {
+      path: "NotoSansCJKsc-Regular.otf",
+      family: "Noto Sans CJK SC",
+      weight: 400,
+      style: "normal",
+    },
   };
 }
 
@@ -692,10 +750,16 @@ async function createOfflineRuntimeInputs({ inputRoot, target }) {
     );
   }
 
-  await writeFileEnsured(
-    join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"),
-    "OTTOfixture\n",
-  );
+  await Promise.all([
+    writeFileEnsured(
+      join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Black.otf"),
+      "OTTOfixture black\n",
+    ),
+    writeFileEnsured(
+      join(inputRoot, "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"),
+      "OTTOfixture regular\n",
+    ),
+  ]);
   const toolchainsLock = JSON.parse(await readFile(toolchainsLockPath, "utf8"));
   const targetToolchain = toolchainsLock.targets[target];
   const observedImage = `${targetToolchain.builder.identity}:20260920.314.1`;

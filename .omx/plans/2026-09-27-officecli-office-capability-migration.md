@@ -70,6 +70,16 @@
 
 本轮本地验证完成：23 个相关单元、44 个发布契约和 10 个预算/硬上限测试通过；完整桌面 build、Node/Web typecheck、原生运行时边界和 bundled plugins 检查通过，完整 lint 为 0 错误、539 个既有警告。独立只读审查未发现字体优先级、安全边界或局部文字门禁阻塞。待新四目标校准确认 Linux 实图，A1–A9 仍未全部接受。
 
+修复提交 `45a4e151b3e83c772f3ff58ae83756cde29377fd` 已推送。新四目标 `calibrate` 运行 [36420932977](https://github.com/Linnanli/dasWork/actions/runs/36420932977) 于 2026-09-28 12:17:53 UTC 创建，已确认 `headSha` 绑定该提交、状态为 `in_progress`。按约定在此暂停，待用户告知完成后再读取原生 Linux 图表文字、四平台实图与校准结果，并继续新预算审查和 final；未读取该运行最终结果，完整计划仍未验收通过。
+
+### 2026-09-29：最新 Linux 预览失败的结构修复
+
+用户报告 [36420932977](https://github.com/Linnanli/dasWork/actions/runs/36420932977) 报错后，确认四目标原生构建成功，Linux P3b 真实图片检查失败，表格文字和图表中文丢失。旧 Main 在本地真实 Linux 直接复现；此前隐藏窗口与 offscreen 首帧方案仍不稳定，未提交该候选。
+
+现明确 Runtime 的 Regular 默认字体来源/路径/400 字重契约，Main 用私有 CJK face 保留 Latin 字体，并改为完整 SVG 解码后在白底 canvas 导出 PNG，删除窗口截图完成条件。最终 Linux 两轮与本机 macOS 各六页通过原像素/文字区域门槛，Linux 两轮逐页 SHA 一致。相关 27 项桌面回归、77 项 Runtime（另 4 项平台跳过）和 44 项发布契约通过；未降低门槛或改动样本。原始失败与控制证据见[本轮记录](../../docs/verification/officecli-runtime-migration/2026-09-29/calibration-36420932977/README.md)。A6/A9 仍需新四目标原生实图接受、新源锁预算审查和 final 工程 Feed 门禁，完整计划尚未完成。
+
+最终完整桌面构建、Node/Web 类型、原生运行时边界和 bundled plugins 检查通过；完整 lint 为 0 错误、539 条既有警告，变更 TypeScript 文件单独 lint 无输出，diff 检查通过。
+
 ## Requirements Summary
 
 1. **目标**：以固定版本、经校验的 OfficeCLI 接管 `.docx`、`.xlsx`、`.pptx` 的本地创建、读取、修改和质量检查；保留现有 PPTX 工作区预览的对外结果与标注能力。当前 PPTX 生成链由 `presentation-skill`、PptxGenJS、Python、LibreOffice、Poppler 共同支撑，预览单独由 Main 调用 `soffice` 与 `pdftoppm`。依据：`primary-runtime/runtime-sources.lock.json:5-66,78-117`；`desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts:55-128`。

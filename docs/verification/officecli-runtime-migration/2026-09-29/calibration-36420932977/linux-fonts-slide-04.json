@@ -1,0 +1,158 @@
+[
+  {
+    "text": "数据表｜细分需求对比",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 10,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "细分需求",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 4,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "需求占比",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 4,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "建议控制",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 4,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "身份与权限治理",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 7,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "46%",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Liberation Sans",
+        "glyphCount": 3,
+        "isCustomFont": false,
+        "postScriptName": "LiberationSans"
+      }
+    ]
+  },
+  {
+    "text": "最小权限与强制审批",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 9,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "提示注入防护",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 6,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "高优先级",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 4,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "输入隔离与策略检测",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 9,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "工具调用审计",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 6,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "第一优先行动",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 6,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  },
+  {
+    "text": "记录参数、结果与责任主体",
+    "family": "\"Dascowork Preview CJK\", Calibri, \"PingFang SC\", \"Hiragino Sans\", \"Yu Gothic\", \"Apple SD Gothic Neo\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif",
+    "fonts": [
+      {
+        "familyName": "Noto Sans CJK SC",
+        "glyphCount": 12,
+        "isCustomFont": true,
+        "postScriptName": "NotoSansCJKsc-Regular"
+      }
+    ]
+  }
+]

@@ -6,25 +6,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { rasterizePresentationSvg } from './rasterizePresentationSvg'
 
+type RequestHandler = (
+  details: { url: string },
+  callback: (response: { cancel: boolean }) => void
+) => void
+
 const electronMock = vi.hoisted(() => {
-  const session = {
-    webRequest: { onBeforeRequest: vi.fn() },
-    setPermissionRequestHandler: vi.fn()
+  let requestHandler: RequestHandler | undefined
+  const image = {
+    isEmpty: vi.fn(() => false),
+    getSize: vi.fn(() => ({ width: 1920, height: 1080 })),
+    toPNG: vi.fn(() => Buffer.from('png'))
   }
   return {
-    session,
+    image,
+    session: {
+      webRequest: {
+        onBeforeRequest: vi.fn((handler: RequestHandler) => {
+          requestHandler = handler
+        })
+      },
+      setPermissionRequestHandler: vi.fn()
+    },
+    nativeImage: {
+      createFromDataURL: vi.fn(() => image)
+    },
+    request: (url: string, callback: (response: { cancel: boolean }) => void) => {
+      if (!requestHandler) throw new Error('request handler was not registered')
+      requestHandler({ url }, callback)
+    },
     windowOptions: vi.fn(),
     setContentSize: vi.fn(),
     loadFile: vi.fn<(path: string) => Promise<void>>(async () => undefined),
-    executeJavaScriptInIsolatedWorld: vi.fn<
-      (world: number, scripts: unknown[]) => Promise<boolean>
-    >(async () => true),
-    capturePage: vi.fn(async () => ({
-      isEmpty: () => false,
-      getSize: () => ({ width: 1920, height: 1080 }),
-      toPNG: () => Buffer.from('png')
-    })),
-    once: vi.fn<(event: string, listener: () => void) => void>(),
+    executeJavaScriptInIsolatedWorld:
+      vi.fn<(world: number, scripts: Array<{ code: string }>) => Promise<string | false>>(),
+    setWindowOpenHandler: vi.fn(),
     destroy: vi.fn()
   }
 })
@@ -32,17 +48,16 @@ const electronMock = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: { whenReady: async () => undefined },
   session: { fromPartition: () => electronMock.session },
+  nativeImage: electronMock.nativeImage,
   BrowserWindow: class {
     constructor(options: unknown) {
       electronMock.windowOptions(options)
     }
     loadFile = electronMock.loadFile
     setContentSize = electronMock.setContentSize
-    once = electronMock.once
     webContents = {
       executeJavaScriptInIsolatedWorld: electronMock.executeJavaScriptInIsolatedWorld,
-      capturePage: electronMock.capturePage,
-      setWindowOpenHandler: vi.fn()
+      setWindowOpenHandler: electronMock.setWindowOpenHandler
     }
     isDestroyed = (): boolean => false
     destroy = electronMock.destroy
@@ -52,14 +67,17 @@ vi.mock('electron', () => ({
 const directories: string[] = []
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"></svg>'
 
+let activeEnvironment: IsolatedEnvironment
+
 beforeEach(() => {
-  electronMock.capturePage.mockClear()
-  electronMock.loadFile.mockClear()
-  electronMock.windowOptions.mockClear()
-  electronMock.setContentSize.mockClear()
-  electronMock.destroy.mockClear()
-  electronMock.once.mockReset().mockImplementation((_event, listener) => listener())
-  electronMock.executeJavaScriptInIsolatedWorld.mockReset().mockResolvedValue(true)
+  vi.clearAllMocks()
+  electronMock.image.isEmpty.mockReturnValue(false)
+  electronMock.image.getSize.mockReturnValue({ width: 1920, height: 1080 })
+  electronMock.nativeImage.createFromDataURL.mockReturnValue(electronMock.image)
+  activeEnvironment = createIsolatedEnvironment()
+  electronMock.executeJavaScriptInIsolatedWorld.mockImplementation((_world, scripts) =>
+    activeEnvironment.run(scripts[0].code)
+  )
 })
 
 afterEach(async () => {
@@ -67,88 +85,97 @@ afterEach(async () => {
 })
 
 describe('rasterizePresentationSvg', () => {
-  it('sets the slide content size after first paint and before font layout', async () => {
-    let releasePaint!: () => void
-    electronMock.once.mockImplementationOnce((_event, listener) => (releasePaint = listener))
+  it('waits for Image.decode before drawing, exporting, and returning the native PNG', async () => {
+    activeEnvironment.imageDecode = controlledPromise<void>()
     const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
-    await vi.waitFor(() => expect(electronMock.loadFile).toHaveBeenCalled())
-    expect(electronMock.setContentSize).not.toHaveBeenCalled()
-    releasePaint()
-    await rendering
-    expect(electronMock.setContentSize).toHaveBeenCalledWith(1920, 1080)
-    expect(electronMock.setContentSize.mock.invocationCallOrder[0]).toBeLessThan(
-      electronMock.executeJavaScriptInIsolatedWorld.mock.invocationCallOrder[0]
+
+    await activeEnvironment.imageDecode.started
+    expect(activeEnvironment.context.fillRect).not.toHaveBeenCalled()
+    expect(activeEnvironment.context.drawImage).not.toHaveBeenCalled()
+    expect(activeEnvironment.canvas.toDataURL).not.toHaveBeenCalled()
+    expect(electronMock.nativeImage.createFromDataURL).not.toHaveBeenCalled()
+
+    activeEnvironment.imageDecode.resolve()
+    await expect(rendering).resolves.toEqual(Buffer.from('png'))
+    expect(activeEnvironment.context.fillRect).toHaveBeenCalledWith(0, 0, 1920, 1080)
+    expect(activeEnvironment.context.drawImage).toHaveBeenCalledWith(
+      activeEnvironment.image,
+      0,
+      0,
+      1920,
+      1080
     )
-    expect(electronMock.windowOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ enableLargerThanScreen: true })
+    expect(activeEnvironment.canvas.toDataURL).toHaveBeenCalledWith('image/png')
+    expect(electronMock.nativeImage.createFromDataURL).toHaveBeenCalledWith(
+      activeEnvironment.dataUrl
+    )
+    expect(electronMock.image.toPNG).toHaveBeenCalledOnce()
+  })
+
+  it('waits for fonts.ready after the style flush exposes the new layout', async () => {
+    activeEnvironment.fontsReady = controlledPromise<void>()
+    activeEnvironment.readyBeforeLayout = false
+    activeEnvironment.readyAfterLayout = false
+    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
+
+    await activeEnvironment.fontsReady.started
+    expect(activeEnvironment.layoutFlushed).toBe(true)
+    expect(activeEnvironment.readyBeforeLayout).toBe(false)
+    expect(activeEnvironment.readyAfterLayout).toBe(true)
+    expect(activeEnvironment.imageDecode.wasStarted()).toBe(false)
+
+    activeEnvironment.fontsReady.resolve()
+    await expect(rendering).resolves.toEqual(Buffer.from('png'))
+    expect(activeEnvironment.imageDecode.wasStarted()).toBe(true)
+  })
+
+  it('prioritizes the private CJK face while preserving each existing Latin family', async () => {
+    const htmlText = activeEnvironment.parents[0]
+    const svgText = activeEnvironment.parents[1]
+    const svgSpan = activeEnvironment.parents[2]
+
+    await rasterizePresentationSvg(svg, 5_000, await fontFixture())
+
+    expect(htmlText.style.fontFamily).toBe(
+      '"Dascowork Preview CJK", Calibri, "Noto Sans CJK SC", sans-serif'
+    )
+    expect(svgText.style.fontFamily).toBe('"Dascowork Preview CJK", serif')
+    expect(svgSpan.style.fontFamily).toBe('"Dascowork Preview CJK", Arial, serif')
+  })
+
+  it('uses an HTML canvas with a white 1920x1080 backing surface', async () => {
+    await rasterizePresentationSvg(svg, 5_000, await fontFixture())
+
+    expect(activeEnvironment.canvas.namespaceURI).toBe('http://www.w3.org/1999/xhtml')
+    expect(activeEnvironment.canvas.width).toBe(1920)
+    expect(activeEnvironment.canvas.height).toBe(1080)
+    expect(activeEnvironment.context.fillStyle).toBe('#ffffff')
+    expect(activeEnvironment.context.fillRect).toHaveBeenCalledWith(0, 0, 1920, 1080)
+    expect(activeEnvironment.context.drawImage).toHaveBeenCalledWith(
+      activeEnvironment.image,
+      0,
+      0,
+      1920,
+      1080
     )
   })
 
-  it('rejects a capture clipped to a smaller native window instead of publishing it', async () => {
-    electronMock.capturePage.mockResolvedValueOnce({
-      isEmpty: () => false,
-      getSize: () => ({ width: 1008, height: 681 }),
-      toPNG: () => Buffer.from('cropped png')
+  it('embeds a private CJK face without giving document scripts or external resources access', async () => {
+    let document = ''
+    electronMock.loadFile.mockImplementationOnce(async (path) => {
+      document = await readFile(path, 'utf8')
     })
-    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).rejects.toThrow(
-      'Presentation SVG capture dimensions do not match the slide'
-    )
-    expect(electronMock.destroy).toHaveBeenCalledOnce()
-    await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
-  })
-
-  it('accepts a same-aspect high-DPI capture that is larger than the CSS slide', async () => {
-    electronMock.capturePage.mockResolvedValueOnce({
-      isEmpty: () => false,
-      getSize: () => ({ width: 3840, height: 2160 }),
-      toPNG: () => Buffer.from('retina png')
-    })
-    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).resolves.toEqual(
-      Buffer.from('retina png')
-    )
-  })
-
-  it.each([
-    { width: 1921, height: 1080 },
-    { width: 1919, height: 1080 }
-  ])('accepts a complete capture with one-pixel edge rounding: %o', async (size) => {
-    electronMock.capturePage.mockResolvedValueOnce({
-      isEmpty: () => false,
-      getSize: () => size,
-      toPNG: () => Buffer.from('png')
-    })
-    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).resolves.toEqual(
-      Buffer.from('png')
-    )
-  })
-
-  it('rejects oversized SVG dimensions before creating an Electron window', async () => {
-    await expect(
-      rasterizePresentationSvg('<svg width="4097" height="1080"></svg>', 100, '/runtime/noto.otf')
-    ).rejects.toThrow('unsupported presentation slide dimensions')
-    await expect(
-      rasterizePresentationSvg('<svg width="4096" height="4096"></svg>', 100, '/runtime/noto.otf')
-    ).rejects.toThrow('unsupported presentation slide dimensions')
-    expect(electronMock.windowOptions).not.toHaveBeenCalled()
-  })
-
-  it('embeds the Runtime font and waits for its layout before capturing with scripts disabled', async () => {
     const fontPath = await fontFixture()
-    let releaseFont!: (loaded: boolean) => void
-    electronMock.executeJavaScriptInIsolatedWorld.mockImplementationOnce(
-      () => new Promise<boolean>((resolve) => (releaseFont = resolve))
-    )
-    const rendering = rasterizePresentationSvg(svg, 5_000, fontPath)
-    await vi.waitFor(() => expect(electronMock.executeJavaScriptInIsolatedWorld).toHaveBeenCalled())
-    expect(electronMock.capturePage).not.toHaveBeenCalled()
-    const svgPath = electronMock.loadFile.mock.calls[0][0]
-    const document = await readFile(svgPath, 'utf8')
+    await rasterizePresentationSvg(svg, 5_000, fontPath)
+    expect(document).toContain('font-family:"Dascowork Preview CJK"')
+    expect(document).toContain('unicode-range:')
     expect(document).toContain(
       `data:font/otf;base64,${Buffer.from('locked font bytes').toString('base64')}`
     )
     expect(document).not.toContain(fontPath)
     expect(electronMock.windowOptions).toHaveBeenCalledWith(
       expect.objectContaining({
+        backgroundColor: '#ffffff',
         webPreferences: expect.objectContaining({
           javascript: false,
           sandbox: true,
@@ -158,103 +185,269 @@ describe('rasterizePresentationSvg', () => {
         })
       })
     )
-    releaseFont(true)
-    await expect(rendering).resolves.toEqual(Buffer.from('png'))
-    expect(electronMock.capturePage).toHaveBeenCalledOnce()
-    expect(electronMock.destroy).toHaveBeenCalledOnce()
-    await expect(readFile(svgPath)).rejects.toThrow()
-    const onRequest = electronMock.session.webRequest.onBeforeRequest.mock.calls[0][0]
+    expect(electronMock.setWindowOpenHandler).toHaveBeenCalledWith(expect.any(Function))
     const callback = vi.fn()
-    onRequest({ url: 'https://example.com/font.otf' }, callback)
+    electronMock.request('https://example.com/font.otf', callback)
     expect(callback).toHaveBeenCalledWith({ cancel: true })
+    await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
   })
 
-  it('waits for the hidden window first paint before loading fonts and capturing', async () => {
-    let releasePaint!: () => void
-    electronMock.once.mockImplementationOnce((_event, listener) => (releasePaint = listener))
-    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
-    await vi.waitFor(() => expect(electronMock.loadFile).toHaveBeenCalled())
-    expect(electronMock.once).toHaveBeenCalledWith('ready-to-show', expect.any(Function))
-    expect(electronMock.executeJavaScriptInIsolatedWorld).not.toHaveBeenCalled()
-    expect(electronMock.capturePage).not.toHaveBeenCalled()
-    releasePaint()
-    await expect(rendering).resolves.toEqual(Buffer.from('png'))
-  })
-
-  it('includes the Runtime fallback and waits for two frames after font layout', async () => {
-    const elements = [
-      { style: { fontFamily: 'Aptos' } },
-      { style: { fontFamily: '"Noto Sans CJK SC"' } },
-      { style: { fontFamily: '' } }
-    ]
-    const document = {
-      querySelectorAll: () => elements,
-      fonts: {
-        load: async () => [{ status: 'loaded' }],
-        ready: Promise.resolve()
-      }
-    }
-    const frames: Array<() => void> = []
-    electronMock.executeJavaScriptInIsolatedWorld.mockImplementationOnce((_world, scripts) => {
-      const [{ code }] = scripts as Array<{ code: string }>
-      return new Function('document', 'requestAnimationFrame', `return ${code}`)(
-        document,
-        (callback: () => void) => frames.push(callback)
-      ) as Promise<boolean>
-    })
-    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
-    await vi.waitFor(() => expect(frames).toHaveLength(1))
-    expect(elements[0].style.fontFamily).toBe('Aptos, "Noto Sans CJK SC"')
-    expect(elements[1].style.fontFamily).toBe('"Noto Sans CJK SC"')
-    expect(elements[2].style.fontFamily).toBe('')
-    expect(electronMock.capturePage).not.toHaveBeenCalled()
-    frames.shift()!()
-    expect(electronMock.capturePage).not.toHaveBeenCalled()
-    expect(frames).toHaveLength(1)
-    frames.shift()!()
-    await expect(rendering).resolves.toEqual(Buffer.from('png'))
-  })
-
-  it('rejects a failed font load before capture and removes the temporary SVG', async () => {
-    electronMock.executeJavaScriptInIsolatedWorld.mockResolvedValueOnce(false)
+  it('rejects a failed font load and cleans up', async () => {
+    activeEnvironment.fontFaces = []
     await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).rejects.toThrow(
       'could not load the Runtime Chinese font'
     )
-    expect(electronMock.capturePage).not.toHaveBeenCalled()
+    expect(electronMock.nativeImage.createFromDataURL).not.toHaveBeenCalled()
     expect(electronMock.destroy).toHaveBeenCalledOnce()
     await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
   })
 
-  it('adds the Runtime font to SVG chart text that inherits its family without an inline style', async () => {
-    const chartText = { localName: 'text', style: { fontFamily: '' } }
-    const chartSpan = { localName: 'tspan', style: { fontFamily: '' } }
-    const elements = [chartText, chartSpan]
-    const document = {
-      querySelectorAll: (selector: string) =>
-        selector.includes('text') && selector.includes('tspan') ? elements : [],
-      fonts: {
-        load: async () => [{ status: 'loaded' }],
-        ready: Promise.resolve()
-      }
-    }
-    const getComputedStyle = (element: typeof chartText): { fontFamily: string } => ({
-      fontFamily: element === chartText ? 'Arial, serif' : 'serif'
-    })
-    electronMock.executeJavaScriptInIsolatedWorld.mockImplementationOnce((_world, scripts) => {
-      const [{ code }] = scripts as Array<{ code: string }>
-      return new Function(
-        'document',
-        'requestAnimationFrame',
-        'getComputedStyle',
-        `return ${code}`
-      )(document, (callback: () => void) => callback(), getComputedStyle) as Promise<boolean>
-    })
-    await rasterizePresentationSvg(svg, 5_000, await fontFixture())
-    expect(chartText.style.fontFamily).toBe('Arial, serif, "Noto Sans CJK SC"')
-    expect(chartSpan.style.fontFamily).toBe('serif, "Noto Sans CJK SC"')
-    expect(electronMock.capturePage).toHaveBeenCalledOnce()
+  it('rejects a decoded image failure and cleans up', async () => {
+    activeEnvironment.imageDecode = controlledPromise<void>()
+    const rendering = rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    await activeEnvironment.imageDecode.started
+    activeEnvironment.imageDecode.reject(new Error('decode failed'))
+    await expect(rendering).rejects.toThrow('decode failed')
+    expect(electronMock.nativeImage.createFromDataURL).not.toHaveBeenCalled()
+    expect(electronMock.destroy).toHaveBeenCalledOnce()
+    await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
   })
+
+  it('times out while waiting for the decoded image and cleans up', async () => {
+    activeEnvironment.imageDecode = controlledPromise<void>()
+    await expect(rasterizePresentationSvg(svg, 100, await fontFixture())).rejects.toThrow(
+      'rendering timed out'
+    )
+    expect(activeEnvironment.context.drawImage).not.toHaveBeenCalled()
+    expect(electronMock.destroy).toHaveBeenCalledOnce()
+    await expect(readFile(electronMock.loadFile.mock.calls[0][0])).rejects.toThrow()
+  })
+
+  it.each([
+    { width: 3840, height: 2160 },
+    { width: 1921, height: 1080 },
+    { width: 1919, height: 1080 }
+  ])('accepts a decoded image with the slide aspect: %o', async (size) => {
+    electronMock.image.getSize.mockReturnValueOnce(size)
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).resolves.toEqual(
+      Buffer.from('png')
+    )
+  })
+
+  it('rejects a clipped decoded image instead of publishing it', async () => {
+    electronMock.image.getSize.mockReturnValueOnce({ width: 1008, height: 681 })
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).rejects.toThrow(
+      'dimensions do not match the slide'
+    )
+    expect(electronMock.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('rejects an empty native image', async () => {
+    electronMock.image.isEmpty.mockReturnValueOnce(true)
+    await expect(rasterizePresentationSvg(svg, 5_000, await fontFixture())).rejects.toThrow(
+      'rendered an empty image'
+    )
+    expect(electronMock.image.toPNG).not.toHaveBeenCalled()
+    expect(electronMock.destroy).toHaveBeenCalledOnce()
+  })
+
+  it.each(['<svg width="4097" height="1080"></svg>', '<svg width="4096" height="4096"></svg>'])(
+    'rejects oversized slide dimensions before creating a window: %s',
+    async (input) => {
+      await expect(rasterizePresentationSvg(input, 100, '/runtime/noto.otf')).rejects.toThrow(
+        'unsupported presentation slide dimensions'
+      )
+      expect(electronMock.windowOptions).not.toHaveBeenCalled()
+    }
+  )
 })
+
+type ControlledPromise<T> = Promise<T> & {
+  resolve: (value: T | PromiseLike<T>) => void
+  reject: (error: unknown) => void
+  started: Promise<void>
+  wasStarted: () => boolean
+}
+
+type TextParent = {
+  localName: string
+  namespaceURI: string
+  style: { fontFamily: string }
+  closest: (selector: string) => object | null
+}
+
+type CanvasContext = {
+  fillStyle: string
+  fillRect: ReturnType<typeof vi.fn>
+  drawImage: ReturnType<typeof vi.fn>
+}
+
+type CanvasElement = {
+  namespaceURI: string
+  width: number
+  height: number
+  getContext: (kind: string) => CanvasContext | null
+  toDataURL: ReturnType<typeof vi.fn>
+}
+
+type IsolatedEnvironment = {
+  canvas: CanvasElement
+  context: CanvasContext
+  dataUrl: string
+  fontFaces: Array<{ status: string }>
+  fontsReady: ControlledPromise<void>
+  image: { src: string; decode: () => Promise<void> }
+  imageDecode: ControlledPromise<void>
+  layoutFlushed: boolean
+  parents: TextParent[]
+  readyAfterLayout: boolean
+  readyBeforeLayout: boolean
+  run: (code: string) => Promise<string | false>
+}
+
+function controlledPromise<T>(): ControlledPromise<T> {
+  let started = false
+  let markStarted!: () => void
+  const startedPromise = new Promise<void>((resolve) => {
+    markStarted = resolve
+  })
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  }) as ControlledPromise<T>
+  promise.resolve = (value) => {
+    resolve(value)
+  }
+  promise.reject = (error) => {
+    reject(error)
+  }
+  promise.started = startedPromise
+  promise.wasStarted = () => started
+  return new Proxy(promise, {
+    get(target, prop, receiver) {
+      if (prop === 'then') {
+        started = true
+        markStarted()
+        return target.then.bind(target)
+      }
+      if (prop === 'catch') return target.catch.bind(target)
+      if (prop === 'finally') return target.finally.bind(target)
+      return Reflect.get(target, prop, receiver)
+    }
+  }) as ControlledPromise<T>
+}
+
+function createIsolatedEnvironment(): IsolatedEnvironment {
+  const dataUrl = `data:image/png;base64,${Buffer.from('canvas png').toString('base64')}`
+  const context: CanvasContext = {
+    fillStyle: '',
+    fillRect: vi.fn(),
+    drawImage: vi.fn()
+  }
+  const canvas: CanvasElement = {
+    namespaceURI: 'http://www.w3.org/1999/xhtml',
+    width: 0,
+    height: 0,
+    getContext: vi.fn((kind: string) => (kind === '2d' ? context : null)),
+    toDataURL: vi.fn(() => dataUrl)
+  }
+  const env: IsolatedEnvironment = {
+    canvas,
+    context,
+    dataUrl,
+    fontFaces: [{ status: 'loaded' }],
+    fontsReady: controlledPromise<void>(),
+    image: { src: '', decode: () => env.imageDecode },
+    imageDecode: controlledPromise<void>(),
+    layoutFlushed: false,
+    parents: [
+      textParent('span', 'Calibri, "Noto Sans CJK SC", sans-serif'),
+      textParent('text', 'serif'),
+      textParent('tspan', 'Arial, serif')
+    ],
+    readyAfterLayout: false,
+    readyBeforeLayout: false,
+    run: async (code) => {
+      const nodes = env.parents.flatMap((parentElement) => [
+        { parentElement, textContent: '中文' },
+        { parentElement, textContent: 'Latin' }
+      ])
+      const document = {
+        documentElement: {
+          getBoundingClientRect: () => {
+            env.layoutFlushed = true
+            return {}
+          }
+        },
+        createElementNS: (namespaceURI: string, localName: string) => {
+          if (namespaceURI !== 'http://www.w3.org/1999/xhtml' || localName !== 'canvas') {
+            throw new Error(`unexpected element ${namespaceURI}:${localName}`)
+          }
+          canvas.namespaceURI = namespaceURI
+          return canvas
+        },
+        createTreeWalker: () => ({
+          nextNode: () => nodes.shift()
+        }),
+        fonts: {
+          load: vi.fn(async () => env.fontFaces),
+          get ready() {
+            if (env.layoutFlushed) {
+              env.readyAfterLayout = true
+            } else {
+              env.readyBeforeLayout = true
+            }
+            return env.fontsReady
+          }
+        }
+      }
+      class TestImage {
+        src = ''
+        decode = (): Promise<void> => env.imageDecode
+        constructor() {
+          env.image = this
+        }
+      }
+      class TestXMLSerializer {
+        serializeToString(value: unknown): string {
+          expect(value).toBe(document.documentElement)
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"></svg>'
+        }
+      }
+      const result = new Function(
+        'document',
+        'NodeFilter',
+        'getComputedStyle',
+        'Image',
+        'XMLSerializer',
+        `return ${code}`
+      )(
+        document,
+        { SHOW_TEXT: 4 },
+        (element: TextParent) => ({ fontFamily: element.style.fontFamily }),
+        TestImage,
+        TestXMLSerializer
+      )
+      return result as Promise<string | false>
+    }
+  }
+  env.fontsReady.resolve()
+  env.imageDecode.resolve()
+  return env
+}
+
+function textParent(localName: string, fontFamily: string): TextParent {
+  return {
+    localName,
+    namespaceURI:
+      localName === 'span' ? 'http://www.w3.org/1999/xhtml' : 'http://www.w3.org/2000/svg',
+    style: { fontFamily },
+    closest: (selector: string) =>
+      selector === 'text' && (localName === 'text' || localName === 'tspan') ? {} : null
+  }
+}
 
 async function fontFixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dascowork-svg-font-test-'))
