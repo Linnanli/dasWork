@@ -20,7 +20,7 @@
 | win32-x64 | [对比](win32-x64/r07-visual/r07-preview-comparison-contact-sheet.png) | [表格](win32-x64/r07-visual/slides/slide-04.png)、[图表](win32-x64/r07-visual/slides/slide-05.png) |
 | linux-x64 | [对比](linux-x64/r07-visual/r07-preview-comparison-contact-sheet.png) | [表格](linux-x64/r07-visual/slides/slide-04.png)、[图表](linux-x64/r07-visual/slides/slide-05.png) |
 
-机器回执和独立 agent 审查不替代用户人工接受；原 comparison report 的 `visualAcceptance=pending/accepted=false` 保留。工程 final 验证仍待进行，完整 A1–A9 尚未接受。
+机器回执和独立 agent 审查不替代用户人工接受；原 comparison report 的 `visualAcceptance=pending/accepted=false` 保留其生成时状态。工程 final 验证已成功完成并核对，见[最终证据](../final-36518852520/README.md)；用户随后明确接受 A6，见[人工接受回执](../final-36518852520/user-visual-acceptance.json)，完整 A1–A9 已验收完成。
 
 ## 实测与候选预算
 
@@ -35,4 +35,14 @@
 
 darwin-x64 第一个冷安装样本为 50,143ms，第二个 Main 最大延迟样本为 1,478ms；两者不是同一次样本。十样本的 p95 采用最大值，候选包含尖峰，并未删除或平滑。报告只记录安装窗口内的延迟，不能据此归因于 CI 宿主，也不能证明不存在客户端性能问题。该目标 p99 样本为 9–13ms，十次普通聊天均在安装完成前结束。
 
-独立预算审查及最终工程 Feed 的后续状态以本轮验收记录为准。
+## 预算接受与最终打包暂停点
+
+独立子 agent `/root/budget_review_36512308682` 的[预算审查](budget-review.json)为 PASS，保留全部样本及尖峰，审查范围不包含最终工程 Feed 或用户视觉接受。正式预算已按候选写入；根侧核对正式预算与候选、来源及四归档身份一致，正式预算验证通过。相关 Runtime 测试重新执行为 77 项通过、4 项平台跳过，发布契约 44 项通过。
+
+正式预算提交为 `7612f7dfbcd8529c469efbc0b7672dd17446b3b8`。最终四目标打包 [36518852520](https://github.com/Linnanli/dasWork/actions/runs/36518852520) 于 2026-09-29 03:49:36 UTC 创建，启动确认时绑定该提交、状态为 `in_progress`，引用本轮校准 `36512308682`。按约定在打包启动后暂停，待用户完成通知后再检查终态、最终归档及签名工程 Feed。
+
+本目录 [files.json](files.json) 记录证据文件的字节数和 SHA-256（索引自身除外）。后续接受状态以[本轮验收记录](../../../officecli-runtime-migration.md)为准。
+
+用户报告完成后，已确认最终运行 `36518852520` 成功，四平台 final 回执、工程 Feed 目标绑定及开发版/打包版 R07 验证通过。暂停段落保留为历史记录；当前 A9 工程验收完成，A6 用户人工视觉接受待答复。
+
+用户随后明确回复“接受当前预览，完成 A6 验收”。A6 用户人工接受已独立记录，当前 A1–A9 全部验收完成。

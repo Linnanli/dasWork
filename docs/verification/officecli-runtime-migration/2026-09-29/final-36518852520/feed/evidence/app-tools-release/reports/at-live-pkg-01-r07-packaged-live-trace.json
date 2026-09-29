@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-r07-live-trace.v2",
+  "capturedAt": "2026-09-29T04:36:38.253Z",
+  "threadId": "01a0eb71-ceab-7b20-aeb6-9843644a1e6a",
+  "turnId": "01a0eb71-ee4b-78e0-b711-c0687807e2c6",
+  "modelEvidence": {
+    "kind": "scripted-external-model",
+    "proves": "deterministic-desktop-runtime-command-path",
+    "doesNotProve": "live-model-skill-compliance"
+  },
+  "skill": {
+    "id": "/home/runner/work/_temp/dsc-ch-GrI7ef/skills/dascowork-primary-runtime/officecli/SKILL.md",
+    "name": "officecli",
+    "localPath": "/home/runner/work/_temp/dsc-ch-GrI7ef/skills/dascowork-primary-runtime/officecli/SKILL.md",
+    "instructionsSha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+  },
+  "activation": {
+    "operationId": "efc6deea-b3c5-4f25-b6b4-084ed6601700",
+    "activeVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final",
+    "manifestSequence": 1
+  },
+  "loader": {
+    "loaderCallId": "call-primary-runtime-loader",
+    "appServerLogIndex": 201,
+    "observedAt": "2026-09-29T04:35:07.613Z",
+    "monotonicNs": "940877936320",
+    "outputSha256": "71d8e323a148e8e4695c6d4511d880dc552d36383ab0da7d0bba15d64776c100"
+  },
+  "command": {
+    "commandItemId": "call-primary-runtime-presentation-command",
+    "appServerLogIndex": 208,
+    "observedAt": "2026-09-29T04:35:07.807Z",
+    "monotonicNs": "941072226142",
+    "outputSha256": "e9dc62975dd6dded716c4344d458c455898fbfd866bf940f394ca75cc1afcbc5"
+  },
+  "artifact": {
+    "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+    "observedAt": "2026-09-29T04:35:37.041Z",
+    "monotonicNs": "970305587616",
+    "generation": 1,
+    "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+  },
+  "preview": {
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "observedAt": "2026-09-29T04:36:38.245Z",
+    "monotonicNs": "1031510437858",
+    "visible": true,
+    "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 53,
+        "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.17576003086419753,
+        "colorBucketCount": 197,
+        "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.01259741512345679,
+        "colorBucketCount": 16,
+        "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.28176890432098767,
+        "colorBucketCount": 68,
+        "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08553144290123457,
+        "colorBucketCount": 36,
+        "chartLabelRatios": {
+          "category1": 0.023669554455445545,
+          "category2": 0.026463150289017343,
+          "legend": 0.004148148148148148
+        },
+        "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.02896749614197531,
+        "colorBucketCount": 256,
+        "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "9507b80af8214326b15e9009d66c794e",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+        }
+      }
+    ]
+  },
+  "renderReportSha256": "05d95479bcc242882cbec5f7cc34b431f8cd46e62edaff25774004b256fc581f",
+  "visualArtifacts": {
+    "directory": "/home/runner/work/_temp/feed-repository/evidence/r07-visual-packaged"
+  }
+}

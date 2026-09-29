@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "sequence": 1,
+  "channel": "engineering",
+  "issuedAt": "2026-09-29T04:30:15.173Z",
+  "expiresAt": "2026-09-30T04:30:15.173Z",
+  "keyId": "engineering-manifest-v1",
+  "releases": [
+    {
+      "platform": "darwin",
+      "arch": "arm64",
+      "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final",
+      "archiveFormat": "zip",
+      "archiveUrl": "https://127.0.0.1:36935/v1/runtime/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "archiveSizeBytes": 115377512,
+      "archiveSha256": "4e9ebc826434b5aea7abcef2292d5848af89a36945ea43caa382900e73e68c6c",
+      "budget": {
+        "maxArchiveBytes": 132684150,
+        "maxUnpackedBytes": 199670093,
+        "minimumFreeDiskBytes": 611827987,
+        "maxColdInstallMs": 16593,
+        "maxMainEventLoopDelayP99Ms": 23,
+        "maxMainEventLoopDelayMaxMs": 585
+      }
+    },
+    {
+      "platform": "darwin",
+      "arch": "x64",
+      "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+      "archiveFormat": "zip",
+      "archiveUrl": "https://127.0.0.1:36935/v1/runtime/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "archiveSizeBytes": 116313335,
+      "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+      "budget": {
+        "maxArchiveBytes": 133760444,
+        "maxUnpackedBytes": 200867655,
+        "minimumFreeDiskBytes": 615820118,
+        "maxColdInstallMs": 62679,
+        "maxMainEventLoopDelayP99Ms": 17,
+        "maxMainEventLoopDelayMaxMs": 1848
+      }
+    },
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final",
+      "archiveFormat": "zip",
+      "archiveUrl": "https://127.0.0.1:36935/v1/runtime/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "archiveSizeBytes": 179820975,
+      "archiveSha256": "47ba6430d8909a83e4f8500eae5d1eb1e636cc6bee093368a584b4b76b5b6938",
+      "budget": {
+        "maxArchiveBytes": 206794121,
+        "maxUnpackedBytes": 403671845,
+        "minimumFreeDiskBytes": 1166258483,
+        "maxColdInstallMs": 15482,
+        "maxMainEventLoopDelayP99Ms": 5,
+        "maxMainEventLoopDelayMaxMs": 32
+      }
+    },
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final",
+      "archiveFormat": "zip",
+      "archiveUrl": "https://127.0.0.1:36935/v1/runtime/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "archiveSizeBytes": 112773705,
+      "archiveSha256": "916857145aeac0d3b8f11e5d22ebe2889f2c7c546bdea8dfc227b4bf279a9eb3",
+      "budget": {
+        "maxArchiveBytes": 129689769,
+        "maxUnpackedBytes": 187341215,
+        "minimumFreeDiskBytes": 580028029,
+        "maxColdInstallMs": 12635,
+        "maxMainEventLoopDelayP99Ms": 9,
+        "maxMainEventLoopDelayMaxMs": 74
+      }
+    }
+  ],
+  "signature": "DBfHOpT2EDwm95BMaRJZu+av/ozwKFHXRdpempKlDtb1W5KI5D6d9m+hpWW1zXANriRe8fTcR0b4BZIm0XENCg=="
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "sequence": 1,
+  "channel": "engineering",
+  "manifestUrl": "https://127.0.0.1:36935/v1/runtime/channels/engineering/manifest.json",
+  "pollIntervalMs": 3600000,
+  "issuedAt": "2026-09-29T04:30:15.173Z",
+  "expiresAt": "2026-09-30T04:30:15.173Z",
+  "keyId": "engineering-config-v1",
+  "signature": "Cr5PJuo/fII2ZeunEmg3SI4oFdfreH0b+2v/S7ldmEF4xMoFdoqZV3o1ueU6Z3JFrVSy7BEYl/zg2b2qDZO6Ag=="
+}

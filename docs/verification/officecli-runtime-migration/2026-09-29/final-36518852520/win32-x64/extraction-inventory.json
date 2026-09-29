@@ -1,0 +1,117 @@
+{
+  "artifactId": 11012958027,
+  "artifactZipBytes": 112743360,
+  "entries": [
+    {
+      "name": "build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "install-stress-memory.json",
+      "bytes": 392
+    },
+    {
+      "name": "migration-matrix.json",
+      "bytes": 157538
+    },
+    {
+      "name": "performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "SBOM.json",
+      "bytes": 17813
+    },
+    {
+      "name": "source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "THIRD_PARTY_NOTICES.txt",
+      "bytes": 3602
+    }
+  ],
+  "extracted": [
+    {
+      "name": "build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "install-stress-memory.json",
+      "bytes": 392
+    },
+    {
+      "name": "migration-matrix.json",
+      "bytes": 157538
+    },
+    {
+      "name": "performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "SBOM.json",
+      "bytes": 17813
+    },
+    {
+      "name": "source-fetch.json",
+      "bytes": 1787
+    }
+  ],
+  "method": "bounded byte-range extraction with ZIP CRC/length checks; large Runtime ZIP not downloaded or locally hashed"
+}

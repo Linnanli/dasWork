@@ -1,0 +1,639 @@
+{
+  "schemaVersion": 1,
+  "sourceRunId": "36518852520",
+  "excluded": [
+    "files.json"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4113,
+      "sha256": "6480c760aadf0b085cb9595f6355b76a3b6a2398d330d95d18aa65fd31106579"
+    },
+    {
+      "path": "artifacts.json",
+      "bytes": 7440,
+      "sha256": "7738fcb9d271075804d04531f242de221f592bb983c290d5692e28d8fb6a363a"
+    },
+    {
+      "path": "darwin-arm64/SBOM.json",
+      "bytes": 17017,
+      "sha256": "d6b77afa43e3b5c033d84a46f3277a05d37f5a5524f3a898356ff5fb29b15119"
+    },
+    {
+      "path": "darwin-arm64/build-unpack-measurement.json",
+      "bytes": 854,
+      "sha256": "a7579bd4257fdeea6fb23862b2c25db0e68fc9e0096ac79ae2805ed13951312d"
+    },
+    {
+      "path": "darwin-arm64/component-smoke.json",
+      "bytes": 47022,
+      "sha256": "c4428f1879f3f66bca71153dd0ddaef62db3db11da576b8288c1c3656466cecb"
+    },
+    {
+      "path": "darwin-arm64/extraction-inventory.json",
+      "bytes": 2177,
+      "sha256": "189841496386ab77f1fdb4125842c560a127a97669f7dbbdc1dd2f7e8a7b1464"
+    },
+    {
+      "path": "darwin-arm64/install-stress-memory.json",
+      "bytes": 395,
+      "sha256": "a9e3d7fc8eb3fe6e3b27b6858e6f555ffbccfc579d46732f9d22c8adc763c2fa"
+    },
+    {
+      "path": "darwin-arm64/migration-matrix.json",
+      "bytes": 158931,
+      "sha256": "0823427eb04616fc2b268140e614bc1cf4fb2c2417948ff67f46ec5de5134e7e"
+    },
+    {
+      "path": "darwin-arm64/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "darwin-arm64/platform-validation.json",
+      "bytes": 25171,
+      "sha256": "101449ecc86034037d6b7ebd55271347e6ac7743e40a886e12aa9f5001adbc6c"
+    },
+    {
+      "path": "darwin-arm64/provenance.json",
+      "bytes": 3156,
+      "sha256": "9ee4b19850a32509ed90535fa651e8f6b9039295704ebf2fb271732ce8c9a964"
+    },
+    {
+      "path": "darwin-arm64/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "darwin-arm64/runtime-inputs.manifest.json",
+      "bytes": 30425,
+      "sha256": "e0fc32e9b2cea3f3b432747e2f18d0b6344f1a81a9b22ddf54551ff35a24d844"
+    },
+    {
+      "path": "darwin-arm64/runtime.json",
+      "bytes": 1381,
+      "sha256": "2eb075b89b214b3576be13d6507f3b8c3f318687a1a858dcf3acd8984789ef90"
+    },
+    {
+      "path": "darwin-arm64/source-fetch.json",
+      "bytes": 1804,
+      "sha256": "cd4cc700fd77e2bfbd47b4803616afe4fc0ab263a6901f340ab4b55c0dc33f4a"
+    },
+    {
+      "path": "darwin-x64/SBOM.json",
+      "bytes": 17016,
+      "sha256": "18038fa80328c4960f29906f9c03ad5e120a1745125c629ddf93a5f3a6dbfa55"
+    },
+    {
+      "path": "darwin-x64/build-unpack-measurement.json",
+      "bytes": 858,
+      "sha256": "ebfa399433a79e2f4dac60ce14f3845eb56aad417b29a0a6b223368d96cc4a99"
+    },
+    {
+      "path": "darwin-x64/component-smoke.json",
+      "bytes": 46917,
+      "sha256": "19ce531919ad189249119b053da7ffeda3f614feed11a842305b63018ceb31f8"
+    },
+    {
+      "path": "darwin-x64/extraction-inventory.json",
+      "bytes": 2177,
+      "sha256": "fe4513165cd60b63865d181d58e7af5debe6e4f3c9cef3a6f81c76954135cebe"
+    },
+    {
+      "path": "darwin-x64/install-stress-memory.json",
+      "bytes": 393,
+      "sha256": "c8980197e2a83435d18dab93fcf100880c2c5f2b3bb76f826d2836eb79edc43f"
+    },
+    {
+      "path": "darwin-x64/migration-matrix.json",
+      "bytes": 158873,
+      "sha256": "2311c5c684e5b8c07f9a6dc90fef420c542f2f1f36b40386620f9b722f4844fa"
+    },
+    {
+      "path": "darwin-x64/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "darwin-x64/platform-validation.json",
+      "bytes": 25173,
+      "sha256": "5bd5968534ef5ea3848c78db48977852ec3c22d312533d926c336e09a3a406ff"
+    },
+    {
+      "path": "darwin-x64/provenance.json",
+      "bytes": 3170,
+      "sha256": "0bb36515c3ad552f1d2bed8e084dee2cad889adfc2aaac291b7c92a999c03e75"
+    },
+    {
+      "path": "darwin-x64/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "darwin-x64/runtime-inputs.manifest.json",
+      "bytes": 30439,
+      "sha256": "939b947e37b6b45cbb9cab9f2641db9891b2e82215a08396444b3cda167725c9"
+    },
+    {
+      "path": "darwin-x64/runtime.json",
+      "bytes": 1377,
+      "sha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78"
+    },
+    {
+      "path": "darwin-x64/source-fetch.json",
+      "bytes": 1800,
+      "sha256": "c67bc1c74d9e3103946bf64bd24925c5afe9ae90889e6c54d395bd93c428484e"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854,
+      "sha256": "a7579bd4257fdeea6fb23862b2c25db0e68fc9e0096ac79ae2805ed13951312d"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022,
+      "sha256": "c4428f1879f3f66bca71153dd0ddaef62db3db11da576b8288c1c3656466cecb"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171,
+      "sha256": "101449ecc86034037d6b7ebd55271347e6ac7743e40a886e12aa9f5001adbc6c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425,
+      "sha256": "e0fc32e9b2cea3f3b432747e2f18d0b6344f1a81a9b22ddf54551ff35a24d844"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381,
+      "sha256": "2eb075b89b214b3576be13d6507f3b8c3f318687a1a858dcf3acd8984789ef90"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804,
+      "sha256": "cd4cc700fd77e2bfbd47b4803616afe4fc0ab263a6901f340ab4b55c0dc33f4a"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156,
+      "sha256": "9ee4b19850a32509ed90535fa651e8f6b9039295704ebf2fb271732ce8c9a964"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858,
+      "sha256": "ebfa399433a79e2f4dac60ce14f3845eb56aad417b29a0a6b223368d96cc4a99"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917,
+      "sha256": "19ce531919ad189249119b053da7ffeda3f614feed11a842305b63018ceb31f8"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173,
+      "sha256": "5bd5968534ef5ea3848c78db48977852ec3c22d312533d926c336e09a3a406ff"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439,
+      "sha256": "939b947e37b6b45cbb9cab9f2641db9891b2e82215a08396444b3cda167725c9"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377,
+      "sha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800,
+      "sha256": "c67bc1c74d9e3103946bf64bd24925c5afe9ae90889e6c54d395bd93c428484e"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170,
+      "sha256": "0bb36515c3ad552f1d2bed8e084dee2cad889adfc2aaac291b7c92a999c03e75"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855,
+      "sha256": "14a30f1da59df9d3ab0408e7b5658d25d33be9de58530e228b889c90e14f1099"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676,
+      "sha256": "9039641e368c91c2f7c047e95830c0ca3aa514c7997ea38646783907d85a8ca9"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055,
+      "sha256": "4c9ed74259c063eaf1b0dca942f3de4888717a737c2ed00248452ae77f720610"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907,
+      "sha256": "aff27a4556ae0d96bbf205c720a526877473a32d760f8998dad1ae45f57d0e15"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375,
+      "sha256": "18fe1888f2f3abaa6232f11240426b45c1a9e1449911b173ff88ede1bd8f6a5c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797,
+      "sha256": "89f515a9cb4a717223236ac597e70bd213579a94ba7660266085d0b12a0503e6"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158,
+      "sha256": "9f4db979e75e548e588fe4d416fc5db5927f0d11be1eff014fabf840376ab709"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855,
+      "sha256": "a9792cc4a27a524b87e8c19eefe9a2aaf41a6b48e5a44c6a0657cd0626067b72"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823,
+      "sha256": "ee76909a577cd6a066a9792c86b3d4454e325e17d8446ba2f9ebc90ff4e96627"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156,
+      "sha256": "f18b4384e2e2682f82ff1f9d98100ae67be6b12c73cae6b8de898b6a25fcb318"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388,
+      "sha256": "3144eef6f2269fe172ee3332d4e22f5d8ebc429e89c9e9aee079937b69da7243"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387,
+      "sha256": "a6ca91891e686896c2fd1205e8f31f6a9f19ffc8769973d6a6f628471de34dbe"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787,
+      "sha256": "ba7ad3f93ccc5f48f39416d13e85db5932f155667f6a0216a30bee6ab14f1a0a"
+    },
+    {
+      "path": "feed/current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156,
+      "sha256": "5525b3c2f4cae2f48e2dbcbcac82c99c0027881853a591c3c9e8db50545115fe"
+    },
+    {
+      "path": "feed/current/channels/engineering/manifest.json",
+      "bytes": 3194,
+      "sha256": "2ff270ac87dda90de1e7f0b5fa0ee4783464acaa18d0715fa3e6a4acea0b6bc5"
+    },
+    {
+      "path": "feed/current/config.json",
+      "bytes": 417,
+      "sha256": "38fe92a11f5fc07c5e68757cc368f0443fb4e6aa8ef4a5048984d91f3db390f4"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/at-e2e-01.json",
+      "bytes": 3659,
+      "sha256": "7799cd2ece3e6db3fab8fac4964774e59835b0bdb9a1cdd7c15cc83351c2634a"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/at-live-01.json",
+      "bytes": 3660,
+      "sha256": "0d058164c44e3c2b2e44ae90caed6ec0e1a11ecd06fed6334a7d75c73afb075e"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/at-live-pkg-01.json",
+      "bytes": 3764,
+      "sha256": "f80b305e54e7596fea102e6110ccc43c7a0d592540e508e582c3416ee4c95f1d"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/reports/at-e2e-01-r07-dev-live-trace.json",
+      "bytes": 6128,
+      "sha256": "892c6d6999fb55cfc36e8ab930c6579d3b0434a3e7d3b3634d0a4f1cded48673"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/reports/at-live-01-r07-dev-live-trace.json",
+      "bytes": 6128,
+      "sha256": "892c6d6999fb55cfc36e8ab930c6579d3b0434a3e7d3b3634d0a4f1cded48673"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/reports/at-live-pkg-01-r07-packaged-live-trace.json",
+      "bytes": 6134,
+      "sha256": "ed6dcdaa2bd602ae927ffe22afa4ab03fe92b8d77e4248b1cc06e00dc0508362"
+    },
+    {
+      "path": "feed/evidence/app-tools-release/reports/packaged-app-assets.json",
+      "bytes": 211,
+      "sha256": "700182a8780ccffdda72a5a16c66c183648f066a9f8110db908a4bb037e5980f"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/r07-ai-agent-security-market.pptx",
+      "bytes": 70211,
+      "sha256": "936e52e8d7d948c520aef3908795ea409095ed3f7f7c0f133224c8e2984ffc4d"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/r07-contact-sheet.png",
+      "bytes": 33522,
+      "sha256": "b0a07d59d806b23fc91158b1128bcebc0486e97f8c1b161158546c5e1b6d5093"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/r07-preview-render-receipt.json",
+      "bytes": 4190,
+      "sha256": "e74aec402f5c7103bc08f500c919b0f503ef83aa2076a57063a97a2733b74374"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-01.png",
+      "bytes": 32523,
+      "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-02.png",
+      "bytes": 91157,
+      "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-03.png",
+      "bytes": 59172,
+      "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-04.png",
+      "bytes": 67533,
+      "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-05.png",
+      "bytes": 39732,
+      "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5"
+    },
+    {
+      "path": "feed/evidence/r07-visual-dev/slides/slide-06.png",
+      "bytes": 67514,
+      "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/r07-ai-agent-security-market.pptx",
+      "bytes": 70206,
+      "sha256": "ec2ddf51aa75ced4102fd4336f883204e7edf6bfbbae1ab413cf998e2abbb358"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/r07-contact-sheet.png",
+      "bytes": 33522,
+      "sha256": "b0a07d59d806b23fc91158b1128bcebc0486e97f8c1b161158546c5e1b6d5093"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/r07-preview-render-receipt.json",
+      "bytes": 4190,
+      "sha256": "fe9d5f4bb79fc6145574f5e2d1dd1fd6fa9652e920d4d9fa2ecce3626d17a4f3"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-01.png",
+      "bytes": 32523,
+      "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-02.png",
+      "bytes": 91157,
+      "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-03.png",
+      "bytes": 59172,
+      "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-04.png",
+      "bytes": 67533,
+      "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-05.png",
+      "bytes": 39732,
+      "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5"
+    },
+    {
+      "path": "feed/evidence/r07-visual-packaged/slides/slide-06.png",
+      "bytes": 67514,
+      "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614"
+    },
+    {
+      "path": "feed/extraction-inventory.json",
+      "bytes": 80858,
+      "sha256": "e2a867f990c06e0a5584da128870e5ea050daad5396ac8e5f1a913d99b0ffe55"
+    },
+    {
+      "path": "feed/four-target-summary.json",
+      "bytes": 345,
+      "sha256": "9fc5a219f7b9c483be01a2f98f9674dd1898ed31333d40bbafbe7fcac0db67c5"
+    },
+    {
+      "path": "feed-audit-summary.json",
+      "bytes": 9420,
+      "sha256": "1c09418babde755036693ba95998282482e236731f938308abd543fd4343c7c1"
+    },
+    {
+      "path": "final-acceptance-review.json",
+      "bytes": 623,
+      "sha256": "717b254c1b34c691e2e7c6ffefdb188d00c2c24547f64e980ce2371dae96e762"
+    },
+    {
+      "path": "linux-x64/SBOM.json",
+      "bytes": 17001,
+      "sha256": "6db39c933c332d57cdaac855fd32b927533ba105992c5ccd97d973c70633102f"
+    },
+    {
+      "path": "linux-x64/build-unpack-measurement.json",
+      "bytes": 855,
+      "sha256": "14a30f1da59df9d3ab0408e7b5658d25d33be9de58530e228b889c90e14f1099"
+    },
+    {
+      "path": "linux-x64/component-smoke.json",
+      "bytes": 49676,
+      "sha256": "9039641e368c91c2f7c047e95830c0ca3aa514c7997ea38646783907d85a8ca9"
+    },
+    {
+      "path": "linux-x64/extraction-inventory.json",
+      "bytes": 2177,
+      "sha256": "154fa766fefe7440de29ee917965e3aa4175ed5679d6a903075018f8b69df14f"
+    },
+    {
+      "path": "linux-x64/install-stress-memory.json",
+      "bytes": 392,
+      "sha256": "5bfd904ad839c48e56ec25e3ccf08c84fd472366c0f211826ef20a923885c6ff"
+    },
+    {
+      "path": "linux-x64/migration-matrix.json",
+      "bytes": 158594,
+      "sha256": "fde4722299d0bcbeee05a862ffe40317a84004f770ab17a29386f8042365d7e0"
+    },
+    {
+      "path": "linux-x64/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "linux-x64/platform-validation.json",
+      "bytes": 23055,
+      "sha256": "4c9ed74259c063eaf1b0dca942f3de4888717a737c2ed00248452ae77f720610"
+    },
+    {
+      "path": "linux-x64/provenance.json",
+      "bytes": 3158,
+      "sha256": "9f4db979e75e548e588fe4d416fc5db5927f0d11be1eff014fabf840376ab709"
+    },
+    {
+      "path": "linux-x64/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "linux-x64/runtime-inputs.manifest.json",
+      "bytes": 26907,
+      "sha256": "aff27a4556ae0d96bbf205c720a526877473a32d760f8998dad1ae45f57d0e15"
+    },
+    {
+      "path": "linux-x64/runtime.json",
+      "bytes": 1375,
+      "sha256": "18fe1888f2f3abaa6232f11240426b45c1a9e1449911b173ff88ede1bd8f6a5c"
+    },
+    {
+      "path": "linux-x64/source-fetch.json",
+      "bytes": 1797,
+      "sha256": "89f515a9cb4a717223236ac597e70bd213579a94ba7660266085d0b12a0503e6"
+    },
+    {
+      "path": "native-audit-summary.json",
+      "bytes": 3004,
+      "sha256": "15d02728a156f36f09ba2b70198353d6e2c88c705b1fe16c25a4671b289dcb11"
+    },
+    {
+      "path": "release-gate-verification.json",
+      "bytes": 625,
+      "sha256": "34a6c77aff377ff16e3ae97ede1dff25bc2398ba6edf7a0db31f9a8b4cb51c8b"
+    },
+    {
+      "path": "run.json",
+      "bytes": 50109,
+      "sha256": "5d3d6000ba65dcab286733e2bf9f0ac2de030e600a20b4abac9e31a14c827544"
+    },
+    {
+      "path": "user-visual-acceptance.json",
+      "bytes": 597,
+      "sha256": "84b2d606aa6e71cf51fdaa71d4f697c27611287f2227777a4a6bd710adf33a8a"
+    },
+    {
+      "path": "visual-review.json",
+      "bytes": 782,
+      "sha256": "cf35d6e9d840e7af68f1b3e705dfe6cbcb6695fc0e5afc9a0d3fca20717e7374"
+    },
+    {
+      "path": "win32-x64/SBOM.json",
+      "bytes": 17813,
+      "sha256": "545b3502146a681a0c96d0858fb02411e2c37e08991d43ab96fbbdac7bd7b49a"
+    },
+    {
+      "path": "win32-x64/build-unpack-measurement.json",
+      "bytes": 855,
+      "sha256": "a9792cc4a27a524b87e8c19eefe9a2aaf41a6b48e5a44c6a0657cd0626067b72"
+    },
+    {
+      "path": "win32-x64/component-smoke.json",
+      "bytes": 47823,
+      "sha256": "ee76909a577cd6a066a9792c86b3d4454e325e17d8446ba2f9ebc90ff4e96627"
+    },
+    {
+      "path": "win32-x64/extraction-inventory.json",
+      "bytes": 2177,
+      "sha256": "a8b683525adf228a58f5eba1ab530c9d636b757cdf42bdc013aeb1d44738ce71"
+    },
+    {
+      "path": "win32-x64/install-stress-memory.json",
+      "bytes": 392,
+      "sha256": "726e063b57b7bdfca56988880fe080a43613bb61456328d991d219128d3afb10"
+    },
+    {
+      "path": "win32-x64/migration-matrix.json",
+      "bytes": 157538,
+      "sha256": "d0f70f19bebf0c58a3d01e92f0da0d81e21759e31d5c8ef444c2b1df2575e1dc"
+    },
+    {
+      "path": "win32-x64/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "win32-x64/platform-validation.json",
+      "bytes": 25156,
+      "sha256": "f18b4384e2e2682f82ff1f9d98100ae67be6b12c73cae6b8de898b6a25fcb318"
+    },
+    {
+      "path": "win32-x64/provenance.json",
+      "bytes": 3156,
+      "sha256": "5525b3c2f4cae2f48e2dbcbcac82c99c0027881853a591c3c9e8db50545115fe"
+    },
+    {
+      "path": "win32-x64/runtime-budgets.json",
+      "bytes": 2071,
+      "sha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06"
+    },
+    {
+      "path": "win32-x64/runtime-inputs.manifest.json",
+      "bytes": 26388,
+      "sha256": "3144eef6f2269fe172ee3332d4e22f5d8ebc429e89c9e9aee079937b69da7243"
+    },
+    {
+      "path": "win32-x64/runtime.json",
+      "bytes": 1387,
+      "sha256": "a6ca91891e686896c2fd1205e8f31f6a9f19ffc8769973d6a6f628471de34dbe"
+    },
+    {
+      "path": "win32-x64/source-fetch.json",
+      "bytes": 1787,
+      "sha256": "ba7ad3f93ccc5f48f39416d13e85db5932f155667f6a0216a30bee6ab14f1a0a"
+    }
+  ]
+}

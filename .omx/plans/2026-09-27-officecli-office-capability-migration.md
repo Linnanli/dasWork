@@ -5,7 +5,7 @@
 
 ## 实施与工程验收（2026-09-28）
 
-主要迁移代码已落地，但复审发现验收缺口，完整计划尚未完成。已有四平台构建、安装压力测试、签名 Feed 与 Linux 打包版门禁记录：[36361322781](https://github.com/Linnanli/dasWork/actions/runs/36361322781)，提交：`316386121eb1747ca03328414279e34eae0008cc`。该运行的 R07 指标未读取真实 PNG，不能作为视觉验收完成的证据。
+A1–A9 全部验收完成。最新最终运行 [36518852520](https://github.com/Linnanli/dasWork/actions/runs/36518852520) 已在提交 `7612f7dfbcd8529c469efbc0b7672dd17446b3b8` 上成功完成，四平台构建、安装/迁移、正式预算、签名工程 Feed 和开发版/打包版真实 R07 门禁均通过；用户已明确接受 A6 预览。早期运行 [36361322781](https://github.com/Linnanli/dasWork/actions/runs/36361322781) 的 R07 指标未读取真实 PNG，不能作为视觉验收证据；后续修复和原始取证见下方记录。
 
 归档大小/哈希、四平台安装内存原始报告、预算审查、测试范围和发布边界见[迁移验收记录](../../docs/verification/officecli-runtime-migration.md)。最终 Feed 产物为工程验证用途；生产发布仍遵循既有发布门禁。
 
@@ -81,6 +81,12 @@
 最终完整桌面构建、Node/Web 类型、原生运行时边界和 bundled plugins 检查通过；完整 lint 为 0 错误、539 条既有警告，变更 TypeScript 文件单独 lint 无输出，diff 检查通过。
 
 修复提交 `48e1a5ed1095a536e4c8b492065536dfcc5af47e` 已推送。新四目标 `calibrate` 运行 [36512308682](https://github.com/Linnanli/dasWork/actions/runs/36512308682) 已成功完成，预算证据提取 [36517699704](https://github.com/Linnanli/dasWork/actions/runs/36517699704) 通过；新源锁预算已审查并写入 `primary-runtime/runtime-budgets.json`。四平台实图复查未见缺字复发，但用户人工接受和 final 工程 Feed 门禁仍未完成，A1–A9 仍未全部接受。
+
+正式预算提交 `7612f7dfbcd8529c469efbc0b7672dd17446b3b8` 已推送，根侧正式预算核验通过。最终四目标 `final` 运行 [36518852520](https://github.com/Linnanli/dasWork/actions/runs/36518852520) 于 2026-09-29 03:49:36 UTC 创建，启动确认时绑定该提交、状态为 `in_progress`，使用校准 `36512308682`。按约定在 Runtime 打包启动后暂停，待用户告知完成后再读取最终归档及签名工程 Feed 结果；完整计划仍未验收通过。
+
+用户报告完成后，确认 [36518852520](https://github.com/Linnanli/dasWork/actions/runs/36518852520) 于 2026-09-29 04:38:02 UTC 成功完成。根侧核对最终四平台的来源/归档/正式预算、48 个迁移场景、100 条隔离命令及四份安装内存通过，三个 R07 工程门禁重新验证通过。开发版/打包版十二张真实 PNG 的哈希、尺寸及来源绑定通过，两组逐页相同，六张唯一原图复查未见缺字或裁切；独立只读审查未发现工程验收设计阻塞。工程 Feed 明确不具备生产信任和公开部署资格。A1–A5、A7–A9 工程验收已完成，A6 用户人工视觉接受仍待答复。[最终证据与边界](../../docs/verification/officecli-runtime-migration/2026-09-29/final-36518852520/README.md)。
+
+用户随后明确回复“接受当前预览，完成 A6 验收”，于 2026-09-29 06:27:34 UTC 保存[人工视觉接受回执](../../docs/verification/officecli-runtime-migration/2026-09-29/final-36518852520/user-visual-acceptance.json)。A6 完成，A1–A9 全部验收完成；原始回执中生成时的 pending 状态保留，生产发布仍由既有独立流程管理。
 
 ## Requirements Summary
 

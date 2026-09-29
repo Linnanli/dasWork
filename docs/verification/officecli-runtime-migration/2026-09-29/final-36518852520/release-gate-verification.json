@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "dascowork-app-tools-release-gates.v1",
+  "commit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "assetSha256": "e2315dc5790814fc72986537097bd6a33d21ae8c95bb3ad252cec56759c52e2f",
+  "verified": [
+    {
+      "id": "AT-E2E-01",
+      "producer": "primary-runtime-feed-e2e",
+      "capturedAt": "2026-09-29T04:33:41.521Z"
+    },
+    {
+      "id": "AT-LIVE-01",
+      "producer": "live-office-runtime-dev",
+      "capturedAt": "2026-09-29T04:33:41.521Z"
+    },
+    {
+      "id": "AT-LIVE-PKG-01",
+      "producer": "live-office-runtime-packaged",
+      "capturedAt": "2026-09-29T04:36:38.253Z"
+    }
+  ]
+}

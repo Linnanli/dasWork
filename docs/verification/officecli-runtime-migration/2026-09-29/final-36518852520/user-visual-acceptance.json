@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "status": "accepted",
+  "accepted": true,
+  "acceptedBy": "user",
+  "source": "Explicit user reply in active Codex task",
+  "recordedAt": "2026-09-29T06:27:34Z",
+  "decisionText": "接受当前预览，完成 A6 验收",
+  "criterion": "A6",
+  "finalRunId": "36518852520",
+  "finalSourceCommit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "calibrationRunId": "36512308682",
+  "scope": "Final six-page preview and four-platform legacy/current comparisons; disclosed font size, wrapping and local layout differences. Engineering Feed only, no production publication."
+}

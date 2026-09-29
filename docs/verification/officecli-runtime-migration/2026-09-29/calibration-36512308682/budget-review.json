@@ -1,0 +1,296 @@
+{
+  "status": "PASS",
+  "sourceRunId": "36512308682",
+  "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+  "installerCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+  "evidence": {
+    "sourceRunId": "36512308682",
+    "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "installerCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "measurementsFingerprint": "1508f62ca733546ace4656588ff75ea3a858ea24b32c1560f965bbb4dadd21fc"
+  },
+  "candidateArchiveSha256": {
+    "darwin-x64": "0840ce3eb836cb75fd89a37ced8e7a7efaf139a4b1810a252f126baefc2be49e",
+    "darwin-arm64": "1d710784b7fd62e4cd107a808bceb104bc6778d1615963b486fd1083d7b1f681",
+    "win32-x64": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+    "linux-x64": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499"
+  },
+  "targets": {
+    "darwin-x64": {
+      "observedMax": {
+        "archiveBytes": 116313429,
+        "unpackedBytes": 174667526,
+        "coldInstallMs": 50143,
+        "mainEventLoopDelayP99Ms": 13,
+        "mainEventLoopDelayMaxMs": 1478,
+        "chatInstallOverlapMs": 5557
+      },
+      "candidateBudget": {
+        "maxArchiveBytes": 133760444,
+        "maxUnpackedBytes": 200867655,
+        "minimumFreeDiskBytes": 615820118,
+        "maxColdInstallMs": 62679,
+        "maxMainEventLoopDelayP99Ms": 17,
+        "maxMainEventLoopDelayMaxMs": 1848
+      },
+      "samples": {
+        "coldInstallMs": [
+          50143,
+          28715,
+          26751,
+          24610,
+          21911,
+          20439,
+          18918,
+          15988,
+          16048,
+          16317
+        ],
+        "mainEventLoopDelayP99Ms": [
+          11,
+          13,
+          13,
+          12,
+          12,
+          10,
+          13,
+          9,
+          9,
+          9
+        ],
+        "mainEventLoopDelayMaxMs": [
+          324,
+          1478,
+          263,
+          129,
+          253,
+          130,
+          129,
+          39,
+          59,
+          152
+        ],
+        "chatInstallOverlapMs": [
+          3218,
+          5557,
+          2335,
+          2150,
+          4111,
+          1473,
+          3297,
+          1357,
+          1441,
+          2341
+        ]
+      }
+    },
+    "darwin-arm64": {
+      "observedMax": {
+        "archiveBytes": 115377521,
+        "unpackedBytes": 173626167,
+        "coldInstallMs": 13274,
+        "mainEventLoopDelayP99Ms": 18,
+        "mainEventLoopDelayMaxMs": 468,
+        "chatInstallOverlapMs": 3867
+      },
+      "candidateBudget": {
+        "maxArchiveBytes": 132684150,
+        "maxUnpackedBytes": 199670093,
+        "minimumFreeDiskBytes": 611827987,
+        "maxColdInstallMs": 16593,
+        "maxMainEventLoopDelayP99Ms": 23,
+        "maxMainEventLoopDelayMaxMs": 585
+      },
+      "samples": {
+        "coldInstallMs": [
+          13274,
+          6505,
+          6873,
+          7539,
+          7082,
+          6289,
+          7111,
+          5160,
+          6682,
+          6665
+        ],
+        "mainEventLoopDelayP99Ms": [
+          18,
+          11,
+          10,
+          12,
+          12,
+          10,
+          12,
+          10,
+          10,
+          13
+        ],
+        "mainEventLoopDelayMaxMs": [
+          468,
+          117,
+          105,
+          114,
+          73,
+          84,
+          66,
+          37,
+          38,
+          127
+        ],
+        "chatInstallOverlapMs": [
+          3867,
+          1424,
+          1573,
+          1749,
+          1990,
+          1331,
+          1686,
+          1166,
+          1656,
+          1644
+        ]
+      }
+    },
+    "win32-x64": {
+      "observedMax": {
+        "archiveBytes": 112773712,
+        "unpackedBytes": 162905404,
+        "coldInstallMs": 10108,
+        "mainEventLoopDelayP99Ms": 7,
+        "mainEventLoopDelayMaxMs": 59,
+        "chatInstallOverlapMs": 840
+      },
+      "candidateBudget": {
+        "maxArchiveBytes": 129689769,
+        "maxUnpackedBytes": 187341215,
+        "minimumFreeDiskBytes": 580028029,
+        "maxColdInstallMs": 12635,
+        "maxMainEventLoopDelayP99Ms": 9,
+        "maxMainEventLoopDelayMaxMs": 74
+      },
+      "samples": {
+        "coldInstallMs": [
+          9393,
+          8885,
+          9019,
+          9969,
+          9009,
+          10105,
+          10108,
+          9046,
+          10048,
+          10049
+        ],
+        "mainEventLoopDelayP99Ms": [
+          3,
+          4,
+          3,
+          7,
+          3,
+          4,
+          7,
+          3,
+          4,
+          5
+        ],
+        "mainEventLoopDelayMaxMs": [
+          31,
+          30,
+          23,
+          23,
+          18,
+          59,
+          17,
+          25,
+          20,
+          22
+        ],
+        "chatInstallOverlapMs": [
+          721,
+          714,
+          698,
+          726,
+          797,
+          840,
+          734,
+          693,
+          750,
+          739
+        ]
+      }
+    },
+    "linux-x64": {
+      "observedMax": {
+        "archiveBytes": 179820974,
+        "unpackedBytes": 351018995,
+        "coldInstallMs": 12385,
+        "mainEventLoopDelayP99Ms": 4,
+        "mainEventLoopDelayMaxMs": 25,
+        "chatInstallOverlapMs": 806
+      },
+      "candidateBudget": {
+        "maxArchiveBytes": 206794121,
+        "maxUnpackedBytes": 403671845,
+        "minimumFreeDiskBytes": 1166258483,
+        "maxColdInstallMs": 15482,
+        "maxMainEventLoopDelayP99Ms": 5,
+        "maxMainEventLoopDelayMaxMs": 32
+      },
+      "samples": {
+        "coldInstallMs": [
+          12385,
+          8686,
+          8665,
+          8582,
+          8718,
+          8711,
+          8638,
+          8886,
+          8885,
+          8757
+        ],
+        "mainEventLoopDelayP99Ms": [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        "mainEventLoopDelayMaxMs": [
+          20,
+          21,
+          14,
+          18,
+          19,
+          16,
+          19,
+          23,
+          25,
+          18
+        ],
+        "chatInstallOverlapMs": [
+          611,
+          664,
+          677,
+          698,
+          750,
+          734,
+          588,
+          754,
+          806,
+          727
+        ]
+      }
+    }
+  },
+  "conclusion": "Formula, source lineage, target archive bindings, and sample counts validate. Darwin x64 cold install and max-delay spikes are real included samples, on different attempts; no evidence that the candidate hides a repeatable client-side blocking regression. Final engineering feed and user visual acceptance remain outside this budget review."
+}

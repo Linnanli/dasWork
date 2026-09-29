@@ -1,0 +1,15 @@
+{
+  "status": "no-blocking-visual-regression-found",
+  "reviewer": "/root",
+  "sourceRunId": "36518852520",
+  "sourceCommit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "scope": "Six unique original final packaged PNGs personally viewed; twelve dev/packaged PNGs verified byte-identical in pairs. Four native old/new comparisons were separately reviewed in calibration 36512308682.",
+  "observations": [
+    "All six pages have complete Chinese text with no tofu, blank slide, or page cropping observed.",
+    "Table headings, three rows and 46% are visible.",
+    "Chart title, both Chinese categories, legend, 18.4 and 37 are visible.",
+    "Slide 6 control flow image and both Chinese body lines are visible."
+  ],
+  "acceptedByUser": false,
+  "visualAcceptance": "pending"
+}
