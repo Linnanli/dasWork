@@ -103,7 +103,7 @@ const counterLabels: Record<ToolGroupCounterKey, CounterLabels> = {
   webSearches: { active: '正在搜索网页', completed: '已搜索网页', unit: '', showCount: false },
   mcpTools: { active: '正在调用', completed: '已调用', unit: '个 MCP 工具' },
   subAgentActivities: { active: '正在更新', completed: '已更新', unit: '次子任务' },
-  imageViews: { active: '正在查看', completed: '已查看', unit: '张图片' },
+  imageViews: { active: '已查看', completed: '已查看', unit: '张图片' },
   contextCompactions: { active: '正在压缩', completed: '已压缩', unit: '次上下文' },
   hookPrompts: { active: '正在读取', completed: '已读取', unit: '条项目指令' },
   reviewModeChanges: { active: '正在切换', completed: '已切换', unit: '次审查模式' },
@@ -122,9 +122,22 @@ export function summarizeToolGroup(parts: readonly unknown[]): ToolGroupSummary 
   const sourceNames = new Set<string>()
   const details: string[] = []
   let activeSummary: string | undefined
+  const imageViewIds = new Set<string>()
 
   for (const part of parts) {
     if (!isRecord(part)) continue
+
+    if (isImageViewPart(part)) {
+      const identity = imageViewRecordIdentity(part)
+      const key = identity ? JSON.stringify([identity.turnId, identity.id]) : undefined
+      if (key && imageViewIds.has(key)) continue
+      if (key) imageViewIds.add(key)
+      knownPartCount += 1
+      // This is a record of an imageView item appearing, not evidence that the
+      // tool succeeded. Its execution and the image's load state remain separate.
+      addCounter(state, 'imageViews', false)
+      continue
+    }
 
     const item = extractThreadItem(part)
     if (item) {
@@ -161,6 +174,27 @@ export function summarizeToolGroup(parts: readonly unknown[]): ToolGroupSummary 
     details,
     sourceSummary: renderSourceSummary(sourceNames)
   }
+}
+
+export function isImageViewPart(part: unknown): boolean {
+  if (!isRecord(part)) return false
+  return extractThreadItem(part)?.type === 'imageView' || part.toolName === 'codex_image_view'
+}
+
+export function imageViewRecordIdentity(
+  part: unknown
+): { id: string; turnId?: string } | undefined {
+  if (!isRecord(part) || !isImageViewPart(part)) return undefined
+  const item = extractThreadItem(part)
+  const id =
+    stringValue(item?.id) ??
+    stringValue(item?.callId) ??
+    stringValue(part.toolCallId) ??
+    stringValue(part.id)
+  if (!id) return undefined
+  const metadata = readCodexMessageMetadata(part.providerMetadata)
+  const turnId = stringValue(metadata?.turnId) ?? stringValue(item?.turnId)
+  return { id, ...(turnId ? { turnId } : {}) }
 }
 
 function createSummaryState(): ToolGroupSummaryState {

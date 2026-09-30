@@ -4,9 +4,10 @@
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, unlinkSync } from 'node:fs'
 import { createInterface } from 'node:readline'
+import { pinnedAppServerVersion } from './pinned-app-server-version.mjs'
 
 if (process.argv.includes('--version')) {
-  process.stdout.write('codex-cli 0.148.0-alpha.21\n')
+  process.stdout.write(`codex-cli ${pinnedAppServerVersion}\n`)
   process.exit(0)
 }
 

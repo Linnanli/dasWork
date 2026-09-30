@@ -437,6 +437,11 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
   vi.stubGlobal('desktopApp', {
     environment: { platform: 'darwin' },
     codex: {
+      resolveImageSource: vi.fn(async ({ source }) => ({
+        status: 'available',
+        displaySrc: source
+      })),
+      saveImage: vi.fn(async () => ({ status: 'cancelled' })),
       openExternalHttpUrl: vi.fn(async () => undefined),
       openLocalPath: vi.fn(async () => undefined),
       revealLocalPath: vi.fn(async () => undefined),
@@ -1230,20 +1235,22 @@ vi.mock('@assistant-ui/react', () => {
     useAui: () => mockAui,
     useMessageTiming: () => null,
     useAuiState: (selector: (state: Record<string, unknown>) => unknown) => {
-      const attachment = threadMessageState.message.content
+      const attachments = threadMessageState.message.content
         .filter((part): part is Extract<MockMessagePart, { type: 'file' }> => part.type === 'file')
-        .map((part) => ({
+        .map((part, index) => ({
+          id: `attachment-${index}`,
           type: part.mediaType.startsWith('image/') ? 'image' : 'file',
           name: part.name ?? 'file',
           status: { type: 'complete' as const },
           content: part.mediaType.startsWith('image/')
             ? [{ type: 'image' as const, image: part.url ?? part.data ?? '' }]
             : []
-        }))[0]
+        }))
 
       return selector({
         ...currentAssistantState(),
-        attachment,
+        message: { ...currentAssistantState().message, attachments },
+        attachment: attachments[0],
         threadListItem: {
           id: 'main',
           remoteId: undefined,
@@ -3023,7 +3030,7 @@ describe('App composer', () => {
     const tile = container.querySelector<HTMLDivElement>('.aui-attachment-tile')
 
     expect(preview?.getAttribute('src')).toBe('app://fs/@fs/tmp/codex-clipboard.png')
-    expect(preview?.getAttribute('alt')).toBe('Attachment preview')
+    expect(preview?.getAttribute('alt')).toBe('codex-clipboard.png')
     expect(tile?.className).toContain('size-14')
     expect(tile?.className).toContain('rounded-md')
     expect(container.querySelector('.aui-attachment-root')?.className).not.toContain('size-24')
@@ -3033,7 +3040,7 @@ describe('App composer', () => {
     })
 
     expect(container.querySelector('.aui-attachment-tile-image')).toBeNull()
-    expect(container.querySelector('.aui-attachment-tile-fallback-icon')).not.toBeNull()
+    expect(container.querySelector('[data-chat-image-state="unavailable"]')).not.toBeNull()
   })
 
   it('renders the edit composer when a user message enters editing state', async () => {
@@ -3712,11 +3719,10 @@ describe('App composer', () => {
     await renderApp()
 
     const reasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
-    expect(reasoning?.dataset.state).toBe('closed')
-
-    await act(async () => {
-      reasoning?.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')?.click()
-    })
+    expect(reasoning?.dataset.state).toBe('open')
+    expect(
+      reasoning?.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')?.disabled
+    ).toBe(true)
 
     const webSearchGroup = toolGroup('web-search')
     const dynamicGroup = toolGroup('dynamic')
@@ -4995,6 +5001,66 @@ describe('App composer', () => {
     expect(completedReasoning?.getAttribute('data-state')).toBe('open')
     expect(completedReasoning?.textContent).toContain('我会按“只分析、不改代码”的方式')
     expect(completedReasoning?.textContent).toContain('现已核对实时流与历史记录')
+  })
+
+  it('keeps image records lazy through both disclosures and preserves the user expansion during final streaming', async () => {
+    threadMessageState.message.role = 'assistant'
+    threadMessageState.message.status = { type: 'running' }
+    threadMessageState.message.content = [
+      { type: 'text', text: '先查看图片。' },
+      genericToolPart('view-a', 'codex_image_view', 'imageView', { path: '/tmp/a.png' }),
+      genericToolPart('view-b', 'codex_image_view', 'imageView', { path: '/tmp/b.png' })
+    ]
+    threadMessageState.externalMessages = [
+      { parts: [{ type: 'text', providerMetadata: messagePhaseMetadata('commentary') }] }
+    ]
+    await renderApp()
+    let process = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')!
+    expect(process.dataset.state).toBe('open')
+    expect(
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.disabled
+    ).toBe(true)
+    expect(container.textContent).toContain('已查看 2 张图片')
+    expect(window.desktopApp.codex.resolveImageSource).not.toHaveBeenCalled()
+
+    threadMessageState.message.content.push({ type: 'text', text: '图片分析完成。' })
+    threadMessageState.externalMessages[0]!.parts.push({
+      type: 'text',
+      providerMetadata: messagePhaseMetadata('final_answer')
+    })
+    await renderApp()
+    process = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')!
+    expect(process.dataset.state).toBe('closed')
+    expect(container.textContent).toContain('图片分析完成。')
+    expect(container.querySelector('[data-slot="image-view-activity"]')).toBeNull()
+    act(() =>
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.click()
+    )
+    expect(
+      container.querySelector('[data-slot="image-view-activity"]')?.getAttribute('data-state')
+    ).toBe('closed')
+    expect(window.desktopApp.codex.resolveImageSource).not.toHaveBeenCalled()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-slot="image-view-activity"] [data-slot="tool-group-trigger"]'
+        )!
+        .click()
+    )
+    expect(window.desktopApp.codex.resolveImageSource).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-slot="image-view-images"]')).not.toBeNull()
+    threadMessageState.message.content.push({ type: 'text', text: '补充结论。' })
+    threadMessageState.externalMessages[0]!.parts.push({
+      type: 'text',
+      providerMetadata: messagePhaseMetadata('final_answer')
+    })
+    await renderApp()
+    expect(process.dataset.state).toBe('open')
+    expect(window.desktopApp.codex.resolveImageSource).toHaveBeenCalledTimes(2)
+    act(() =>
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.click()
+    )
+    expect(container.querySelector('[data-slot="image-view-images"]')).toBeNull()
   })
 
   it('collapses an inferred process when the candidate answer starts', async () => {

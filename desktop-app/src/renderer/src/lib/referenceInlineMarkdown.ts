@@ -1,12 +1,14 @@
 import { defaultRehypePlugins, type StreamdownProps } from 'streamdown'
 
 import { inlineCodeReference } from './referenceInlineCode'
-import { classifyReferenceTarget } from './referenceInlineTarget'
+import { classifyReferenceTarget, isMarkdownChatImageSource } from './referenceInlineTarget'
 
 export const inlineReferenceCodeTagName = 'inline-reference-code'
 
 const protectedReferenceHref = 'https://inline-reference.invalid/'
 const protectedReferenceProperty = 'dataInlineReferenceHref'
+const protectedImageSrc = 'https://chat-image.invalid/'
+const protectedImageProperty = 'dataChatImageSource'
 
 type SanitizeOptions = {
   attributes?: Record<string, readonly unknown[] | undefined>
@@ -26,18 +28,21 @@ const [sanitizePlugin, sanitizeOptions] = defaultSanitize
 export const referenceInlineRehypePlugins: RehypePlugins = [
   defaultRehypePlugins.raw,
   protectInlineReferenceLinks,
+  protectChatImageSources,
   [
     sanitizePlugin,
     {
       ...sanitizeOptions,
       attributes: {
         ...sanitizeOptions.attributes,
-        a: [...(sanitizeOptions.attributes?.a ?? []), protectedReferenceProperty]
+        a: [...(sanitizeOptions.attributes?.a ?? []), protectedReferenceProperty],
+        img: [...(sanitizeOptions.attributes?.img ?? []), protectedImageProperty]
       }
     }
   ],
   defaultRehypePlugins.harden,
   restoreInlineReferenceLinks,
+  restoreChatImageSources,
   decorateInlineCodeReferences
 ]
 
@@ -47,6 +52,31 @@ type HastNode = {
   tagName?: string
   type: string
   value?: string
+}
+
+function chatImageSourceNodes(node: HastNode, restore: boolean): void {
+  if (node.type === 'element' && node.tagName === 'img' && node.properties) {
+    const original = stringProperty(node.properties[protectedImageProperty])
+    const src = stringProperty(node.properties.src)
+    if (restore) {
+      delete node.properties[protectedImageProperty]
+      if (src === protectedImageSrc && original && isMarkdownChatImageSource(original)) {
+        node.properties.src = original
+      }
+    } else if (src && isMarkdownChatImageSource(src)) {
+      node.properties[protectedImageProperty] = src
+      node.properties.src = protectedImageSrc
+    }
+  }
+  for (const child of node.children ?? []) chatImageSourceNodes(child, restore)
+}
+
+function protectChatImageSources(): (tree: unknown) => void {
+  return (tree) => chatImageSourceNodes(tree as HastNode, false)
+}
+
+function restoreChatImageSources(): (tree: unknown) => void {
+  return (tree) => chatImageSourceNodes(tree as HastNode, true)
 }
 
 function protectInlineReferenceLinkNodes(node: HastNode): void {

@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { config as configureZod, type ZodType } from 'zod'
 import { codexChatTerminalFallbackSchema } from '../shared/codexIpcApi'
+import {
+  chatImageIpcChannels,
+  chatImageRequestSchema,
+  chatImageSaveRequestSchema,
+  chatImageResolveResultSchema,
+  chatImageSaveResultSchema
+} from '../shared/chatImageApi'
 import type {
   CodexApprovalRequest,
   CodexApprovalResponse,
@@ -148,6 +155,22 @@ const desktopCodex: DesktopCodexApi = {
   listExistingLocalPaths: (input) => ipcRenderer.invoke('codex:list-existing-local-paths', input),
   pickLocalContext: (kind: LocalContextPickerKind) =>
     ipcRenderer.invoke('codex:pick-local-context', { kind }) as Promise<LocalContextReference[]>,
+  resolveImageSource: async (input) =>
+    chatImageResolveResultSchema.parse(
+      await ipcRenderer.invoke(
+        chatImageIpcChannels.resolveSource,
+        chatImageRequestSchema.parse(input, { jitless: true })
+      ),
+      { jitless: true }
+    ),
+  saveImage: async (input) =>
+    chatImageSaveResultSchema.parse(
+      await ipcRenderer.invoke(
+        chatImageIpcChannels.save,
+        chatImageSaveRequestSchema.parse(input, { jitless: true })
+      ),
+      { jitless: true }
+    ),
   onStatusChange: (callback: (status: CodexStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: CodexStatus): void =>
       callback(status)

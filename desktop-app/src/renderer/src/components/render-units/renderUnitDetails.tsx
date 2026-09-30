@@ -43,6 +43,8 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { DiffViewer } from '@/components/assistant-ui/diff-viewer'
+import { ChatImage, useImagePreview, type ChatImageDescriptor } from '@/components/images'
+import { useChatImageConversation } from '@/components/conversation/chatImageConversationContext'
 import {
   useLocalGitReview,
   type LocalGitReviewLastTurn
@@ -807,7 +809,10 @@ function GeneratedImageEntryUnit({ unit }: { unit: EntryUnit }): React.JSX.Eleme
           <p className="text-sm font-medium">
             {pending ? '正在生成图片' : `已生成 ${images.length} 张图片`}
           </p>
-          <ImageGallery images={images.length > 0 ? images : [{ alt: '图片生成中' }]} />
+          <ImageGallery
+            groupId={unit.key}
+            images={images.length > 0 ? images : [{ alt: '图片生成中' }]}
+          />
         </div>
       </div>
     </RenderUnitCard>
@@ -834,7 +839,7 @@ function GeneratedImageFileUnit({
         <ImageIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">已生成图片</p>
-          <ImageGallery images={[image]} />
+          <ImageGallery groupId={unit.key} images={[image]} />
         </div>
       </div>
     </RenderUnitCard>
@@ -1131,42 +1136,72 @@ function RenderUnitCard({
   )
 }
 
-function ImageGallery({ images }: { images: readonly ImageEntry[] }): React.JSX.Element {
-  const [preview, setPreview] = useState<ImageEntry | undefined>()
+function ImageGallery({
+  groupId,
+  images
+}: {
+  groupId: string
+  images: readonly ImageEntry[]
+}): React.JSX.Element {
+  const owner = useChatImageConversation()
+  const preview = useImagePreview()
+  const descriptors = useMemo<ChatImageDescriptor[]>(
+    () =>
+      images.flatMap((image, index) =>
+        image.src
+          ? [
+              {
+                id: `generated:${groupId}:${index}`,
+                source: image.src,
+                sourceKind: generatedImageSourceKind(image.src),
+                alt: image.alt ?? '生成图片',
+                title: image.savedPath,
+                ...owner
+              }
+            ]
+          : []
+      ),
+    [groupId, images, owner]
+  )
   const visible = images.slice(0, 4)
   const overflow = images.length - visible.length
 
   return (
     <div data-slot="generated-image-gallery" className="mt-2 space-y-2">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
-        {visible.map((image, index) => (
-          <Button
-            aria-label={image.src ? `预览 ${image.alt ?? '生成图片'}` : (image.alt ?? '图片生成中')}
-            key={`${image.src ?? image.alt ?? 'pending'}:${index}`}
-            className="group relative aspect-square h-auto min-w-0 w-full justify-start overflow-hidden rounded-md border bg-muted/35 p-0 text-left hover:bg-muted/35"
-            variant="ghost"
-            type="button"
-            onClick={() => image.src && setPreview(image)}
-            disabled={!image.src}
-          >
-            {image.src ? (
-              <img
-                alt={image.alt ?? '生成图片'}
-                className="size-full object-cover"
-                src={image.src}
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center px-3 text-center text-xs text-muted-foreground">
-                {image.alt ?? '等待图片'}
-              </div>
-            )}
-            {index === visible.length - 1 && overflow > 0 ? (
-              <span className="absolute inset-0 flex items-center justify-center bg-background/75 text-sm font-medium">
-                +{overflow}
-              </span>
-            ) : null}
-          </Button>
-        ))}
+        {visible.map((image, index) => {
+          const descriptorIndex = descriptors.findIndex(
+            (entry) => entry.id === `generated:${groupId}:${index}`
+          )
+          const descriptor = descriptors[descriptorIndex]
+          return (
+            <div
+              key={`${image.src ?? image.alt ?? 'pending'}:${index}`}
+              className="group relative aspect-square min-w-0 overflow-hidden rounded-md border bg-muted/35"
+            >
+              {descriptor ? (
+                <ChatImage
+                  image={descriptor}
+                  variant="thumbnail"
+                  className="size-full rounded-none"
+                  imageClassName="size-full object-cover"
+                  onPreview={(_image, trigger) =>
+                    preview.open(descriptors, descriptorIndex, trigger)
+                  }
+                />
+              ) : (
+                <div className="flex size-full items-center justify-center px-3 text-center text-xs text-muted-foreground">
+                  {image.alt ?? '等待图片'}
+                </div>
+              )}
+              {index === visible.length - 1 && overflow > 0 ? (
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/75 text-sm font-medium">
+                  +{overflow}
+                </span>
+              ) : null}
+            </div>
+          )
+        })}
       </div>
       {images.some((image) => image.alt || image.savedPath) ? (
         <div className="space-y-1 text-xs text-muted-foreground">
@@ -1175,26 +1210,6 @@ function ImageGallery({ images }: { images: readonly ImageEntry[] }): React.JSX.
               {image.alt ?? image.savedPath}
             </p>
           ))}
-        </div>
-      ) : null}
-      {preview ? (
-        <div
-          data-slot="generated-image-preview"
-          className="rounded-md border bg-background p-2 shadow-sm"
-        >
-          <img
-            alt={preview.alt ?? '生成图片预览'}
-            className="max-h-96 w-full rounded object-contain"
-            src={preview.src}
-          />
-          <Button
-            className="mt-2"
-            size="sm"
-            variant="outline"
-            onClick={() => setPreview(undefined)}
-          >
-            关闭预览
-          </Button>
         </div>
       ) : null}
     </div>
@@ -1822,7 +1837,7 @@ function imageEntriesFromItem(item: AnyRecord): ImageEntry[] {
 
 function imageSourceFromPart(part: AnyRecord): string | undefined {
   const url = stringValue(part.url)
-  if (url) return safeRenderableImageSrc(url)
+  if (url) return url
   const data = stringValue(part.data)
   const mediaType = stringValue(part.mediaType) ?? 'image/png'
   if (!data) return undefined
@@ -1836,12 +1851,24 @@ function imageSrcFromRecord(record: AnyRecord | undefined): string | undefined {
     stringValue(record.src) ??
     stringValue(record.url) ??
     stringValue(record.imageUrl) ??
-    stringValue(record.result)
+    stringValue(record.result) ??
+    stringValue(record.savedPath)
   if (!src) return undefined
-  const safeSrc = safeRenderableImageSrc(src)
-  if (safeSrc) return safeSrc
-  if (hasUrlScheme(src)) return undefined
+  if (hasUrlScheme(src) || isImageFilePath(src)) return src
   return `data:image/png;base64,${src}`
+}
+
+function generatedImageSourceKind(source: string): ChatImageDescriptor['sourceKind'] {
+  if (/^(?:file:|sandbox:)/i.test(source)) return 'markdown-url'
+  return isImageFilePath(source) ? 'native-path' : 'media-url'
+}
+
+function isImageFilePath(source: string): boolean {
+  return (
+    source.startsWith('/') ||
+    /^[a-z]:[\\/]/i.test(source) ||
+    (!hasUrlScheme(source) && /\.(?:png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(source))
+  )
 }
 
 function resourceCardData(value: unknown): ResourceCardData {
@@ -2086,11 +2113,6 @@ function mediaSrc(record: AnyRecord | undefined): string | undefined {
   if (!data) return undefined
   if (data.startsWith('data:')) return data
   return `data:${stringValue(record.mimeType) ?? stringValue(record.mediaType) ?? 'application/octet-stream'};base64,${data}`
-}
-
-function safeRenderableImageSrc(src: string | undefined): string | undefined {
-  if (!src) return undefined
-  return isSafeDomMediaSrc(src) ? src : undefined
 }
 
 function safeRenderableMediaSrc(src: string | undefined): string | undefined {

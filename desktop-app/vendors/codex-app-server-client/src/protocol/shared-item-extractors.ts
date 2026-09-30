@@ -43,6 +43,7 @@ export const THREAD_ITEM_TYPE_COVERAGE: Record<ThreadItem["type"], true> = {
     userMessage: true,
     hookPrompt: true,
     agentMessage: true,
+    functionCallOutput: true,
     plan: true,
     reasoning: true,
     commandExecution: true,
@@ -77,6 +78,7 @@ export function classifyThreadItem(item: CodexRenderableThreadItem): ThreadItemC
         case "reasoning":
             return "reasoning";
         case "commandExecution":
+        case "functionCallOutput":
         case "fileChange":
         case "mcpToolCall":
         case "dynamicToolCall":
@@ -105,6 +107,8 @@ export function toolNameForItem(item: CodexRenderableThreadItem): string | null
     {
         case "commandExecution":
             return "codex_command_execution";
+        case "functionCallOutput":
+            return "codex_function_call_output";
         case "fileChange":
             return "codex_file_change";
         case "mcpToolCall":
@@ -156,6 +160,8 @@ export function toolInputForItem(item: CodexRenderableThreadItem): unknown
                     ? item.commandActions
                     : undefined,
             });
+        case "functionCallOutput":
+            return { name: item.name, namespace: item.namespace };
         case "fileChange":
             return { changes: item.changes, status: item.status };
         case "mcpToolCall":
@@ -266,6 +272,10 @@ export function userMessageCompareKey(
         url: string;
         detail?: string;
     } | {
+        type: "image";
+        fileId: string;
+        detail?: string;
+    } | {
         type: "localImage";
         path: string;
         detail?: string;
@@ -274,6 +284,14 @@ export function userMessageCompareKey(
         switch (input.type)
         {
             case "image":
+                if ("fileId" in input)
+                {
+                    return [{
+                        type: input.type,
+                        fileId: input.fileId,
+                        ...(input.detail ? { detail: input.detail } : {}),
+                    }];
+                }
                 return [{
                     type: input.type,
                     url: input.url,

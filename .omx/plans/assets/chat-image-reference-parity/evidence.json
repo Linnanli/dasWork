@@ -1,0 +1,48 @@
+{
+  "verifiedAt": "2026-09-29T13:14:48.031Z",
+  "command": "npm exec -- playwright test tests/e2e/chat-images.e2e.ts tests/e2e/chat.e2e.ts --reporter=line --output=/private/tmp/dsc-chat-image-final-e2e",
+  "result": {
+    "exitCode": 0,
+    "passed": 14,
+    "failed": 0,
+    "duration": "1.7m"
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "x64",
+    "appServer": "codex-cli 0.148.0-alpha.21",
+    "transport": "real Electron -> IPC -> Main -> AI-free client -> real app-server -> mock model HTTP"
+  },
+  "coverage": [
+    "PNG/JPEG naturalWidth; absolute/file/sandbox/relative Markdown URLs; spaces/Chinese/#/?/literal %20; missing/broken/403/404",
+    "Message-scoped gallery; initial fit; button zoom; Ctrl+wheel anchor <=2px; ordinary scrolling; drag; Chromium CDP pinch; arrows/Escape/focus",
+    "Real view_image calls with distinct ids and literal native path; two-level collapse before and during final; 80px thumbnails; official persisted paginated items; reload; missing source retains count",
+    "Stopped turn without final remains expanded; official persisted view item; reload",
+    "Local/data/HTTP original byte SHA256; native cancel; real interrupted DownloadItem then retry with 302 URLChain and completed byte count",
+    "Two composer images and sent-image gallery; exact PNG/model input; original attachment filenames after reload; nine existing chat regressions"
+  ],
+  "limits": [
+    "This run used macOS; Windows real filesystem/Electron behavior was not run here.",
+    "Pinch was exercised by real Chromium CDP touch input; physical touchscreen and trackpad hardware were not exercised."
+  ],
+  "correctedFailures": [
+    "Preload Zod parsing attempted dynamic code generation under renderer CSP; jitless parsing fixed it.",
+    "Renderer CSP lacked authorized HTTP image sources; img-src http was added.",
+    "Legacy history omitted imageView; durable new threads now use official paginated history.",
+    "DownloadItem updated interrupted can omit done; Main now reports failure and cleans up before cancel.",
+    "History localImage projection lacked filename/MIME; original name/MIME are now restored."
+  ],
+  "artifacts": [
+    "markdown-local-images.png",
+    "markdown-image-unavailable.png",
+    "image-preview-zoom-and-navigation.png",
+    "image-view-record-in-running-process.png",
+    "image-view-process-collapsed-during-final.png",
+    "image-view-expanded-thumbnails.png",
+    "stopped-image-view-history-without-final.png",
+    "sent-attachment-shared-gallery.png",
+    "history-evidence.json",
+    "download-evidence.json",
+    "sha256.json"
+  ]
+}

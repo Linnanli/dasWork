@@ -739,6 +739,7 @@ function plugin(
   }>
 ): PluginSummary {
   return {
+    extensions: null,
     id: 'codex-app-tools@dascowork-bundled',
     remotePluginId: null,
     version: '0.1.0',

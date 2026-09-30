@@ -317,6 +317,11 @@ function reasoningGroup(
     target: { id: key, itemIds: [] },
     children,
     state: 'thinking',
-    turnRunning: true
+    turnRunning: true,
+    hasFinalAnswerStarted: false,
+    canCollapse: false,
+    defaultExpanded: true,
+    expanded: true,
+    forceExpanded: true
   }
 }

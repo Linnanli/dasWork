@@ -10,6 +10,29 @@ import {
 type ToolGroupUnit = Extract<AssistantRenderUnit, { type: 'tool-group' }>
 
 describe('buildToolActivityDisplayModel', () => {
+  it.each(['input-available', 'output-available', 'output-error'])(
+    'keeps image-view appearance independent of %s tool status',
+    (state) => {
+      const group = runningToolGroup([
+        {
+          type: 'dynamic-tool',
+          toolName: 'codex_image_view',
+          toolCallId: 'image-a',
+          state,
+          input: { path: '/missing.png' },
+          ...(state === 'output-error' ? { errorText: 'Missing file' } : {})
+        }
+      ])
+      expect(buildToolActivityDisplayModel(group).group).toMatchObject({
+        label: '已查看 1 张图片',
+        icon: 'image-view',
+        showShimmer: false,
+        count: 1,
+        expandable: true
+      })
+    }
+  )
+
   it('keeps running command activity in the group header and full shell data on the item', () => {
     const group = runningToolGroup([
       {
@@ -378,7 +401,11 @@ function toolGroup(
     status: { type: messageStatus },
     content
   })
-  const unit = model.units.find((candidate) => candidate.type === 'tool-group')
+  const unit = model.units
+    .flatMap((candidate) =>
+      candidate.type === 'reasoning-group' ? candidate.children : [candidate]
+    )
+    .find((candidate) => candidate.type === 'tool-group')
   if (!unit || unit.type !== 'tool-group') {
     throw new Error('Expected a tool group render unit')
   }

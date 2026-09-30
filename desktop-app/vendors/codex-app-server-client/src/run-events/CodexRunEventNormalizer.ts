@@ -646,6 +646,7 @@ export class CodexEventMapper
                 break;
             }
             case "fileChange":
+            case "functionCallOutput":
             case "mcpToolCall":
             case "sleep":
             case "collabAgentToolCall":

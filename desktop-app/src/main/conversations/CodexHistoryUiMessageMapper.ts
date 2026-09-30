@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { basename, win32 } from 'node:path'
 
 import type { UIMessage } from 'ai'
 import type { SharedV3ProviderMetadata } from '@ai-sdk/provider'
@@ -19,6 +20,7 @@ import {
 import type { CodexTurnInputItem } from '@dascowork/codex-app-server-client'
 import { normalizedFailedTurnError, stripUndefined } from '@dascowork/codex-app-server-client'
 import { codexMessageProviderMetadata } from '../../shared/codexMessageMetadata'
+import { mediaTypeForPath } from '../localMediaProtocol'
 
 type UiMessagePart = UIMessage['parts'][number]
 type DynamicToolUiPart = Extract<UiMessagePart, { type: 'dynamic-tool' }>
@@ -129,6 +131,7 @@ export function mapCodexTurnToUiMessages(
         break
       }
       case 'commandExecution':
+      case 'functionCallOutput':
       case 'fileChange':
       case 'mcpToolCall':
       case 'dynamicToolCall':
@@ -257,6 +260,7 @@ export function mapCodexThreadItemToUiPart(item: CodexRenderableThreadItem): UiM
       return text ? { type: 'reasoning', text, state: 'done' } : null
     }
     case 'commandExecution':
+    case 'functionCallOutput':
     case 'fileChange':
     case 'mcpToolCall':
     case 'dynamicToolCall':
@@ -323,9 +327,19 @@ function userMessageParts(item: Extract<ThreadItem, { type: 'userMessage' }>): U
 function userInputFilePart(entry: CodexTurnInputItem): FileUiPart | null {
   switch (entry.type) {
     case 'image':
-      return { type: 'file', mediaType: 'image/*', url: entry.url }
-    case 'localImage':
-      return { type: 'file', mediaType: 'image/*', url: pathToFileURL(entry.path).href }
+      return 'url' in entry ? { type: 'file', mediaType: 'image/*', url: entry.url } : null
+    case 'localImage': {
+      const filename = /^[A-Za-z]:[\\/]/u.test(entry.path)
+        ? win32.basename(entry.path)
+        : basename(entry.path)
+      const inferredMime = mediaTypeForPath(filename)
+      return {
+        type: 'file',
+        mediaType: inferredMime?.startsWith('image/') ? inferredMime : 'image/*',
+        url: pathToFileURL(entry.path).href,
+        ...(filename ? { filename } : {})
+      }
+    }
     case 'audio':
       return { type: 'file', mediaType: 'audio/*', url: entry.url }
     case 'localAudio':

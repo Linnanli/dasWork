@@ -36,6 +36,7 @@ import {
 } from './conversations/ConversationApiService'
 import { createNativeContextMenuHandler, installWindowContextMenu } from './contextMenu'
 import { createPickLocalContextHandler } from './localContextPicker'
+import { registerChatImageIpc } from './chatImages/registerChatImageIpc'
 import { ArtifactPreviewCapabilityStore } from './artifacts/ArtifactPreviewCapabilityStore'
 import { ArtifactComposerAttachmentStore } from './artifacts/ArtifactComposerAttachmentStore'
 import { ArtifactPreviewSourceManifest } from './artifacts/ArtifactPreviewSourceManifest'
@@ -188,6 +189,7 @@ let localGitWatchBroker: LocalGitWatchBroker | undefined
 let gitHostRegistry: GitHostRegistry | undefined
 let codexHostConnectionRegistry: CodexHostConnectionRegistry | undefined
 let rightWorkspaceIpc: RightWorkspaceIpcRegistration | undefined
+let chatImageIpc: ReturnType<typeof registerChatImageIpc> | undefined
 let codexAppToolsPipe: CodexAppToolsNativePipeServer | undefined
 let primaryRuntimeService: PrimaryRuntimeService | undefined
 let primaryRuntimeUpdateCoordinator: PrimaryRuntimeUpdateCoordinator | undefined
@@ -503,8 +505,10 @@ async function createCodexRuntime(
         scope: { threadId: event.threadId }
       })
     },
-    onThreadBound: (conversationId, threadId) =>
-      rightWorkspaceIpc?.terminalManager.bindThread(conversationId, threadId),
+    onThreadBound: (conversationId, threadId) => {
+      rightWorkspaceIpc?.terminalManager.bindThread(conversationId, threadId)
+      chatImageIpc?.service.bindThread(conversationId, threadId)
+    },
     hostCapabilities
   })
 }
@@ -1050,6 +1054,14 @@ app.whenReady().then(async () => {
   const turnDiffStore = new TurnDiffStore(join(app.getPath('userData'), 'turn-diffs'))
   const runtime = await createCodexRuntime(hosts, manager, turnDiffStore, runtimeConfig)
   codexRuntime = runtime
+  chatImageIpc = registerChatImageIpc({
+    ipcMain,
+    projectService: requireProjectService(),
+    windowForSender: (event) => BrowserWindow.fromWebContents(event.sender),
+    showSaveDialog: (window, fileName) =>
+      dialog.showSaveDialog(window, { title: '保存图片', defaultPath: fileName }),
+    devRendererUrl: is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined
+  })
   const targetResolver = new GitRepositoryTargetResolver({
     projectService: requireProjectService(),
     gitManager: manager,
@@ -1527,6 +1539,7 @@ app.on(
       } finally {
         localGitWatchBroker?.dispose()
         rightWorkspaceIpc?.dispose()
+        chatImageIpc?.dispose()
         composerContextChanges?.dispose()
         await Promise.allSettled([
           codexRuntime?.stop(),

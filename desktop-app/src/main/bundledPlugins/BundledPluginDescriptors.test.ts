@@ -595,6 +595,7 @@ function installedMarketplace(
   path: string
   interface: null
   plugins: Array<{
+    extensions: null
     id: string
     remotePluginId: null
     version: null
@@ -622,6 +623,7 @@ function installedMarketplace(
     interface: null,
     plugins: [
       {
+        extensions: null,
         id: `${pluginName}@${marketplaceName}`,
         remotePluginId: null,
         version: null,

@@ -1,27 +1,27 @@
 'use client'
 
 import {
+  createContext,
   type FC,
   type KeyboardEvent,
-  type PropsWithChildren,
   useCallback,
-  useEffect,
+  useContext,
+  useMemo,
   useState
 } from 'react'
-import { AlertCircleIcon, FileText, Loader2Icon, PlusIcon, XIcon } from 'lucide-react'
+import { AlertCircleIcon, Loader2Icon, PlusIcon, XIcon } from 'lucide-react'
 import {
   AttachmentPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
+  type Attachment,
   useAui,
   useAuiState
 } from '@assistant-ui/react'
-import { useShallow } from 'zustand/shallow'
-
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
+import { ChatImage, useImagePreview, type ChatImageDescriptor } from '@/components/images'
+import { useChatImageConversation } from '@/components/conversation/chatImageConversationContext'
 import { useOptionalRightWorkspace } from '@/components/right-workspace'
 import { isPptxArtifactPath } from '@/components/workspace-container'
 import {
@@ -31,111 +31,64 @@ import {
 } from '@/composer/imageAttachmentAdapter'
 import { cn } from '@/lib/utils'
 
-const useFileSrc = (file: File | undefined): string | undefined => {
-  const [src, setSrc] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    if (!file) {
-      // The attachment lifecycle owns this object URL state.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSrc(undefined)
-      return
-    }
-
-    const objectUrl = URL.createObjectURL(file)
-    setSrc(objectUrl)
-
-    return () => URL.revokeObjectURL(objectUrl)
-  }, [file])
-
-  return src
-}
-
-const useAttachmentSrc = (): string | undefined => {
-  const { file, src } = useAuiState(
-    useShallow((state): { file?: File; src?: string } => {
-      if (state.attachment.type !== 'image') return {}
-      if (state.attachment.file) return { file: state.attachment.file }
-
-      const content = state.attachment.content?.find(
-        (item) => item.type === 'image' || item.type === 'file'
-      )
-      if (!content) return {}
-      return {
-        src: content.type === 'image' ? content.image : asImageSource(content.data)
-      }
-    })
-  )
-
-  return useFileSrc(file) ?? src
-}
+const AttachmentImagesContext = createContext<readonly ChatImageDescriptor[]>([])
+const EMPTY_ATTACHMENTS: readonly Attachment[] = []
 
 function asImageSource(data: unknown): string | undefined {
   return typeof data === 'string' ? data : undefined
 }
 
-const AttachmentPreview: FC<{ src: string }> = ({ src }) => {
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  return (
-    <img
-      src={src}
-      alt="Attachment preview"
-      className={cn(
-        'block h-auto max-h-[80vh] w-auto max-w-full object-contain',
-        isLoaded
-          ? 'aui-attachment-preview-image-loaded'
-          : 'aui-attachment-preview-image-loading invisible'
-      )}
-      onLoad={() => setIsLoaded(true)}
-    />
-  )
-}
-
-const AttachmentPreviewDialog: FC<PropsWithChildren> = ({ children }) => {
-  const src = useAttachmentSrc()
-
-  if (!src) return children
-
-  return (
-    <Dialog>
-      <DialogTrigger
-        className="aui-attachment-preview-trigger cursor-pointer transition-colors hover:bg-accent/50"
-        asChild
-      >
-        {children}
-      </DialogTrigger>
-      <DialogContent className="aui-attachment-preview-dialog-content [&>button]:bg-foreground/60 [&_svg]:text-background [&>button]:hover:[&_svg]:text-destructive p-2 sm:max-w-3xl [&>button]:rounded-full [&>button]:p-1 [&>button]:opacity-100 [&>button]:ring-0!">
-        <DialogTitle className="aui-sr-only sr-only">Image Attachment Preview</DialogTitle>
-        <div className="aui-attachment-preview bg-background relative mx-auto flex max-h-[80dvh] w-full items-center justify-center overflow-hidden">
-          <AttachmentPreview src={src} />
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 const AttachmentThumb: FC = () => {
-  const src = useAttachmentSrc()
+  const attachmentId = useAuiState((state) => state.attachment.id)
+  const images = useContext(AttachmentImagesContext)
+  const preview = useImagePreview()
+  const index = images.findIndex((image) => image.id === attachmentId)
+  const image = images[index]
 
-  if (!src) {
+  if (!image) {
     return (
       <AttachmentPrimitive.unstable_Thumb className="aui-attachment-tile-fallback flex size-full items-center justify-center bg-muted px-1 text-center text-[10px] font-medium text-muted-foreground" />
     )
   }
 
   return (
-    <Avatar className="aui-attachment-tile-avatar h-full w-full rounded-none">
-      <AvatarImage
-        src={src}
-        alt="Attachment preview"
-        className="aui-attachment-tile-image size-full object-cover"
-      />
-      <AvatarFallback>
-        <FileText className="aui-attachment-tile-fallback-icon text-muted-foreground size-6" />
-      </AvatarFallback>
-    </Avatar>
+    <ChatImage
+      image={image}
+      variant="attachment"
+      className="aui-attachment-preview-trigger aui-attachment-tile-avatar h-full w-full rounded-none"
+      imageClassName="aui-attachment-tile-image size-full object-cover"
+      onPreview={(_image, trigger) => preview.open(images, index, trigger)}
+    />
   )
+}
+
+function attachmentImages(
+  attachments: readonly Attachment[],
+  owner: { conversationId?: string; threadId?: string }
+): ChatImageDescriptor[] {
+  return attachments.flatMap((attachment) => {
+    if (attachment.type !== 'image') return []
+    const content = attachment.content?.find(
+      (part) => part.type === 'image' || part.type === 'file'
+    )
+    const source = content
+      ? content.type === 'image'
+        ? content.image
+        : asImageSource(content.data)
+      : undefined
+    if (!attachment.file && !source) return []
+    return [
+      {
+        id: attachment.id,
+        source: source ?? attachment.name,
+        sourceKind: 'media-url' as const,
+        alt: attachment.name || '图片附件',
+        title: attachment.name,
+        file: attachment.file,
+        ...owner
+      }
+    ]
+  })
 }
 
 const AttachmentUI: FC = () => {
@@ -144,6 +97,7 @@ const AttachmentUI: FC = () => {
   const isComposer = aui.attachment.source !== 'message'
   const attachmentId = useAuiState((state) => state.attachment.id)
   const attachmentName = useAuiState((state) => state.attachment.name)
+  const isImage = useAuiState((state) => state.attachment.type === 'image')
   const attachmentArtifactSourceId = useAuiState((state) => {
     const content = state.attachment.content?.find((item) => item.type === 'file')
     return content ? artifactSourceIdFromUrl(content.data) : undefined
@@ -239,42 +193,40 @@ const AttachmentUI: FC = () => {
     <TooltipProvider>
       <Tooltip>
         <AttachmentPrimitive.Root className="aui-attachment-root relative">
-          <AttachmentPreviewDialog>
-            <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  'aui-attachment-tile bg-muted relative flex size-14 cursor-pointer items-center justify-center overflow-hidden rounded-md border text-muted-foreground transition-opacity hover:opacity-75',
-                  isError && 'border-destructive'
-                )}
-                data-attachment-name={attachmentName}
-                role="button"
-                tabIndex={0}
-                aria-label={`${isPptxAttachment ? '打开 PPTX 预览' : typeLabel} attachment${
-                  isError ? '，附件不可用' : isUploading ? '，正在检查' : ''
-                }`}
-                onClick={isPptxAttachment ? () => void openPresentation() : undefined}
-                onKeyDown={onPresentationKeyDown}
-              >
-                <AttachmentThumb />
-                {isUploading && (
-                  <div
-                    aria-hidden="true"
-                    className="aui-attachment-tile-uploading bg-background/60 absolute inset-0 flex items-center justify-center backdrop-blur-[1px]"
-                  >
-                    <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
-                  </div>
-                )}
-                {isError && (
-                  <div
-                    aria-hidden="true"
-                    className="aui-attachment-tile-error bg-destructive/10 absolute inset-0 flex items-center justify-center"
-                  >
-                    <AlertCircleIcon className="text-destructive size-5" />
-                  </div>
-                )}
-              </div>
-            </TooltipTrigger>
-          </AttachmentPreviewDialog>
+          <TooltipTrigger asChild>
+            <div
+              className={cn(
+                'aui-attachment-tile bg-muted relative flex size-14 cursor-pointer items-center justify-center overflow-hidden rounded-md border text-muted-foreground transition-opacity hover:opacity-75',
+                isError && 'border-destructive'
+              )}
+              data-attachment-name={attachmentName}
+              role={isImage ? undefined : 'button'}
+              tabIndex={isImage ? undefined : 0}
+              aria-label={`${isPptxAttachment ? '打开 PPTX 预览' : typeLabel} attachment${
+                isError ? '，附件不可用' : isUploading ? '，正在检查' : ''
+              }`}
+              onClick={isPptxAttachment ? () => void openPresentation() : undefined}
+              onKeyDown={onPresentationKeyDown}
+            >
+              <AttachmentThumb />
+              {isUploading && (
+                <div
+                  aria-hidden="true"
+                  className="aui-attachment-tile-uploading bg-background/60 pointer-events-none absolute inset-0 flex items-center justify-center backdrop-blur-[1px]"
+                >
+                  <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
+                </div>
+              )}
+              {isError && (
+                <div
+                  aria-hidden="true"
+                  className="aui-attachment-tile-error bg-destructive/10 pointer-events-none absolute inset-0 flex items-center justify-center"
+                >
+                  <AlertCircleIcon className="text-destructive size-5" />
+                </div>
+              )}
+            </div>
+          </TooltipTrigger>
           {isComposer && <AttachmentRemove />}
         </AttachmentPrimitive.Root>
         <TooltipContent side="top">
@@ -308,18 +260,30 @@ const AttachmentRemove: FC = () => {
 }
 
 export const UserMessageAttachments: FC = () => {
+  const attachments = useAuiState((state) =>
+    state.message.role === 'user' ? state.message.attachments : EMPTY_ATTACHMENTS
+  )
+  const owner = useChatImageConversation()
+  const images = useMemo(() => attachmentImages(attachments, owner), [attachments, owner])
   return (
-    <div className="aui-user-message-attachments-end col-span-full col-start-1 row-start-1 flex w-full flex-row justify-end gap-2">
-      <MessagePrimitive.Attachments>{() => <AttachmentUI />}</MessagePrimitive.Attachments>
-    </div>
+    <AttachmentImagesContext.Provider value={images}>
+      <div className="aui-user-message-attachments-end col-span-full col-start-1 row-start-1 flex w-full flex-row justify-end gap-2">
+        <MessagePrimitive.Attachments>{() => <AttachmentUI />}</MessagePrimitive.Attachments>
+      </div>
+    </AttachmentImagesContext.Provider>
   )
 }
 
 export const ComposerAttachments: FC = () => {
+  const attachments = useAuiState((state) => state.composer.attachments)
+  const owner = useChatImageConversation()
+  const images = useMemo(() => attachmentImages(attachments, owner), [attachments, owner])
   return (
-    <div className="aui-composer-attachments flex w-full flex-row items-center gap-2 overflow-x-auto empty:hidden">
-      <ComposerPrimitive.Attachments>{() => <AttachmentUI />}</ComposerPrimitive.Attachments>
-    </div>
+    <AttachmentImagesContext.Provider value={images}>
+      <div className="aui-composer-attachments flex w-full flex-row items-center gap-2 overflow-x-auto empty:hidden">
+        <ComposerPrimitive.Attachments>{() => <AttachmentUI />}</ComposerPrimitive.Attachments>
+      </div>
+    </AttachmentImagesContext.Provider>
   )
 }
 

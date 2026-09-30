@@ -377,7 +377,9 @@ test('preserves a workspace reference, local file, folder and image after conver
       await page.getByRole('option', { name: 'Files and folders', exact: true }).click()
     }
     await expect(page.getByRole('button', { name: 'File attachment', exact: true })).toHaveCount(2)
-    await expect(page.getByRole('button', { name: 'Image attachment', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: '预览e2e-context.png', exact: true })
+    ).toBeVisible()
 
     const sendButton = page.getByRole('button', { name: '发送消息', exact: true })
     await expect(sendButton).toBeEnabled()
@@ -481,7 +483,7 @@ async function expectAttachmentNames(
   const imagePreviewSource = await imagePreview.getAttribute('src')
   expect(imagePreviewSource).toMatch(/^app:\/\/fs\//u)
   expect(imagePreviewSource?.endsWith(`/${names.image}`)).toBe(true)
-  await expect(imagePreview).toHaveAttribute('alt', 'Attachment preview')
+  await expect(imagePreview).toHaveAttribute('alt', names.image)
 }
 
 async function expectAttachmentTooltip(

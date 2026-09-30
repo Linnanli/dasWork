@@ -70,4 +70,11 @@ describe('classifyReferenceTarget', () => {
     expect(referenceUrlTransform('https://example.test')).toBe('https://example.test')
     expect(referenceUrlTransform('#heading')).toBe('#heading')
   })
+
+  it('preserves encoded Windows separators only for the image source branch', () => {
+    const path = 'C:%5Cimages%5Ca.png'
+    expect(referenceUrlTransform(path, 'src', { tagName: 'img' })).toBe(path)
+    expect(referenceUrlTransform(path, 'href', { tagName: 'a' })).toBeNull()
+    expect(referenceUrlTransform('javascript:alert(1)', 'src', { tagName: 'img' })).toBeNull()
+  })
 })

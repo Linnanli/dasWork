@@ -111,7 +111,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@lexical/react": "0.45.0",
     "@lexical/utils": "0.45.0",
-    "@openai/codex": "0.148.0-alpha.21",
+    "@openai/codex": "0.158.0-alpha.2.1",
     "@playwright/test": "^1.61.1",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",

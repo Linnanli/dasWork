@@ -1,14 +1,14 @@
 {
   "schemaGenerator": {
     "package": "@openai/codex",
-    "version": "0.148.0-alpha.21",
+    "version": "0.158.0-alpha.2.1",
     "command": ["app-server", "generate-ts", "--experimental"]
   },
   "generatedTree": {
     "root": "src/protocol/app-server-protocol",
-    "sha256": "1e815936c544fdf85a8331da1fb31e8f693aa5dba1a1ff0cbcd321891efa4534"
+    "sha256": "66579d82043106642c5d43041a2c52071c61cb82764b274faef6d62781775451"
   },
-  "supportedAppServerVersions": ["0.148.0-alpha.21"],
+  "supportedAppServerVersions": ["0.158.0-alpha.2.1"],
   "initialize": {
     "clientInfo": {
       "name": "dascowork_desktop",
@@ -36,7 +36,7 @@
     "capture": "version"
   },
   "runtimeVersionEvidence": {
-    "commandOutputSha256": "633cc2c6930fb9ed682f801ac8874f00d77b0b34240f6c65af524bab02bd0df6",
-    "description": "desktop-app/node_modules/.bin/codex --version emitted codex-cli 0.148.0-alpha.21 on 2026-09-03"
+    "commandOutputSha256": "cdfae75a4ea1a6ca8bfd876fa9422186f87b39bcff01e7a3157d1dbc4895bd1b",
+    "description": "desktop-app/node_modules/.bin/codex --version emitted codex-cli 0.158.0-alpha.2.1 on 2026-09-30"
   }
 }

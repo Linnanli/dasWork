@@ -1,0 +1,60 @@
+{
+  "savedImages": [
+    {
+      "file": "saved-local.png",
+      "sha256": "128e76f80d75c7149ef9f419a44fc7f3df387a8a2280c42805c32ff785b8d577"
+    },
+    {
+      "file": "saved-data.png",
+      "sha256": "128e76f80d75c7149ef9f419a44fc7f3df387a8a2280c42805c32ff785b8d577"
+    },
+    {
+      "file": "saved-http.png",
+      "sha256": "128e76f80d75c7149ef9f419a44fc7f3df387a8a2280c42805c32ff785b8d577"
+    }
+  ],
+  "originalPngBytes": 915246,
+  "originalPngSha256": "128e76f80d75c7149ef9f419a44fc7f3df387a8a2280c42805c32ff785b8d577",
+  "artifacts": [
+    {
+      "file": "markdown-local-images.png",
+      "bytes": 149101,
+      "sha256": "3b3c3c81238292b848cb9c17b6993f3696e65aaba751b8bf1cdc25f02a3860d7"
+    },
+    {
+      "file": "markdown-image-unavailable.png",
+      "bytes": 132597,
+      "sha256": "f8286dd2c782c5c6d2842844204a48af874b1b5730d65641bb607331e908d338"
+    },
+    {
+      "file": "image-preview-zoom-and-navigation.png",
+      "bytes": 248410,
+      "sha256": "ccca56537e2d38850456bd5c7ded2440ea0f0064435b91d514b82cc534fa9b8a"
+    },
+    {
+      "file": "image-view-record-in-running-process.png",
+      "bytes": 107991,
+      "sha256": "7bac9a1ee118d1e296015e4d8ef0801515f9da78df7fea175f6219511531600c"
+    },
+    {
+      "file": "image-view-process-collapsed-during-final.png",
+      "bytes": 100361,
+      "sha256": "004d4668240f5c4f4fd5ca5d3fa320d8fd0d4b782dc450f6b9ee40df7e7ea21e"
+    },
+    {
+      "file": "image-view-expanded-thumbnails.png",
+      "bytes": 140340,
+      "sha256": "75f630cd14df8e31e96f19946c3fea746b74dd933d831303b4b6c5fd98cfd386"
+    },
+    {
+      "file": "stopped-image-view-history-without-final.png",
+      "bytes": 120648,
+      "sha256": "98312889114338588c3403a7ededd9fbf1dfca7a6d91d0989bee36310af11832"
+    },
+    {
+      "file": "sent-attachment-shared-gallery.png",
+      "bytes": 85827,
+      "sha256": "236d88dbd00826397c4d92389f050bb1cd495a6fb36d4a7b743ca50d6570ff84"
+    }
+  ]
+}

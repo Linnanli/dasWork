@@ -78,6 +78,13 @@ import {
 import { ConversationTurnErrorBoundary } from '@/components/conversation/ConversationTurnErrorBoundary'
 import { ConversationRecoveryStatus } from '@/components/conversation/ConversationRecoveryStatus'
 import { WorkspaceRecoveryBanner } from '@/components/conversation/WorkspaceRecoveryBanner'
+import {
+  ChatImageConversationProvider,
+  ChatImageMessageRootProvider
+} from '@/components/conversation/chatImageConversationContext'
+import { ImagePreviewProvider } from '@/components/images'
+import { MarkdownChatImage } from '@/components/render-units/markdownChatImage'
+import { ImageViewActivity } from '@/components/render-units/imageViewActivity'
 import { ContextLexicalInput } from '@/composer/contextLexicalInput'
 import {
   ComposerSuggestionProvider,
@@ -419,6 +426,7 @@ const streamdownAnimation = {
 }
 const assistantMarkdownComponents = {
   a: InlineReferenceAnchor,
+  img: MarkdownChatImage,
   [inlineReferenceCodeTagName]: InlineReferenceCodeToken
 } satisfies Components
 
@@ -1849,6 +1857,13 @@ function ChatThread({
   onRespondApproval
 }: ChatThreadProps): React.JSX.Element {
   countConversationStreamPerformance('chatThread')
+  const imageOwner = useMemo(
+    () => ({
+      conversationId: activeConversation?.conversationId,
+      threadId: activeConversation?.threadId
+    }),
+    [activeConversation?.conversationId, activeConversation?.threadId]
+  )
   const isEmpty = useAuiState(isNewChatView)
   const showNewConversationView = isEmpty && !loading && !loadError
   const canChangeProject = showNewConversationView && !activeConversation?.threadId
@@ -1935,176 +1950,185 @@ function ChatThread({
 
   return (
     <ComposerContextIdentityProvider index={composerContextCatalog.identityIndex}>
-      <ThreadPrimitive.Root
-        className="aui-root aui-thread-root @container flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
-        style={{
-          ['--thread-max-width' as string]: '48rem',
-          ['--composer-padding' as string]: '8px'
-        }}
-      >
-        <ThreadPrimitive.Viewport
-          ref={viewportRef}
-          turnAnchor="top"
-          scrollToBottomOnInitialize={!scrollSnapshot}
-          scrollToBottomOnThreadSwitch={false}
-          data-slot="aui_thread-viewport"
-          className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
-        >
-          {loadError ? (
-            <div
-              data-slot="conversation-load-error"
-              role="alert"
-              className="mx-auto mb-6 flex w-full max-w-(--thread-max-width) items-center justify-between gap-4 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+      <ChatImageConversationProvider value={imageOwner}>
+        <ImagePreviewProvider>
+          <ThreadPrimitive.Root
+            className="aui-root aui-thread-root @container flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background"
+            style={{
+              ['--thread-max-width' as string]: '48rem',
+              ['--composer-padding' as string]: '8px'
+            }}
+          >
+            <ThreadPrimitive.Viewport
+              ref={viewportRef}
+              turnAnchor="top"
+              scrollToBottomOnInitialize={!scrollSnapshot}
+              scrollToBottomOnThreadSwitch={false}
+              data-slot="aui_thread-viewport"
+              className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
             >
-              <span>无法加载此对话：{loadError.message}</span>
-              <Button type="button" size="sm" variant="secondary" onClick={onRetryLoad}>
-                重试
-              </Button>
-            </div>
-          ) : null}
-          {showNewConversationView ? <ThreadWelcome /> : null}
-          <div data-slot="aui_message-group" className="mb-14 flex flex-col gap-y-6 empty:hidden">
-            <ThreadPrimitive.Messages>
-              {({ message }) => {
-                if (message.composer.isEditing) return <EditComposer />
-                if (message.role === 'user') return <UserMessage />
-                return (
-                  <AssistantMessage
-                    hasBlockingRequest={hasBlockingRequest}
-                    workspaceCwd={activeConversation?.cwd ?? undefined}
-                    canOpenLocalPaths={
-                      activeConversation?.projectSelection?.projectKind !== 'remote'
-                    }
-                    onOpenConversation={onOpenConversation}
-                  />
-                )
-              }}
-            </ThreadPrimitive.Messages>
-          </div>
-          <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mx-auto mt-auto flex w-full max-w-(--thread-max-width) flex-col gap-4 overflow-visible rounded-t-xl bg-background pb-4 md:pb-6">
-            <ThreadScrollToBottom />
-            <ConversationRecoveryStatus phase={recoveryPhase} error={recoveryError} />
-            <WorkspaceRecoveryBanner
-              conversationId={activeConversation?.conversationId}
-              threadId={activeConversation?.threadId}
-              onCreateNewTask={onCreateNewTask}
-            />
-            <ComposerTurnStatusCard status={composerTurnStatus} />
-            <div data-slot="composer-project-stack" className="flex w-full flex-col">
-              {reservedEditingItem && !editingFollowUp ? (
+              {loadError ? (
                 <div
-                  data-slot="queued-follow-up-edit-recovery"
-                  className="mb-2 flex items-center justify-between rounded-xl border border-border/60 bg-muted/60 px-3 py-2 text-xs"
+                  data-slot="conversation-load-error"
+                  role="alert"
+                  className="mx-auto mb-6 flex w-full max-w-(--thread-max-width) items-center justify-between gap-4 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
                 >
-                  <span>有一条排队消息处于编辑保留状态。</span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => void beginEditingFollowUp(reservedEditingItem.id)}
-                    >
-                      继续编辑
-                    </Button>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => void followUps.cancelEdit(reservedEditingItem.id)}
-                    >
-                      恢复到队列
-                    </Button>
-                  </div>
+                  <span>无法加载此对话：{loadError.message}</span>
+                  <Button type="button" size="sm" variant="secondary" onClick={onRetryLoad}>
+                    重试
+                  </Button>
                 </div>
               ) : null}
-              <QueuedFollowUpPausedBanner
-                item={visibleFollowUpItems[0]}
-                busy={followUps.pendingItemIds.has(visibleFollowUpItems[0]?.id ?? '')}
-                onResume={followUps.resume}
-              />
-              <QueuedFollowUpList
-                items={visibleFollowUpItems}
-                conversationKey={followUps.state?.conversationKey}
-                defaultMode={followUps.defaultMode}
-                pendingItemIds={followUps.pendingItemIds}
-                announcement={followUps.announcement}
-                onEdit={(item) => beginEditingFollowUp(item.id)}
-                onDelete={followUps.deleteItem}
-                onMoveUp={followUps.moveUp}
-                onMoveDown={followUps.moveDown}
-                onReorder={followUps.reorder}
-                onSteer={async (itemId) => {
-                  const message = await followUps.materializeItem(itemId)
-                  return onSteerFollowUp(itemId, message)
-                }}
-                onRetry={followUps.retry}
-                onToggleQueueing={() =>
-                  followUps.setDefaultMode(followUps.defaultMode === 'queue' ? 'steer' : 'queue')
-                }
-                onRequestComposerFocus={() =>
-                  document.querySelector<HTMLElement>('.aui-lexical-input')?.focus()
-                }
-              />
-              {followUps.error ? (
-                <p role="alert" className="px-2 py-1 text-xs text-destructive">
-                  {followUps.error}
-                </p>
-              ) : null}
-              {canChangeProject ? (
-                <ComposerProjectCard
-                  activeSelection={effectiveProjectSelection}
-                  projectState={projectState}
-                  trailingControl={
-                    hasSelectedProject ? (
-                      <LocalBranchSwitcher target={projectBranchTarget} />
-                    ) : undefined
-                  }
-                />
-              ) : null}
-              {approvalRequests.length > 0 ? (
-                <ServerRequestPanel
-                  onInteraction={onSnoozeApproval}
-                  onReject={onRejectApproval}
-                  onRespond={onRespondApproval}
-                  requests={approvalRequests}
-                />
-              ) : (
-                <Composer
-                  activeConversation={activeConversation}
-                  composerContextCatalog={composerContextCatalog}
-                  disabled={disabled}
-                  followUps={followUps}
-                  models={models}
-                  selectedModelId={selectedModelId}
-                  modelSelectionError={modelSelectionError}
-                  onSelectedModelChange={onSelectedModelChange}
-                  onSteerFollowUp={onSteerFollowUp}
-                  onStartCodeReview={onStartCodeReview}
+              {showNewConversationView ? <ThreadWelcome /> : null}
+              <div
+                data-slot="aui_message-group"
+                className="mb-14 flex flex-col gap-y-6 empty:hidden"
+              >
+                <ThreadPrimitive.Messages>
+                  {({ message }) => {
+                    if (message.composer.isEditing) return <EditComposer />
+                    if (message.role === 'user') return <UserMessage />
+                    return (
+                      <AssistantMessage
+                        hasBlockingRequest={hasBlockingRequest}
+                        workspaceCwd={activeConversation?.cwd ?? undefined}
+                        canOpenLocalPaths={
+                          activeConversation?.projectSelection?.projectKind !== 'remote'
+                        }
+                        onOpenConversation={onOpenConversation}
+                      />
+                    )
+                  }}
+                </ThreadPrimitive.Messages>
+              </div>
+              <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mx-auto mt-auto flex w-full max-w-(--thread-max-width) flex-col gap-4 overflow-visible rounded-t-xl bg-background pb-4 md:pb-6">
+                <ThreadScrollToBottom />
+                <ConversationRecoveryStatus phase={recoveryPhase} error={recoveryError} />
+                <WorkspaceRecoveryBanner
+                  conversationId={activeConversation?.conversationId}
+                  threadId={activeConversation?.threadId}
                   onCreateNewTask={onCreateNewTask}
-                  composerModeKind={composerModeKind}
-                  approvalModeKind={approvalModeKind}
-                  goalEditorActive={goalEditorActive}
-                  threadGoal={threadGoal}
-                  goalCapabilityStatus={goalCapabilityStatus}
-                  goalOperation={goalOperation}
-                  goalError={goalError}
-                  onComposerModeKindChange={onComposerModeKindChange}
-                  onApprovalModeKindChange={onApprovalModeKindChange}
-                  onGoalEditorActiveChange={onGoalEditorActiveChange}
-                  onThreadGoalChange={onThreadGoalChange}
-                  onGoalOperationChange={onGoalOperationChange}
-                  onSaveThreadGoal={onSaveThreadGoal}
-                  projectState={projectState}
-                  editingFollowUp={editingFollowUp}
-                  onEditingFollowUpChange={setEditingFollowUp}
-                  queueAttached={visibleFollowUpItems.length > 0}
-                  reservedEditingItemId={reservedEditingItem?.id}
                 />
-              )}
-            </div>
-          </ThreadPrimitive.ViewportFooter>
-        </ThreadPrimitive.Viewport>
-      </ThreadPrimitive.Root>
+                <ComposerTurnStatusCard status={composerTurnStatus} />
+                <div data-slot="composer-project-stack" className="flex w-full flex-col">
+                  {reservedEditingItem && !editingFollowUp ? (
+                    <div
+                      data-slot="queued-follow-up-edit-recovery"
+                      className="mb-2 flex items-center justify-between rounded-xl border border-border/60 bg-muted/60 px-3 py-2 text-xs"
+                    >
+                      <span>有一条排队消息处于编辑保留状态。</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => void beginEditingFollowUp(reservedEditingItem.id)}
+                        >
+                          继续编辑
+                        </Button>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => void followUps.cancelEdit(reservedEditingItem.id)}
+                        >
+                          恢复到队列
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <QueuedFollowUpPausedBanner
+                    item={visibleFollowUpItems[0]}
+                    busy={followUps.pendingItemIds.has(visibleFollowUpItems[0]?.id ?? '')}
+                    onResume={followUps.resume}
+                  />
+                  <QueuedFollowUpList
+                    items={visibleFollowUpItems}
+                    conversationKey={followUps.state?.conversationKey}
+                    defaultMode={followUps.defaultMode}
+                    pendingItemIds={followUps.pendingItemIds}
+                    announcement={followUps.announcement}
+                    onEdit={(item) => beginEditingFollowUp(item.id)}
+                    onDelete={followUps.deleteItem}
+                    onMoveUp={followUps.moveUp}
+                    onMoveDown={followUps.moveDown}
+                    onReorder={followUps.reorder}
+                    onSteer={async (itemId) => {
+                      const message = await followUps.materializeItem(itemId)
+                      return onSteerFollowUp(itemId, message)
+                    }}
+                    onRetry={followUps.retry}
+                    onToggleQueueing={() =>
+                      followUps.setDefaultMode(
+                        followUps.defaultMode === 'queue' ? 'steer' : 'queue'
+                      )
+                    }
+                    onRequestComposerFocus={() =>
+                      document.querySelector<HTMLElement>('.aui-lexical-input')?.focus()
+                    }
+                  />
+                  {followUps.error ? (
+                    <p role="alert" className="px-2 py-1 text-xs text-destructive">
+                      {followUps.error}
+                    </p>
+                  ) : null}
+                  {canChangeProject ? (
+                    <ComposerProjectCard
+                      activeSelection={effectiveProjectSelection}
+                      projectState={projectState}
+                      trailingControl={
+                        hasSelectedProject ? (
+                          <LocalBranchSwitcher target={projectBranchTarget} />
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                  {approvalRequests.length > 0 ? (
+                    <ServerRequestPanel
+                      onInteraction={onSnoozeApproval}
+                      onReject={onRejectApproval}
+                      onRespond={onRespondApproval}
+                      requests={approvalRequests}
+                    />
+                  ) : (
+                    <Composer
+                      activeConversation={activeConversation}
+                      composerContextCatalog={composerContextCatalog}
+                      disabled={disabled}
+                      followUps={followUps}
+                      models={models}
+                      selectedModelId={selectedModelId}
+                      modelSelectionError={modelSelectionError}
+                      onSelectedModelChange={onSelectedModelChange}
+                      onSteerFollowUp={onSteerFollowUp}
+                      onStartCodeReview={onStartCodeReview}
+                      onCreateNewTask={onCreateNewTask}
+                      composerModeKind={composerModeKind}
+                      approvalModeKind={approvalModeKind}
+                      goalEditorActive={goalEditorActive}
+                      threadGoal={threadGoal}
+                      goalCapabilityStatus={goalCapabilityStatus}
+                      goalOperation={goalOperation}
+                      goalError={goalError}
+                      onComposerModeKindChange={onComposerModeKindChange}
+                      onApprovalModeKindChange={onApprovalModeKindChange}
+                      onGoalEditorActiveChange={onGoalEditorActiveChange}
+                      onThreadGoalChange={onThreadGoalChange}
+                      onGoalOperationChange={onGoalOperationChange}
+                      onSaveThreadGoal={onSaveThreadGoal}
+                      projectState={projectState}
+                      editingFollowUp={editingFollowUp}
+                      onEditingFollowUpChange={setEditingFollowUp}
+                      queueAttached={visibleFollowUpItems.length > 0}
+                      reservedEditingItemId={reservedEditingItem?.id}
+                    />
+                  )}
+                </div>
+              </ThreadPrimitive.ViewportFooter>
+            </ThreadPrimitive.Viewport>
+          </ThreadPrimitive.Root>
+        </ImagePreviewProvider>
+      </ChatImageConversationProvider>
     </ComposerContextIdentityProvider>
   )
 }
@@ -2391,6 +2415,7 @@ function AssistantMessage({
   onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
   countConversationStreamPerformance('assistantMessage')
+  const imageMessageRootRef = useRef<HTMLDivElement>(null)
   const message = useAuiState((state) => state.message)
   const isThreadRunning = useAuiState((state) => state.thread.isRunning)
   const textPartMetadata = useMemo(() => codexTextPartMetadataFor(message), [message])
@@ -2425,80 +2450,83 @@ function AssistantMessage({
   )
 
   return (
-    <MessagePrimitive.Root
-      data-slot="aui_assistant-message-root"
-      data-role="assistant"
-      className="relative mx-auto w-full max-w-(--thread-max-width) duration-150 animate-in fade-in slide-in-from-bottom-1"
-    >
-      <div
-        data-slot="aui_assistant-message-content"
-        className={cn(
-          'wrap-break-word px-2 leading-relaxed text-foreground',
-          isThinkingOnly && 'shimmer text-foreground/60 motion-reduce:animate-none'
-        )}
+    <ChatImageMessageRootProvider rootRef={imageMessageRootRef}>
+      <MessagePrimitive.Root
+        data-slot="aui_assistant-message-root"
+        data-role="assistant"
+        className="relative mx-auto w-full max-w-(--thread-max-width) duration-150 animate-in fade-in slide-in-from-bottom-1"
       >
-        {isThinkingOnly ? (
-          pendingStatusText
-        ) : (
-          <>
-            {visibleUnits.map((unit) => (
-              <ConversationTurnErrorBoundary
-                key={unit.key}
-                resetKey={`${message.id}:${unit.key}`}
-                renderUnitKind={unit.type}
-              >
-                <AssistantRenderUnitView
-                  unit={unit}
-                  pendingStatusText={pendingStatusText}
-                  onOpenConversation={onOpenConversation}
-                  workspaceCwd={workspaceCwd}
-                  canOpenLocalPaths={canOpenLocalPaths}
-                />
-              </ConversationTurnErrorBoundary>
-            ))}
-          </>
-        )}
-        <MessagePrimitive.Error>
-          <ErrorPrimitive.Root
-            data-slot="aui_assistant-message-error"
-            role="alert"
-            aria-live="polite"
-            className="border-destructive/20 bg-destructive/5 text-destructive mt-2 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-          >
-            <ErrorPrimitive.Message className="min-w-0 flex-1 wrap-break-word" />
-            <ActionBarPrimitive.Reload asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={isThreadRunning}
-                data-slot="aui_assistant-message-retry"
-              >
-                重试
-              </Button>
-            </ActionBarPrimitive.Reload>
-          </ErrorPrimitive.Root>
-        </MessagePrimitive.Error>
-        {wasCancelled ? (
-          <p
-            data-slot="aui_assistant-message-cancelled"
-            role="status"
-            className="mt-2 text-sm text-muted-foreground"
-          >
-            已取消
-          </p>
-        ) : null}
-      </div>
-      {isThinkingOnly ? null : (
-        // Keep the autohidden action bar from changing the following message's position.
         <div
-          data-slot="aui_assistant-message-footer"
-          className="ml-2 mt-1.5 flex h-8 items-center -mb-8"
+          ref={imageMessageRootRef}
+          data-slot="aui_assistant-message-content"
+          className={cn(
+            'wrap-break-word px-2 leading-relaxed text-foreground',
+            isThinkingOnly && 'shimmer text-foreground/60 motion-reduce:animate-none'
+          )}
         >
-          <AssistantActionBar />
+          {isThinkingOnly ? (
+            pendingStatusText
+          ) : (
+            <>
+              {visibleUnits.map((unit) => (
+                <ConversationTurnErrorBoundary
+                  key={unit.key}
+                  resetKey={`${message.id}:${unit.key}`}
+                  renderUnitKind={unit.type}
+                >
+                  <AssistantRenderUnitView
+                    unit={unit}
+                    pendingStatusText={pendingStatusText}
+                    onOpenConversation={onOpenConversation}
+                    workspaceCwd={workspaceCwd}
+                    canOpenLocalPaths={canOpenLocalPaths}
+                  />
+                </ConversationTurnErrorBoundary>
+              ))}
+            </>
+          )}
+          <MessagePrimitive.Error>
+            <ErrorPrimitive.Root
+              data-slot="aui_assistant-message-error"
+              role="alert"
+              aria-live="polite"
+              className="border-destructive/20 bg-destructive/5 text-destructive mt-2 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+            >
+              <ErrorPrimitive.Message className="min-w-0 flex-1 wrap-break-word" />
+              <ActionBarPrimitive.Reload asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={isThreadRunning}
+                  data-slot="aui_assistant-message-retry"
+                >
+                  重试
+                </Button>
+              </ActionBarPrimitive.Reload>
+            </ErrorPrimitive.Root>
+          </MessagePrimitive.Error>
+          {wasCancelled ? (
+            <p
+              data-slot="aui_assistant-message-cancelled"
+              role="status"
+              className="mt-2 text-sm text-muted-foreground"
+            >
+              已取消
+            </p>
+          ) : null}
         </div>
-      )}
-    </MessagePrimitive.Root>
+        {isThinkingOnly ? null : (
+          // Keep the autohidden action bar from changing the following message's position.
+          <div
+            data-slot="aui_assistant-message-footer"
+            className="ml-2 mt-1.5 flex h-8 items-center -mb-8"
+          >
+            <AssistantActionBar />
+          </div>
+        )}
+      </MessagePrimitive.Root>
+    </ChatImageMessageRootProvider>
   )
 }
 
@@ -3006,7 +3034,8 @@ function ReasoningGroupUnit({
   canOpenLocalPaths: boolean
 }): React.JSX.Element {
   const isActive = unit.active === true
-  const [completedProcessOpen, setCompletedProcessOpen] = useState(false)
+  const [userExpanded, setUserExpanded] = useState<boolean | undefined>(undefined)
+  const expanded = unit.canCollapse ? (userExpanded ?? unit.defaultExpanded) : true
   const measuredDurationMs = useReasoningElapsedDuration(isActive)
   let label = isActive
     ? `已处理 · 耗时 ${formatProcessedDuration(measuredDurationMs ?? 0)}`
@@ -3016,19 +3045,19 @@ function ReasoningGroupUnit({
   return (
     <Collapsible
       data-slot="reasoning-group"
-      open={isActive || completedProcessOpen}
-      onOpenChange={isActive ? undefined : setCompletedProcessOpen}
-      disabled={isActive}
+      open={expanded}
+      onOpenChange={unit.canCollapse ? setUserExpanded : undefined}
+      disabled={!unit.canCollapse}
       className="group/reasoning my-2 w-full"
       {...renderUnitAttributes(unit)}
     >
       <div data-slot="reasoning-group-header">
         <CollapsibleTrigger
           data-slot="reasoning-group-trigger"
-          disabled={isActive}
+          disabled={!unit.canCollapse}
           className={cn(
             'group/trigger flex w-fit items-center gap-2 py-1.5 text-muted-foreground transition-colors hover:text-foreground',
-            isActive && 'cursor-default hover:text-muted-foreground'
+            !unit.canCollapse && 'cursor-default hover:text-muted-foreground'
           )}
         >
           <span data-slot="reasoning-group-label" className="relative inline-block">
@@ -3253,6 +3282,7 @@ function ToolGroupUnit({
   pendingStatusText: string
   onOpenConversation: OpenSubagentConversation
 }): React.JSX.Element {
+  if (unit.kind === 'image-view') return <ImageViewActivity unit={unit} />
   const displayModel = buildToolActivityDisplayModel(unit, { pendingLabel: pendingStatusText })
 
   return (

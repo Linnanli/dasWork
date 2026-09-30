@@ -212,6 +212,7 @@ describe('NativeCodexRunDriver dynamic tool publication', () => {
     expect(threadStartParams?.dynamicTools).toEqual([
       { type: 'namespace', name: 'codex_app', description: 'Desktop tools', tools: [] }
     ])
+    expect(threadStartParams?.historyMode).toBe('paginated')
     client.terminate(new Error('test complete'))
     await drained
   })
@@ -244,6 +245,7 @@ describe('NativeCodexRunDriver dynamic tool publication', () => {
     await run.session
 
     expect(threadStartParams?.dynamicTools).toEqual([])
+    expect(threadStartParams?.historyMode).toBeUndefined()
     client.terminate(new Error('test complete'))
     await drained
   })

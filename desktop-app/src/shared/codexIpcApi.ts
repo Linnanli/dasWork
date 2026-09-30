@@ -7,6 +7,14 @@ export * from './mcpServerStatus'
 export * from './codexFollowUpApi'
 export * from './codexApprovalApi'
 export * from './localGitApi'
+export * from './chatImageApi'
+
+import type {
+  ChatImageRequest,
+  ChatImageResolveResult,
+  ChatImageSaveRequest,
+  ChatImageSaveResult
+} from './chatImageApi'
 
 import type {
   LocalProject,
@@ -693,6 +701,8 @@ export type DesktopCodexApi = {
     input: CodexExistingLocalPathsPayload
   ): Promise<CodexExistingLocalPathsResult>
   pickLocalContext(kind: LocalContextPickerKind): Promise<LocalContextReference[]>
+  resolveImageSource(input: ChatImageRequest): Promise<ChatImageResolveResult>
+  saveImage(input: ChatImageSaveRequest): Promise<ChatImageSaveResult>
   onStatusChange(callback: (status: CodexStatus) => void): () => void
   onApprovalRequest(callback: (request: CodexApprovalRequest) => void): () => void
   onApprovalSettled?(callback: (requestId: string) => void): () => void

@@ -9,11 +9,12 @@ import { verifyProtocolContract } from '../verify-codex-app-server-protocol-cont
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const coreRoot = resolve(desktopRoot, 'vendors/codex-app-server-client')
+const protocolManifest = JSON.parse(readFileSync(join(coreRoot, 'protocol-manifest.json'), 'utf8'))
 
 test('accepts the pinned generated protocol and runtime evidence', () => {
   const result = verifyProtocolContract({ coreRoot, regenerate: false })
   assert.equal(result.ok, true)
-  assert.equal(result.pinnedVersion, '0.148.0-alpha.21')
+  assert.equal(result.pinnedVersion, protocolManifest.schemaGenerator.version)
 })
 
 test('rejects a manifest whose generator version diverges from the lockfile', () => {

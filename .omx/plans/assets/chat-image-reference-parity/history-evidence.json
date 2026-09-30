@@ -1,0 +1,314 @@
+{
+  "completed": {
+    "threadId": "01a0ed49-d7bb-72c1-8f3f-57fb7b1a024b",
+    "historyMode": "paginated",
+    "authoritativeTurns": {
+      "data": [
+        {
+          "id": "01a0ed49-d8b4-7562-ac03-9eb9e54d41af",
+          "items": [
+            {
+              "type": "userMessage",
+              "id": "01a0ed49-db38-7a61-b04b-4132a23b2387",
+              "clientId": "03b49813-7965-46b4-8fa7-f57489687145",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "检查图片原生查看记录",
+                  "text_elements": []
+                }
+              ]
+            },
+            {
+              "type": "agentMessage",
+              "id": "resp-view-images-commentary",
+              "text": "先查看两次同一图片",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            {
+              "type": "imageView",
+              "id": "resp-view-images-view-0",
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-FP8ODJ/literal%20.png"
+            },
+            {
+              "type": "imageView",
+              "id": "resp-view-images-view-1",
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-FP8ODJ/literal%20.png"
+            },
+            {
+              "type": "agentMessage",
+              "id": "msg-after-images",
+              "text": "图片分析完成",
+              "phase": "final_answer",
+              "memoryCitation": null
+            }
+          ],
+          "itemsView": "full",
+          "status": "completed",
+          "error": null,
+          "startedAt": 1790687434,
+          "completedAt": 1790687437,
+          "durationMs": 2825
+        }
+      ],
+      "nextCursor": null,
+      "backwardsCursor": "{\"requestedThreadId\":\"01a0ed49-d7bb-72c1-8f3f-57fb7b1a024b\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+    },
+    "publicUiMessageParts": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "type": "text",
+            "text": "检查图片原生查看记录"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "parts": [
+          {
+            "type": "text",
+            "text": "先查看两次同一图片"
+          },
+          {
+            "type": "dynamic-tool",
+            "toolName": "codex_image_view",
+            "toolCallId": "resp-view-images-view-0",
+            "input": {
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-FP8ODJ/literal%20.png"
+            }
+          },
+          {
+            "type": "dynamic-tool",
+            "toolName": "codex_image_view",
+            "toolCallId": "resp-view-images-view-1",
+            "input": {
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-FP8ODJ/literal%20.png"
+            }
+          },
+          {
+            "type": "text",
+            "text": "图片分析完成"
+          }
+        ]
+      }
+    ]
+  },
+  "stopped": {
+    "threadId": "01a0ed4a-33ff-7901-b7b6-2290b7c5d810",
+    "historyMode": "paginated",
+    "authoritativeTurns": {
+      "data": [
+        {
+          "id": "01a0ed4a-349f-7f92-940b-8e1e75acbbd8",
+          "items": [
+            {
+              "type": "userMessage",
+              "id": "01a0ed4a-35d7-7780-8cec-9f2c02cabf5f",
+              "clientId": "207a4f89-c55f-43ad-b26c-fc4fe6659c11",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "停止没有最终回答的图片查看",
+                  "text_elements": []
+                }
+              ]
+            },
+            {
+              "type": "agentMessage",
+              "id": "resp-stop-view-commentary",
+              "text": "先查看图片",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            {
+              "type": "imageView",
+              "id": "resp-stop-view-view-0",
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-stop-qyKrnE/stop-view.png"
+            }
+          ],
+          "itemsView": "full",
+          "status": "interrupted",
+          "error": null,
+          "startedAt": 1790687458,
+          "completedAt": 1790687459,
+          "durationMs": 905
+        }
+      ],
+      "nextCursor": null,
+      "backwardsCursor": "{\"requestedThreadId\":\"01a0ed4a-33ff-7901-b7b6-2290b7c5d810\",\"rolloutOrdinal\":1,\"includeAnchor\":true,\"scope\":{\"kind\":\"turns\"}}"
+    },
+    "publicUiMessageParts": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "type": "text",
+            "text": "停止没有最终回答的图片查看"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "parts": [
+          {
+            "type": "text",
+            "text": "先查看图片"
+          },
+          {
+            "type": "dynamic-tool",
+            "toolName": "codex_image_view",
+            "toolCallId": "resp-stop-view-view-0",
+            "input": {
+              "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-stop-qyKrnE/stop-view.png"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "earlierFailure": {
+    "completed": {
+      "threadId": "01a0ed46-4b12-7263-b571-4102bcc30799",
+      "historyMode": "legacy",
+      "authoritativeTurns": {
+        "data": [
+          {
+            "id": "01a0ed46-4b69-7bf3-9f5d-14936f9718bc",
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "item-1",
+                "clientId": "6989e0c5-a64c-478c-be5d-2d8d9dd8bb7f",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "检查图片原生查看记录",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "item-2",
+                "text": "先查看两次同一图片",
+                "phase": "commentary",
+                "memoryCitation": null
+              },
+              {
+                "type": "agentMessage",
+                "id": "item-3",
+                "text": "图片分析完成",
+                "phase": "final_answer",
+                "memoryCitation": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "completed",
+            "error": null,
+            "startedAt": 1790687202,
+            "completedAt": 1790687204,
+            "durationMs": 2051
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"turnId\":\"01a0ed46-4b69-7bf3-9f5d-14936f9718bc\",\"includeAnchor\":true}"
+      },
+      "publicUiMessageParts": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "检查图片原生查看记录"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "先查看两次同一图片"
+            },
+            {
+              "type": "text",
+              "text": "图片分析完成"
+            }
+          ]
+        }
+      ]
+    },
+    "stopped": {
+      "threadId": "01a0ed46-c42e-7361-bf67-80976f4711c3",
+      "historyMode": "legacy",
+      "authoritativeTurns": {
+        "data": [
+          {
+            "id": "01a0ed46-c524-75f1-a954-21e34070a6d2",
+            "items": [
+              {
+                "type": "userMessage",
+                "id": "item-1",
+                "clientId": "bb4966cc-5b5e-43f0-819e-2738c62eef6e",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "停止没有最终回答的图片查看",
+                    "text_elements": []
+                  }
+                ]
+              },
+              {
+                "type": "agentMessage",
+                "id": "item-2",
+                "text": "先查看图片",
+                "phase": "commentary",
+                "memoryCitation": null
+              }
+            ],
+            "itemsView": "full",
+            "status": "interrupted",
+            "error": null,
+            "startedAt": 1790687233,
+            "completedAt": 1790687234,
+            "durationMs": 760
+          }
+        ],
+        "nextCursor": null,
+        "backwardsCursor": "{\"turnId\":\"01a0ed46-c524-75f1-a954-21e34070a6d2\",\"includeAnchor\":true}"
+      },
+      "publicUiMessageParts": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "停止没有最终回答的图片查看"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "先查看图片"
+            },
+            {
+              "type": "dynamic-tool",
+              "toolName": "codex_image_view",
+              "toolCallId": "resp-stop-view-view-0",
+              "input": {
+                "path": "/var/folders/wd/cvfh5tnd4ds4027l2dhdhzbr0000gn/T/dsc-image-view-stop-qtFnB1/stop-view.png"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "cause": "Legacy history returned messages without imageView records. Paginated history now returns the real persisted imageView items."
+  }
+}

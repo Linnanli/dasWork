@@ -593,6 +593,7 @@ function threadStartParams(input: NativeCodexRunDriverInput): Record<string, unk
     config: mergeDesktopThreadConfig(customModel.config, input.threadConfig),
     developerInstructions: input.developerInstructions,
     ephemeral: input.ephemeral,
+    historyMode: input.ephemeral ? undefined : 'paginated',
     dynamicTools: input.ephemeral ? [] : [...(input.dynamicTools ?? [])]
   })
 }
