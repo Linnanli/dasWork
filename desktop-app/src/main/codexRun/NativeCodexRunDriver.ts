@@ -11,7 +11,7 @@ import {
   TurnLifecycleNormalizer
 } from '@dascowork/codex-app-server-client'
 
-import type { AdminBackendClientModel } from '../adminBackendModelClient'
+import type { LocalClientModel } from '../localModels/LocalClientModel'
 import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
 import type { CodexTurnLifecycleEvent, ThreadGoalSummary } from '../../shared/codexIpcApi'
 import { CodexRunInputAdapter } from './CodexRunInputAdapter'
@@ -38,7 +38,7 @@ export type NativeCodexRunDriverInput = {
   messages: readonly UIMessage[]
   modelId: string
   clientUserMessageId?: string
-  clientModel?: AdminBackendClientModel
+  clientModel?: LocalClientModel
   cwd?: string
   runtimeWorkspaceRoots?: string[]
   approvalPolicy?: 'never' | 'on-request'
@@ -614,13 +614,13 @@ function threadResumeParams(input: NativeCodexRunDriverInput): Record<string, un
   })
 }
 
-function customModelConfig(model: AdminBackendClientModel | undefined): {
+function customModelConfig(model: LocalClientModel | undefined): {
   modelProvider?: string
   config?: Record<string, unknown>
 } {
   if (!model) return {}
   if (model.api_format.trim().toLowerCase() !== 'openai' || !model.api_base_url?.trim()) {
-    throw new Error(`Unsupported admin backend model configuration: ${model.model_id}`)
+    throw new Error(`Unsupported local model configuration: ${model.model_id}`)
   }
   return {
     modelProvider: model.provider,
@@ -630,6 +630,7 @@ function customModelConfig(model: AdminBackendClientModel | undefined): {
         [model.provider]: omitUndefined({
           name: model.provider,
           base_url: model.api_base_url.trim(),
+          query_params: model.api_query_params,
           experimental_bearer_token: model.api_key?.trim(),
           wire_api: 'responses',
           requires_openai_auth: false,

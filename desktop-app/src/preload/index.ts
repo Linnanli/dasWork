@@ -137,6 +137,8 @@ const desktopEnvironment = {
 const desktopCodex: DesktopCodexApi = {
   getStatus: () => ipcRenderer.invoke('codex:get-status') as Promise<CodexStatus>,
   listModels: () => ipcRenderer.invoke('codex:list-models') as Promise<CodexModelList>,
+  addLocalModel: (input) =>
+    ipcRenderer.invoke('codex:add-local-model', input) as Promise<CodexModelList>,
   ...createMcpServerStatusBridge((channel, payload) => ipcRenderer.invoke(channel, payload)),
   setSelectedModel: (modelId: string) =>
     ipcRenderer.invoke('codex:set-selected-model', { modelId }) as Promise<{

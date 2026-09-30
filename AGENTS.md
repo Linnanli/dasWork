@@ -37,13 +37,13 @@
 - `desktop-app/src/main/bundledPlugins/` 与 `desktop-app/resources/bundled-plugins/`：读取、校验并协调应用自带及 Primary Runtime 自带的 plugin marketplace；通过 app-server 的插件目录能力安装/升级/启用内部插件。
 - `desktop-app/vendors/codex-app-server-client/`：项目自有、AI-free 的 app-server transport、共享连接、协议类型、各业务 client、中性事件 normalizer 和 dynamic tool dispatcher；生成的 app-server TypeScript 协议只在这里维护。它不是 Codex CLI 附带的 JavaScript 库。
 - `codex/codex-rs/app-server/`：Codex 执行基座；负责 thread/turn 生命周期、cwd、sandbox、审批、MCP、工具调用、elicitation、模型 provider 配置和最终 LLM 请求。
-- admin backend：可选的模型目录与 provider 配置来源，通过 `/api/client-models` 返回模型、base URL 和凭据。Main 将敏感配置写入 app-server 的 thread config；admin backend 不是桌面聊天推理链路的执行基座。
+- 本地模型配置：Main 将用户添加的模型、平台和加密后的 API Key，以及自动生成的 Codex 模型目录，保存在同一份 `local-models.json`；启动时以该文件作为 app-server 的 `model_catalog_json`。provider 的地址和解密后的凭据只通过 thread config 传给 app-server。
 
 ### 核心数据流
 
 - 应用启动：Main 创建 `PrimaryRuntimeService` 与 `DesktopHostCapabilityRuntime`，启动 App Tools bridge、协调 bundled plugins，再创建共享 `CodexAppServerConnection`/`HostCodexConnection`、history/context clients 和 `CodexChatRuntimeService`。工具或 Runtime 降级不得拖垮普通聊天。
-- 模型列表：Renderer 调 `window.desktopApp.codex.listModels()` -> Preload `codex:list-models` -> Main `CodexChatRuntimeService.listModels()`。配置了 admin backend 时只走 `ModelCatalogService` 与其缓存；未配置时才走 `NativeCodexRunDriver.listModels()` -> `HostCodexConnection` -> app-server `model/list`。不能把“已配置 admin 但请求失败”误写成自动回退 app-server catalog。
-- 聊天流：assistant-ui -> `ElectronIpcChatTransport` -> `window.desktopApp.chat.startChatStream()` -> Preload `codex-chat:start` + `MessagePort` -> Main Zod 校验 -> `CodexChatRuntimeService` -> 本次 `DesktopCapabilitySnapshot` -> `CodexRunDriver`/`NativeCodexRunDriver` -> `HostCodexConnection` -> AI-free client -> stdio JSON-RPC -> `codex app-server` -> 内建或 admin 配置的 custom model provider。app-server 中性事件经 `CodexRunEventNormalizer` 和 `CodexUiMessageAdapter` 转为 `UIMessageChunk`，由 Main journal 经 MessagePort 回到 Renderer；`codex-chat:attach` 只重连现有 run 和重放 journal，不创建新 turn。
+- 模型列表：Renderer 调 `window.desktopApp.codex.listModels()` -> Preload `codex:list-models` -> Main `CodexChatRuntimeService.listModels()` -> app-server `model/list`（由本地 `local-models.json` 的 Codex 目录部分提供），并合并 Main 中带平台信息的本地模型记录。添加模型通过 `codex:add-local-model` 原子更新同一文件；Codex 目录部分由应用自动重建。
+- 聊天流：assistant-ui -> `ElectronIpcChatTransport` -> `window.desktopApp.chat.startChatStream()` -> Preload `codex-chat:start` + `MessagePort` -> Main Zod 校验 -> `CodexChatRuntimeService` -> 本次 `DesktopCapabilitySnapshot` -> `CodexRunDriver`/`NativeCodexRunDriver` -> `HostCodexConnection` -> AI-free client -> stdio JSON-RPC -> `codex app-server` -> 内建或本地配置的 custom model provider。app-server 中性事件经 `CodexRunEventNormalizer` 和 `CodexUiMessageAdapter` 转为 `UIMessageChunk`，由 Main journal 经 MessagePort 回到 Renderer；`codex-chat:attach` 只重连现有 run 和重放 journal，不创建新 turn。
 - 审批流：app-server 发出 command、file change、tool user input、permission 或 MCP elicitation server request -> `NativeCodexRunDriver` 穷举路由 -> `CodexChatRuntimeService`/`CodexApprovalBroker`（内部用 `ApprovalCoordinator` 保留上下文）-> Main 推送 `codex:approval-request` -> Renderer 审批面板 -> `codex:respond-approval` -> broker resolve -> app-server。`item/tool/call` 属于宿主动态工具调用，不得混进审批分支。
 - 宿主工具流：Main 在新 thread 创建前取得不可变 capability snapshot -> `thread/start.dynamicTools` -> app-server `item/tool/call` -> `DynamicAppToolRegistry` -> 具体桌面 handler -> app-server。恢复已有 thread 不重新发布 `dynamicTools`；Runtime、plugin 或工具目录变化只影响新 thread。`codex_app` MCP/Native Pipe 是同一注册表的兼容投影，不是原生工具主链的依赖或第二个工具真相源。
 - app-server 启动：默认从应用进程的 `PATH` 执行 `codex app-server --listen stdio://`；`CODEX_APP_SERVER_BIN` 只用于测试替身。
@@ -51,7 +51,7 @@
 ### 架构边界
 
 - 禁止在桌面聊天推理路径中绕过 Codex app server 直接调用 OpenAI-compatible API、Responses API、第三方 SDK、`fetch` 模型接口或新建独立 LLM client。
-- 禁止把 admin backend 返回的 API key、provider headers 或完整模型配置暴露给 renderer；敏感信息只能在 main process 和 app-server 子进程边界内流动。
+- 禁止把本地模型 API Key、provider headers 或完整模型配置暴露给 renderer；敏感信息只能在 main process 和 app-server 子进程边界内流动。
 - 原生运行时的协议状态、共享连接、`initialize`、version probe 与 server request routing 由 Main 和 AI-free client 共同拥有；不得重新引入桌面侧 provider compatibility layer。
 - Renderer 不能直接使用 Node/Electron、原始 app-server RPC、MCP command/env、Native Pipe path、Primary Runtime root/下载源或宿主工具 schema。新增桌面能力必须经过 preload 白名单、shared schema 和 Main handler。
 - app-server 生成协议的唯一所有者是 `desktop-app/vendors/codex-app-server-client/src/protocol/app-server-protocol/`；Main 不维护第二份手写协议模型。
@@ -62,7 +62,7 @@
 
 ### 排障与验证
 
-遇到“发送无回复”“模型不可用”“custom provider 不生效”时按链路排查：Renderer 是否发出 `codex-chat:start`/`codex-chat:attach` -> Main 是否通过 shared schema 并进入 runtime -> `HostCodexConnection` 是否完成版本探测和每个 connection generation 唯一一次 `initialize`/`initialized` -> 当前模型目录分支是 admin backend 还是 app-server `model/list` -> native driver 是否发送正确的 `thread/start`/`thread/resume`/`turn/start` -> app-server thread config 是否包含期望的 `model_provider`/`model_providers` -> app-server 是否请求目标 provider -> 中性事件是否经过 normalizer、`CodexUiMessageAdapter` 与 runtime journal，最终经 MessagePort 回到 Renderer。
+遇到“发送无回复”“模型不可用”“custom provider 不生效”时按链路排查：Renderer 是否发出 `codex-chat:start`/`codex-chat:attach` -> Main 是否通过 shared schema 并进入 runtime -> `HostCodexConnection` 是否完成版本探测和每个 connection generation 唯一一次 `initialize`/`initialized` -> `local-models.json` 的 `model_catalog_json` 与 app-server `model/list` -> native driver 是否发送正确的 `thread/start`/`thread/resume`/`turn/start` -> app-server thread config 是否包含期望的 `model_provider`/`model_providers` -> app-server 是否请求目标 provider -> 中性事件是否经过 normalizer、`CodexUiMessageAdapter` 与 runtime journal，最终经 MessagePort 回到 Renderer。
 
 遇到“桌面工具不可用”“Primary Runtime 未生效”“bundled plugin 缺失”时按能力链排查：Primary Runtime diagnose/active pointer -> bundled plugin descriptor 与 reconcile -> `DesktopHostCapabilityRuntime.snapshot()` -> 新 thread 的 `dynamicTools` 与 desktop thread config -> app-server `item/tool/call` -> `DynamicAppToolRegistry.dispatch()`。不要在恢复旧 thread 时期待工具目录热更新，也不要用 MCP/Pipe 兼容链代替原生 dynamic tools 证据。
 

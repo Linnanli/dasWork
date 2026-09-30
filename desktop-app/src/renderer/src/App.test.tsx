@@ -187,6 +187,7 @@ const runtimeState = vi.hoisted<{
   selectedModelId: string | undefined
   modelSelectionError: string | undefined
   setSelectedModelId: ReturnType<typeof vi.fn>
+  addLocalModel: ReturnType<typeof vi.fn>
   setActiveProjectSelection: ReturnType<typeof vi.fn>
   startNewConversation: ReturnType<typeof vi.fn>
   startNewConversationWithDraft: ReturnType<typeof vi.fn>
@@ -241,6 +242,7 @@ const runtimeState = vi.hoisted<{
   selectedModelId: 'gpt-5-codex',
   modelSelectionError: undefined,
   setSelectedModelId: vi.fn(),
+  addLocalModel: vi.fn(),
   setActiveProjectSelection: vi.fn(),
   startNewConversation: vi.fn(),
   startNewConversationWithDraft: vi.fn(),
@@ -382,6 +384,8 @@ function resetThreadMessageState(): void {
   runtimeState.modelSelectionError = undefined
   runtimeState.setSelectedModelId.mockReset()
   runtimeState.setSelectedModelId.mockResolvedValue(undefined)
+  runtimeState.addLocalModel.mockReset()
+  runtimeState.addLocalModel.mockResolvedValue(undefined)
   runtimeState.setActiveProjectSelection.mockReset()
   runtimeState.startNewConversation.mockReset()
   runtimeState.startNewConversationWithDraft.mockReset()
@@ -786,6 +790,7 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
       restoreActiveConversation: runtimeState.restoreActiveConversation,
       restoreSingleActiveConversation: runtimeState.restoreSingleActiveConversation,
       setSelectedModelId: runtimeState.setSelectedModelId,
+      addLocalModel: runtimeState.addLocalModel,
       setActiveProjectSelection: runtimeState.setActiveProjectSelection,
       setActiveDraft: runtimeState.setActiveDraft,
       setActiveDraftAttachments: runtimeState.setActiveDraftAttachments,
@@ -2072,6 +2077,107 @@ describe('App composer', () => {
 
     expect(runtimeState.setSelectedModelId).toHaveBeenCalledWith('gpt-5.5')
     expect(container.textContent).toContain('model catalog unavailable')
+  })
+
+  it('opens the local add-model dialog from the model picker', async () => {
+    await renderApp()
+
+    await act(async () => {
+      buttonWithText('GPT-5 Codex')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-slot="model-selector-add-model"]')?.click()
+    })
+
+    expect(document.querySelector('[data-slot="dialog-title"]')?.textContent).toBe('添加模型')
+    expect(document.querySelector('#add-model-base-url')).not.toBeNull()
+    expect(document.querySelector('#add-model-api-key')).not.toBeNull()
+    expect(document.querySelector('#add-model-name')).not.toBeNull()
+
+    const setInput = async (id: string, value: string): Promise<void> => {
+      await act(async () => {
+        const input = document.querySelector<HTMLInputElement>(id)
+        expect(input).not.toBeNull()
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          input,
+          value
+        )
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await setInput('#add-model-base-url', 'https://models.example.test/v1')
+    await setInput('#add-model-api-key', 'secret-key')
+    await setInput('#add-model-name', 'my-model')
+    await act(async () => {
+      document
+        .querySelector<HTMLFormElement>('[data-slot="dialog-content"] form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+
+    expect(runtimeState.addLocalModel).toHaveBeenCalledWith({
+      platform: 'custom',
+      baseUrl: 'https://models.example.test/v1',
+      fullUrl: false,
+      apiKey: 'secret-key',
+      modelId: 'my-model',
+      imageInput: 'auto',
+      apiMode: 'auto'
+    })
+  })
+
+  it('prefills the DeepSeek Responses base URL in the add-model dialog', async () => {
+    await renderApp()
+
+    await act(async () => {
+      buttonWithText('GPT-5 Codex')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-slot="model-selector-add-model"]')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('#add-model-platform')?.click()
+    })
+    expect(document.body.textContent).toContain('DeepSeek')
+    expect(
+      [...document.body.querySelectorAll<HTMLElement>('[data-slot="command-item"]')].find((item) =>
+        item.textContent?.includes('OpenAI')
+      )
+    ).toBeUndefined()
+    await act(async () => {
+      const deepSeekOption = [
+        ...document.body.querySelectorAll<HTMLElement>('[data-slot="command-item"]')
+      ].find((item) => item.textContent?.includes('DeepSeek'))
+      deepSeekOption?.click()
+    })
+
+    expect(document.querySelector<HTMLInputElement>('#add-model-base-url')?.value).toBe(
+      'https://api.deepseek.com'
+    )
+    for (const [id, value] of [
+      ['#add-model-api-key', 'secret-key'],
+      ['#add-model-name', 'deepseek-flash']
+    ]) {
+      await act(async () => {
+        const input = document.querySelector<HTMLInputElement>(id)
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          input,
+          value
+        )
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await act(async () => {
+      document
+        .querySelector<HTMLFormElement>('[data-slot="dialog-content"] form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(runtimeState.addLocalModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'deepseek',
+        baseUrl: 'https://api.deepseek.com',
+        modelId: 'deepseek-flash'
+      })
+    )
   })
 
   it('renders split sidebar sections without delete actions', async () => {

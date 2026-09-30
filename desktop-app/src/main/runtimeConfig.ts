@@ -1,9 +1,6 @@
 import { isAbsolute } from 'node:path'
 
 export type DesktopRuntimeConfig = {
-  adminBackendUrl?: string
-  adminBackendModelUserId?: string
-  adminBackendModelCacheTtlMs?: number
   remoteCodexCommand?: string
   terminalCommand?: string
   /** Product-owned gate for the local workspace-dependencies capability. */
@@ -35,9 +32,6 @@ export type DesktopRuntimeConfig = {
 }
 
 export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntimeConfig {
-  const adminBackendUrl = env['ADMIN_BACKEND_URL']?.trim()
-  const adminBackendModelUserId = env['ADMIN_BACKEND_MODEL_USER_ID']?.trim()
-  const adminBackendModelCacheTtlMs = parsePositiveInteger(env['ADMIN_BACKEND_MODEL_CACHE_TTL_MS'])
   const remoteCodexCommand = parseRemoteCodexCommand(env['DASCOWORK_REMOTE_CODEX_COMMAND'])
   const terminalCommand = parseTerminalCommand(env['DASCOWORK_TERMINAL_COMMAND'])
   const workspaceDependenciesFeatureEnabled = parseOptionalBoolean(
@@ -56,23 +50,7 @@ export function loadDesktopRuntimeConfig(env: NodeJS.ProcessEnv): DesktopRuntime
     )
   }
 
-  if (!adminBackendUrl) {
-    return {
-      ...(remoteCodexCommand ? { remoteCodexCommand } : {}),
-      ...(terminalCommand ? { terminalCommand } : {}),
-      ...(workspaceDependenciesFeatureEnabled === undefined
-        ? {}
-        : { workspaceDependenciesFeatureEnabled }),
-      ...(primaryRuntimeRelease ? { primaryRuntimeRelease } : {}),
-      ...(primaryRuntimeManifest ? { primaryRuntimeManifest } : {}),
-      ...(primaryRuntimeProductConfig ? { primaryRuntimeProductConfig } : {})
-    }
-  }
-
   return {
-    adminBackendUrl,
-    ...(adminBackendModelUserId ? { adminBackendModelUserId } : {}),
-    ...(adminBackendModelCacheTtlMs ? { adminBackendModelCacheTtlMs } : {}),
     ...(remoteCodexCommand ? { remoteCodexCommand } : {}),
     ...(terminalCommand ? { terminalCommand } : {}),
     ...(workspaceDependenciesFeatureEnabled === undefined

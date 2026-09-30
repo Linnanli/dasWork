@@ -94,6 +94,8 @@ export type CodexStatus = {
 
 export type CodexModel = {
   id: string
+  /** Raw model slug, present for locally configured entries. */
+  modelId?: string
   displayName: string
   description?: string
   inputModalities: string[]
@@ -104,6 +106,16 @@ export type CodexModelList = {
   models: CodexModel[]
   selectedModelId?: string
   unavailableReason?: string
+}
+
+export type AddLocalModelInput = {
+  platform: 'custom' | 'deepseek'
+  baseUrl: string
+  fullUrl: boolean
+  apiKey: string
+  modelId: string
+  imageInput: 'auto' | 'supported' | 'unsupported'
+  apiMode: 'auto' | 'responses'
 }
 
 export type SidebarConversation = {
@@ -575,6 +587,18 @@ export const codexSetSelectedModelPayloadSchema = z.object({
   modelId: z.string().min(1)
 })
 
+export const addLocalModelInputSchema = z
+  .object({
+    platform: z.enum(['custom', 'deepseek']),
+    baseUrl: z.string().trim().url(),
+    fullUrl: z.boolean(),
+    apiKey: z.string().trim().min(1),
+    modelId: z.string().trim().min(1),
+    imageInput: z.enum(['auto', 'supported', 'unsupported']),
+    apiMode: z.enum(['auto', 'responses'])
+  })
+  .strict() satisfies z.ZodType<AddLocalModelInput>
+
 export const codexOpenExternalHttpUrlPayloadSchema = z.object({
   url: z.string().url().refine(isExternalHttpUrl, 'external URL must be http(s)')
 })
@@ -689,6 +713,7 @@ export const sidebarPreferencesPatchSchema = sidebarPreferencesSchema.partial()
 export type DesktopCodexApi = {
   getStatus(): Promise<CodexStatus>
   listModels(): Promise<CodexModelList>
+  addLocalModel(input: AddLocalModelInput): Promise<CodexModelList>
   listMcpServers(input: McpServerListRequest): Promise<McpServerListResult>
   setSelectedModel(modelId: string): Promise<{ selectedModelId: string }>
   listPendingApprovals?(): Promise<CodexApprovalRequest[]>

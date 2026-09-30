@@ -8,6 +8,7 @@ export type CodexAppServerLaunchOptions = {
 
 export type CodexAppServerLaunchOptionsInput = {
   env?: NodeJS.ProcessEnv
+  modelCatalogPath?: string
 }
 
 const SERVER_ARGS = ['--listen', 'stdio://']
@@ -17,6 +18,9 @@ export function resolveCodexAppServerLaunchOptions(
   options: CodexAppServerLaunchOptionsInput = {}
 ): CodexAppServerLaunchOptions {
   const env = options.env ?? process.env
+  const catalogArgs = options.modelCatalogPath
+    ? ['-c', `model_catalog_json=${JSON.stringify(options.modelCatalogPath)}`]
+    : []
   const explicitBinary = env.CODEX_APP_SERVER_BIN
   if (explicitBinary) {
     return {
@@ -27,10 +31,12 @@ export function resolveCodexAppServerLaunchOptions(
     }
   }
 
+  const args = [...catalogArgs, ...CODEX_CLI_ARGS]
+
   return {
     command: 'codex',
-    args: [...CODEX_CLI_ARGS],
-    displayBinary: `codex ${CODEX_CLI_ARGS.join(' ')}`,
+    args,
+    displayBinary: `codex ${args.join(' ')}`,
     env
   }
 }

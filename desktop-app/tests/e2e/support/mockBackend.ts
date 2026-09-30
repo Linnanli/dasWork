@@ -15,6 +15,8 @@ export type MockRequest = {
 
 export type MockBackend = {
   baseUrl: string
+  modelApiBasePath: string
+  capabilities: string[]
   requests: MockRequest[]
   close(): Promise<void>
 }
@@ -23,7 +25,6 @@ export type MockBackendOptions = {
   responses: Array<ResponsesStep | ResponsesStepFactory>
   searchResponses?: unknown[]
   modelApiBasePath?: string
-  modelProvider?: string
   capabilities?: string[]
 }
 
@@ -77,24 +78,6 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
     const body = await readRequestBody(request)
     capturedRequest.body = body
 
-    if (request.method === 'GET' && request.url?.startsWith('/api/client-models')) {
-      writeJson(response, [
-        {
-          model_id: 'qwen3.7-plus',
-          display_name: 'qwen3.7-plus',
-          description: null,
-          provider: options.modelProvider ?? 'qwen',
-          is_default: true,
-          capabilities: options.capabilities ?? ['text'],
-          api_base_url: `${serverBaseUrl(server)}${options.modelApiBasePath ?? ''}`,
-          api_key: 'sk-e2e-test-key',
-          api_format: 'openai',
-          source: 'admin'
-        }
-      ])
-      return
-    }
-
     if (request.method === 'GET' && (request.url === '/v1/models' || request.url === '/models')) {
       writeJson(response, {
         object: 'list',
@@ -141,6 +124,8 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
 
   return {
     baseUrl: serverBaseUrl(server),
+    modelApiBasePath: options.modelApiBasePath ?? '',
+    capabilities: options.capabilities ?? ['text'],
     requests,
     close: () =>
       new Promise((resolveClose, rejectClose) => {

@@ -164,6 +164,7 @@ import {
 } from 'react'
 
 import { ModelSelector } from './components/assistant-ui'
+import { AddModelDialog } from './components/assistant-ui/add-model-dialog'
 import { ServerRequestPanel } from './components/assistant-ui/server-request-panel'
 import { QueuedFollowUpList, QueuedFollowUpPausedBanner } from './components/queued-follow-ups'
 import {
@@ -250,6 +251,7 @@ import {
 import { createQueuedFollowUpSnapshot } from './runtime/queuedFollowUpSnapshot'
 import { restoreQueuedFollowUpToComposerDraft } from './runtime/restoreQueuedFollowUpToComposer'
 import type {
+  AddLocalModelInput,
   CodexApprovalRequest,
   CodexApprovalResponse,
   LocalContextPickerKind
@@ -328,6 +330,7 @@ type ComposerProps = {
   selectedModelId: string | undefined
   modelSelectionError?: string
   onSelectedModelChange: (modelId: string) => void
+  onAddModel: (input: AddLocalModelInput) => Promise<void>
   projectState: ProjectStateController
   disabled?: boolean
   followUps: ConversationFollowUpsController
@@ -582,6 +585,7 @@ function App(): React.JSX.Element {
     selectedModelId,
     modelSelectionError,
     setSelectedModelId,
+    addLocalModel,
     activeConversation,
     startNewConversation,
     startNewConversationWithDraft,
@@ -930,6 +934,7 @@ function App(): React.JSX.Element {
                           onOpenConversation={handleOpenConversation}
                           onScrollSnapshotChange={setActiveScroll}
                           onSelectedModelChange={handleSelectedModelChange}
+                          onAddModel={addLocalModel}
                           onCreateNewTask={handleStartNewConversation}
                           onRejectApproval={rejectServerRequest}
                           onSnoozeApproval={snoozeServerRequest}
@@ -969,6 +974,7 @@ function ActiveConversationPane({
   onOpenConversation,
   onScrollSnapshotChange,
   onSelectedModelChange,
+  onAddModel,
   onCreateNewTask,
   onRejectApproval,
   onSnoozeApproval,
@@ -997,6 +1003,7 @@ function ActiveConversationPane({
   onOpenConversation: OpenSubagentConversation
   onScrollSnapshotChange: (snapshot: ConversationScrollSnapshot) => void
   onSelectedModelChange: (modelId: string) => void
+  onAddModel: (input: AddLocalModelInput) => Promise<void>
   onCreateNewTask: () => void
   onRejectApproval: (request: CodexApprovalRequest) => Promise<void>
   onSnoozeApproval: (request: CodexApprovalRequest) => Promise<void>
@@ -1189,6 +1196,7 @@ function ActiveConversationPane({
         onOpenConversation={onOpenConversation}
         onScrollSnapshotChange={onScrollSnapshotChange}
         onSelectedModelChange={onSelectedModelChange}
+        onAddModel={onAddModel}
         onCreateNewTask={onCreateNewTask}
         onStartCodeReview={startCodeReview}
         composerModeKind={entry.composerModeKind}
@@ -1831,6 +1839,7 @@ function ChatThread({
   onRetryLoad,
   onOpenConversation,
   onSelectedModelChange,
+  onAddModel,
   onSteerFollowUp,
   onStartCodeReview,
   projectState,
@@ -2100,6 +2109,7 @@ function ChatThread({
                       selectedModelId={selectedModelId}
                       modelSelectionError={modelSelectionError}
                       onSelectedModelChange={onSelectedModelChange}
+                      onAddModel={onAddModel}
                       onSteerFollowUp={onSteerFollowUp}
                       onStartCodeReview={onStartCodeReview}
                       onCreateNewTask={onCreateNewTask}
@@ -3634,6 +3644,7 @@ function ComposerBody({
   selectedModelId,
   modelSelectionError,
   onSelectedModelChange,
+  onAddModel,
   onSteerFollowUp,
   onStartCodeReview,
   onCreateNewTask,
@@ -3662,6 +3673,7 @@ function ComposerBody({
   const hasProjectContext = hasConversationProjectContext(activeConversation, projectState)
   const localContextPickerEnabled = !isRemoteExecution
   const [contextSearchOpen, setContextSearchOpen] = useState(false)
+  const [addModelOpen, setAddModelOpen] = useState(false)
   const composerText = useAuiState((state) => state.composer.text)
   const composerAttachments = useAuiState((state) => state.composer.attachments)
   const isThreadRunning = useAuiState((state) => state.thread.isRunning)
@@ -4397,8 +4409,14 @@ function ComposerBody({
                 models={models}
                 value={selectedModelId}
                 onValueChange={onSelectedModelChange}
+                onAddModel={() => setAddModelOpen(true)}
                 variant="ghost"
                 size="sm"
+              />
+              <AddModelDialog
+                open={addModelOpen}
+                onOpenChange={setAddModelOpen}
+                onSubmit={onAddModel}
               />
               {!editingFollowUp ? (
                 <AuiIf condition={(state) => !state.thread.isRunning}>

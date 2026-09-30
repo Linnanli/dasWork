@@ -8,6 +8,7 @@ import {
   nativeTheme,
   net,
   protocol,
+  safeStorage,
   session
 } from 'electron'
 import { stat } from 'node:fs/promises'
@@ -50,7 +51,7 @@ import {
   registerAppProtocol,
   registerAppSchemePrivileges
 } from './localMediaProtocol'
-import { createModelCatalogService } from './modelCatalogService'
+import { LocalModelStore } from './localModels/LocalModelStore'
 import { ComposerContextCatalogService } from './composerContext/ComposerContextCatalogService'
 import { ComposerContextChangeBroker } from './composerContext/ComposerContextChangeBroker'
 import { ComposerContextSearchService } from './composerContext/ComposerContextSearchService'
@@ -149,6 +150,7 @@ import {
   codexRespondApprovalPayloadSchema,
   codexSnoozeApprovalAutoResolutionPayloadSchema,
   codexSetSelectedModelPayloadSchema,
+  addLocalModelInputSchema,
   type CodexChatAttachResult,
   type ComposerContextCatalogChangeEvent,
   type FollowUpQueueChangeEvent,
@@ -273,7 +275,15 @@ async function createCodexRuntime(
       rightWorkspaceIpc?.terminalManager.readThreadTerminal(threadId) ?? { terminalAttached: false }
   })
   const desktopToolBridge = await startDesktopToolBridge(hostCapabilities)
-  const launch = resolveCodexAppServerLaunchOptions({ env: process.env })
+  const localModels = new LocalModelStore({
+    userDataPath: app.getPath('userData'),
+    secretStorage: safeStorage
+  })
+  const modelCatalogPath = await localModels.prepareCatalog()
+  const launch = resolveCodexAppServerLaunchOptions({
+    env: process.env,
+    modelCatalogPath
+  })
   const codexHome = resolveCodexHome(launch.env)
   let bundledPluginDescriptors = uniqueBundledPluginDescriptors([...desktopToolBridge.descriptors])
   const reconcileBundledPluginCatalog = async ({
@@ -489,7 +499,7 @@ async function createCodexRuntime(
   return new CodexChatRuntimeService({
     launch,
     hostConnection,
-    modelCatalog: createModelCatalogService(runtimeConfig),
+    localModels,
     projectService: projectRuntimeServices.projectService,
     projectStore: projectRuntimeServices.projectStore,
     turnDiffStore,
@@ -1108,6 +1118,9 @@ app.whenReady().then(async () => {
     )
   )
   ipcMain.handle('codex:list-models', () => runtime.listModels())
+  ipcMain.handle('codex:add-local-model', (_, payload: unknown) =>
+    runtime.addLocalModel(addLocalModelInputSchema.parse(payload))
+  )
   ipcMain.handle('codex:list-mcp-servers', createListMcpServersHandler(requireMcpServerStatus()))
   for (const [channel, handler] of Object.entries(
     createPluginCenterIpcHandlers(requirePluginCenterService())

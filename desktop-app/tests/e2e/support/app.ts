@@ -10,6 +10,7 @@ import {
   type TestInfo
 } from '@playwright/test'
 import electronExecutable from 'electron'
+import type { AddLocalModelInput } from '../../../src/shared/codexIpcApi'
 import type { MockBackend } from './mockBackend'
 
 export const appRoot = resolve(__dirname, '..', '..', '..')
@@ -22,6 +23,7 @@ export function e2eTempRoot(): string {
 }
 
 export type LaunchAppOptions = {
+  initialModel?: AddLocalModelInput
   configureCodexHome?: (codexHomeDir: string) => Promise<void>
   userDataDir?: string
   codexHomeDir?: string
@@ -55,7 +57,8 @@ export type AppReadinessSnapshot = {
 }
 
 export async function launchApp(
-  backend: Pick<MockBackend, 'baseUrl'>,
+  backend: Pick<MockBackend, 'baseUrl'> &
+    Partial<Pick<MockBackend, 'modelApiBasePath' | 'capabilities'>>,
   logs: string[],
   options: LaunchAppOptions = {}
 ): Promise<ElectronApplication> {
@@ -76,9 +79,6 @@ export async function launchApp(
       cwd: options.cwd ?? appRoot,
       env: {
         ...process.env,
-        ADMIN_BACKEND_URL: backend.baseUrl,
-        ADMIN_BACKEND_MODEL_USER_ID: 'e2e-user',
-        ADMIN_BACKEND_MODEL_CACHE_TTL_MS: '1000',
         CODEX_ASP_DEBUG_PACKETS: '1',
         CODEX_APP_SERVER_DISABLE_MANAGED_CONFIG: '1',
         CODEX_HOME: codexHomeDir,
@@ -94,7 +94,20 @@ export async function launchApp(
     appTempDirs.set(app, options.preserveDataDirectories ? [] : dataDirectories)
     collectMainProcessLogs(app.process().stdout, 'stdout', logs)
     collectMainProcessLogs(app.process().stderr, 'stderr', logs)
-    await expectAppReady(await app.firstWindow())
+    const page = await app.firstWindow()
+    await page.waitForFunction(() => Boolean(window.desktopApp?.codex?.addLocalModel))
+    const initialModel: AddLocalModelInput = options.initialModel ?? {
+      platform: 'custom',
+      baseUrl: `${backend.baseUrl}${backend.modelApiBasePath ?? ''}`,
+      fullUrl: false,
+      apiKey: 'sk-e2e-test-key',
+      modelId: 'qwen3.7-plus',
+      imageInput: backend.capabilities?.includes('image') ? 'supported' : 'unsupported',
+      apiMode: 'responses'
+    }
+    await page.evaluate(async (input) => window.desktopApp.codex.addLocalModel(input), initialModel)
+    await page.reload()
+    await expectAppReady(page)
   } catch (error) {
     if (app) await terminateElectronApp(app)
     else markE2eLaunchClosed()

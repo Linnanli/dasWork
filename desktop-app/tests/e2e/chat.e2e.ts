@@ -31,7 +31,7 @@ const onePixelPng = Buffer.from(
   'base64'
 )
 
-test('sends a real desktop chat turn through the admin backend model provider', async ({
+test('sends a real desktop chat turn through the locally configured model provider', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -722,7 +722,7 @@ test('stops only the active conversation while a background conversation continu
   }
 })
 
-test('shows upstream quota errors returned by the admin backend model provider', async ({
+test('shows upstream quota errors returned by the local model provider', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')

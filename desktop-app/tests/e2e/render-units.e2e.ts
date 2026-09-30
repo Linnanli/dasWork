@@ -190,7 +190,6 @@ test('renders web search and exploration render units through the real desktop c
   const query = 'render unit parity e2e'
   const backend = await startMockBackend({
     modelApiBasePath: '/api/codex',
-    modelProvider: 'OpenAI',
     responses: [
       webSearchResponse('resp-web-search-tool', 'web-run-1', query),
       shellCommandResponse('resp-exploration-tool', 'call-read-package', {

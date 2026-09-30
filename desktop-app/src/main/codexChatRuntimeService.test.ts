@@ -49,8 +49,7 @@ import {
   mcpElicitationResponseFromApprovalResponse,
   permissionsApprovalResponseFromApprovalResponse,
   type CodexPortLike,
-  type CodexChatRuntimeServiceOptions,
-  type ModelCatalogLike
+  type CodexChatRuntimeServiceOptions
 } from './codexChatRuntimeService'
 import type {
   CodexChatStreamEnvelope,
@@ -344,26 +343,10 @@ describe('CodexChatRuntimeService', () => {
       cwd: '/repo',
       workspaceRoots: ['/repo']
     }))
+    nativeDriverState.listModels.mockResolvedValue([
+      { id: 'gpt-test', displayName: 'Test', inputModalities: [], isDefault: true }
+    ])
     const service = new CodexChatRuntimeService({
-      modelCatalog: {
-        listModels: vi.fn(async () => ({
-          models: [{ id: 'gpt-test', displayName: 'Test', inputModalities: [], isDefault: true }],
-          selectedModelId: 'gpt-test'
-        })),
-        setSelectedModel: vi.fn(async (modelId: string) => ({ selectedModelId: modelId })),
-        resolveClientModel: vi.fn(async () => ({
-          model_id: 'gpt-test',
-          display_name: 'Test',
-          description: null,
-          provider: 'test',
-          is_default: true,
-          capabilities: [],
-          api_base_url: null,
-          api_key: null,
-          api_format: 'responses',
-          source: 'test'
-        }))
-      } satisfies ModelCatalogLike,
       projectService: { resolveExistingThreadTarget } as never,
       runDriver: streamText
     })
@@ -1277,33 +1260,6 @@ describe('CodexChatRuntimeService', () => {
     expect(port.messages).toEqual([])
   })
 
-  it('returns catalog unavailability instead of provider fallback when catalog is configured', async () => {
-    nativeDriverState.listModels.mockResolvedValue([])
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn().mockResolvedValue({
-        models: [],
-        unavailableReason: 'backend down'
-      }),
-      setSelectedModel: vi.fn().mockRejectedValue(new Error('model catalog unavailable')),
-      resolveClientModel: vi.fn().mockRejectedValue(new Error('model catalog unavailable'))
-    }
-    const service = new CodexChatRuntimeService({
-      cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      modelCatalog
-    })
-
-    await expect(service.listModels()).resolves.toEqual({
-      models: [],
-      unavailableReason: 'backend down'
-    })
-    expect(nativeDriverState.listModels).not.toHaveBeenCalled()
-  })
-
   it('replays a recent failed terminal to a renderer that detached before it arrived', async () => {
     const firstPort = new FakePort()
     const replacementPort = new FakePort()
@@ -1351,59 +1307,6 @@ describe('CodexChatRuntimeService', () => {
       { type: 'chunk', chunk: { type: 'text-delta', id: 'retained-text', delta: 'partial' } },
       { type: 'error', error: 'upstream disconnected' }
     ])
-  })
-
-  it('keeps catalog validation required after an unavailable catalog list', async () => {
-    const port = new FakePort()
-    const streamText = vi.fn(async (input: RuntimeRunDriverInput) => {
-      await completeCanonicalTurn(input)
-      return { toUIMessageStream: () => emptyUiMessageStream() }
-    })
-    nativeDriverState.listModels.mockResolvedValue([
-      {
-        id: 'provider-model',
-        displayName: 'Provider Model',
-        inputModalities: ['text'],
-        isDefault: true
-      }
-    ])
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn().mockResolvedValue({
-        models: [],
-        unavailableReason: 'backend down'
-      }),
-      setSelectedModel: vi.fn().mockRejectedValue(new Error('model catalog unavailable')),
-      resolveClientModel: vi.fn().mockRejectedValue(new Error('model catalog unavailable'))
-    }
-    const service = new CodexChatRuntimeService({
-      cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      modelCatalog,
-      runDriver: streamText
-    })
-
-    await service.listModels()
-    await expect(service.setSelectedModel('provider-model')).rejects.toThrow(
-      'model catalog unavailable'
-    )
-    await service.startChatStream(
-      {
-        chatId: 'chat-1',
-        trigger: 'submit-message',
-        messages: [],
-        modelId: 'provider-model'
-      },
-      port
-    )
-
-    expect(modelCatalog.setSelectedModel).toHaveBeenCalledWith('provider-model')
-    expect(modelCatalog.resolveClientModel).toHaveBeenCalledWith('provider-model')
-    expect(streamText).not.toHaveBeenCalled()
-    expect(port.messages).toEqual([{ type: 'error', error: 'model catalog unavailable' }])
   })
 
   it('restores app media URLs only in the model-input request copy', async () => {
@@ -1562,203 +1465,98 @@ describe('CodexChatRuntimeService', () => {
     ])
   })
 
-  it('uses the configured model catalog for listModels', async () => {
-    const catalogList = {
-      models: [
-        {
-          id: 'backend-model',
-          displayName: 'Backend Model',
-          description: 'Catalog model',
-          inputModalities: ['text'],
-          isDefault: true
-        }
-      ],
-      selectedModelId: 'backend-model'
+  it('merges the static app-server catalog with local models and selects a newly added model', async () => {
+    nativeDriverState.listModels.mockResolvedValue([
+      {
+        id: 'gpt-5.5',
+        model: 'gpt-5.5',
+        displayName: 'GPT-5.5',
+        inputModalities: ['text', 'image'],
+        isDefault: true
+      },
+      {
+        id: 'custom-model',
+        model: 'custom-model',
+        displayName: 'custom-model',
+        inputModalities: ['text'],
+        isDefault: false
+      }
+    ])
+    const localModel = {
+      id: 'local:one',
+      modelId: 'custom-model',
+      displayName: 'custom-model · 自定义',
+      inputModalities: ['text'],
+      isDefault: false
     }
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn().mockResolvedValue(catalogList),
-      setSelectedModel: vi.fn(),
-      resolveClientModel: vi.fn()
+    const localModels = {
+      listModels: vi.fn().mockResolvedValue([localModel]),
+      resolveClientModel: vi.fn(),
+      addModel: vi.fn().mockResolvedValue('local:one')
     }
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      modelCatalog
+      localModels
     })
 
-    await expect(service.listModels()).resolves.toEqual(catalogList)
-    expect(modelCatalog.listModels).toHaveBeenCalledTimes(1)
+    await expect(service.listModels()).resolves.toMatchObject({
+      models: [expect.objectContaining({ id: 'gpt-5.5' }), localModel],
+      selectedModelId: 'gpt-5.5'
+    })
+    await expect(
+      service.addLocalModel({
+        platform: 'custom',
+        baseUrl: 'https://models.example.test/v1',
+        fullUrl: false,
+        apiKey: 'secret',
+        modelId: 'custom-model',
+        imageInput: 'auto',
+        apiMode: 'auto'
+      })
+    ).resolves.toMatchObject({ selectedModelId: 'local:one' })
   })
 
-  it('uses the catalog selected model when chat requests omit modelId', async () => {
+  it('routes a local selection to its raw model ID and provider configuration', async () => {
+    nativeDriverState.listModels.mockResolvedValue([])
     const port = new FakePort()
     const streamText = runDriverWithStartedThread()
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn().mockResolvedValue({
-        models: [
-          {
-            id: 'backend-default',
-            displayName: 'Backend Default',
-            inputModalities: ['text'],
-            isDefault: true
-          }
-        ],
-        selectedModelId: 'backend-default'
-      }),
-      setSelectedModel: vi.fn(),
+    const localModels = {
+      listModels: vi.fn().mockResolvedValue([
+        { id: 'local:one', displayName: 'custom-model', inputModalities: ['text'], isDefault: false }
+      ]),
       resolveClientModel: vi.fn().mockResolvedValue({
-        model_id: 'backend-default',
-        display_name: 'Backend Default',
+        model_id: 'custom-model',
+        display_name: 'custom-model',
         description: null,
-        provider: 'openai',
+        provider: 'local_provider_one',
+        is_default: false,
         capabilities: ['text'],
-        is_default: true,
-        api_base_url: 'https://models.example.test',
+        api_base_url: 'https://models.example.test/v1',
         api_key: 'secret',
         api_format: 'openai',
-        source: 'admin'
-      })
+        source: 'local'
+      }),
+      addModel: vi.fn()
     }
     const service = new CodexChatRuntimeService({
       cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      runDriver: streamText,
-      modelCatalog
+      localModels,
+      runDriver: streamText
     })
 
     await service.listModels()
     await service.startChatStream(
-      {
-        chatId: 'chat-1',
-        trigger: 'submit-message',
-        messages: []
-      },
+      { chatId: 'chat-1', trigger: 'submit-message', modelId: 'local:one', messages: [] },
       port
     )
 
-    expect(modelCatalog.resolveClientModel).toHaveBeenCalledWith('backend-default')
+    expect(localModels.resolveClientModel).toHaveBeenCalledWith('local:one')
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelId: 'backend-default'
+        modelId: 'custom-model',
+        clientModel: expect.objectContaining({ provider: 'local_provider_one' })
       })
     )
-    expect(port.messages).toContainEqual({ type: 'thread-bound', threadId: 'thread-prestarted' })
-    expect(port.messages.at(-1)).toEqual({ type: 'finish', threadId: 'thread-prestarted' })
-  })
-
-  it('rejects chat request modelId values that are not in the catalog', async () => {
-    const port = new FakePort()
-    const streamText = vi.fn(async () => ({
-      toUIMessageStream: () => emptyUiMessageStream()
-    }))
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn(),
-      setSelectedModel: vi.fn(),
-      resolveClientModel: vi.fn().mockRejectedValue(new Error('Unknown model: unknown-model'))
-    }
-    const service = new CodexChatRuntimeService({
-      cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      runDriver: streamText,
-      modelCatalog
-    })
-
-    await service.startChatStream(
-      {
-        chatId: 'chat-1',
-        trigger: 'submit-message',
-        messages: [],
-        modelId: 'unknown-model'
-      },
-      port
-    )
-
-    expect(streamText).not.toHaveBeenCalled()
-    expect(port.messages).toEqual([{ type: 'error', error: 'Unknown model: unknown-model' }])
-  })
-
-  it('streams with the canonical catalog model id after resolving padded request values', async () => {
-    const port = new FakePort()
-    const streamText = runDriverWithStartedThread()
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn(),
-      setSelectedModel: vi.fn(),
-      resolveClientModel: vi.fn().mockResolvedValue({
-        model_id: 'canonical-model',
-        display_name: 'Canonical Model',
-        description: null,
-        provider: 'openai',
-        capabilities: ['text'],
-        is_default: false,
-        api_base_url: 'https://models.example.test',
-        api_key: 'secret',
-        api_format: 'openai',
-        source: 'admin'
-      })
-    }
-    const service = new CodexChatRuntimeService({
-      cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      runDriver: streamText,
-      modelCatalog
-    })
-
-    await service.startChatStream(
-      {
-        chatId: 'chat-1',
-        trigger: 'submit-message',
-        messages: [],
-        modelId: '  canonical-model  '
-      },
-      port
-    )
-
-    expect(modelCatalog.resolveClientModel).toHaveBeenCalledWith('  canonical-model  ')
-    expect(streamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelId: 'canonical-model'
-      })
-    )
-    expect(port.messages).toContainEqual({ type: 'thread-bound', threadId: 'thread-prestarted' })
-    expect(port.messages.at(-1)).toEqual({ type: 'finish', threadId: 'thread-prestarted' })
-  })
-
-  it('delegates selected model validation to the catalog', async () => {
-    const modelCatalog: ModelCatalogLike = {
-      listModels: vi.fn(),
-      setSelectedModel: vi.fn().mockResolvedValue({ selectedModelId: 'backend-model' }),
-      resolveClientModel: vi.fn()
-    }
-    const service = new CodexChatRuntimeService({
-      cwd: '/repo',
-      launch: {
-        command: '/bin/codex-app-server',
-        args: ['--listen', 'stdio://'],
-        displayBinary: '/bin/codex-app-server --listen stdio://'
-      },
-      modelCatalog
-    })
-
-    await expect(service.setSelectedModel('backend-model')).resolves.toEqual({
-      selectedModelId: 'backend-model'
-    })
-    expect(modelCatalog.setSelectedModel).toHaveBeenCalledWith('backend-model')
   })
 
   it('streams UI message chunks to the provided port', async () => {
