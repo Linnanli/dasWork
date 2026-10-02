@@ -28,7 +28,7 @@ export type ConversationStreamPerformanceCounter =
   | 'scrollRestoreApplyCount'
   | 'scrollRestoreCleanupCount'
 
-function enabled(): boolean {
+export function isConversationStreamPerformanceEnabled(): boolean {
   return globalThis.__DASCOWORK_CONVERSATION_PERF__ === true
 }
 
@@ -48,14 +48,14 @@ export function markConversationStreamEvent(
   controllerId?: string,
   version?: number
 ): void {
-  if (!enabled() || typeof performance === 'undefined') return
+  if (!isConversationStreamPerformanceEnabled() || typeof performance === 'undefined') return
   performance.mark(markName(event, controllerId, version))
 }
 
 export function countConversationStreamPerformance(
   counter: ConversationStreamPerformanceCounter
 ): void {
-  if (!enabled()) return
+  if (!isConversationStreamPerformanceEnabled()) return
   const target = globalThis as typeof globalThis & {
     __DASCOWORK_CONVERSATION_PERF_COUNTS__?: Partial<
       Record<ConversationStreamPerformanceCounter, number>
@@ -70,7 +70,7 @@ export function markConversationStreamPublish(controllerId: string, version: num
 }
 
 export function markConversationStreamCommit(controllerId: string, version: number): void {
-  if (!enabled() || typeof performance === 'undefined') return
+  if (!isConversationStreamPerformanceEnabled() || typeof performance === 'undefined') return
   const publish = markName('publish', controllerId, version)
   const commit = markName('commit', controllerId, version)
   performance.mark(commit)
@@ -86,9 +86,9 @@ export function markConversationStreamCommit(controllerId: string, version: numb
 }
 
 export function scheduleConversationStreamNextFrame(controllerId: string, version: number): void {
-  if (!enabled() || typeof window === 'undefined') return
+  if (!isConversationStreamPerformanceEnabled() || typeof window === 'undefined') return
   window.requestAnimationFrame(() => {
-    if (!enabled() || typeof performance === 'undefined') return
+    if (!isConversationStreamPerformanceEnabled() || typeof performance === 'undefined') return
     const nextFrame = markName('next-frame', controllerId, version)
     performance.mark(nextFrame)
     try {

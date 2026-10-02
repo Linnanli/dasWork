@@ -331,7 +331,9 @@ describe('ConversationChatRegistry', () => {
   })
 
   it('restores a local conversation from a main-owned run before thread binding', async () => {
-    const { bridge, registry } = registryFixture()
+    const draftStore = new ConversationDraftStore(new MemoryStorage())
+    draftStore.set('local-recovery', 'Restore this local prompt.')
+    const { bridge, registry } = registryFixture({ draftStore })
     const callbacks = new Map<string, CodexChatStreamCallbacks>()
     bridge.getActiveSnapshot = vi.fn(async (conversationId: string) =>
       conversationId === 'local-recovery'
@@ -369,6 +371,7 @@ describe('ConversationChatRegistry', () => {
 
     const entry = registry.getSnapshot().activeEntry
     expect(entry.localId).toBe('local-recovery')
+    expect(entry.draft).toBe('')
     expect(entry.context.threadId).toBe('thread-recovered')
     expect(entry.messages).toEqual(
       expect.arrayContaining([
@@ -594,6 +597,24 @@ describe('ConversationChatRegistry', () => {
     })
   })
 
+  it('redacts an active-run probe failure and settles recovery as needs_resume', async () => {
+    const { bridge, registry } = registryFixture()
+    bridge.attachChatStream = vi.fn(async () => null)
+    bridge.getActiveRun = vi.fn(async () => {
+      throw new Error('provider configuration rejected secret-provider-token')
+    })
+
+    const entry = await registry.openConversation('recover-probe-failure', async () =>
+      openResult('recover-probe-failure')
+    )
+    await flushRecoveryWork()
+
+    expect(entry.recoveryPhase).toBe('needs_resume')
+    expect(entry.recoveryError?.message).toBe('无法确认后台任务状态，请重试。')
+    expect(entry.recoveryError?.message).not.toContain('secret-provider-token')
+    expect(bridge.attachChatStream).not.toHaveBeenCalled()
+  })
+
   it('drops a persisted failed fallback after a later assistant response succeeds', () => {
     const { registry, recoveryStorage } = registryFixture()
     const entry = registry.getSnapshot().activeEntry
@@ -621,7 +642,8 @@ describe('ConversationChatRegistry', () => {
   })
 
   it('clears a failed fallback only after a later turn settles successfully', async () => {
-    const { bridge, callbacks, registry, recoveryStorage } = registryFixture()
+    const { bridge, callbacks, registry, recoveryStorage, transcriptRecoveryStore } =
+      registryFixture()
     const entry = registry.getSnapshot().activeEntry
     const failedSend = entry.controller.sendMessage({
       id: 'failed-user',
@@ -640,6 +662,13 @@ describe('ConversationChatRegistry', () => {
     failedStream?.onError('network disconnect')
     await expect(failedSend).rejects.toThrow('network disconnect')
     expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).toContain('failed-turn')
+    transcriptRecoveryStore.saveActiveTextFallback('thread-recovery', [
+      {
+        id: 'assistant:failed-turn:message',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Visible before failure.' }]
+      }
+    ])
 
     const recoveredSend = entry.controller.sendMessage({
       id: 'recovered-user',
@@ -671,6 +700,9 @@ describe('ConversationChatRegistry', () => {
     expect(entry.status).toBe('ready')
     expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).toContain(
       '"recoveries":{}'
+    )
+    expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).not.toContain(
+      'Visible before failure.'
     )
   })
 
@@ -996,7 +1028,7 @@ describe('ConversationChatRegistry', () => {
   })
 
   it('binds a thread created after abort back to its origin entry', async () => {
-    const { callbacks, registry } = registryFixture()
+    const { callbacks, recoveryStorage, registry } = registryFixture()
     const originEntry = registry.getSnapshot().activeEntry
     const send = originEntry.controller.sendMessage({
       id: 'aborted-user',
@@ -1009,6 +1041,16 @@ describe('ConversationChatRegistry', () => {
       threadId: 'thread-aborted',
       turnId: 'turn-aborted',
       sequence: 1
+    })
+    callbacks.get(originEntry.controller.id)?.onChunk({
+      type: 'start',
+      messageId: 'assistant:turn-aborted:message'
+    })
+    callbacks.get(originEntry.controller.id)?.onChunk({ type: 'text-start', id: 'text-aborted' })
+    callbacks.get(originEntry.controller.id)?.onChunk({
+      type: 'text-delta',
+      id: 'text-aborted',
+      delta: 'Visible before abort.'
     })
     callbacks.get(originEntry.controller.id)?.onTurnLifecycle?.({
       type: 'turn-completed',
@@ -1023,12 +1065,16 @@ describe('ConversationChatRegistry', () => {
     expect(originEntry.error).toBeUndefined()
     expect(originEntry.messages.at(-1)).toMatchObject({
       role: 'assistant',
+      parts: [expect.objectContaining({ type: 'text', text: 'Visible before abort.' })],
       metadata: {
         codexTurn: {
           status: 'interrupted'
         }
       }
     })
+    expect(recoveryStorage.getItem('das-cowork.transcript-recovery.v1')).toContain(
+      'Visible before abort.'
+    )
 
     registry.applyConversationMetadata([
       {

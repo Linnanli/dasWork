@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { config as configureZod, type ZodType } from 'zod'
 import { codexChatTerminalFallbackSchema } from '../shared/codexIpcApi'
+import {
+  chatImageIpcChannels,
+  chatImageRequestSchema,
+  chatImageSaveRequestSchema,
+  chatImageResolveResultSchema,
+  chatImageSaveResultSchema
+} from '../shared/chatImageApi'
 import type {
   CodexApprovalRequest,
   CodexApprovalResponse,
@@ -28,6 +35,8 @@ import type {
 import {
   artifactPreviewSourceRequestSchema,
   artifactPreviewComposerAttachmentResultSchema,
+  artifactPresentationRenderResultSchema,
+  artifactPresentationRenderRequestSchema,
   artifactPreviewRegisterAuthorizedLocalSourceRequestSchema,
   artifactPreviewRegisterWorkspaceSourceRequestSchema,
   artifactPreviewSourceChangeEventSchema
@@ -128,6 +137,8 @@ const desktopEnvironment = {
 const desktopCodex: DesktopCodexApi = {
   getStatus: () => ipcRenderer.invoke('codex:get-status') as Promise<CodexStatus>,
   listModels: () => ipcRenderer.invoke('codex:list-models') as Promise<CodexModelList>,
+  addLocalModel: (input) =>
+    ipcRenderer.invoke('codex:add-local-model', input) as Promise<CodexModelList>,
   ...createMcpServerStatusBridge((channel, payload) => ipcRenderer.invoke(channel, payload)),
   setSelectedModel: (modelId: string) =>
     ipcRenderer.invoke('codex:set-selected-model', { modelId }) as Promise<{
@@ -146,6 +157,22 @@ const desktopCodex: DesktopCodexApi = {
   listExistingLocalPaths: (input) => ipcRenderer.invoke('codex:list-existing-local-paths', input),
   pickLocalContext: (kind: LocalContextPickerKind) =>
     ipcRenderer.invoke('codex:pick-local-context', { kind }) as Promise<LocalContextReference[]>,
+  resolveImageSource: async (input) =>
+    chatImageResolveResultSchema.parse(
+      await ipcRenderer.invoke(
+        chatImageIpcChannels.resolveSource,
+        chatImageRequestSchema.parse(input, { jitless: true })
+      ),
+      { jitless: true }
+    ),
+  saveImage: async (input) =>
+    chatImageSaveResultSchema.parse(
+      await ipcRenderer.invoke(
+        chatImageIpcChannels.save,
+        chatImageSaveRequestSchema.parse(input, { jitless: true })
+      ),
+      { jitless: true }
+    ),
   onStatusChange: (callback: (status: CodexStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: CodexStatus): void =>
       callback(status)
@@ -216,7 +243,13 @@ const desktopComposerContext: DesktopComposerContextApi = createComposerContextB
 
 const desktopPlugins = createPluginCenterBridge(
   (channel, payload) => ipcRenderer.invoke(channel, payload),
-  (channel, payload) => ipcRenderer.send(channel, payload)
+  (channel, payload) => ipcRenderer.send(channel, payload),
+  (channel, listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown): void =>
+      listener(_event, payload)
+    ipcRenderer.on(channel, wrapped)
+    return () => ipcRenderer.removeListener(channel, wrapped)
+  }
 )
 
 const desktopProjects: DesktopProjectsApi = {
@@ -585,6 +618,13 @@ const desktopRightWorkspace: DesktopRightWorkspaceApi = {
         rightWorkspaceIpcChannels.readArtifactBinary,
         parseWorkspacePayload(artifactPreviewSourceRequestSchema, input)
       ),
+    renderPresentation: (input) =>
+      ipcRenderer
+        .invoke(
+          rightWorkspaceIpcChannels.renderArtifactPresentation,
+          parseWorkspacePayload(artifactPresentationRenderRequestSchema, input)
+        )
+        .then((result) => artifactPresentationRenderResultSchema.parse(result, { jitless: true })),
     release: (input) =>
       ipcRenderer.invoke(
         rightWorkspaceIpcChannels.releaseArtifactSource,

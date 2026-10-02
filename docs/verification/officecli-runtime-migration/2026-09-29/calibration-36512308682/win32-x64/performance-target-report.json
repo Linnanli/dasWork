@@ -1,0 +1,90 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-performance-target.v1",
+  "target": "win32-x64",
+  "evidence": {
+    "sourceRunId": "36512308682",
+    "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "installerCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "runner": "windows-2025"
+  },
+  "runner": "windows-2025",
+  "candidateArchiveSha256": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+  "p1aBuildUnpackReceiptSha256": "76cc4c61168ba0397ac7049231fc14b82caac5e86e635a44a1fd88a6646cac7c",
+  "archiveBytes": [
+    112773711,
+    112773710,
+    112773712,
+    112773711,
+    112773712
+  ],
+  "unpackedBytes": [
+    162905404,
+    162905404,
+    162905404,
+    162905404,
+    162905404
+  ],
+  "minimumAvailableDiskBytes": [
+    151611543552,
+    151611514880,
+    151611514880,
+    151611449344,
+    151611449344,
+    151611318272,
+    151611416576,
+    151611383808,
+    151611449344,
+    151611432960
+  ],
+  "coldInstallMs": [
+    9393,
+    8885,
+    9019,
+    9969,
+    9009,
+    10105,
+    10108,
+    9046,
+    10048,
+    10049
+  ],
+  "mainEventLoopDelayP99Ms": [
+    3,
+    4,
+    3,
+    7,
+    3,
+    4,
+    7,
+    3,
+    4,
+    5
+  ],
+  "mainEventLoopDelayMaxMs": [
+    31,
+    30,
+    23,
+    23,
+    18,
+    59,
+    17,
+    25,
+    20,
+    22
+  ],
+  "chatInstallOverlapMs": [
+    721,
+    714,
+    698,
+    726,
+    797,
+    840,
+    734,
+    693,
+    750,
+    739
+  ]
+}

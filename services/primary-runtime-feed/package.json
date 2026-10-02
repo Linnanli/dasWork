@@ -1,0 +1,22 @@
+{
+  "name": "@dascowork/primary-runtime-feed",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test tests/feed-contract.node-test.mjs && node --test tests/development-cli.node-test.mjs",
+    "test:publish-contract": "node --test tests/feed-contract.node-test.mjs",
+    "generate:engineering-key": "node scripts/generate-engineering-signing-key.mjs",
+    "create:metadata": "node scripts/create-release-metadata.mjs",
+    "sign:config": "node scripts/sign-config.mjs",
+    "sign:manifest": "node scripts/sign-manifest.mjs",
+    "assemble-release-staging": "node scripts/assemble-release-staging.mjs",
+    "publish-release": "node scripts/publish-release.mjs",
+    "dev:import": "node scripts/dev-import.mjs",
+    "dev:refresh": "node scripts/dev-refresh.mjs",
+    "dev:serve": "node scripts/dev-serve.mjs"
+  }
+}

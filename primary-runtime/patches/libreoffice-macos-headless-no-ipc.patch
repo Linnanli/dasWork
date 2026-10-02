@@ -1,0 +1,29 @@
+--- a/desktop/source/app/app.cxx
++++ b/desktop/source/app/app.cxx
+@@ -28,6 +28,7 @@
+ #include <config_wasm_strip.h>
+ 
+ #include <sal/config.h>
++#include <rtl/bootstrap.hxx>
+ 
+ #include <cstdlib>
+ #include <iostream>
+@@ -528,7 +529,17 @@
+     }
+ 
+     // start ipc thread only for non-remote offices
+-    RequestHandler::Status aStatus = RequestHandler::Enable(true);
++    bool bUseIpc = true;
++#if defined MACOSX
++    OUString aNoIpc;
++    if (rCmdLineArgs.IsHeadless()
++        && rtl::Bootstrap::get(u"DASCOWORK_HEADLESS_NO_IPC"_ustr, aNoIpc)
++        && aNoIpc == u"1"_ustr)
++    {
++        bUseIpc = false;
++    }
++#endif
++    RequestHandler::Status aStatus = RequestHandler::Enable(bUseIpc);
+     if ( aStatus == RequestHandler::IPC_STATUS_PIPE_ERROR )
+     {
+ #if defined(ANDROID) || defined(__EMSCRIPTEN__)

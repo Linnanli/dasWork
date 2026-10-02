@@ -25,6 +25,7 @@ export type GitCliOptions = {
   maxOutputBytes?: number
   signal?: AbortSignal
   env?: Record<string, string | undefined>
+  priority?: 'background'
 }
 
 export type GitDiffCliOptions = GitCliOptions & {

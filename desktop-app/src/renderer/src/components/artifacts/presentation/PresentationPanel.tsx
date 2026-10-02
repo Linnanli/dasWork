@@ -8,7 +8,7 @@ import {
   PlusIcon,
   MessageSquarePlusIcon
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -24,9 +24,13 @@ import type {
 } from './presentationTypes'
 
 import './PresentationPanel.css'
+import { PresentationHtmlView } from './PresentationHtmlView'
 
 type Props = {
   document: PresentationDocument
+  renderedSlides?: readonly string[]
+  html?: string
+  onPreviewError?(message: string): void
   navigation?: ArtifactNavigationTarget
   onOpenHyperlink?(url: string): void
   onSelectElement?(slide: PresentationSlide, element: PresentationElement): void
@@ -36,6 +40,9 @@ type Props = {
 
 export function PresentationPanel({
   document,
+  renderedSlides = [],
+  html,
+  onPreviewError,
   navigation,
   onOpenHyperlink,
   onSelectElement,
@@ -51,6 +58,8 @@ export function PresentationPanel({
   const [regionSelection, setRegionSelection] = useState(false)
   const [highlightedObjectId, setHighlightedObjectId] = useState(initialNavigation?.objectId)
   const panelRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const [toolbarHeight, setToolbarHeight] = useState(44)
   const [panelWidth, setPanelWidth] = useState(0)
   const selectedSlideIndex = Math.max(
     0,
@@ -70,6 +79,15 @@ export function PresentationPanel({
     observer.observe(panel)
     return () => observer.disconnect()
   }, [])
+  useEffect(() => {
+    const toolbar = toolbarRef.current
+    if (!toolbar || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) =>
+      setToolbarHeight(entry?.borderBoxSize?.[0]?.blockSize ?? toolbar.offsetHeight)
+    )
+    observer.observe(toolbar)
+    return () => observer.disconnect()
+  }, [])
 
   const layout = panelWidth <= 688 ? 'stacked' : panelWidth <= 748 ? 'floating' : 'rail'
   const canGoPrevious = selectedSlideIndex > 0
@@ -84,7 +102,11 @@ export function PresentationPanel({
       ref={panelRef}
       data-slot="presentation-panel"
       data-presentation-layout={layout}
-      className={cn('presentation-panel', layout === 'stacked' && 'presentation-panel-stacked')}
+      className={cn(
+        'presentation-panel',
+        layout === 'stacked' && 'presentation-panel-stacked',
+        html && 'presentation-panel-html'
+      )}
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft' && canGoPrevious) {
@@ -97,13 +119,18 @@ export function PresentationPanel({
         }
       }}
     >
-      <div className={cn('presentation-rail-wrap', layout === 'floating' && !railOpen && 'hidden')}>
-        <SlideRail
-          slides={document.slides}
-          selectedIndex={selectedSlideIndex}
-          onSelect={selectSlide}
-        />
-      </div>
+      {!html ? (
+        <div
+          className={cn('presentation-rail-wrap', layout === 'floating' && !railOpen && 'hidden')}
+        >
+          <SlideRail
+            slides={document.slides}
+            renderedSlides={renderedSlides}
+            selectedIndex={selectedSlideIndex}
+            onSelect={selectSlide}
+          />
+        </div>
+      ) : null}
       {layout === 'floating' ? (
         <Button
           type="button"
@@ -117,8 +144,8 @@ export function PresentationPanel({
           幻灯片
         </Button>
       ) : null}
-      <main className="presentation-main">
-        <div className="presentation-toolbar" aria-label="演示文稿控制">
+      <main className={html ? 'presentation-html-controls' : 'presentation-main'}>
+        <div ref={toolbarRef} className="presentation-toolbar" aria-label="演示文稿控制">
           <div className="flex items-center gap-1">
             <Button
               type="button"
@@ -210,10 +237,13 @@ export function PresentationPanel({
             ) : null}
           </div>
         </div>
-        {slide ? (
+        {!html && slide ? (
           <div className="presentation-stage-scroll">
             <SlideCanvas
+              key={slide.id}
               slide={slide}
+              imageSrc={renderedSlides[selectedSlideIndex]}
+              aspectRatio={document.width / document.height}
               zoom={zoom}
               highlightedObjectId={highlightedObjectId}
               onOpenHyperlink={onOpenHyperlink}
@@ -226,20 +256,55 @@ export function PresentationPanel({
               onRegionSelectionDone={() => setRegionSelection(false)}
             />
           </div>
-        ) : (
+        ) : !html ? (
           <p className="m-auto text-sm text-muted-foreground">演示文稿没有可显示的幻灯片。</p>
-        )}
+        ) : null}
       </main>
+      {html ? (
+        <PresentationHtmlView
+          html={html}
+          slideIndex={selectedSlideIndex}
+          zoom={zoom}
+          layout={layout}
+          railOpen={railOpen}
+          toolbarHeight={toolbarHeight}
+          onSelectSlide={selectSlide}
+          onError={onPreviewError}
+          overlay={
+            slide ? (
+              <SlideCanvas
+                key={slide.id}
+                slide={slide}
+                imageSrc={undefined}
+                aspectRatio={document.width / document.height}
+                zoom={100}
+                overlayOnly
+                highlightedObjectId={highlightedObjectId}
+                onOpenHyperlink={onOpenHyperlink}
+                onSelectElement={onSelectElement}
+                annotations={annotations.filter(
+                  (annotation) => annotation.target.slideId === slide.id
+                )}
+                onRequestAnnotation={onRequestAnnotation}
+                regionSelection={regionSelection}
+                onRegionSelectionDone={() => setRegionSelection(false)}
+              />
+            ) : null
+          }
+        />
+      ) : null}
     </div>
   )
 }
 
 function SlideRail({
   slides,
+  renderedSlides,
   selectedIndex,
   onSelect
 }: {
   slides: readonly PresentationSlide[]
+  renderedSlides: readonly string[]
   selectedIndex: number
   onSelect(index: number): void
 }): React.JSX.Element {
@@ -255,17 +320,7 @@ function SlideRail({
           onClick={() => onSelect(index)}
         >
           <span className="presentation-thumbnail-canvas" aria-hidden="true">
-            {slide.elements.slice(0, 5).map((element) => (
-              <span
-                key={element.id}
-                className="presentation-thumbnail-line"
-                style={{
-                  top: `${element.frame.y * 100}%`,
-                  left: `${element.frame.x * 100}%`,
-                  width: `${Math.max(element.frame.width * 100, 8)}%`
-                }}
-              />
-            ))}
+            <img src={renderedSlides[index]} alt="" draggable={false} />
           </span>
           <span>{slide.number}</span>
         </button>
@@ -276,6 +331,8 @@ function SlideRail({
 
 function SlideCanvas({
   slide,
+  imageSrc,
+  aspectRatio,
   zoom,
   highlightedObjectId,
   onOpenHyperlink,
@@ -283,9 +340,12 @@ function SlideCanvas({
   annotations,
   onRequestAnnotation,
   regionSelection,
+  overlayOnly = false,
   onRegionSelectionDone
 }: {
   slide: PresentationSlide
+  imageSrc: string | undefined
+  aspectRatio: number
   zoom: number
   highlightedObjectId?: string
   onOpenHyperlink?(url: string): void
@@ -293,10 +353,102 @@ function SlideCanvas({
   annotations: readonly ArtifactAnnotation[]
   onRequestAnnotation?(target: ArtifactAnnotationTarget): void
   regionSelection: boolean
+  overlayOnly?: boolean
   onRegionSelectionDone(): void
 }): React.JSX.Element {
+  const stageRef = useRef<HTMLDivElement>(null)
   const [regionStart, setRegionStart] = useState<{ x: number; y: number }>()
   const [regionEnd, setRegionEnd] = useState<{ x: number; y: number }>()
+  const activeRegion = useRef<
+    | {
+        pointerId: number
+        start: { x: number; y: number }
+      }
+    | undefined
+  >(undefined)
+  const regionCallbacks = useRef({ onRequestAnnotation, onRegionSelectionDone })
+  useLayoutEffect(() => {
+    regionCallbacks.current = { onRequestAnnotation, onRegionSelectionDone }
+  }, [onRequestAnnotation, onRegionSelectionDone])
+
+  // Native pointer capture in an iframe can stall Electron's mouse routing.
+  // Track the drag in both documents instead, including release outside the frame.
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!overlayOnly || !stage) return
+    const childDocument = stage.ownerDocument
+    const frameElement = childDocument.defaultView?.frameElement
+    const parentDocument = frameElement?.ownerDocument
+    const point = (event: PointerEvent, inParent: boolean): { x: number; y: number } => {
+      const rect = stage.getBoundingClientRect()
+      const frame = inParent ? frameElement?.getBoundingClientRect() : undefined
+      return {
+        x: Math.max(0, Math.min(1, (event.clientX - (frame?.left ?? 0) - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (event.clientY - (frame?.top ?? 0) - rect.top) / rect.height))
+      }
+    }
+    const clear = (): void => {
+      activeRegion.current = undefined
+      setRegionStart(undefined)
+      setRegionEnd(undefined)
+      regionCallbacks.current.onRegionSelectionDone()
+    }
+    const move = (event: PointerEvent, inParent: boolean): void => {
+      const region = activeRegion.current
+      if (!region || event.pointerId !== region.pointerId) return
+      setRegionEnd(point(event, inParent))
+    }
+    const finish = (event: PointerEvent, inParent: boolean): void => {
+      const region = activeRegion.current
+      if (!region || event.pointerId !== region.pointerId) return
+      const end = point(event, inParent)
+      const x = Math.min(region.start.x, end.x)
+      const y = Math.min(region.start.y, end.y)
+      const width = Math.abs(region.start.x - end.x)
+      const height = Math.abs(region.start.y - end.y)
+      clear()
+      if (width >= 0.02 && height >= 0.02) {
+        regionCallbacks.current.onRequestAnnotation?.({
+          kind: 'region',
+          slideId: slide.id,
+          x,
+          y,
+          width,
+          height
+        })
+      }
+    }
+    const cancel = (): void => {
+      if (activeRegion.current) clear()
+    }
+    const childMove = (event: PointerEvent): void => move(event, false)
+    const childUp = (event: PointerEvent): void => finish(event, false)
+    const parentMove = (event: PointerEvent): void => move(event, true)
+    const parentUp = (event: PointerEvent): void => finish(event, true)
+    childDocument.addEventListener('pointermove', childMove)
+    childDocument.addEventListener('pointerup', childUp)
+    childDocument.addEventListener('pointercancel', cancel)
+    parentDocument?.addEventListener('pointermove', parentMove)
+    parentDocument?.addEventListener('pointerup', parentUp)
+    parentDocument?.addEventListener('pointercancel', cancel)
+    const topWindow = parentDocument?.defaultView ?? childDocument.defaultView
+    const blur = (): void => {
+      // Focusing the iframe can blur the parent window while the app still has focus.
+      if (!topWindow?.document.hasFocus()) cancel()
+    }
+    topWindow?.addEventListener('blur', blur)
+    return () => {
+      childDocument.removeEventListener('pointermove', childMove)
+      childDocument.removeEventListener('pointerup', childUp)
+      childDocument.removeEventListener('pointercancel', cancel)
+      parentDocument?.removeEventListener('pointermove', parentMove)
+      parentDocument?.removeEventListener('pointerup', parentUp)
+      parentDocument?.removeEventListener('pointercancel', cancel)
+      topWindow?.removeEventListener('blur', blur)
+      activeRegion.current = undefined
+    }
+  }, [overlayOnly, slide.id])
+
   const normalizedPoint = (event: React.PointerEvent<HTMLDivElement>): { x: number; y: number } => {
     const rect = event.currentTarget.getBoundingClientRect()
     return {
@@ -318,30 +470,39 @@ function SlideCanvas({
   }
   return (
     <div
-      className={cn('presentation-stage', regionSelection && 'presentation-stage-selecting-region')}
-      style={{ width: `${zoom}%` }}
+      ref={stageRef}
+      className={cn(
+        'presentation-stage',
+        overlayOnly && 'presentation-stage-overlay',
+        regionSelection && 'presentation-stage-selecting-region'
+      )}
+      style={overlayOnly ? undefined : { width: `${zoom}%`, aspectRatio }}
       aria-label={`第 ${slide.number} 张幻灯片`}
       onPointerDown={(event) => {
         if (!regionSelection || event.target !== event.currentTarget) return
-        event.currentTarget.setPointerCapture(event.pointerId)
         const point = normalizedPoint(event)
+        if (overlayOnly) {
+          activeRegion.current = { pointerId: event.pointerId, start: point }
+        } else {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }
         setRegionStart(point)
         setRegionEnd(point)
       }}
       onPointerMove={(event) => {
-        if (regionStart) setRegionEnd(normalizedPoint(event))
+        if (!overlayOnly && regionStart) setRegionEnd(normalizedPoint(event))
       }}
-      onPointerUp={finishRegion}
+      onPointerUp={overlayOnly ? undefined : finishRegion}
     >
+      {imageSrc ? (
+        <img
+          className="presentation-stage-image"
+          src={imageSrc}
+          alt={`${slide.name}预览`}
+          draggable={false}
+        />
+      ) : null}
       {slide.elements.map((element) => {
-        const content =
-          element.kind === 'image' && element.imageDataUrl ? (
-            <img src={element.imageDataUrl} alt={element.name} draggable={false} />
-          ) : element.kind === 'chart' ? (
-            <span className="presentation-chart-placeholder">{element.text ?? '图表'}</span>
-          ) : (
-            <span>{element.text}</span>
-          )
         return (
           <button
             key={element.id}
@@ -355,9 +516,7 @@ function SlideCanvas({
               left: `${element.frame.x * 100}%`,
               top: `${element.frame.y * 100}%`,
               width: `${element.frame.width * 100}%`,
-              height: `${element.frame.height * 100}%`,
-              ...(element.fill ? { backgroundColor: element.fill } : {}),
-              ...(element.color ? { color: element.color } : {})
+              height: `${element.frame.height * 100}%`
             }}
             aria-label={element.hyperlink ? `${element.name}，打开链接` : element.name}
             onClick={() => {
@@ -367,9 +526,7 @@ function SlideCanvas({
                 onRequestAnnotation?.({ kind: 'element', slideId: slide.id, objectId: element.id })
               }
             }}
-          >
-            {content}
-          </button>
+          ></button>
         )
       })}
       {annotations.map((annotation, index) => {

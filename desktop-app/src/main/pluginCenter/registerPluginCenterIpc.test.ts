@@ -34,6 +34,18 @@ const MUTATION_RESULT = {
   changedSections: []
 } as const
 
+const PRIMARY_RUNTIME_RESULT = {
+  version: PLUGIN_CENTER_API_VERSION,
+  runtime: {
+    state: 'missing',
+    message: 'Primary Runtime 尚未安装。',
+    recovery: '可以安装或修复。',
+    canInstallOrRepair: true,
+    canRunUpdate: true,
+    canCancel: false
+  }
+} as const
+
 const INSTALLED_PLUGINS_RESULT = {
   version: PLUGIN_CENTER_API_VERSION,
   generatedAt: '2026-08-24T00:00:00.000Z',
@@ -106,6 +118,10 @@ const REQUEST_ID = 'request-0000000001'
 
 type ServiceMethod =
   | 'getSnapshot'
+  | 'getPrimaryRuntimeStatus'
+  | 'installOrRepairPrimaryRuntime'
+  | 'runPrimaryRuntimeUpdate'
+  | 'cancelPrimaryRuntime'
   | 'getInstalledPlugins'
   | 'getPluginDetail'
   | 'getAppTools'
@@ -328,6 +344,18 @@ function createService(
 ): Record<ServiceMethod, ReturnType<typeof vi.fn>> {
   return {
     getSnapshot: vi.fn(async () => resultByMethod.getSnapshot ?? SNAPSHOT_RESULT),
+    getPrimaryRuntimeStatus: vi.fn(
+      async () => resultByMethod.getPrimaryRuntimeStatus ?? PRIMARY_RUNTIME_RESULT
+    ),
+    installOrRepairPrimaryRuntime: vi.fn(
+      async () => resultByMethod.installOrRepairPrimaryRuntime ?? PRIMARY_RUNTIME_RESULT
+    ),
+    runPrimaryRuntimeUpdate: vi.fn(
+      async () => resultByMethod.runPrimaryRuntimeUpdate ?? PRIMARY_RUNTIME_RESULT
+    ),
+    cancelPrimaryRuntime: vi.fn(
+      async () => resultByMethod.cancelPrimaryRuntime ?? PRIMARY_RUNTIME_RESULT
+    ),
     getInstalledPlugins: vi.fn(
       async () => resultByMethod.getInstalledPlugins ?? INSTALLED_PLUGINS_RESULT
     ),
@@ -387,6 +415,10 @@ describe('createPluginCenterIpcHandlers', () => {
   it('exposes only the fixed plugin center channels', () => {
     expect(pluginCenterIpcChannels).toEqual({
       getSnapshot: 'codex:plugin-center:get-snapshot',
+      getPrimaryRuntimeStatus: 'codex:plugin-center:get-primary-runtime-status',
+      installOrRepairPrimaryRuntime: 'codex:plugin-center:install-or-repair-primary-runtime',
+      runPrimaryRuntimeUpdate: 'codex:plugin-center:run-primary-runtime-update',
+      cancelPrimaryRuntime: 'codex:plugin-center:cancel-primary-runtime',
       getInstalledPlugins: 'codex:plugin-center:get-installed-plugins',
       getPluginDetail: 'codex:plugin-center:get-plugin-detail',
       getAppTools: 'codex:plugin-center:get-app-tools',
@@ -412,6 +444,27 @@ describe('createPluginCenterIpcHandlers', () => {
         .filter((channel) => channel !== pluginCenterIpcChannels.cancelRequest)
         .sort()
     )
+  })
+
+  it('validates and dispatches the fixed Primary Runtime recovery actions', async () => {
+    const service = createService()
+    const handlers = createPluginCenterIpcHandlers(service as never)
+    const input = { version: PLUGIN_CENTER_API_VERSION }
+
+    for (const [channel, method] of [
+      [pluginCenterIpcChannels.getPrimaryRuntimeStatus, 'getPrimaryRuntimeStatus'],
+      [pluginCenterIpcChannels.installOrRepairPrimaryRuntime, 'installOrRepairPrimaryRuntime'],
+      [pluginCenterIpcChannels.runPrimaryRuntimeUpdate, 'runPrimaryRuntimeUpdate'],
+      [pluginCenterIpcChannels.cancelPrimaryRuntime, 'cancelPrimaryRuntime']
+    ] as const) {
+      await expect(handlers[channel](createIpcEvent(), envelope(input))).resolves.toEqual(
+        PRIMARY_RUNTIME_RESULT
+      )
+      expect(service[method]).toHaveBeenCalledWith(input)
+      await expect(
+        handlers[channel](createIpcEvent(), envelope({ ...input, path: '/private' }))
+      ).rejects.toThrow()
+    }
   })
 
   it.each(cases)(

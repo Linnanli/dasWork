@@ -30,5 +30,6 @@ export function normalizedFailedTurnError(
         message: turnErrorMessage(status, error) ?? DEFAULT_TURN_FAILURE_MESSAGE,
         codexErrorInfo: error?.codexErrorInfo ?? null,
         additionalDetails: error?.additionalDetails ?? null,
+        misalignment: error?.misalignment ?? null,
     };
 }

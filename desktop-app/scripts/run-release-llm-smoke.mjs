@@ -5,34 +5,39 @@ import { join, resolve } from 'node:path'
 const appRoot = resolve(import.meta.dirname, '..')
 const playwrightArgs = process.argv.slice(2)
 
-requireReleaseEnvironment()
-if (playwrightArgs.length > 0) {
-  throw new Error('The release LLM gate always runs the complete R01-R06 suite without filters.')
-}
-runOrExit('npm', ['run', 'build:unpack'])
+process.exitCode = await main()
 
-const executable = packagedExecutable(join(appRoot, 'dist'))
-if (!executable || !existsSync(executable)) {
-  throw new Error(`Could not find packaged executable for ${process.platform}/${process.arch}`)
-}
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+async function main() {
+  requireReleaseEnvironment()
+  if (playwrightArgs.length > 0) {
+    throw new Error('The release LLM gate always runs the complete R01-R06 suite without filters.')
+  }
 
-const releaseEnvironment = {
-  DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE: executable
-}
-const firstAttemptStatus = runReleaseSuite(1, releaseEnvironment)
-if (firstAttemptStatus === 0) process.exit(0)
+  const buildStatus = run('npm', ['run', 'build:unpack'])
+  if (buildStatus !== 0) return buildStatus
 
-// An operator may classify the first failure as an external-service outage. The
-// retry is deliberately whole-suite and capped at one, so R01-R06 cannot become
-// green through per-test retries or an unbounded retry loop.
-if (process.env.DASCOWORK_RELEASE_EXTERNAL_RETRY !== '1') {
-  process.exit(firstAttemptStatus)
-}
+  const executable = packagedExecutable(join(appRoot, 'dist'))
+  if (!executable || !existsSync(executable)) {
+    throw new Error(`Could not find packaged executable for ${process.platform}/${process.arch}`)
+  }
 
-console.error(
-  'Release LLM suite failed after an externally classified outage; rerunning the complete R01-R06 suite once.'
-)
-process.exit(runReleaseSuite(2, releaseEnvironment))
+  const releaseEnvironment = {
+    DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE: executable
+  }
+  const firstAttemptStatus = runReleaseSuite(1, releaseEnvironment)
+  if (firstAttemptStatus === 0) return 0
+
+  // An operator may classify the first failure as an external-service outage.
+  // The retry is deliberately whole-suite and capped at one, so R01-R06 cannot
+  // become green through per-test retries or an unbounded retry loop.
+  if (process.env.DASCOWORK_RELEASE_EXTERNAL_RETRY !== '1') return firstAttemptStatus
+
+  console.error(
+    'Release LLM suite failed after an externally classified outage; rerunning the complete R01-R06 suite once.'
+  )
+  return runReleaseSuite(2, releaseEnvironment)
+}
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function requireReleaseEnvironment() {
@@ -57,12 +62,6 @@ function runReleaseSuite(attempt, extraEnv) {
     ],
     extraEnv
   )
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function runOrExit(command, args, extraEnv = {}) {
-  const status = run(command, args, extraEnv)
-  if (status !== 0) process.exit(status)
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type

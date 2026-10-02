@@ -26,6 +26,8 @@ import {
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcChannels,
   pluginCenterIpcCancelRequestSchema,
+  pluginCenterPrimaryRuntimeRequestSchema,
+  pluginCenterPrimaryRuntimeResultSchema,
   parsePluginCenterIpcRequestEnvelope
 } from '../../shared/pluginCenterApi'
 import type { PluginCenterService } from './PluginCenterService'
@@ -60,6 +62,10 @@ type PluginCenterIpcEvent = {
 
 type PluginCenterServiceMethod =
   | 'getSnapshot'
+  | 'getPrimaryRuntimeStatus'
+  | 'installOrRepairPrimaryRuntime'
+  | 'runPrimaryRuntimeUpdate'
+  | 'cancelPrimaryRuntime'
   | 'getInstalledPlugins'
   | 'getPluginDetail'
   | 'getAppTools'
@@ -126,6 +132,68 @@ export function createPluginCenterIpcHandlers(
         requestId,
         SNAPSHOT_ERROR_MESSAGE,
         { cancellable: true }
+      )
+    },
+    [pluginCenterIpcChannels.getPrimaryRuntimeStatus]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterPrimaryRuntimeRequestSchema
+      )
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterPrimaryRuntimeResultSchema.parse(
+            await service.getPrimaryRuntimeStatus(input)
+          ),
+        event,
+        requestId,
+        SNAPSHOT_ERROR_MESSAGE,
+        { cancellable: true }
+      )
+    },
+    [pluginCenterIpcChannels.installOrRepairPrimaryRuntime]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterPrimaryRuntimeRequestSchema
+      )
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterPrimaryRuntimeResultSchema.parse(
+            await service.installOrRepairPrimaryRuntime(input)
+          ),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.runPrimaryRuntimeUpdate]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterPrimaryRuntimeRequestSchema
+      )
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterPrimaryRuntimeResultSchema.parse(
+            await service.runPrimaryRuntimeUpdate(input)
+          ),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
+      )
+    },
+    [pluginCenterIpcChannels.cancelPrimaryRuntime]: async (event, payload) => {
+      const { requestId, payload: input } = parseEnvelope(
+        payload,
+        pluginCenterPrimaryRuntimeRequestSchema
+      )
+      return safePluginCenterCall(
+        async () =>
+          pluginCenterPrimaryRuntimeResultSchema.parse(await service.cancelPrimaryRuntime(input)),
+        event,
+        requestId,
+        MUTATION_ERROR_MESSAGE,
+        { cancellable: false }
       )
     },
     [pluginCenterIpcChannels.getInstalledPlugins]: async (event, payload) => {

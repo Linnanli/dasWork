@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.9752872759480689,
+        "colorBucketCount": 308,
+        "sha256": "0f74345dfae768310cac02ac7950482ace21c8e1fbe303726c95bd9c8e8481e2",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.30820397175022723,
+        "colorBucketCount": 785,
+        "sha256": "f5e634c6cdb9468e3f2cd2ba14fddf3be5c4aec834fec7154a6a4086715e2acc",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.06727676386266694,
+        "colorBucketCount": 618,
+        "sha256": "1cb71475ef021ef652dff422b25e11139eafae9f5f7f351bec9e593c89098f46",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.6124746521222292,
+        "colorBucketCount": 526,
+        "sha256": "8b82074c22bd17457a7488c31a8c5c661f4af3b3a384d3b31ec5f72cdd48db41",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.14256578794023728,
+        "colorBucketCount": 202,
+        "sha256": "7a345e8b6074913503267a89738626bb0dc1d30d5b9897619b12312465732ef6",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1008,
+        "height": 681,
+        "nonWhiteRatio": 0.10145123884110668,
+        "colorBucketCount": 578,
+        "sha256": "6aa6c1fb0eec185b060ffa3b71e239ed8ef91e19922668df95154d60d6283e6c",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "801e3f7698264b6ab80e42cdfdb6bc8f",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd"
+        }
+      }
+    ]
+  }
+}

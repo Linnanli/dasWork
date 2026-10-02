@@ -27,6 +27,7 @@ import type {
   PluginCenterGetPluginDetailResult,
   PluginCenterGetRecommendedSkillsResult,
   PluginCenterMutationResult,
+  PluginCenterPrimaryRuntimeStatus,
   PluginCenterPlugin,
   PluginCenterPluginDetail,
   PluginCenterPluginMcpServer,
@@ -829,6 +830,9 @@ export function PluginCenterPage({
   const search = surface.page === 'browse' ? (surface.search ?? browseSearchDraft) : manageSearch
   const [mutation, setMutation] = React.useState<MutationStatus>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
+  const [primaryRuntimeStatus, setPrimaryRuntimeStatus] =
+    React.useState<PluginCenterPrimaryRuntimeStatus | null>(null)
+  const [primaryRuntimeLoading, setPrimaryRuntimeLoading] = React.useState(false)
   const [marketplaceOpen, setMarketplaceOpen] = React.useState(false)
   const [mcpEditor, setMcpEditor] = React.useState<McpEditorState>(null)
   const [confirm, setConfirm] = React.useState<ConfirmState>(null)
@@ -925,6 +929,61 @@ export function PluginCenterPage({
       supplementalSection,
       usesPluginResources
     ]
+  )
+
+  const primaryRuntimeVisible = surface.page === 'manage' && surface.tab === 'plugins'
+  const refreshPrimaryRuntime = React.useCallback(async (): Promise<void> => {
+    if (!api) return
+    setPrimaryRuntimeLoading(true)
+    try {
+      const result = await api.getPrimaryRuntimeStatus({ version: PLUGIN_CENTER_API_VERSION })
+      setPrimaryRuntimeStatus(result.runtime)
+    } catch {
+      setPrimaryRuntimeStatus(null)
+    } finally {
+      setPrimaryRuntimeLoading(false)
+    }
+  }, [api])
+
+  React.useEffect(() => {
+    if (!primaryRuntimeVisible) return
+    const timer = window.setTimeout(() => void refreshPrimaryRuntime(), 0)
+    return () => window.clearTimeout(timer)
+  }, [primaryRuntimeVisible, refreshPrimaryRuntime])
+
+  React.useEffect(() => {
+    if (!primaryRuntimeVisible || !api) return
+    return api.subscribePrimaryRuntimeStatus((status) => {
+      setPrimaryRuntimeStatus(status)
+      setPrimaryRuntimeLoading(false)
+    })
+  }, [api, primaryRuntimeVisible])
+
+  const runPrimaryRuntimeAction = React.useCallback(
+    async (
+      action: (input: { version: typeof PLUGIN_CENTER_API_VERSION }) => Promise<{
+        runtime: PluginCenterPrimaryRuntimeStatus
+      }>
+    ): Promise<void> => {
+      if (!api) return
+      setPrimaryRuntimeLoading(true)
+      setActionError(null)
+      try {
+        const result = await action({ version: PLUGIN_CENTER_API_VERSION })
+        setPrimaryRuntimeStatus(result.runtime)
+        if (result.runtime.state === 'ready') {
+          await refresh(true)
+          toast.success('Primary Runtime 已就绪；请新建任务以使用新增能力。')
+        } else if (result.runtime.state === 'failed') {
+          toast.error(result.runtime.message ?? 'Primary Runtime 安装未完成。')
+        }
+      } catch {
+        setActionError('Primary Runtime 操作未完成，请稍后重试。')
+      } finally {
+        setPrimaryRuntimeLoading(false)
+      }
+    },
+    [api, refresh]
   )
 
   const applyMutationResult = React.useCallback(
@@ -1480,7 +1539,12 @@ export function PluginCenterPage({
             aria-label="刷新插件详情"
             title="刷新插件详情"
             disabled={loading || Boolean(mutation)}
-            onClick={() => void refresh(true)}
+            onClick={() =>
+              void Promise.all([
+                refresh(true),
+                primaryRuntimeVisible ? refreshPrimaryRuntime() : undefined
+              ])
+            }
           >
             <RefreshCwIcon className={cn('size-4', (loading || refreshing) && 'animate-spin')} />
           </Button>
@@ -1779,6 +1843,22 @@ export function PluginCenterPage({
               </div>
             )}
 
+            {primaryRuntimeVisible && (
+              <PrimaryRuntimeStatusCard
+                status={primaryRuntimeStatus}
+                loading={primaryRuntimeLoading}
+                onInstallOrRepair={() =>
+                  void runPrimaryRuntimeAction((input) => api!.installOrRepairPrimaryRuntime(input))
+                }
+                onUpdate={() =>
+                  void runPrimaryRuntimeAction((input) => api!.runPrimaryRuntimeUpdate(input))
+                }
+                onCancel={() =>
+                  void runPrimaryRuntimeAction((input) => api!.cancelPrimaryRuntime(input))
+                }
+              />
+            )}
+
             {contentView}
           </div>
         </ScrollArea>
@@ -1855,6 +1935,134 @@ function applyInstalledMutation(
   }
   if (currentIndex < 0) return [...plugins, installedPlugin]
   return plugins.map((plugin, index) => (index === currentIndex ? installedPlugin : plugin))
+}
+
+function PrimaryRuntimeStatusCard({
+  status,
+  loading,
+  onInstallOrRepair,
+  onUpdate,
+  onCancel
+}: {
+  status: PluginCenterPrimaryRuntimeStatus | null
+  loading: boolean
+  onInstallOrRepair: () => void
+  onUpdate: () => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const stateLabel = primaryRuntimeStateLabel(status?.state)
+  const destructive = status?.state === 'failed' || status?.state === 'broken'
+  return (
+    <section
+      data-slot="primary-runtime-status"
+      className={cn(
+        'mb-4 rounded-lg border px-4 py-3',
+        destructive ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/20'
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <DatabaseIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <h2 className="font-medium">Primary Runtime</h2>
+        <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
+          {loading ? '正在读取状态' : stateLabel}
+        </span>
+        {status?.currentVersion && (
+          <span className="text-xs text-muted-foreground">当前版本 {status.currentVersion}</span>
+        )}
+        {!status?.currentVersion && status?.targetVersion && (
+          <span className="text-xs text-muted-foreground">目标版本 {status.targetVersion}</span>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {status?.message ?? '正在读取 Primary Runtime 状态。'}
+      </p>
+      {status?.recovery && <p className="mt-1 text-xs text-muted-foreground">{status.recovery}</p>}
+      {status?.state === 'downloading' && status.downloadSizeBytes && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          下载进度{' '}
+          {formatPrimaryRuntimeDownloadProgress(
+            status.downloadedBytes ?? 0,
+            status.downloadSizeBytes
+          )}
+        </p>
+      )}
+      {status?.nextCheckAt && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          下次检查 {new Date(status.nextCheckAt).toLocaleString()}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {status?.canInstallOrRepair && (
+          <Button size="sm" type="button" disabled={loading} onClick={onInstallOrRepair}>
+            {status.state === 'ready' ? '修复 Runtime' : '安装或修复'}
+          </Button>
+        )}
+        {status?.canRunUpdate && (
+          <Button size="sm" variant="outline" type="button" disabled={loading} onClick={onUpdate}>
+            检查并更新
+          </Button>
+        )}
+        {status?.canCancel && (
+          <Button size="sm" variant="outline" type="button" disabled={loading} onClick={onCancel}>
+            取消安装
+          </Button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function primaryRuntimeStateLabel(
+  state: PluginCenterPrimaryRuntimeStatus['state'] | undefined
+): string {
+  switch (state) {
+    case 'ready':
+      return '已就绪'
+    case 'checking':
+      return '正在检查'
+    case 'resolving':
+      return '正在获取发布信息'
+    case 'downloading':
+      return '正在下载'
+    case 'verifying':
+      return '正在验证'
+    case 'extracting':
+      return '正在解压'
+    case 'validating':
+      return '正在校验 Runtime'
+    case 'installing':
+      return '正在安装'
+    case 'activating':
+      return '正在激活'
+    case 'configuring':
+      return '正在配置插件和技能'
+    case 'committing':
+      return '正在提交'
+    case 'rolling-back':
+      return '正在恢复'
+    case 'update-available':
+      return '有可用更新'
+    case 'disabled':
+      return '未配置'
+    case 'unsupported':
+      return '不受支持'
+    case 'failed':
+      return '需要处理'
+    case 'missing':
+    case 'broken':
+    case undefined:
+      return '未就绪'
+  }
+}
+
+function formatPrimaryRuntimeDownloadProgress(downloadedBytes: number, totalBytes: number): string {
+  const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
+  return `${percent}%（${formatPrimaryRuntimeBytes(downloadedBytes)} / ${formatPrimaryRuntimeBytes(totalBytes)}）`
+}
+
+function formatPrimaryRuntimeBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function AddMenu({

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "284c3665b1d843948373b613830f325b",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 51,
+        "sha256": "fa1e5b7ebaed7de283aca77a0a55c95eb18d43eeae7d8e7a807ef78f9f9dc87a",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.1766407455632716,
+        "colorBucketCount": 181,
+        "sha256": "ea42d08dc2fa13dc173b1dc8e7a23e814124345fdfebf9c45101634aa5115b9e",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.018167558834876543,
+        "colorBucketCount": 17,
+        "sha256": "561674ab9941941841f70fffdd172c424b7fda15b834563889222596fd35f62f",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.28106999903549384,
+        "colorBucketCount": 70,
+        "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.0824609375,
+        "colorBucketCount": 43,
+        "sha256": "58cd4feeeca6600649052196543c04c9acae79248f2bd0e32d4aa8e0b8fd0cad",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.03025390625,
+        "colorBucketCount": 278,
+        "sha256": "e7be7f5845731a609afc918b04537ef2ea29a5815e11151ac28fe8dc30436db6",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "284c3665b1d843948373b613830f325b",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "eba6711c2fc124086786fa8d2496adcf30569ecbd442fc39c380498145786e2f"
+        }
+      }
+    ]
+  }
+}

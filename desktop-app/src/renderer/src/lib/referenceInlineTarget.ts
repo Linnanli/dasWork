@@ -1,3 +1,5 @@
+import { parseChatImageDataUrl } from '../../../shared/chatImageApi'
+
 export type InlineReferenceKind =
   | 'agent'
   | 'app'
@@ -183,7 +185,22 @@ export function isAbsoluteLocalPath(path: string): boolean {
   return (path.startsWith('/') && !path.startsWith('//')) || /^[A-Za-z]:[\\/]/u.test(path)
 }
 
-export function referenceUrlTransform(url: string): string | null | undefined {
+export function isMarkdownChatImageSource(url: string): boolean {
+  if (!url || url.includes('\0')) return false
+  if (url.startsWith('data:')) return parseChatImageDataUrl(url) !== null
+  if (safeHttpUrl(url)) return true
+  if (url.startsWith('app://fs/@fs/') || url.startsWith('file:') || url.startsWith('sandbox:'))
+    return true
+  if (isAbsoluteLocalPath(url) || /^[A-Za-z]:%5C/iu.test(url)) return true
+  return !/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(url) && !url.startsWith('//') && !url.startsWith('#')
+}
+
+export function referenceUrlTransform(
+  url: string,
+  key?: string,
+  node?: { tagName?: string }
+): string | null | undefined {
+  if (key === 'src' && node?.tagName === 'img') return isMarkdownChatImageSource(url) ? url : null
   const reference = classifyReferenceTarget({ href: url })
   if (reference?.kind === 'unsupported') return null
   return url

@@ -1,0 +1,2996 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-migration.v1",
+  "target": "darwin-x64",
+  "status": "passed",
+  "realAppServer": true,
+  "signedLoopbackFeed": true,
+  "evidenceScope": "migration-correctness; performance and release budgets are verified by separate gates",
+  "archiveIdentities": {
+    "v2": {
+      "path": "/Users/runner/work/_temp/legacy-v2/darwin-x64/primary-runtime.zip",
+      "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+      "sha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+      "size": 794412879
+    },
+    "v3": {
+      "path": "/Users/runner/work/_temp/runtime-dist/darwin-x64/primary-runtime.zip",
+      "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+      "sha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+      "size": 116313335
+    }
+  },
+  "transitions": [
+    {
+      "scenario": "v2-initial",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 1,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-2",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-2",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 1,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "interrupted-v3-download",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 1,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-2",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-2",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 1,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "feed-unavailable",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 1,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-2",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-2",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 1,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "failed-v2-to-v3-sync_skills",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 3,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-6",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-6",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 2,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "failed-v2-to-v3-reload_skills",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 5,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-10",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-10",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 4,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "failed-v2-to-v3-retire_plugin",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 7,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-14",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-14",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 7,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "v2-to-v3",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 8,
+        "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+        "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+        "manifestSha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78",
+        "directory": "versions/705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+          "skills": [
+            {
+              "name": "officecli",
+              "sha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+            }
+          ]
+        },
+        "names": [
+          "officecli"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": false,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-16",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-16",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 8,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "v3-cold-start-retirement",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 8,
+        "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+        "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+        "manifestSha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78",
+        "directory": "versions/705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+          "skills": [
+            {
+              "name": "officecli",
+              "sha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+            }
+          ]
+        },
+        "names": [
+          "officecli"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": false,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-18",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-18",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 9,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "retained-v2-rollback-1",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 9,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-20",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-20",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 10,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "repeat-v2-to-v3-1",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 10,
+        "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+        "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+        "manifestSha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78",
+        "directory": "versions/705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+          "skills": [
+            {
+              "name": "officecli",
+              "sha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+            }
+          ]
+        },
+        "names": [
+          "officecli"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": false,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-22",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-22",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 11,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "retained-v2-rollback-2",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 11,
+        "version": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+        "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+        "manifestSha256": "816febe355322d0db6fa5f100f6a002c574c43090a6a103b1b827586501b7c45",
+        "directory": "versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-darwin-x64-p1a-5",
+          "skills": [
+            {
+              "name": "presentation-skill",
+              "sha256": "b64a5bf1e513709cbe706466dd95c2bdb6caa2d6aa38d05f79b422400ed3be5d"
+            }
+          ]
+        },
+        "names": [
+          "presentation-skill"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": true,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-24",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-24",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 12,
+      "chatCompleted": true
+    },
+    {
+      "scenario": "repeat-v2-to-v3-2",
+      "pointer": {
+        "schemaVersion": 1,
+        "generation": 12,
+        "version": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+        "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+        "manifestSha256": "4b043e6baa99a1b9f82e4332f22ea985a8ace00e472e81096c68d8fb6a4b1a78",
+        "directory": "versions/705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd"
+      },
+      "managedSkills": {
+        "marker": {
+          "owner": "dascowork-primary-runtime",
+          "bundleVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final",
+          "skills": [
+            {
+              "name": "officecli",
+              "sha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+            }
+          ]
+        },
+        "names": [
+          "officecli"
+        ]
+      },
+      "plugins": [
+        {
+          "id": "presentation-skill@presentation-skill",
+          "remotePluginId": null,
+          "version": null,
+          "localVersion": "0.8.0",
+          "name": "presentation-skill",
+          "shareContext": null,
+          "source": {
+            "type": "local",
+            "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff/plugins/presentation-skill/plugins/presentation-skill"
+          },
+          "installed": true,
+          "installedAt": null,
+          "enabled": false,
+          "installPolicy": "AVAILABLE",
+          "installPolicySource": null,
+          "mustShowInstallationInterstitial": null,
+          "authPolicy": "ON_INSTALL",
+          "availability": "AVAILABLE",
+          "disabledReason": null,
+          "eligiblePlanTypes": null,
+          "interface": {
+            "displayName": "presentation-skill",
+            "shortDescription": "Create a new PPTX, run offline QA, and preview the result.",
+            "longDescription": "Creates a new PPTX from non-PPTX workspace inputs using only Runtime-owned dependencies. Existing-PPTX editing, online installs, network asset collection, and model API access are not available.",
+            "developerName": "dasCowork Runtime",
+            "category": "Productivity",
+            "capabilities": [
+              "Write",
+              "Files",
+              "Presentations",
+              "Quality assurance"
+            ],
+            "websiteUrl": null,
+            "privacyPolicyUrl": null,
+            "termsOfServiceUrl": null,
+            "defaultPrompt": [
+              "Create a new PowerPoint deck from the supplied workspace inputs.",
+              "Run the Runtime presentation QA and preview the generated deck."
+            ],
+            "brandColor": "#2563EB",
+            "composerIcon": null,
+            "composerIconUrl": null,
+            "logo": null,
+            "logoDark": null,
+            "logoUrl": null,
+            "logoUrlDark": null,
+            "screenshots": [],
+            "screenshotUrls": []
+          },
+          "keywords": []
+        }
+      ],
+      "snapshot": {
+        "revision": "desktop-capabilities-26",
+        "primaryRuntimeStateRevision": "primary-runtime-capabilities-26",
+        "hostId": "local",
+        "dynamicTools": [
+          {
+            "type": "namespace",
+            "name": "codex_app",
+            "description": "Desktop-hosted tools available in the local Codex application.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "load_workspace_dependencies",
+                "description": "Load the verified local workspace runtime paths and bundled libraries.",
+                "inputSchema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "availableToolNames": [
+          "load_workspace_dependencies"
+        ],
+        "nativeTools": "degraded",
+        "primaryRuntime": "ready",
+        "codexAppMcp": "unavailable",
+        "bundledPlugins": "unavailable",
+        "workspaceInstructionsEnabled": true,
+        "presentationsEligible": true,
+        "degraded": true
+      },
+      "reloadCount": 13,
+      "chatCompleted": true
+    }
+  ],
+  "reloads": [
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "officecli",
+        "description": "Create, inspect, validate, and edit Office documents (.docx, .xlsx, .pptx) with the Primary Runtime bundled OfficeCLI binary.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "officecli",
+        "description": "Create, inspect, validate, and edit Office documents (.docx, .xlsx, .pptx) with the Primary Runtime bundled OfficeCLI binary.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "officecli",
+        "description": "Create, inspect, validate, and edit Office documents (.docx, .xlsx, .pptx) with the Primary Runtime bundled OfficeCLI binary.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "officecli",
+        "description": "Create, inspect, validate, and edit Office documents (.docx, .xlsx, .pptx) with the Primary Runtime bundled OfficeCLI binary.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ],
+    [
+      {
+        "name": "officecli",
+        "description": "Create, inspect, validate, and edit Office documents (.docx, .xlsx, .pptx) with the Primary Runtime bundled OfficeCLI binary.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "presentation-skill:presentation-skill",
+        "description": "Create a new PPTX from non-PPTX workspace inputs, run offline QA, and return a preview. Existing-PPTX editing is not supported.",
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/plugins/cache/presentation-skill/presentation-skill/0.8.0/skills/presentation-skill/SKILL.md",
+        "scope": "user",
+        "enabled": true
+      },
+      {
+        "name": "imagegen",
+        "description": "Generate or edit raster images when the task benefits from AI-created bitmap visuals such as photos, illustrations, textures, sprites, mockups, or transparent-background cutouts. Use when Codex should create a brand-new image, transform an existing image, or derive visual variants from references, and the output should be a bitmap asset rather than repo-native code or vector. Do not use when the task is better handled by editing existing SVG/vector/code-native assets, extending an established icon or logo system, or building the visual directly in HTML/CSS/canvas.",
+        "interface": {
+          "displayName": "Image Gen",
+          "shortDescription": "Generate or edit images for websites, games, and more",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/assets/imagegen.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $imagegen to make or edit an image for this project."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/imagegen/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "openai-docs",
+        "description": "Use for Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, customization, automations, and self-knowledge—including 'you,' 'your,' 'this app,' or 'this coding agent' when they refer to Codex—and for OpenAI APIs/products and ChatGPT Work. Also use for model choice/migration, prompting, SDKs, Responses, Realtime, agents, evals, and Chat/Work/Codex comparisons. Do not use for generic app/software tasks that merely mention Codex.",
+        "shortDescription": "Codex models/pricing, scheduled tasks, skills, settings, setup, troubleshooting, and self-knowledge; OpenAI APIs and ChatGPT Work. 'You'/'this app' means Codex only.",
+        "interface": {
+          "displayName": "OpenAI Docs",
+          "shortDescription": "OpenAI and Codex docs for models, skills, tasks, and setup",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/assets/openai.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/openai-docs/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "plugin-creator",
+        "description": "Create and scaffold plugin directories for Codex with a required `.codex-plugin/plugin.json`, optional plugin folders/files, valid manifest defaults, and personal-marketplace entries by default. Use when Codex needs to create a new personal plugin, add optional plugin structure, generate or update marketplace entries for plugin ordering and availability metadata, or update an existing local plugin during development with the CLI-driven cachebuster and reinstall flow.",
+        "interface": {
+          "displayName": "Plugin Creator",
+          "shortDescription": "Scaffold plugins and marketplace entries",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/assets/plugin-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $plugin-creator to scaffold a valid plugin in the personal marketplace, then validate it before handing it back."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/plugin-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "review-agent",
+        "description": "Perform a read-only, defect-first review of a specified code change and return every actionable finding. Use when another agent delegates review of uncommitted changes, a base-branch diff, a commit, or custom review instructions.",
+        "interface": {
+          "displayName": "Review Agent",
+          "shortDescription": "Find actionable bugs in code changes",
+          "iconSmall": null,
+          "iconLarge": null,
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": "Use $review-agent to review the requested code changes and return actionable findings."
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/review-agent/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-creator",
+        "description": "Create or update a Codex skill with appropriately scoped instructions and any needed supporting resources.",
+        "shortDescription": "Create or update a skill",
+        "interface": {
+          "displayName": "Skill Creator",
+          "shortDescription": "Create or update a skill",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/assets/skill-creator.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-creator/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      },
+      {
+        "name": "skill-installer",
+        "description": "Install Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path. Use when a user asks to list installable skills, install a curated skill, or install a skill from another repo (including private repos).",
+        "shortDescription": "Install curated skills from openai/skills or other repos",
+        "interface": {
+          "displayName": "Skill Installer",
+          "shortDescription": "Install curated skills from openai/skills or other repos",
+          "iconSmall": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer-small.svg",
+          "iconLarge": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/assets/skill-installer.png",
+          "iconSmallUrl": null,
+          "iconLargeUrl": null,
+          "brandColor": null,
+          "defaultPrompt": null
+        },
+        "path": "/Users/runner/work/_temp/dsc-mig-pYZJEA/codex-home/skills/.system/skill-installer/SKILL.md",
+        "scope": "system",
+        "enabled": true
+      }
+    ]
+  ],
+  "previewBaseline": {
+    "legacyRuntimeRoot": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+    "cacheRoot": "/Users/runner/work/_temp/dsc-mig-pYZJEA/cache",
+    "legacyArchiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+  }
+}

@@ -1,0 +1,1472 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-input-validation.v1",
+  "status": "verified",
+  "target": "linux-x64",
+  "runner": "ubuntu-24.04",
+  "inputManifestSha256": "aff27a4556ae0d96bbf205c720a526877473a32d760f8998dad1ae45f57d0e15",
+  "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+  "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+  "font": {
+    "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+    "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+  },
+  "isolation": {
+    "schemaVersion": "dascowork-officecli-isolation.v1",
+    "target": "linux-x64",
+    "officecliSha256": "e54d3c1d248372365f0634aac56d6f1918bd04d6e71afc792ad50e075f56cfe9",
+    "strategy": "linux-network-namespace",
+    "host": {
+      "platform": "linux",
+      "architecture": "x64",
+      "release": "6.17.0-1022-azure"
+    },
+    "envReceipt": {
+      "pathEntries": [
+        "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli",
+        "/tmp/primary-runtime-officecli-isolated-wtdwlG/bin"
+      ],
+      "home": "/tmp/primary-runtime-officecli-isolated-wtdwlG/home",
+      "userProfile": "/tmp/primary-runtime-officecli-isolated-wtdwlG/home",
+      "xdgCacheHome": "/tmp/primary-runtime-officecli-isolated-wtdwlG/xdg-cache",
+      "xdgConfigHome": "/tmp/primary-runtime-officecli-isolated-wtdwlG/xdg-config",
+      "dotnetCliHome": "/tmp/primary-runtime-officecli-isolated-wtdwlG/dotnet",
+      "officeCliSkipUpdate": "1",
+      "officeCliNoAutoResident": "1"
+    },
+    "networkProbe": {
+      "schemaVersion": "dascowork-officecli-isolation.v1",
+      "target": "linux-x64",
+      "endpoint": {
+        "kind": "loopback",
+        "host": "127.0.0.1",
+        "port": 40983
+      },
+      "positiveControl": {
+        "denied": false,
+        "reason": "connected"
+      },
+      "isolatedAttempt": {
+        "denied": true,
+        "reason": "ENETUNREACH"
+      },
+      "isolatedCommand": {
+        "strategy": "linux-network-namespace",
+        "exitCode": 70,
+        "signal": null,
+        "elapsedMs": 69,
+        "outputTruncated": false,
+        "firewallRuleName": null
+      },
+      "passed": true
+    },
+    "executionAudit": {
+      "probe": {
+        "passed": true,
+        "positive": {
+          "schemaVersion": "dascowork-officecli-exec-audit-posix.v1",
+          "target": "linux-x64",
+          "strategy": "linux-strace-execve-allowlist",
+          "passed": true,
+          "allowedExecPaths": [
+            "/opt/hostedtoolcache/node/22.23.2/x64/bin/node"
+          ],
+          "command": {
+            "executable": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node",
+            "args": [
+              "--version"
+            ],
+            "exitCode": 0,
+            "signal": null,
+            "elapsedMs": 22,
+            "outputBytes": 9,
+            "stdoutBytes": 9,
+            "stderrBytes": 0,
+            "stdout": "v22.23.2\n",
+            "stderr": ""
+          },
+          "trace": {
+            "entries": [
+              {
+                "syscall": "execve",
+                "path": "/opt/hostedtoolcache/node/22.23.2/x64/bin/node"
+              }
+            ],
+            "allowedExecPaths": [
+              "/opt/hostedtoolcache/node/22.23.2/x64/bin/node"
+            ]
+          }
+        },
+        "externalSpawnRejection": "OfficeCLI Linux exec audit blocked external executable /bin/true.",
+        "execReplacementRejection": "OfficeCLI Linux exec audit blocked external executable /bin/true."
+      },
+      "commands": [
+        {
+          "name": "officecli-version",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "--version"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "7e01836ca678490f428e4db71f0fc51698525f44ae1317c87a2ca607117f70c4"
+        },
+        {
+          "name": "officecli-read-complex-docx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.docx",
+            "/body",
+            "--depth",
+            "4",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "ae7c6bfd961ab676ad983a4a89685cb70340db3a911b74de84675e12f4c9f295"
+        },
+        {
+          "name": "officecli-read-complex-xlsx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.xlsx",
+            "/Sheet1",
+            "--depth",
+            "2",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "86b7b34d1ad6f9c078b2baf61ab62ced12b0ace01662ba79c7c6ce5a34352a77"
+        },
+        {
+          "name": "officecli-create-docx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "create",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "8e232af2cfaaa9604a5f59aa0840e5406e2af1d4bfc7320e5565418cd4ec4d87"
+        },
+        {
+          "name": "officecli-read-docx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+            "/",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "37644586ee348908362675b064af51616e5aa3b963a3eae0a0ad18f2fb214282"
+        },
+        {
+          "name": "officecli-create-xlsx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "create",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "dbfbb94e09ebb42aaa3807f0527fb564e60acc56111def07b0d113348a2edc31"
+        },
+        {
+          "name": "officecli-read-xlsx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+            "/",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "fb23d4d7f4a9e0227b19a6b47744b01982dc69f05ccbdca703e2929199fd4daa"
+        },
+        {
+          "name": "officecli-create-pptx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "create",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "06f742f20a47bfa85aa03f38e6b2be8e102c05d1511d36841e5b9d68d7305ec6"
+        },
+        {
+          "name": "officecli-read-pptx-original",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+            "/",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "90172a0870b52fd7f641d416c93c624e67e7c9651662dfa64c1a0772615fe084"
+        },
+        {
+          "name": "officecli-add-docx-paragraph-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "add",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+            "/body",
+            "--type",
+            "paragraph",
+            "--prop",
+            "text=Runtime 中文验证",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "c699bc854791730612d4a64907c710d42dfdac25ed0cbcdaf281c6311f47b549"
+        },
+        {
+          "name": "officecli-save-docx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "save",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "9bf27ff81bc947e8e248cd1599fb120271960be83a5438b66e8d8411a3c34ab1"
+        },
+        {
+          "name": "officecli-validate-docx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "validate",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "97e777fa8f03b316d7fa6db3f5e01d0983506d90c06b342c92990d8bd93a5eb2"
+        },
+        {
+          "name": "officecli-reread-docx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+            "/body",
+            "--depth",
+            "4",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "f4996916dc2b1bddeebd7bece8ab1375b741fd397be12f48dea3fc12c61e5f26"
+        },
+        {
+          "name": "officecli-add-xlsx-cell-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "add",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "/Sheet1",
+            "--type",
+            "cell",
+            "--prop",
+            "address=C1",
+            "--prop",
+            "value=Runtime 中文验证",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "0c56025da0a18c720923ce5062b98573d89ae28910084d2bf7bddf37382e019c"
+        },
+        {
+          "name": "officecli-save-xlsx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "save",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "6ecc73a595a976c1afb151b4291462dccac1e5782756dab8a338ce2018cb666f"
+        },
+        {
+          "name": "officecli-validate-xlsx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "validate",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "e07b97c4bcb70f321727599aba28ce277d4b79c269a46923527afb3f1979f498"
+        },
+        {
+          "name": "officecli-reread-xlsx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "/Sheet1/C1",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "e081297ed95e09f83ee9e6a2047a5c88b006062ea140b366ff2cc999f6036410"
+        },
+        {
+          "name": "officecli-reread-xlsx-formula-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "/Sheet1/B4",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "f60bdb8a4bc7d7039ceff9e1c9ade542dd7f306db25254d5eb31bf867fa6b213"
+        },
+        {
+          "name": "officecli-reread-xlsx-chart-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+            "/Sheet1/chart[1]",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "6785fc354715c033f4ed4cad31b2adf0617fcda9e39cd3c9a4286c933801a724"
+        },
+        {
+          "name": "officecli-add-pptx-slide-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "add",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "/",
+            "--type",
+            "slide",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "70ae2ef58ff93a25af51e01f9e398f05c66c92abcff83095e64d82043523af2b"
+        },
+        {
+          "name": "officecli-add-pptx-text-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "add",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "/slide[1]",
+            "--type",
+            "shape",
+            "--prop",
+            "text=Runtime 中文验证",
+            "--prop",
+            "x=1",
+            "--prop",
+            "y=1",
+            "--prop",
+            "w=8",
+            "--prop",
+            "h=1",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "bf62f2e767f56ab6a9e660e6c741371d9525ff257c44e2172ae69f821f22e78c"
+        },
+        {
+          "name": "officecli-save-pptx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "save",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "cbf308a24f28ca78c802724b9663d34b0b7c3b23a094da9f0a54086346684664"
+        },
+        {
+          "name": "officecli-validate-pptx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "validate",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "7e13d9365887ab61d3c4646f54aae2a5c778901fbb889d7cc2f601648c7aa47b"
+        },
+        {
+          "name": "officecli-reread-pptx-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "get",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "/slide[1]",
+            "--json"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "08c7d7e4f8ee264fd66649fb067b6c6028e81531715786e7dec8f30a35fd7cfd"
+        },
+        {
+          "name": "officecli-view-pptx-svg-copy",
+          "executable": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli",
+          "args": [
+            "view",
+            "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+            "svg",
+            "--start",
+            "1",
+            "--max-lines",
+            "1"
+          ],
+          "exitCode": 0,
+          "strategy": "linux-unshare-strace-execve-allowlist",
+          "passed": true,
+          "entries": [
+            {
+              "syscall": "execve",
+              "path": "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+            }
+          ],
+          "allowedExecPaths": [
+            "/home/runner/work/_temp/runtime-inputs/linux-x64/dependencies/native/officecli/officecli"
+          ],
+          "traceSha256": "026853b3ce4ce3eed83638a2cc05e3ccddfdf3fa45dbc58ebb56a9c0802c3010"
+        }
+      ]
+    }
+  },
+  "render": {
+    "target": "linux-x64",
+    "engine": "officecli",
+    "originalSha256": {
+      "docx": "b7fd0a374a9f7c6c7081d98637a2db5376da6d9a253917a9013edfa814910d84",
+      "xlsx": "1cca0a8c9015085fb633b6bc4d6f006d2e4bb320bf671d9e1402a5c5ec7bbf1d",
+      "pptx": "8d1b2036c5e739ad8b536decf7d895a6507f6f921bc8120f2949cf759ea14c8f"
+    },
+    "docxSha256": "e6a89d554379bf99ecb581b1006a8ea793e4dc339ff0abbd31cb824d4227ffdf",
+    "xlsxSha256": "43ad3646bb412800fe7ca73f4fb098be63d352347acce346149a7b541d838e4e",
+    "pptxSha256": "dce83bc9f9b905da48e4e99c23b49ac7e339c9120e81a390130d0c63c50d8118",
+    "svgSha256": "70805eb2735bb78b528923bb1267e39d31a4bfb0fbe58b2485d04bb782bc7fcb",
+    "commands": [
+      {
+        "name": "officecli-read-complex-docx-original",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.docx",
+          "/body",
+          "--depth",
+          "4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "7d38e7d047d39613b30892124aa3c10bd66448400669047e6cddd53f7bb8e3bb",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-complex-xlsx-original",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.xlsx",
+          "/Sheet1",
+          "--depth",
+          "2",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "44b49853a54dbf5fa2d7e858c4eea1f52de6017869c2ca37c3b3a05415f41cac",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-docx-original",
+        "executable": "officecli",
+        "args": [
+          "create",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "b063d38ab2c8615ff977887d988c8a0e812a3204ce5b9fc629c09fe09918761e",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-docx-original",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "781e862da40d01f922b1496fa38a54228b13df53c163c5d7ba68ec33d13a5723",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-xlsx-original",
+        "executable": "officecli",
+        "args": [
+          "create",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "d1649d0a3ffa52b915ae23a86babbb34fbcb0a9b6bf3e5d9f50fe118a3ce83c5",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-xlsx-original",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "f5adacaf817e6bd20e847d8d4528b24844242e830cf7ecc73ed519d012310a24",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-create-pptx-original",
+        "executable": "officecli",
+        "args": [
+          "create",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "3192e8fa5dc6f4aaf787279a1d31013291334f3244441cc01d4f088627ff3833",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-read-pptx-original",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+          "/",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "4ed6a57f760fa82c969f0c3a5a0d9ba8b23798cee97cfa8f981c84e31cb44783",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-docx-paragraph-copy",
+        "executable": "officecli",
+        "args": [
+          "add",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+          "/body",
+          "--type",
+          "paragraph",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "839930fa6fea2f9605c6c233b7fbda1d46560910effea14ef9b1393dd75d400b",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-docx-copy",
+        "executable": "officecli",
+        "args": [
+          "save",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "637cdcfabcfdf9f41c75d1a478dee7b957e98ac72fd453fe924f3d8de77171dd",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-docx-copy",
+        "executable": "officecli",
+        "args": [
+          "validate",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-docx-copy",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+          "/body",
+          "--depth",
+          "4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "836d48c14abd6c5afbe98d49ebf3c4f26135c4d64cf1fb848b3b800b480ddb62",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-xlsx-cell-copy",
+        "executable": "officecli",
+        "args": [
+          "add",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "/Sheet1",
+          "--type",
+          "cell",
+          "--prop",
+          "address=C1",
+          "--prop",
+          "value=Runtime 中文验证",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "c12a086f06524ee9f0fc282eb069e8b6da4df61a4a3c7ce66f0d030568dbaf0d",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-xlsx-copy",
+        "executable": "officecli",
+        "args": [
+          "save",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "f8d156f94e7960a079f66ba29226f51ffba9c1299db0bc9ebaa6c4ba0b451223",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-xlsx-copy",
+        "executable": "officecli",
+        "args": [
+          "validate",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-copy",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "/Sheet1/C1",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "b1696bbf3451a6ca68cc1639fcf570fac6d1170c2845f08549bd3bf9e58c5407",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-formula-copy",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "/Sheet1/B4",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "dd9c0952e0f4056c97c87ec01908a35ba0c1f09ac145e41ac53b877ef1f36b60",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-xlsx-chart-copy",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+          "/Sheet1/chart[1]",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "5cda334e2648e4c4c81e39e4ea7c034cad2e066500df205a39b79702df6dfc33",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-pptx-slide-copy",
+        "executable": "officecli",
+        "args": [
+          "add",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "/",
+          "--type",
+          "slide",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "3823fdd714fc290c56f9c5ae54aaf83a2d6cd1d51f717fc475fcc6dcb45e6918",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-add-pptx-text-copy",
+        "executable": "officecli",
+        "args": [
+          "add",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "/slide[1]",
+          "--type",
+          "shape",
+          "--prop",
+          "text=Runtime 中文验证",
+          "--prop",
+          "x=1",
+          "--prop",
+          "y=1",
+          "--prop",
+          "w=8",
+          "--prop",
+          "h=1",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "f2c5e010111039f51971a6a926e05954d623eabc880245ba4eaea393410ac64d",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-save-pptx-copy",
+        "executable": "officecli",
+        "args": [
+          "save",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "c70a3a9609157c2a3f243f40e1d9098318ddf579f8c6c1bd8d70295495114953",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-validate-pptx-copy",
+        "executable": "officecli",
+        "args": [
+          "validate",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-reread-pptx-copy",
+        "executable": "officecli",
+        "args": [
+          "get",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "/slide[1]",
+          "--json"
+        ],
+        "exitCode": 0,
+        "resultSha256": "8b6b822ec355d35f399fc7d498cdbf062560fcbd51bbb72dd22196bced9a01d4",
+        "jsonSuccess": true,
+        "warningCount": 0
+      },
+      {
+        "name": "officecli-view-pptx-svg-copy",
+        "executable": "officecli",
+        "args": [
+          "view",
+          "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+          "svg",
+          "--start",
+          "1",
+          "--max-lines",
+          "1"
+        ],
+        "exitCode": 0,
+        "resultSha256": "70805eb2735bb78b528923bb1267e39d31a4bfb0fbe58b2485d04bb782bc7fcb"
+      }
+    ]
+  },
+  "commands": [
+    {
+      "name": "native-dependency-closure",
+      "executable": "ldd",
+      "args": [
+        "3",
+        "native-entrypoints"
+      ],
+      "resultSha256": "b92979fd730f3ffa8d7c8a0062fc822f99eab60fa25f6858e7ece3675699f235"
+    },
+    {
+      "name": "poppler-pdfinfo-version",
+      "executable": "pdfinfo",
+      "args": [
+        "-v"
+      ],
+      "exitCode": 0,
+      "resultSha256": "a52826a416f59e57847797ceaa05ae6ec184e04e8fd20d146b2b73f794b0c9a5"
+    },
+    {
+      "name": "poppler-pdftoppm-version",
+      "executable": "pdftoppm",
+      "args": [
+        "-v"
+      ],
+      "exitCode": 0,
+      "resultSha256": "54e9f0f4509563a73b6a32642853b4e4c6e0b3ec5d28d0309b20539731ca0caa"
+    },
+    {
+      "name": "officecli-version",
+      "executable": "officecli",
+      "args": [
+        "--version"
+      ],
+      "exitCode": 0,
+      "resultSha256": "bb74739144317234d4c07637568e7eb830370bda7505b81125df23b626b1bd4f"
+    },
+    {
+      "name": "officecli-read-complex-docx-original",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.docx",
+        "/body",
+        "--depth",
+        "4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "7d38e7d047d39613b30892124aa3c10bd66448400669047e6cddd53f7bb8e3bb",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-complex-xlsx-original",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-complex-original.xlsx",
+        "/Sheet1",
+        "--depth",
+        "2",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "44b49853a54dbf5fa2d7e858c4eea1f52de6017869c2ca37c3b3a05415f41cac",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-docx-original",
+      "executable": "officecli",
+      "args": [
+        "create",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "b063d38ab2c8615ff977887d988c8a0e812a3204ce5b9fc629c09fe09918761e",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-docx-original",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.docx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "781e862da40d01f922b1496fa38a54228b13df53c163c5d7ba68ec33d13a5723",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-xlsx-original",
+      "executable": "officecli",
+      "args": [
+        "create",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "d1649d0a3ffa52b915ae23a86babbb34fbcb0a9b6bf3e5d9f50fe118a3ce83c5",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-xlsx-original",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.xlsx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "f5adacaf817e6bd20e847d8d4528b24844242e830cf7ecc73ed519d012310a24",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-create-pptx-original",
+      "executable": "officecli",
+      "args": [
+        "create",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "3192e8fa5dc6f4aaf787279a1d31013291334f3244441cc01d4f088627ff3833",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-read-pptx-original",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-created.pptx",
+        "/",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "4ed6a57f760fa82c969f0c3a5a0d9ba8b23798cee97cfa8f981c84e31cb44783",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-docx-paragraph-copy",
+      "executable": "officecli",
+      "args": [
+        "add",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+        "/body",
+        "--type",
+        "paragraph",
+        "--prop",
+        "text=Runtime 中文验证",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "839930fa6fea2f9605c6c233b7fbda1d46560910effea14ef9b1393dd75d400b",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-docx-copy",
+      "executable": "officecli",
+      "args": [
+        "save",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "637cdcfabcfdf9f41c75d1a478dee7b957e98ac72fd453fe924f3d8de77171dd",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-docx-copy",
+      "executable": "officecli",
+      "args": [
+        "validate",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-docx-copy",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.docx",
+        "/body",
+        "--depth",
+        "4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "836d48c14abd6c5afbe98d49ebf3c4f26135c4d64cf1fb848b3b800b480ddb62",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-xlsx-cell-copy",
+      "executable": "officecli",
+      "args": [
+        "add",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "/Sheet1",
+        "--type",
+        "cell",
+        "--prop",
+        "address=C1",
+        "--prop",
+        "value=Runtime 中文验证",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "c12a086f06524ee9f0fc282eb069e8b6da4df61a4a3c7ce66f0d030568dbaf0d",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-xlsx-copy",
+      "executable": "officecli",
+      "args": [
+        "save",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "f8d156f94e7960a079f66ba29226f51ffba9c1299db0bc9ebaa6c4ba0b451223",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-xlsx-copy",
+      "executable": "officecli",
+      "args": [
+        "validate",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-copy",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "/Sheet1/C1",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "b1696bbf3451a6ca68cc1639fcf570fac6d1170c2845f08549bd3bf9e58c5407",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-formula-copy",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "/Sheet1/B4",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "dd9c0952e0f4056c97c87ec01908a35ba0c1f09ac145e41ac53b877ef1f36b60",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-xlsx-chart-copy",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.xlsx",
+        "/Sheet1/chart[1]",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "5cda334e2648e4c4c81e39e4ea7c034cad2e066500df205a39b79702df6dfc33",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-pptx-slide-copy",
+      "executable": "officecli",
+      "args": [
+        "add",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "/",
+        "--type",
+        "slide",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "3823fdd714fc290c56f9c5ae54aaf83a2d6cd1d51f717fc475fcc6dcb45e6918",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-add-pptx-text-copy",
+      "executable": "officecli",
+      "args": [
+        "add",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "/slide[1]",
+        "--type",
+        "shape",
+        "--prop",
+        "text=Runtime 中文验证",
+        "--prop",
+        "x=1",
+        "--prop",
+        "y=1",
+        "--prop",
+        "w=8",
+        "--prop",
+        "h=1",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "f2c5e010111039f51971a6a926e05954d623eabc880245ba4eaea393410ac64d",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-save-pptx-copy",
+      "executable": "officecli",
+      "args": [
+        "save",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "c70a3a9609157c2a3f243f40e1d9098318ddf579f8c6c1bd8d70295495114953",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-validate-pptx-copy",
+      "executable": "officecli",
+      "args": [
+        "validate",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "b6dc9112d3f194daad3ab6d761b6832248998062fce01271ec8747db783cb6d1",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-reread-pptx-copy",
+      "executable": "officecli",
+      "args": [
+        "get",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "/slide[1]",
+        "--json"
+      ],
+      "exitCode": 0,
+      "resultSha256": "8b6b822ec355d35f399fc7d498cdbf062560fcbd51bbb72dd22196bced9a01d4",
+      "jsonSuccess": true,
+      "warningCount": 0
+    },
+    {
+      "name": "officecli-view-pptx-svg-copy",
+      "executable": "officecli",
+      "args": [
+        "view",
+        "/tmp/primary-runtime-officecli-l0fn9i/runtime-edited.pptx",
+        "svg",
+        "--start",
+        "1",
+        "--max-lines",
+        "1"
+      ],
+      "exitCode": 0,
+      "resultSha256": "70805eb2735bb78b528923bb1267e39d31a4bfb0fbe58b2485d04bb782bc7fcb"
+    }
+  ],
+  "productionTrust": false
+}

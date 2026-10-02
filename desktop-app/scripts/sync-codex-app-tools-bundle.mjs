@@ -16,7 +16,7 @@ const REQUIRED_FILES = [
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const appRoot = resolve(scriptDirectory, '..')
-const targetMarketplaceRoot = join(appRoot, 'resources', 'bundled-plugins', 'openai-bundled')
+const targetMarketplaceRoot = join(appRoot, 'resources', 'bundled-plugins', 'dascowork-bundled')
 const targetPluginRoot = join(targetMarketplaceRoot, 'plugins', 'codex-app-tools')
 const targetMarketplaceManifestPath = join(
   targetMarketplaceRoot,
@@ -46,7 +46,7 @@ async function main() {
     ? marketplace.plugins.filter((plugin) => plugin?.name === manifest.name)
     : []
   if (
-    marketplace.name !== 'openai-bundled' ||
+    marketplace.name !== 'dascowork-bundled' ||
     marketplaceEntries.length !== 1 ||
     marketplaceEntries[0].source?.source !== 'local' ||
     marketplaceEntries[0].source?.path !== './plugins/codex-app-tools'
@@ -69,7 +69,7 @@ async function main() {
 
   const lock = {
     bundleFormatVersion: 2,
-    marketplace: { name: 'openai-bundled', pluginRoot: 'plugins' },
+    marketplace: { name: 'dascowork-bundled', pluginRoot: 'plugins' },
     plugins: [
       {
         name: manifest.name,
@@ -79,7 +79,7 @@ async function main() {
         provenance: {
           kind: 'repo-owned',
           sourcePath:
-            'desktop-app/resources/bundled-plugins/openai-bundled/plugins/codex-app-tools',
+            'desktop-app/resources/bundled-plugins/dascowork-bundled/plugins/codex-app-tools',
           licensePath: 'LICENSE',
           reviewStatus: 'pending-independent-review'
         },

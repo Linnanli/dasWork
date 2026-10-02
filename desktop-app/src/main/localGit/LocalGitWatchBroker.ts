@@ -123,7 +123,7 @@ export class LocalGitWatchBroker {
       if (isNewTarget && target.hostId !== 'local') this.restartTimer()
       this.ensureStarted()
       this.startLocalWatcher(key)
-      void this.pollTarget(key)
+      if (isNewTarget) void this.pollTarget(key)
     }
   }
 

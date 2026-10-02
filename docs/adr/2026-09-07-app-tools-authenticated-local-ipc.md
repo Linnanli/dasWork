@@ -51,3 +51,9 @@ and Windows continues to fail closed until the broker is built, packaged and
 signed. Public-release gates `AT-PIPE-MAC-01` and `AT-PIPE-WIN-01` remain
 pending until negative tests prove rejection of wrong ancestry, old
 generations, replayed challenges, wrong SID/UID and preemptive connections.
+
+This compatibility transport is never the Primary Runtime or native dynamic-tool
+production path. If it is disabled, fails authentication, or is unavailable on
+a platform, Main closes only the `codex_app` projection; the existing
+`thread/start.dynamicTools → item/tool/call → DynamicAppToolRegistry` path remains
+available with its same capability snapshot and handler semantics.

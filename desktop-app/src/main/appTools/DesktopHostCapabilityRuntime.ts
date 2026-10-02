@@ -11,21 +11,36 @@ import {
 import {
   createLoadWorkspaceDependenciesTool,
   createReadThreadTerminalTool,
+  type WorkspaceDependencyDiagnostic,
   type WorkspaceDependencyLoader
 } from './desktopToolDefinitions'
+import { PrimaryRuntimeCapabilityPolicy, type PrimaryRuntimeDiagnostic } from '../primaryRuntime'
 
 export type DesktopCapabilityState = 'ready' | 'degraded' | 'unavailable'
 
 export type DesktopCapabilitySnapshot = {
   revision: string
+  /** Main-only Runtime state revision observed while creating this thread. */
+  primaryRuntimeStateRevision: string
   hostId: 'local'
   dynamicTools: readonly NativeDynamicToolSpec[]
   availableToolNames: readonly string[]
   threadConfig?: DesktopThreadConfig
   nativeTools: DesktopCapabilityState
-  primaryRuntime: 'ready' | 'missing' | 'broken' | 'unsupported'
+  primaryRuntime:
+    | 'ready'
+    | 'missing'
+    | 'broken'
+    | 'unsupported'
+    | 'checking'
+    | 'installing'
+    | 'failed'
   codexAppMcp: DesktopCapabilityState
   bundledPlugins: DesktopCapabilityState
+  /** Runtime instructions are enabled once the Runtime itself is healthy. */
+  workspaceInstructionsEnabled: boolean
+  /** Presentation work is enabled after Runtime plugin/skill synchronization. */
+  presentationsEligible: boolean
   degraded: boolean
 }
 
@@ -37,12 +52,17 @@ export class DesktopHostCapabilityRuntime {
   private codexAppMcp: DesktopCapabilityState = 'unavailable'
   private codexAppMcpThreadConfig: DesktopThreadConfig | undefined
   private bundledPlugins: DesktopCapabilityState = 'unavailable'
+  private readonly primaryRuntimeCapabilities: PrimaryRuntimeCapabilityPolicy
 
   constructor(options: {
     readThreadTerminal?: ThreadTerminalReader
     workspaceDependencies?: WorkspaceDependencyLoader
+    primaryRuntimeCapabilities?: PrimaryRuntimeCapabilityPolicy
   }) {
     this.workspaceDependencies = options.workspaceDependencies
+    this.primaryRuntimeCapabilities =
+      options.primaryRuntimeCapabilities ??
+      new PrimaryRuntimeCapabilityPolicy(Boolean(options.workspaceDependencies))
     this.registry = new DynamicAppToolRegistry()
     this.registry.register(createReadThreadTerminalTool(options.readThreadTerminal))
     this.registry.register(createLoadWorkspaceDependenciesTool(options.workspaceDependencies))
@@ -51,10 +71,23 @@ export class DesktopHostCapabilityRuntime {
   async snapshot(
     context: DesktopToolContext = { hostId: 'local' }
   ): Promise<DesktopCapabilitySnapshot> {
-    const runtimeStatus = await this.workspaceDependencies?.diagnoseDependencies?.()
+    let runtimeStatus: WorkspaceDependencyDiagnostic | undefined
+    let diagnosticFailed = false
+    try {
+      runtimeStatus = await this.workspaceDependencies?.diagnoseDependencies?.()
+    } catch {
+      // Runtime recovery can fail independently of a normal chat. Close its
+      // capabilities for this snapshot while retaining unrelated host tools.
+      runtimeStatus = { status: 'broken' }
+      diagnosticFailed = true
+    }
+    const runtimeCapabilities = await this.primaryRuntimeCapabilities.snapshot({
+      hostId: context.hostId
+    })
     const snapshotContext = {
       ...context,
-      ...(runtimeStatus ? { primaryRuntimeStatus: runtimeStatus.status } : {})
+      ...(runtimeStatus ? { primaryRuntimeStatus: runtimeStatus.status } : {}),
+      workspaceDependenciesEnabled: runtimeCapabilities.loaderPublished && !diagnosticFailed
     }
     const dynamicTools = await this.registry.nativeProjection(snapshotContext)
     const availableToolNames = await this.registry.availableToolNames(snapshotContext)
@@ -68,6 +101,7 @@ export class DesktopHostCapabilityRuntime {
       dynamicTools.length === 0
     return {
       revision: `desktop-capabilities-${this.revision}`,
+      primaryRuntimeStateRevision: runtimeCapabilities.revision,
       hostId: 'local',
       dynamicTools,
       availableToolNames,
@@ -78,8 +112,20 @@ export class DesktopHostCapabilityRuntime {
       primaryRuntime,
       codexAppMcp: this.codexAppMcp,
       bundledPlugins: this.bundledPlugins,
+      workspaceInstructionsEnabled:
+        runtimeCapabilities.workspaceInstructionsEnabled && !diagnosticFailed,
+      presentationsEligible: runtimeCapabilities.presentationsEligible && !diagnosticFailed,
       degraded
     }
+  }
+
+  /** Refreshes observed Runtime/plugin state after catalog synchronization. */
+  updatePrimaryRuntimeState(input: {
+    diagnostic: PrimaryRuntimeDiagnostic
+    runtimePluginsSynchronized: boolean
+  }): void {
+    this.primaryRuntimeCapabilities.update(input)
+    this.refresh()
   }
 
   async dispatch(call: DynamicToolCall, signal?: AbortSignal): Promise<CodexToolCallResult> {

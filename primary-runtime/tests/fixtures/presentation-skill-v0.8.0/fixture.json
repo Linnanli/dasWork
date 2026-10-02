@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "dascowork-presentation-patch-base.v1",
+  "repository": "https://github.com/siril9/presentation-skill",
+  "tag": "v0.8.0",
+  "commit": "a25708686160a13a4cdcb9cc1cc206fa9cb86219",
+  "license": {
+    "spdx": "MIT",
+    "upstreamPath": "LICENSE",
+    "sha256": "35ad5e04d561f55065144021e70024bf94f50ef43903f4c54fc62802ed9f50f5"
+  },
+  "files": {
+    "plugins/presentation-skill/skills/presentation-skill/SKILL.md": "b4761743210ef6ce4f1a6884bddaae423281111f",
+    "plugins/presentation-skill/skills/presentation-skill/scripts/build_deck_pptxgenjs.js": "ffb73d91e3b592be9b5f373bd00b30d70ba4f9d7",
+    "plugins/presentation-skill/skills/presentation-skill/scripts/render_slides.py": "f26dc65b164526140ad924028ab89dde80f3cfde",
+    "plugins/presentation-skill/skills/presentation-skill/templates/pptxgenjs/slides.js": "18efabc8071c24ae0716b6a082cdcb6c3e8a7a0d"
+  }
+}

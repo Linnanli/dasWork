@@ -1,9 +1,14 @@
-import { readFile, realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { readdir, readFile, realpath } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
 import { z } from 'zod'
+import type { PluginInstalledResponse } from '@dascowork/codex-app-server-client/protocol/app-server-protocol/v2/PluginInstalledResponse'
 
-import type { PrimaryRuntimeDiagnostic } from '../primaryRuntime'
+import type { PrimaryRuntimeDiagnostic, PrimaryRuntimeManifest } from '../primaryRuntime'
+import {
+  PRIMARY_RUNTIME_MANIFEST_FILENAME,
+  readPrimaryRuntimeManifest
+} from '../primaryRuntime/PrimaryRuntimeManifest'
 
 const bundleFileSchema = z.object({
   path: z.string().min(1),
@@ -11,14 +16,28 @@ const bundleFileSchema = z.object({
   mode: z.literal('executable').optional()
 })
 
-const bundleProvenanceSchema = z
-  .object({
-    kind: z.literal('repo-owned'),
-    sourcePath: z.string().regex(/^desktop-app\/(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
-    licensePath: z.string().regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
-    reviewStatus: z.enum(['pending-independent-review', 'approved'])
-  })
-  .strict()
+const relativeBundlePathSchema = z.string().regex(/^(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u)
+
+const bundleProvenanceSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('repo-owned'),
+      sourcePath: z.string().regex(/^desktop-app\/(?!\.\.?\/)(?!.*\/\.\.?\/)[a-zA-Z0-9._/-]+$/u),
+      licensePath: relativeBundlePathSchema,
+      reviewStatus: z.enum(['pending-independent-review', 'approved'])
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('locked-source'),
+      sourceLock: z.literal('primary-runtime/runtime-sources.lock.json'),
+      sourceCommit: z.string().regex(/^[a-f0-9]{40}$/u),
+      sourceArchiveSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+      licensePath: relativeBundlePathSchema,
+      reviewStatus: z.literal('approved')
+    })
+    .strict()
+])
 
 const bundlePluginSchema = z.object({
   name: z.string().min(1),
@@ -74,6 +93,8 @@ export type BundledPluginDescriptor = {
   installWhenMissing: boolean
   internal: boolean
   sourceKind: BundledPluginSourceKind
+  /** Identifies the component allowed to reconcile this internal plugin. */
+  owner: 'app-bundled' | `primary-runtime:${string}`
 }
 
 export type BundledPluginLock = z.infer<typeof bundleLockSchema>
@@ -82,6 +103,10 @@ type LocalMarketplace = {
   path: string
   manifest: z.infer<typeof marketplaceSchema>
 }
+
+export type PrimaryRuntimePluginCatalogReader = (input?: {
+  cwd?: string
+}) => Promise<PluginInstalledResponse>
 
 export async function readBundledPluginDescriptorsFromMarketplaceRoot(
   marketplacePath: string,
@@ -163,7 +188,8 @@ async function descriptorsFromBundleLock(
         version: plugin.version,
         installWhenMissing: plugin.installWhenMissing,
         internal: plugin.internal,
-        sourceKind
+        sourceKind,
+        owner: sourceKind === 'app-resource' ? 'app-bundled' : 'primary-runtime:unversioned'
       }
     })
   )
@@ -197,7 +223,8 @@ async function readMarketplaceDescriptors(
       version: pluginManifest.version,
       installWhenMissing: true,
       internal: true,
-      sourceKind
+      sourceKind,
+      owner: sourceKind === 'app-resource' ? 'app-bundled' : 'primary-runtime:unversioned'
     })
   }
   return descriptors
@@ -211,8 +238,8 @@ export async function readAppBundledPluginDescriptors(
   options: { isPackaged: false; appPath: string } | { isPackaged: true; resourcesPath: string }
 ): Promise<BundledPluginDescriptor[]> {
   const marketplacePath = options.isPackaged
-    ? join(options.resourcesPath, 'plugins', 'openai-bundled')
-    : join(options.appPath, 'resources', 'bundled-plugins', 'openai-bundled')
+    ? join(options.resourcesPath, 'plugins', 'dascowork-bundled')
+    : join(options.appPath, 'resources', 'bundled-plugins', 'dascowork-bundled')
   return readBundledPluginDescriptorsFromMarketplaceRoot(marketplacePath, 'app-resource')
 }
 
@@ -225,14 +252,148 @@ export async function readPrimaryRuntimeBundledPluginDescriptors(
 
   const descriptors: BundledPluginDescriptor[] = []
   for (const marketplace of diagnostic.manifest.bundledPlugins) {
+    const marketplaceDescriptors = await readBundledPluginDescriptorsFromMarketplaceRoot(
+      join(diagnostic.root, marketplace.path),
+      'primary-runtime'
+    )
     descriptors.push(
-      ...(await readBundledPluginDescriptorsFromMarketplaceRoot(
-        join(diagnostic.root, marketplace.path),
-        'primary-runtime'
-      ))
+      ...marketplaceDescriptors.map((descriptor) => ({
+        ...descriptor,
+        owner: `primary-runtime:${diagnostic.manifest!.bundleVersion}` as const
+      }))
     )
   }
   return descriptors
+}
+
+export async function readRetiredPrimaryRuntimeBundledPluginDescriptors(input: {
+  installed: PluginInstalledResponse
+  cacheRoot: string
+  activeDescriptors: readonly BundledPluginDescriptor[]
+}): Promise<BundledPluginDescriptor[]> {
+  const versionsRoot = await realpath(join(input.cacheRoot, 'versions')).catch(() => null)
+  if (!versionsRoot) return []
+
+  const activeMarketplacePaths = new Set<string>()
+  for (const descriptor of input.activeDescriptors) {
+    if (descriptor.sourceKind !== 'primary-runtime') continue
+    const marketplacePath = await realpath(descriptor.marketplacePath).catch(() => null)
+    if (marketplacePath) activeMarketplacePaths.add(marketplacePath)
+  }
+
+  const descriptors: BundledPluginDescriptor[] = []
+  for (const marketplace of input.installed.marketplaces) {
+    if (!marketplace.path) continue
+    const marketplacePath = await realpath(marketplace.path).catch(() => null)
+    if (!marketplacePath) continue
+    if (!isPathInside(versionsRoot, marketplacePath)) continue
+    if (activeMarketplacePaths.has(marketplacePath)) continue
+
+    const marketplaceRoot = dirname(dirname(dirname(marketplacePath)))
+    if (!isPathInside(versionsRoot, marketplaceRoot)) continue
+
+    for (const plugin of marketplace.plugins) {
+      if (!plugin.installed || plugin.source.type !== 'local') continue
+      const pluginRoot = await realpath(plugin.source.path).catch(() => null)
+      if (!pluginRoot) continue
+      if (!isPathInside(marketplaceRoot, pluginRoot)) continue
+      if (
+        input.activeDescriptors.some(
+          (descriptor) =>
+            descriptor.marketplaceName === marketplace.name && descriptor.pluginName === plugin.name
+        )
+      ) {
+        continue
+      }
+
+      descriptors.push({
+        marketplaceName: marketplace.name,
+        marketplaceRoot,
+        marketplacePath,
+        pluginRoot,
+        pluginName: plugin.name,
+        version: plugin.localVersion ?? plugin.version ?? 'unknown',
+        installWhenMissing: false,
+        internal: true,
+        sourceKind: 'primary-runtime',
+        owner: 'primary-runtime:retired-cache'
+      })
+    }
+  }
+  return descriptors
+}
+
+export async function readInstalledPrimaryRuntimePluginCatalog(input: {
+  cacheRoot: string
+  listInstalledPluginsForManagement: PrimaryRuntimePluginCatalogReader
+}): Promise<PluginInstalledResponse> {
+  const installed = await input.listInstalledPluginsForManagement()
+  const marketplaceRoots = await discoverCachedPrimaryRuntimeMarketplaceRoots(input.cacheRoot)
+  const catalogs = [installed]
+  for (const marketplaceRoot of marketplaceRoots) {
+    catalogs.push(await input.listInstalledPluginsForManagement({ cwd: marketplaceRoot }))
+  }
+  return mergeInstalledPluginCatalogs(catalogs)
+}
+
+async function discoverCachedPrimaryRuntimeMarketplaceRoots(cacheRoot: string): Promise<string[]> {
+  const versionsRoot = await realpath(join(cacheRoot, 'versions')).catch(() => null)
+  if (!versionsRoot) return []
+
+  const entries = await readdir(versionsRoot, { withFileTypes: true }).catch(() => [])
+  const marketplaceRoots = new Set<string>()
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+    const versionRoot = await realpath(join(versionsRoot, entry.name)).catch(() => null)
+    if (!versionRoot || !isPathInside(versionsRoot, versionRoot)) continue
+
+    const manifest = await readCachedPrimaryRuntimeManifest(versionRoot).catch(() => null)
+    if (!manifest?.bundledPlugins?.length) continue
+
+    for (const bundledPlugin of manifest.bundledPlugins) {
+      const marketplaceRoot = await realpath(resolve(versionRoot, bundledPlugin.path)).catch(
+        () => null
+      )
+      if (!marketplaceRoot || !isPathInside(versionRoot, marketplaceRoot)) continue
+      const descriptors = await readBundledPluginDescriptorsFromMarketplaceRoot(
+        marketplaceRoot,
+        'primary-runtime'
+      ).catch(() => [])
+      if (descriptors.length > 0) marketplaceRoots.add(marketplaceRoot)
+    }
+  }
+  return [...marketplaceRoots].sort()
+}
+
+async function readCachedPrimaryRuntimeManifest(
+  versionRoot: string
+): Promise<PrimaryRuntimeManifest> {
+  const manifestPath = await realpath(join(versionRoot, PRIMARY_RUNTIME_MANIFEST_FILENAME))
+  if (!isPathInside(versionRoot, manifestPath)) {
+    throw new Error('Primary Runtime manifest escapes version root.')
+  }
+  return readPrimaryRuntimeManifest(manifestPath)
+}
+
+function mergeInstalledPluginCatalogs(
+  catalogs: readonly PluginInstalledResponse[]
+): PluginInstalledResponse {
+  const marketplaces = new Map<string, PluginInstalledResponse['marketplaces'][number]>()
+  const anonymousMarketplaces: PluginInstalledResponse['marketplaces'] = []
+  for (const catalog of catalogs) {
+    for (const marketplace of catalog.marketplaces) {
+      if (!marketplace.path) {
+        anonymousMarketplaces.push(marketplace)
+        continue
+      }
+      const key = marketplace.path
+      if (!marketplaces.has(key)) marketplaces.set(key, marketplace)
+    }
+  }
+  return {
+    marketplaces: [...anonymousMarketplaces, ...marketplaces.values()],
+    marketplaceLoadErrors: catalogs.flatMap((catalog) => catalog.marketplaceLoadErrors)
+  }
 }
 
 function isPathInside(root: string, candidate: string): boolean {

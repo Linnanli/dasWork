@@ -189,6 +189,7 @@ export class ApprovalsDispatcher
                 const decision = await this.onFileChangeApproval({ ...request, changes });
                 return { decision } satisfies FileChangeRequestApprovalResponse;
             },
+            { waitForQueuedNotifications: true },
         );
 
         const unsubToolUserInput = client.onRequest(

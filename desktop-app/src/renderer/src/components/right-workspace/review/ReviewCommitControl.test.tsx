@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   GitRepositoryTarget,
+  LocalGitChangeEvent,
   LocalBranchSummary,
   LocalGitPublishStatus
 } from '../../../../../shared/localGitApi'
@@ -156,6 +157,75 @@ describe('ReviewCommitControl', () => {
 
     expect(git.getPublishStatus).toHaveBeenCalledTimes(2)
     expect(button().disabled).toBe(true)
+  })
+
+  it('refreshes a disabled toolbar when an external working-tree change arrives', async () => {
+    let notifyGitChange: ((event: LocalGitChangeEvent) => void) | undefined
+    git.subscribe.mockImplementation((listener) => {
+      notifyGitChange = listener
+      return () => undefined
+    })
+    git.getPublishStatus
+      .mockResolvedValueOnce(publishStatus({ stagedFiles: 1 }))
+      .mockResolvedValueOnce(publishStatus({ stagedFiles: 0 }))
+      .mockResolvedValueOnce(publishStatus({ stagedFiles: 1 }))
+
+    await render()
+    await act(flush)
+    await act(async () => button().click())
+    await act(flush)
+    await act(async () => actionButton('commit').click())
+    await act(flush)
+    expect(button().disabled).toBe(true)
+
+    await act(async () => {
+      notifyGitChange?.({
+        target,
+        snapshotGeneration: 'external-working-tree-change',
+        changeTypes: ['working-tree']
+      })
+      await flush()
+    })
+
+    expect(git.getPublishStatus).toHaveBeenCalledTimes(3)
+    expect(button().disabled).toBe(false)
+  })
+
+  it('coalesces repository change events while a publish workflow is active', async () => {
+    let notifyGitChange: ((event: LocalGitChangeEvent) => void) | undefined
+    const commit = deferred<Awaited<ReturnType<typeof window.desktopApp.git.commitChanges>>>()
+    git.subscribe.mockImplementation((listener) => {
+      notifyGitChange = listener
+      return () => undefined
+    })
+    git.commitChanges.mockReturnValue(commit.promise)
+    git.getPublishStatus
+      .mockResolvedValueOnce(publishStatus({ stagedFiles: 1 }))
+      .mockResolvedValueOnce(publishStatus({ stagedFiles: 0 }))
+
+    await render()
+    await act(flush)
+    await act(async () => button().click())
+    await act(flush)
+    await act(async () => actionButton('commit').click())
+
+    await act(async () => {
+      notifyGitChange?.({
+        target,
+        snapshotGeneration: 'commit-in-progress',
+        changeTypes: ['head', 'index', 'working-tree']
+      })
+      await flush()
+    })
+
+    expect(git.getPublishStatus).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      commit.resolve({ status: 'success', commitSha: 'abc1234' })
+      await flush()
+    })
+
+    expect(git.getPublishStatus).toHaveBeenCalledTimes(2)
   })
 
   it('opens from a clean detached HEAD when a remote can publish a new branch', async () => {

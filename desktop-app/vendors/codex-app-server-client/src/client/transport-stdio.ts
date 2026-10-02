@@ -49,6 +49,10 @@ export class StdioTransport implements CodexTransport
             cwd: this.settings.cwd,
             env: this.settings.env,
             stdio: "pipe",
+            // npm exposes the locked Windows CLI as codex.cmd. Node cannot
+            // execute a command-script directly without a shell, while the
+            // fixed default argv below has no interpolated user input.
+            shell: process.platform === "win32" && this.usesDefaultCodexCommand(),
         };
 
         const child = spawn(
@@ -93,6 +97,15 @@ export class StdioTransport implements CodexTransport
         });
 
         return Promise.resolve();
+    }
+
+    private usesDefaultCodexCommand(): boolean
+    {
+        const command = this.settings.command ?? DEFAULT_COMMAND;
+        const args = this.settings.args ?? DEFAULT_ARGS;
+        return command === DEFAULT_COMMAND &&
+            args.length === DEFAULT_ARGS.length &&
+            args.every((value, index) => value === DEFAULT_ARGS[index]);
     }
 
     async disconnect(): Promise<void> 

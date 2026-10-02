@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "dascowork-preview-viewport-control.v1",
+  "baseCommit": "aa27d8fdf5b3f2a0722c075efa4b48c44df7d1ed",
+  "failedRunId": "36403623699",
+  "failedRunUrl": "https://github.com/Linnanli/dasWork/actions/runs/36403623699",
+  "sourceWindowsArtifactId": "10963406175",
+  "sourceDarwinArtifactId": "10963177635",
+  "actualWindowsSlides": [
+    {
+      "file": "slide-01.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "0f74345dfae768310cac02ac7950482ace21c8e1fbe303726c95bd9c8e8481e2"
+    },
+    {
+      "file": "slide-02.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "f5e634c6cdb9468e3f2cd2ba14fddf3be5c4aec834fec7154a6a4086715e2acc"
+    },
+    {
+      "file": "slide-03.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "1cb71475ef021ef652dff422b25e11139eafae9f5f7f351bec9e593c89098f46"
+    },
+    {
+      "file": "slide-04.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "8b82074c22bd17457a7488c31a8c5c661f4af3b3a384d3b31ec5f72cdd48db41"
+    },
+    {
+      "file": "slide-05.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "7a345e8b6074913503267a89738626bb0dc1d30d5b9897619b12312465732ef6"
+    },
+    {
+      "file": "slide-06.png",
+      "width": 1008,
+      "height": 681,
+      "sha256": "6aa6c1fb0eec185b060ffa3b71e239ed8ef91e19922668df95154d60d6283e6c"
+    }
+  ],
+  "actualWindowsLegacySlideDimensions": [
+    1921,
+    1080
+  ],
+  "windowsDeckSha256": "0327c4b77c14550749e0042a5346d9f95f8dfde8ffced98b457b8f47f859bedd",
+  "windowsPreviewBaseline": {
+    "legacyRuntimeRoot": "D:\\a\\_temp\\dsc-mig-WecJ4B\\cache\\versions\\1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7",
+    "cacheRoot": "D:\\a\\_temp\\dsc-mig-WecJ4B\\cache",
+    "legacyArchiveSha256": "1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7"
+  },
+  "darwinFailure": "CreateArtifact ETIMEDOUT after all validation steps passed",
+  "localControlTarget": "darwin-x64",
+  "localTestOnlyChange": "The esbuild test plugin forces each newly created hidden window to 1008x681 before loadFile; the production helper restores its viewport after first paint. Exported Windows source SVGs are otherwise unchanged.",
+  "productionHelperSha256": "7fb15d8d65f8d41faa4681e9add81933946e23c2ad5468f56893ad3c51560b45",
+  "localControlSourceSha256": "eb462243724d6752243c78dfb18f321d08f0bd83de1978e29b1e06efa90a20ed",
+  "scope": "Six real PNGs from the actual Windows deck demonstrate the local small-window correction. Native Windows CI, four-target calibration review, human old/new visual acceptance and final gates remain pending.",
+  "localR07": {
+    "status": "passed",
+    "duration": "3.8 minutes",
+    "target": "darwin-x64",
+    "kind": "real signed Feed/chat/app-server/command/file event/host preview, deterministic external model response",
+    "deckSha256": "387858f5ee5d0c3a31a31ea0dc8f49312b7c37b0b516e16f11d01e32aaf3ac1b",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 51,
+        "sha256": "f82741ebd11bf5420c395b0f7efeb3d5296563a35c41aecfd040a49682f6a120"
+      },
+      {
+        "file": "slide-02.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.1766407455632716,
+        "colorBucketCount": 181,
+        "sha256": "ea42d08dc2fa13dc173b1dc8e7a23e814124345fdfebf9c45101634aa5115b9e"
+      },
+      {
+        "file": "slide-03.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.018167558834876543,
+        "colorBucketCount": 17,
+        "sha256": "561674ab9941941841f70fffdd172c424b7fda15b834563889222596fd35f62f"
+      },
+      {
+        "file": "slide-04.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.2810935088734568,
+        "colorBucketCount": 70,
+        "sha256": "76963b61875379cfe54d98f0f4cfb3dd86c75764c0f382c75383d61dbf8e7eb1"
+      },
+      {
+        "file": "slide-05.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.0824609375,
+        "colorBucketCount": 43,
+        "sha256": "58cd4feeeca6600649052196543c04c9acae79248f2bd0e32d4aa8e0b8fd0cad"
+      },
+      {
+        "file": "slide-06.png",
+        "width": 3840,
+        "height": 2160,
+        "nonWhiteRatio": 0.03025390625,
+        "colorBucketCount": 278,
+        "sha256": "e7be7f5845731a609afc918b04537ef2ea29a5815e11151ac28fe8dc30436db6"
+      }
+    ],
+    "scope": "One functional local R07 run, not ten-sample calibration, native Windows/Linux evidence or final acceptance.",
+    "runtimeArchive": {
+      "sourceRun": 36379148451,
+      "artifactId": 10952445907,
+      "bundleVersion": "2f2ea382dfdf29e36b400a4432112951e9c73b9d-darwin-x64-p1a-5",
+      "sha256": "602a4a5d45e43d2b57f0e31702748c0ffa3c32b62ed82c0cffd33b6d73aed3c0"
+    },
+    "workspaceFilesSha256": {
+      "desktop-app/src/main/artifacts/rasterizePresentationSvg.ts": "7fb15d8d65f8d41faa4681e9add81933946e23c2ad5468f56893ad3c51560b45",
+      "desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts": "fdf9b2711e31c2c998c67f2e09d27605e1edfd174b9dd9be46ed615158b1903e",
+      "desktop-app/tests/e2e/primary-runtime-feed.e2e.ts": "bcd94797e6f52d2b3a5c055c7d54fa89286db3c6b02597f803ba4687202757d9",
+      "desktop-app/tests/e2e/support/r07Presentation.ts": "03bd32f8f98328536a8d8b04cadca9df0cd19162a1516b941a4d4132b80dba1e"
+    }
+  },
+  "retainedLogNormalization": {
+    "changes": "Removed ANSI colors and trailing whitespace only; original download hashes are recorded.",
+    "logs": {
+      "windows": {
+        "originalSha256": "d3d49a9ba13c8543182bfce98020f88028dae20e1dbd59f2d7b4855cbf889517",
+        "retainedSha256": "ce30f76d95c8d905f60233520ac3052878afdc242d449f7334de0d86a5ea99c0"
+      },
+      "darwin": {
+        "originalSha256": "510961a754813b006f9d9530e70fc6418d94f93f0fedc5b4ee3fba2924dda590",
+        "retainedSha256": "510961a754813b006f9d9530e70fc6418d94f93f0fedc5b4ee3fba2924dda590"
+      }
+    }
+  }
+}

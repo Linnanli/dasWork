@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "dascowork-r07-visual-artifacts.v1",
+  "previewTrace": {
+    "sourceId": "b15f5f3219ec448296452cd1a41920a0",
+    "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+    "generation": 1,
+    "checksum": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+  },
+  "renderReport": {
+    "schemaVersion": "dascowork-r07-render-qa.v1",
+    "slides": [
+      {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 50,
+        "sha256": "00d9b062939341113b872f042e319318b5d6ea30cc190f5f6f1d30e843f6f0ba",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      },
+      {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.1769338348765432,
+        "colorBucketCount": 202,
+        "sha256": "e245634d93f2a9ce412f2a5215374d7169a4d12a494a65bb701827bbcaef8b7c",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      },
+      {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.015076678240740741,
+        "colorBucketCount": 16,
+        "sha256": "c11446a6999fd82ea061acac1b3ac84baaf99f9e0a1c5a1c3016fc2349bd9286",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      },
+      {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.2825675154320988,
+        "colorBucketCount": 64,
+        "sha256": "c0294a58d4b00797b6a54ac4ab4ee57971ffe043f8d7d96eaf85ca7a21141d94",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      },
+      {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08680266203703704,
+        "colorBucketCount": 37,
+        "chartLabelRatios": {
+          "category1": 0.024752475247524754,
+          "category2": 0.03143063583815029,
+          "legend": 0.006222222222222222
+        },
+        "sha256": "7cb5d8908b06187ed0c505132002a4a10919186171233ade158fd878062cdc00",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      },
+      {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.030345293209876542,
+        "colorBucketCount": 242,
+        "sha256": "c1e962b86aa4dbb551b577d39e92f19da5d7b67349d59a31b94ecfe8837709f3",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "b15f5f3219ec448296452cd1a41920a0",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+        }
+      }
+    ]
+  }
+}

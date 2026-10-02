@@ -3,6 +3,8 @@ import { z } from 'zod'
 import type {
   ArtifactPreviewComposerAttachmentResult,
   ArtifactPreviewMetadataResult,
+  ArtifactPresentationRenderRequest,
+  ArtifactPresentationRenderResult,
   ArtifactPreviewReadBinaryResult,
   ArtifactPreviewRegisterAuthorizedLocalSourceRequest,
   ArtifactPreviewRegisterSourceResult,
@@ -76,6 +78,7 @@ export const rightWorkspaceIpcChannels = {
   createArtifactComposerAttachment: 'right-workspace:artifacts:create-composer-attachment',
   artifactMetadata: 'right-workspace:artifacts:metadata',
   readArtifactBinary: 'right-workspace:artifacts:read-binary',
+  renderArtifactPresentation: 'right-workspace:artifacts:render-presentation',
   releaseArtifactSource: 'right-workspace:artifacts:release-source',
   openArtifactWithSystem: 'right-workspace:artifacts:open-with-system',
   artifactEvent: 'right-workspace:artifacts:event',
@@ -137,6 +140,9 @@ export type DesktopRightWorkspaceApi = {
     ): Promise<ArtifactPreviewComposerAttachmentResult>
     metadata(input: ArtifactPreviewSourceRequest): Promise<ArtifactPreviewMetadataResult>
     readBinary(input: ArtifactPreviewSourceRequest): Promise<ArtifactPreviewReadBinaryResult>
+    renderPresentation(
+      input: ArtifactPresentationRenderRequest
+    ): Promise<ArtifactPresentationRenderResult>
     release(input: ArtifactPreviewSourceRequest): Promise<void>
     openWithSystem(input: ArtifactPreviewSourceRequest): Promise<void>
     onEvent(callback: (event: ArtifactPreviewSourceChangeEvent) => void): () => void

@@ -20,6 +20,7 @@ export interface CodexCommandJsonRpcClientLike {
   onNotification(method: string, handler: (params: unknown) => void | Promise<void>): () => void
   onTransportTermination?(handler: (error: Error) => void): () => void
   request<T = unknown>(method: string, params?: unknown, timeoutMs?: number): Promise<T>
+  waitForQueuedNotifications?(): Promise<void>
 }
 
 export interface CodexCommandClientSettings extends CodexAppServerClientSettings {
@@ -167,6 +168,7 @@ export class CodexCommandClient {
           abortReject = reject
         })
       ])
+      await client.waitForQueuedNotifications?.()
 
       return {
         processId,

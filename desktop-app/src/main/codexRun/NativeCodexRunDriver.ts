@@ -11,7 +11,7 @@ import {
   TurnLifecycleNormalizer
 } from '@dascowork/codex-app-server-client'
 
-import type { AdminBackendClientModel } from '../adminBackendModelClient'
+import type { LocalClientModel } from '../localModels/LocalClientModel'
 import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
 import type { CodexTurnLifecycleEvent, ThreadGoalSummary } from '../../shared/codexIpcApi'
 import { CodexRunInputAdapter } from './CodexRunInputAdapter'
@@ -38,7 +38,7 @@ export type NativeCodexRunDriverInput = {
   messages: readonly UIMessage[]
   modelId: string
   clientUserMessageId?: string
-  clientModel?: AdminBackendClientModel
+  clientModel?: LocalClientModel
   cwd?: string
   runtimeWorkspaceRoots?: string[]
   approvalPolicy?: 'never' | 'on-request'
@@ -167,6 +167,7 @@ export class NativeCodexRunDriver {
       let lifecycleSequence = 0
       let threadId = input.resumeThreadId
       let turnId: string | undefined
+      let goalControlReady = !input.goalControl
 
       const publishExistingTurnRecoveryState = (): void => {
         input.onExistingTurnRecoveryState?.(normalizer.snapshotExistingTurnRecoveryState())
@@ -226,7 +227,7 @@ export class NativeCodexRunDriver {
             const goal =
               method === 'thread/goal/cleared' ? null : (params.goal as ThreadGoalSummary | null)
             await input.onThreadGoalUpdated?.({ threadId: eventThreadId, goal })
-            if (input.goalContinuous && isTerminalGoal(goal)) completed = true
+            if (input.goalContinuous && goalControlReady && isTerminalGoal(goal)) completed = true
           }
         }
         emit(method, params)
@@ -303,6 +304,9 @@ export class NativeCodexRunDriver {
           turnId = nextTurnId
           normalizer.setTurnId(nextTurnId)
           publishExistingTurnRecoveryState()
+        },
+        onThreadGoalSet: () => {
+          goalControlReady = true
         }
       })
 
@@ -395,12 +399,17 @@ export class NativeCodexRunDriver {
       }
     })
     for (const method of SERVER_REQUEST_METHODS) {
-      client.onRequest(method, async (params, request) =>
-        this.routeServerRequest(
-          { method, id: request.id, params } as ServerRequest,
-          input,
-          fileChangeBatches
-        )
+      client.onRequest(
+        method,
+        async (params, request) =>
+          this.routeServerRequest(
+            { method, id: request.id, params } as ServerRequest,
+            input,
+            fileChangeBatches
+          ),
+        method === 'item/fileChange/requestApproval'
+          ? { waitForQueuedNotifications: true }
+          : undefined
       )
     }
   }
@@ -473,6 +482,7 @@ export class NativeCodexRunSession {
       inputAdapter: CodexRunInputAdapter
       runInput: NativeCodexRunDriverInput
       onTurnId(turnId: string): void
+      onThreadGoalSet(): void
     }
   ) {
     this.currentTurnId = options.turnId
@@ -522,6 +532,7 @@ export class NativeCodexRunSession {
       threadId: this.threadId,
       ...params
     })
+    this.options.onThreadGoalSet()
     return response.goal
   }
 
@@ -582,6 +593,7 @@ function threadStartParams(input: NativeCodexRunDriverInput): Record<string, unk
     config: mergeDesktopThreadConfig(customModel.config, input.threadConfig),
     developerInstructions: input.developerInstructions,
     ephemeral: input.ephemeral,
+    historyMode: input.ephemeral ? undefined : 'paginated',
     dynamicTools: input.ephemeral ? [] : [...(input.dynamicTools ?? [])]
   })
 }
@@ -602,13 +614,13 @@ function threadResumeParams(input: NativeCodexRunDriverInput): Record<string, un
   })
 }
 
-function customModelConfig(model: AdminBackendClientModel | undefined): {
+function customModelConfig(model: LocalClientModel | undefined): {
   modelProvider?: string
   config?: Record<string, unknown>
 } {
   if (!model) return {}
   if (model.api_format.trim().toLowerCase() !== 'openai' || !model.api_base_url?.trim()) {
-    throw new Error(`Unsupported admin backend model configuration: ${model.model_id}`)
+    throw new Error(`Unsupported local model configuration: ${model.model_id}`)
   }
   return {
     modelProvider: model.provider,
@@ -618,6 +630,7 @@ function customModelConfig(model: AdminBackendClientModel | undefined): {
         [model.provider]: omitUndefined({
           name: model.provider,
           base_url: model.api_base_url.trim(),
+          query_params: model.api_query_params,
           experimental_bearer_token: model.api_key?.trim(),
           wire_api: 'responses',
           requires_openai_auth: false,

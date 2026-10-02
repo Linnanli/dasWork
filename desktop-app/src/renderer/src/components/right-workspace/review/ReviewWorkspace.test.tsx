@@ -29,6 +29,7 @@ const target = {
 let reviewSource: LocalGitReviewSource = { type: 'unstaged' }
 let reviewOpenIntent: { type: 'uncommitted'; token: number } | undefined
 let lastTurn: LocalGitReviewLastTurn | undefined
+let activeGitWorkflow = false
 const setReviewSource = vi.fn()
 const acknowledgeReviewOpenIntent = vi.fn((token: number) => {
   if (reviewOpenIntent?.token === token) reviewOpenIntent = undefined
@@ -93,7 +94,9 @@ vi.mock('@/components/local-git-review/LocalGitReviewProvider', () => ({
     updateGitWorkflow: () => undefined,
     finishGitWorkflow: () => undefined,
     acknowledgeReviewOpenIntent,
-    getGitWorkflow: () => undefined
+    getGitWorkflow: () =>
+      activeGitWorkflow ? ({ kind: 'commit-or-push', phase: 'committing' } as const) : undefined,
+    isGitWorkflowActive: () => activeGitWorkflow
   })
 }))
 
@@ -173,6 +176,7 @@ describe('ReviewWorkspace', () => {
     reviewSource = { type: 'unstaged' }
     reviewOpenIntent = undefined
     lastTurn = undefined
+    activeGitWorkflow = false
     setReviewSource.mockClear()
     acknowledgeReviewOpenIntent.mockClear()
     notifyGitOperation.mockClear()
@@ -285,6 +289,17 @@ describe('ReviewWorkspace', () => {
     expect(container.textContent).toContain('README.md')
   })
 
+  it('reserves diff space when the file tree preference is wider than the review pane', async () => {
+    await renderReview()
+
+    const tree = container.querySelector<HTMLElement>('[aria-label="Review file tree"]')
+    const diff = container.querySelector<HTMLElement>('[data-review-diff-scroll-height]')
+
+    expect(tree?.style.width).toBe('320px')
+    expect(tree?.style.maxWidth).toBe('45%')
+    expect(diff?.classList.contains('min-w-0')).toBe(true)
+  })
+
   it('selects only the file requested by a last-turn review', async () => {
     reviewSource = { type: 'last-turn', turnId: 'turn-1' }
     lastTurn = {
@@ -382,6 +397,34 @@ describe('ReviewWorkspace', () => {
 
     expect(window.desktopApp.git.getReviewSnapshot).toHaveBeenCalledTimes(4)
     expect(container.textContent).toContain('src/a.ts')
+  })
+
+  it('defers Git change refreshes that arrive before the active workflow rerenders', async () => {
+    let notifyGitChange: ((event: LocalGitChangeEvent) => void) | undefined
+    vi.mocked(window.desktopApp.git.subscribe).mockImplementation((listener) => {
+      notifyGitChange = listener
+      return () => undefined
+    })
+
+    await renderReview()
+    expect(window.desktopApp.git.getReviewSnapshot).toHaveBeenCalledTimes(2)
+
+    activeGitWorkflow = true
+    await act(async () => {
+      notifyGitChange?.({
+        target,
+        snapshotGeneration: 'commit-in-progress',
+        changeTypes: ['head', 'index', 'working-tree']
+      })
+      await Promise.resolve()
+    })
+
+    expect(window.desktopApp.git.getReviewSnapshot).toHaveBeenCalledTimes(2)
+
+    await renderReview()
+    activeGitWorkflow = false
+    await renderReview()
+    expect(window.desktopApp.git.getReviewSnapshot).toHaveBeenCalledTimes(4)
   })
 
   it('collapses stale file-diff replies into one snapshot refresh', async () => {

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "dascowork-officecli-legacy-baseline-context.v1",
+  "sourceRun": 35977341257,
+  "sourceCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
+  "artifactId": 10798893686,
+  "archiveSha256": "1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7",
+  "runtimeManifestSha256": "c9bf9471ee3bb796d078b540148a8622c8843a07c77d35b1a6a3f3ced3179963",
+  "retrieval": "selected original artifact ZIP entries read using absolute HTTP ranges and verified ZIP CRC; runtime manifest SHA-256 matches the platform-validation report",
+  "verifiedNativeRoot": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\primary-runtime-platform-hQb2do\\runtime-inputs",
+  "verifiedNativeRootLength": 83,
+  "failedRun": 36395096696,
+  "failedRetainedRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\primary-runtime-migration-nr6CYg\\cache\\versions\\1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7",
+  "failedRetainedRootLength": 152,
+  "scope": "historical Windows v2 closure/preview proof and actual root comparison; not a current Windows preview recovery proof or a local Windows execution",
+  "limitations": "full 728 MB nested Runtime archive was not downloaded or independently rehashed; embedded LibreOffice Python files were not individually read in this local audit; next native failure diagnostic checks os.py presence and path length"
+}

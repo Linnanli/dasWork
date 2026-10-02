@@ -1,0 +1,33 @@
+
+> desktop-app@1.0.0 test:unit
+> vitest run src/main/artifacts/rasterizePresentationSvg.test.ts -t prioritizes CJK
+
+
+ RUN  v4.1.8 /Users/nallylin/Documents/code/dasCowork/desktop-app
+
+ ❯ |unit| src/main/artifacts/rasterizePresentationSvg.test.ts (12 tests | 1 failed | 11 skipped) 24ms
+     × prioritizes CJK for rendered text while retaining its preferred families 21ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| src/main/artifacts/rasterizePresentationSvg.test.ts > rasterizePresentationSvg > prioritizes CJK for rendered text while retaining its preferred families
+AssertionError: expected 'Calibri, "Noto Sans CJK SC", sans-ser…' to be '"Dascowork Preview CJK", Calibri, "No…' // Object.is equality
+
+Expected: ""Dascowork Preview CJK", Calibri, "Noto Sans CJK SC", sans-serif"
+Received: "Calibri, "Noto Sans CJK SC", sans-serif"
+
+ ❯ src/main/artifacts/rasterizePresentationSvg.test.ts:152:39
+    150|     })
+    151|     await rasterizePresentationSvg(svg, 5_000, await fontFixture())
+    152|     expect(htmlText.style.fontFamily).toBe('"Dascowork Preview CJK", C…
+       |                                       ^
+    153|     expect(svgText.style.fontFamily).toBe('"Dascowork Preview CJK", se…
+    154|     expect(svgSpan.style.fontFamily).toBe('"Dascowork Preview CJK", Ar…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 skipped (12)
+   Start at  09:43:15
+   Duration  499ms (transform 125ms, setup 0ms, import 162ms, tests 24ms, environment 0ms)

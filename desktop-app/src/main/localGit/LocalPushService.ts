@@ -47,7 +47,7 @@ export class LocalPushService {
     try {
       // Do not use the dialog's old state: all branch, remote, and ahead data is
       // read again while executing the action.
-      state = await this.getStatusForRepository(repository)
+      state = await this.readStatusForRepository(repository)
     } catch (error) {
       return { status: 'status-unavailable', message: errorMessage(error) }
     }
@@ -95,6 +95,17 @@ export class LocalPushService {
   private async getStatusForRepository(
     repository: WorktreeRepository
   ): Promise<RepositoryPublishState> {
+    return repository.readCached(
+      'publish-status',
+      [],
+      () => this.readStatusForRepository(repository),
+      { metadata: { gitReadInvalidation: 'short-lived' } }
+    )
+  }
+
+  private async readStatusForRepository(
+    repository: WorktreeRepository
+  ): Promise<RepositoryPublishState> {
     const [branch, hasHead, staged, unstaged] = await Promise.all([
       currentBranch(repository),
       hasHeadCommit(repository),
@@ -103,8 +114,10 @@ export class LocalPushService {
     ])
 
     if (!branch) {
-      const remotes = await remoteNames(repository)
-      const pushDefault = await configValue(repository, 'remote.pushDefault')
+      const [remotes, pushDefault] = await Promise.all([
+        remoteNames(repository),
+        configValue(repository, 'remote.pushDefault')
+      ])
       return {
         branch: null,
         hasHead,
@@ -128,11 +141,14 @@ export class LocalPushService {
       }
     }
 
-    const remotes = await remoteNames(repository)
-    const configuredRemote = await configValue(repository, `branch.${branch}.remote`)
-    const configuredPushRemote = await configValue(repository, `branch.${branch}.pushRemote`)
-    const pushDefault = await configValue(repository, 'remote.pushDefault')
-    const upstream = await upstreamForBranch(repository, branch)
+    const [remotes, configuredRemote, configuredPushRemote, pushDefault, upstream] =
+      await Promise.all([
+        remoteNames(repository),
+        configValue(repository, `branch.${branch}.remote`),
+        configValue(repository, `branch.${branch}.pushRemote`),
+        configValue(repository, 'remote.pushDefault'),
+        upstreamForBranch(repository, branch)
+      ])
     const upstreamTrackingRef = upstream.trackingRef
     const upstreamRemote = upstream.remote
     const upstreamRemoteRef = upstream.remoteRef

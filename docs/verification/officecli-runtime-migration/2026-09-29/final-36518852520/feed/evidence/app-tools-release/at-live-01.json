@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "dascowork-app-tools-evidence.v1",
+  "gateId": "AT-LIVE-01",
+  "producer": "live-office-runtime-dev",
+  "commit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "capturedAt": "2026-09-29T04:33:41.521Z",
+  "runtime": {
+    "bundleSha256": "47ba6430d8909a83e4f8500eae5d1eb1e636cc6bee093368a584b4b76b5b6938",
+    "config": {
+      "sequence": 1,
+      "payloadHash": "f4ff7d729bec7cccad33ec33126c870f2e5a9dda0b5a6fea461b84e340f92bb0",
+      "keyId": "engineering-config-v1"
+    },
+    "manifest": {
+      "sequence": 1,
+      "payloadHash": "98ad528a4b095bf6df7f6dbf435647f94d93bf366f448b58fa7971ee4191abc6",
+      "keyId": "engineering-manifest-v1"
+    },
+    "target": "linux-x64",
+    "officecli": {
+      "candidateName": "iOfficeAI/OfficeCLI",
+      "tag": "v1.0.152",
+      "commit": "ffa8a0a",
+      "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+      "nativeAssetName": "officecli-linux-x64",
+      "nativeAssetSha256": "e54d3c1d248372365f0634aac56d6f1918bd04d6e71afc792ad50e075f56cfe9"
+    },
+    "budget": {
+      "fileSha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06",
+      "performanceReportSha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    "activation": {
+      "operationId": "2ef45e18-e061-4ff7-8512-23a938fc4991",
+      "activeVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final",
+      "manifestSequence": 1
+    },
+    "live": {
+      "threadId": "01a0eb6f-2270-7862-bb22-974fa0becc5a",
+      "turnId": "01a0eb6f-3ddc-7193-8911-d996d89c9664",
+      "skill": {
+        "id": "/home/runner/work/_temp/dsc-ch-sqgs7B/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "name": "officecli",
+        "localPath": "/home/runner/work/_temp/dsc-ch-sqgs7B/skills/dascowork-primary-runtime/officecli/SKILL.md",
+        "instructionsSha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5"
+      },
+      "modelEvidence": {
+        "kind": "scripted-external-model",
+        "proves": "deterministic-desktop-runtime-command-path",
+        "doesNotProve": "live-model-skill-compliance"
+      },
+      "loader": {
+        "loaderCallId": "call-primary-runtime-loader",
+        "appServerLogIndex": 198,
+        "observedAt": "2026-09-29T04:32:11.366Z",
+        "monotonicNs": "764630882456",
+        "outputSha256": "01d5e4e3d63c5c589d7af7ae5a63fa53b1427ef4efcd0f08139e12bcb77a5325"
+      },
+      "command": {
+        "commandItemId": "call-primary-runtime-presentation-command",
+        "appServerLogIndex": 205,
+        "observedAt": "2026-09-29T04:32:11.553Z",
+        "monotonicNs": "764818525261",
+        "outputSha256": "7781542df91fe0977df8625b1d4393ead1b103320687e6945f2eb89213074bb0"
+      },
+      "artifact": {
+        "artifactSourceId": "57dfec80f4c44dd6bbe4633305a58c38",
+        "observedAt": "2026-09-29T04:32:40.768Z",
+        "monotonicNs": "794032912749",
+        "generation": 1,
+        "presentationSha256": "936e52e8d7d948c520aef3908795ea409095ed3f7f7c0f133224c8e2984ffc4d"
+      },
+      "preview": {
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "observedAt": "2026-09-29T04:33:41.518Z",
+        "monotonicNs": "854782788595",
+        "visible": true,
+        "presentationSha256": "936e52e8d7d948c520aef3908795ea409095ed3f7f7c0f133224c8e2984ffc4d"
+      },
+      "renderReportSha256": "02f2982d7f123a4b046deb9601f26b80e56e3c01804028bd006c7c4d075f1cc1"
+    }
+  },
+  "report": {
+    "path": "reports/at-live-01-r07-dev-live-trace.json",
+    "sha256": "892c6d6999fb55cfc36e8ab930c6579d3b0434a3e7d3b3634d0a4f1cded48673"
+  }
+}

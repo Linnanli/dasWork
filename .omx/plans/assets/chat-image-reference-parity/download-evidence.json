@@ -1,0 +1,48 @@
+{
+  "source": "Real webContents.downloadURL, HTTP 302 and DownloadItem events; only native destination selection was replaced.",
+  "downloads": [
+    {
+      "urls": [
+        "http://127.0.0.1:63879/redirect.png",
+        "http://127.0.0.1:63879/image.png"
+      ],
+      "state": "cancelled",
+      "receivedBytes": 0,
+      "updateCount": 30,
+      "interruptedUpdates": [
+        {
+          "state": "interrupted",
+          "receivedBytes": 0,
+          "resumable": true
+        }
+      ],
+      "lastUpdate": {
+        "state": "interrupted",
+        "receivedBytes": 0,
+        "resumable": true
+      }
+    },
+    {
+      "urls": [
+        "http://127.0.0.1:63879/redirect.png",
+        "http://127.0.0.1:63879/image.png"
+      ],
+      "state": "completed",
+      "receivedBytes": 915246,
+      "updateCount": 5,
+      "interruptedUpdates": [],
+      "lastUpdate": {
+        "state": "progressing",
+        "receivedBytes": 915246,
+        "resumable": false
+      }
+    }
+  ],
+  "uiAssertions": {
+    "interruptedSaveReportedFailure": true,
+    "retryEnabled": true,
+    "retrySavedOriginalBytes": true,
+    "pageDidNotNavigate": true,
+    "cancelledLocalDialogHadNoFailure": true
+  }
+}

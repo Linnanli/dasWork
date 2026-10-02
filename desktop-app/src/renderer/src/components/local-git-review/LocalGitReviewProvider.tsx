@@ -62,6 +62,7 @@ type LocalGitReviewContextValue = {
   updateGitWorkflow(target: GitRepositoryTarget, workflow: LocalGitWorkflow): void
   finishGitWorkflow(target: GitRepositoryTarget): void
   getGitWorkflow(target: GitRepositoryTarget): LocalGitWorkflow | undefined
+  isGitWorkflowActive(target: GitRepositoryTarget): boolean
 }
 
 const LocalGitReviewContext = createContext<LocalGitReviewContextValue>({
@@ -75,7 +76,8 @@ const LocalGitReviewContext = createContext<LocalGitReviewContextValue>({
   startGitWorkflow: () => true,
   updateGitWorkflow: () => undefined,
   finishGitWorkflow: () => undefined,
-  getGitWorkflow: () => undefined
+  getGitWorkflow: () => undefined,
+  isGitWorkflowActive: () => false
 })
 
 const GIT_OPERATION_TOAST_DURATION = 6_000
@@ -175,6 +177,11 @@ export function LocalGitReviewProvider({ children }: { children: ReactNode }): R
     (workflowTarget: GitRepositoryTarget) => gitWorkflows[gitWorkflowKey(workflowTarget)],
     [gitWorkflows]
   )
+  const isGitWorkflowActive = useCallback(
+    (workflowTarget: GitRepositoryTarget) =>
+      Boolean(gitWorkflowsRef.current[gitWorkflowKey(workflowTarget)]),
+    []
+  )
   const value = useMemo(
     () => ({
       target,
@@ -190,13 +197,15 @@ export function LocalGitReviewProvider({ children }: { children: ReactNode }): R
       startGitWorkflow,
       updateGitWorkflow,
       finishGitWorkflow,
-      getGitWorkflow
+      getGitWorkflow,
+      isGitWorkflowActive
     }),
     [
       closeReview,
       acknowledgeReviewOpenIntent,
       finishGitWorkflow,
       getGitWorkflow,
+      isGitWorkflowActive,
       notifyGitOperation,
       openReview,
       openUncommittedReview,

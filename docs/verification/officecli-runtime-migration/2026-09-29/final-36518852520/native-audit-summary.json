@@ -1,0 +1,67 @@
+{
+  "status": "passed",
+  "sourceRunId": "36518852520",
+  "sourceCommit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "calibrationRunId": "36512308682",
+  "engineeringOnly": true,
+  "productionTrust": false,
+  "archiveHashEvidence": "Native CI verification/provenance, not local rehash of large Runtime ZIPs",
+  "targets": {
+    "darwin-x64": {
+      "artifactId": 11012892445,
+      "archiveSha256": "705abfbc4a4b34e7ae2ac182e5a4776ea24a8c8a24da0d2f3b360902005b15fd",
+      "archiveBytes": 116313335,
+      "unpackedBytes": 174667526,
+      "migrationScenarios": 12,
+      "isolatedCommands": 25,
+      "networkAndExecutionProbesPassed": true,
+      "rssDeltaBytes": 47144960,
+      "maxRssDeltaBytes": 402653184,
+      "defaultFont": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      "reviewedBudgetSha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06",
+      "performanceReportSha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    "darwin-arm64": {
+      "artifactId": 11012517237,
+      "archiveSha256": "4e9ebc826434b5aea7abcef2292d5848af89a36945ea43caa382900e73e68c6c",
+      "archiveBytes": 115377512,
+      "unpackedBytes": 173626168,
+      "migrationScenarios": 12,
+      "isolatedCommands": 25,
+      "networkAndExecutionProbesPassed": true,
+      "rssDeltaBytes": 88850432,
+      "maxRssDeltaBytes": 402653184,
+      "defaultFont": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      "reviewedBudgetSha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06",
+      "performanceReportSha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    "win32-x64": {
+      "artifactId": 11012958027,
+      "archiveSha256": "916857145aeac0d3b8f11e5d22ebe2889f2c7c546bdea8dfc227b4bf279a9eb3",
+      "archiveBytes": 112773705,
+      "unpackedBytes": 162905404,
+      "migrationScenarios": 12,
+      "isolatedCommands": 25,
+      "networkAndExecutionProbesPassed": true,
+      "rssDeltaBytes": 52371456,
+      "maxRssDeltaBytes": 402653184,
+      "defaultFont": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      "reviewedBudgetSha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06",
+      "performanceReportSha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    "linux-x64": {
+      "artifactId": 11013246375,
+      "archiveSha256": "47ba6430d8909a83e4f8500eae5d1eb1e636cc6bee093368a584b4b76b5b6938",
+      "archiveBytes": 179820975,
+      "unpackedBytes": 351018995,
+      "migrationScenarios": 12,
+      "isolatedCommands": 25,
+      "networkAndExecutionProbesPassed": true,
+      "rssDeltaBytes": 45522944,
+      "maxRssDeltaBytes": 402653184,
+      "defaultFont": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      "reviewedBudgetSha256": "74deaa2913f551d979a0ef5ef29dd828c6b662bf274d7bb2f2fff12fc03a6d06",
+      "performanceReportSha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    }
+  }
+}

@@ -28,6 +28,9 @@ import {
   pluginCenterUpsertMcpServerRequestSchema,
   pluginCenterIpcCancelRequestSchema,
   pluginCenterIpcChannels,
+  pluginCenterIpcEvents,
+  pluginCenterPrimaryRuntimeRequestSchema,
+  pluginCenterPrimaryRuntimeResultSchema,
   parsePluginCenterIpcRequestEnvelope,
   type DesktopPluginCenterApi,
   type PluginCenterMutationResult,
@@ -36,11 +39,16 @@ import {
 
 type Invoke = (channel: string, payload: unknown) => Promise<unknown>
 type Send = (channel: string, payload: unknown) => void
+type Subscribe = (
+  channel: string,
+  listener: (_event: unknown, payload: unknown) => void
+) => () => void
 
 /** Exposes only fixed product actions, with validation on both IPC boundaries. */
 export function createPluginCenterBridge(
   invoke: Invoke,
-  send: Send = () => undefined
+  send: Send = () => undefined,
+  subscribe: Subscribe = () => () => undefined
 ): DesktopPluginCenterApi {
   return {
     cancelRequest: (requestId) => {
@@ -49,6 +57,14 @@ export function createPluginCenterBridge(
         pluginCenterIpcCancelRequestSchema.parse({ requestId }, { jitless: true })
       )
     },
+    subscribePrimaryRuntimeStatus: (listener) =>
+      subscribe(pluginCenterIpcEvents.primaryRuntimeStatus, (_event, payload) => {
+        try {
+          listener(pluginCenterPrimaryRuntimeResultSchema.parse(payload, { jitless: true }).runtime)
+        } catch {
+          // Ignore malformed Main events; the next explicit status read remains safe.
+        }
+      }),
     getSnapshot: (input, options) =>
       request(
         invoke,
@@ -58,6 +74,49 @@ export function createPluginCenterBridge(
         pluginCenterSnapshotResultSchema,
         input,
         options
+      ),
+    getPrimaryRuntimeStatus: (input, options) =>
+      request(
+        invoke,
+        send,
+        pluginCenterIpcChannels.getPrimaryRuntimeStatus,
+        pluginCenterPrimaryRuntimeRequestSchema,
+        pluginCenterPrimaryRuntimeResultSchema,
+        input,
+        options
+      ),
+    installOrRepairPrimaryRuntime: (input, options) =>
+      request(
+        invoke,
+        send,
+        pluginCenterIpcChannels.installOrRepairPrimaryRuntime,
+        pluginCenterPrimaryRuntimeRequestSchema,
+        pluginCenterPrimaryRuntimeResultSchema,
+        input,
+        options,
+        { cancellable: false }
+      ),
+    runPrimaryRuntimeUpdate: (input, options) =>
+      request(
+        invoke,
+        send,
+        pluginCenterIpcChannels.runPrimaryRuntimeUpdate,
+        pluginCenterPrimaryRuntimeRequestSchema,
+        pluginCenterPrimaryRuntimeResultSchema,
+        input,
+        options,
+        { cancellable: false }
+      ),
+    cancelPrimaryRuntime: (input, options) =>
+      request(
+        invoke,
+        send,
+        pluginCenterIpcChannels.cancelPrimaryRuntime,
+        pluginCenterPrimaryRuntimeRequestSchema,
+        pluginCenterPrimaryRuntimeResultSchema,
+        input,
+        options,
+        { cancellable: false }
       ),
     getInstalledPlugins: (input, options) =>
       request(

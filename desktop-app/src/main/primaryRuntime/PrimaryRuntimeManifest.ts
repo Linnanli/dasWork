@@ -16,7 +16,8 @@ const relativePathSchema = z
 const packageManifestSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1).optional(),
-  path: relativePathSchema
+  path: relativePathSchema,
+  entryRequired: z.boolean().optional()
 })
 
 const binaryManifestSchema = z.object({
@@ -25,39 +26,119 @@ const binaryManifestSchema = z.object({
   required: z.boolean().optional()
 })
 
-const primaryRuntimeManifestV1Schema = z
+const fontManifestSchema = z.object({
+  name: z.string().min(1),
+  path: relativePathSchema
+})
+
+const bundledPluginManifestSchema = z.object({
+  marketplace: z.string().min(1),
+  path: relativePathSchema
+})
+
+const bundledSkillManifestSchema = z.object({
+  path: relativePathSchema.refine(
+    (value) => value.endsWith('/SKILL.md') || value === 'SKILL.md',
+    'bundled skill path must identify SKILL.md'
+  ),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/u)
+})
+
+const sourceDigestSchema = z.object({
+  path: relativePathSchema,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/u)
+})
+
+const syntheticTestOnlySchema = z
   .object({
-    bundleFormatVersion: z.literal(1),
-    bundleVersion: z.string().min(1),
-    target: z.object({
-      platform: z.custom<NodeJS.Platform>((value) => typeof value === 'string'),
-      arch: z.custom<NodeJS.Architecture>((value) => typeof value === 'string')
-    }),
-    node: z.object({
+    kind: z.literal('dascowork-primary-runtime-synthetic-test.v1'),
+    requiredNodePackage: z.literal('@dascowork/test-artifact-tool')
+  })
+  .strict()
+
+const commonManifestFields = {
+  bundleVersion: z.string().min(1),
+  target: z.object({
+    platform: z.custom<NodeJS.Platform>((value) => typeof value === 'string'),
+    arch: z.custom<NodeJS.Architecture>((value) => typeof value === 'string')
+  }),
+  binaries: z.array(binaryManifestSchema).optional(),
+  fonts: z.array(fontManifestSchema).optional(),
+  bundledPlugins: z.array(bundledPluginManifestSchema).optional(),
+  bundledSkills: z.array(bundledSkillManifestSchema).optional(),
+  skillsToRemove: z.array(relativePathSchema).optional(),
+  sourceDigests: z.array(sourceDigestSchema).optional(),
+  syntheticTestOnly: syntheticTestOnlySchema.optional()
+}
+
+const nodeRuntimeManifestFields = {
+  ...commonManifestFields,
+  node: z.object({
+    path: relativePathSchema,
+    version: z.string().min(1).optional()
+  }),
+  nodePackages: z.array(packageManifestSchema).min(1),
+  python: z
+    .object({
       path: relativePathSchema,
-      version: z.string().min(1).optional()
-    }),
-    nodePackages: z.array(packageManifestSchema),
+      version: z.string().min(1).optional(),
+      packages: z.array(packageManifestSchema).optional()
+    })
+    .optional()
+}
+
+const primaryRuntimeManifestV1Schema = z
+  .object({ bundleFormatVersion: z.literal(1), ...nodeRuntimeManifestFields })
+  .strict()
+
+const primaryRuntimeManifestV2Schema = z
+  .object({ bundleFormatVersion: z.literal(2), ...nodeRuntimeManifestFields })
+  .strict()
+
+const primaryRuntimeManifestV3Schema = z
+  .object({
+    bundleFormatVersion: z.literal(3),
+    ...commonManifestFields,
+    node: z
+      .object({
+        path: relativePathSchema,
+        version: z.string().min(1).optional()
+      })
+      .optional(),
+    nodePackages: z.array(packageManifestSchema).optional(),
     python: z
       .object({
         path: relativePathSchema,
         version: z.string().min(1).optional(),
         packages: z.array(packageManifestSchema).optional()
       })
-      .optional(),
-    binaries: z.array(binaryManifestSchema).optional(),
-    bundledPlugins: z
-      .array(
-        z.object({
-          marketplace: z.string().min(1),
-          path: relativePathSchema
-        })
-      )
       .optional()
   })
   .strict()
+  .superRefine((manifest, context) => {
+    if (!manifest.binaries?.some((binary) => binary.name === 'officecli')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'v3 Primary Runtime manifest must declare the officecli binary',
+        path: ['binaries']
+      })
+    }
+    if (!manifest.bundledSkills?.some((skill) => skill.path === 'skills/officecli/SKILL.md')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'v3 Primary Runtime manifest must declare the OfficeCLI skill',
+        path: ['bundledSkills']
+      })
+    }
+  })
 
-const primaryRuntimeManifestV2Schema = z
+/**
+ * Legacy v2 cache decoder. This is intentionally read-only: production feeds
+ * emit the generic v2 schema above, and diagnostics mark this form so update
+ * selection can replace it without exposing its package identity as a new
+ * Runtime capability.
+ */
+const legacyPrimaryRuntimeManifestV2Schema = z
   .object({
     artifactToolVersion: z.string().min(1),
     bundleFormatVersion: z.literal(2),
@@ -74,6 +155,7 @@ const primaryRuntimeManifestV2Schema = z
     (manifest): PrimaryRuntimeManifest => ({
       bundleFormatVersion: manifest.bundleFormatVersion,
       bundleVersion: manifest.bundleVersion,
+      legacyV2: true,
       target: {
         platform: manifest.targetPlatform,
         arch: manifest.targetArch
@@ -120,7 +202,9 @@ const primaryRuntimeManifestV2Schema = z
 
 export const primaryRuntimeManifestSchema = z.union([
   primaryRuntimeManifestV1Schema,
-  primaryRuntimeManifestV2Schema
+  primaryRuntimeManifestV2Schema,
+  primaryRuntimeManifestV3Schema,
+  legacyPrimaryRuntimeManifestV2Schema
 ])
 
 export async function readPrimaryRuntimeManifest(path: string): Promise<PrimaryRuntimeManifest> {

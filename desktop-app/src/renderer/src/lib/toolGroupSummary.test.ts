@@ -3,6 +3,36 @@ import { describe, expect, it } from 'vitest'
 import { summarizeToolGroup } from './toolGroupSummary'
 
 describe('summarizeToolGroup', () => {
+  it('uses a fixed image view count while calls are running, replayed, or errored', () => {
+    const started = {
+      type: 'dynamic-tool',
+      toolName: 'codex_image_view',
+      toolCallId: 'image-a',
+      state: 'input-available',
+      input: { path: '/same.png' }
+    }
+    const completed = {
+      ...started,
+      state: 'output-available',
+      output: { item: { type: 'imageView', id: 'image-a', path: '/same.png' } }
+    }
+    const failed = {
+      type: 'dynamic-tool',
+      toolName: 'codex_image_view',
+      toolCallId: 'image-b',
+      state: 'output-error',
+      input: { path: '/same.png' },
+      errorText: 'File deleted'
+    }
+    expect(summarizeToolGroup([started, completed, failed, started])).toMatchObject({
+      label: '已查看 2 张图片',
+      icon: 'image-view',
+      count: 2,
+      expandable: true
+    })
+    expect(summarizeToolGroup([started])).toMatchObject({ label: '已查看 1 张图片' })
+  })
+
   it('summarizes completed command read actions from tool results', () => {
     const summary = summarizeToolGroup([
       commandResultPart('read-a', 'read'),

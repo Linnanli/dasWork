@@ -6,7 +6,7 @@ describe('createComposerFuzzyScorer', () => {
   it('rejects arbitrary character subsequences that the reference matcher does not accept', () => {
     const score = createComposerFuzzyScorer('readme')
 
-    expect(score('spreadsheets@openai-primary-runtime')).toBe(0)
+    expect(score('spreadsheets@presentation-skill')).toBe(0)
     expect(score('openai-templates:artifact-template-simple-dark-mode')).toBe(0)
     expect(score('Prometheus Strict requirements interviewer and ambiguity mapper')).toBe(0)
     expect(

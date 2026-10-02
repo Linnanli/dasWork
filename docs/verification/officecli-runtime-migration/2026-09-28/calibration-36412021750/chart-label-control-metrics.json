@@ -1,0 +1,63 @@
+{
+  "darwin-x64": {
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08653983410493828,
+    "colorBucketCount": 36,
+    "chartLabelRatios": {
+      "category1": 0.013536509900990099,
+      "category2": 0.021315028901734104,
+      "legend": 0.003259259259259259
+    },
+    "labelGatePassed": true
+  },
+  "darwin-arm64": {
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08654803240740741,
+    "colorBucketCount": 37,
+    "chartLabelRatios": {
+      "category1": 0.013536509900990099,
+      "category2": 0.021315028901734104,
+      "legend": 0.003259259259259259
+    },
+    "labelGatePassed": true
+  },
+  "win32-x64": {
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08473958333333333,
+    "colorBucketCount": 309,
+    "chartLabelRatios": {
+      "category1": 0.012376237623762377,
+      "category2": 0.01743135838150289,
+      "legend": 0.002962962962962963
+    },
+    "labelGatePassed": true
+  },
+  "linux-x64": {
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08877025462962963,
+    "colorBucketCount": 237,
+    "chartLabelRatios": {
+      "category1": 0,
+      "category2": 0.000180635838150289,
+      "legend": 0
+    },
+    "labelGatePassed": false,
+    "reason": "R07 chart label region category1 has too few dark text pixels: 0 <= 0.003."
+  },
+  "local-fixed-control": {
+    "width": 3840,
+    "height": 2160,
+    "nonWhiteRatio": 0.08243742766203704,
+    "colorBucketCount": 43,
+    "chartLabelRatios": {
+      "category1": 0.02778423172242875,
+      "category2": 0.03836253612716763,
+      "legend": 0.017746913580246913
+    },
+    "labelGatePassed": true
+  }
+}

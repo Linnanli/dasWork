@@ -25,7 +25,7 @@ import {
 } from './codexRun/CodexRunDriver'
 import { HostCodexConnection } from './codexRun/HostCodexConnection'
 import type { ThreadTerminalReader } from './terminal/readThreadTerminalTool'
-import type { ModelCatalogService } from './modelCatalogService'
+import type { LocalModelStore } from './localModels/LocalModelStore'
 import type { ProjectStoreLike, ProjectServiceLike } from './threads/startConversation'
 import {
   persistProjectAssignmentForThread,
@@ -48,6 +48,7 @@ import type {
   CodexTurnLifecycleEvent,
   CodexModel,
   CodexModelList,
+  AddLocalModelInput,
   CodexStatus,
   ThreadGoalSummary
 } from '../shared/codexIpcApi'
@@ -201,17 +202,12 @@ const turnInactivityTimeoutError = '模型长时间没有活动，已停止本�
 
 type ApprovalSettings = CodexRunApprovalSettings
 
-export type ModelCatalogLike = Pick<
-  ModelCatalogService,
-  'listModels' | 'setSelectedModel' | 'resolveClientModel'
->
-
 export type CodexChatRuntimeServiceOptions = {
   cwd?: string
   defaultModel?: string
   launch?: CodexAppServerLaunchOptions
   hostConnection?: HostCodexConnection
-  modelCatalog?: ModelCatalogLike
+  localModels?: Pick<LocalModelStore, 'listModels' | 'resolveClientModel' | 'addModel'>
   projectService?: ProjectServiceLike
   projectStore?: ProjectStoreLike
   runDriver?: RunDriverLike
@@ -262,7 +258,7 @@ export class CodexChatRuntimeService {
   private readonly approvalBroker = new CodexApprovalBroker()
   private readonly cwd: string
   private readonly launch: CodexAppServerLaunchOptions
-  private readonly modelCatalog: ModelCatalogLike | undefined
+  private readonly localModels: CodexChatRuntimeServiceOptions['localModels']
   private readonly projectService: ProjectServiceLike | undefined
   private readonly projectStore: ProjectStoreLike | undefined
   private readonly runDriver: RunDriverLike
@@ -334,7 +330,7 @@ export class CodexChatRuntimeService {
       options.canonicalOutcomeTimeoutMs ?? defaultCanonicalOutcomeTimeoutMs
     )
     this.shutdownTimeoutMs = Math.max(0, options.shutdownTimeoutMs ?? defaultShutdownTimeoutMs)
-    this.modelCatalog = options.modelCatalog
+    this.localModels = options.localModels
     this.projectService = options.projectService
     this.projectStore = options.projectStore
     this.turnDiffStore = options.turnDiffStore
@@ -381,18 +377,33 @@ export class CodexChatRuntimeService {
   }
 
   async listModels(): Promise<CodexModelList> {
-    if (this.modelCatalog) {
-      try {
-        const list = await this.modelCatalog.listModels()
-        if (list.models.length > 0) {
-          this.selectedModelId = list.selectedModelId
-        }
-        return list
-      } catch (error) {
-        return { models: [], unavailableReason: errorMessage(error) }
+    if (this.localModels) {
+      const previousSelectedModelId = this.selectedModelId
+      const [nativeList, localModels] = await Promise.all([
+        this.listNativeModels(),
+        this.localModels.listModels()
+      ])
+      const localSlugs = new Set(localModels.map((model) => model.modelId))
+      const models = [
+        ...nativeList.models.filter((model) => !localSlugs.has(model.id)),
+        ...localModels
+      ]
+      const selectedModelId =
+        previousSelectedModelId && models.some((model) => model.id === previousSelectedModelId)
+          ? previousSelectedModelId
+          : nativeList.selectedModelId &&
+              models.some((model) => model.id === nativeList.selectedModelId)
+            ? nativeList.selectedModelId
+            : localModels[0]?.id ?? models[0]?.id
+      this.selectedModelId = selectedModelId
+      return {
+        models,
+        ...(selectedModelId ? { selectedModelId } : {}),
+        ...(models.length === 0 && nativeList.unavailableReason
+          ? { unavailableReason: nativeList.unavailableReason }
+          : {})
       }
     }
-
     return this.listNativeModels()
   }
 
@@ -417,14 +428,22 @@ export class CodexChatRuntimeService {
 
   async setSelectedModel(modelId: string): Promise<{ selectedModelId: string }> {
     if (!modelId.trim()) throw new Error('modelId is required')
-    if (this.modelCatalog) {
-      const response = await this.modelCatalog.setSelectedModel(modelId)
-      this.selectedModelId = response.selectedModelId
-      return response
+    if (this.localModels) {
+      const list = await this.listModels()
+      if (!list.models.some((model) => model.id === modelId)) {
+        throw new Error(`Unknown model: ${modelId}`)
+      }
+      this.selectedModelId = modelId
+      return { selectedModelId: modelId }
     }
-
     this.selectedModelId = modelId
     return { selectedModelId: modelId }
+  }
+
+  async addLocalModel(input: AddLocalModelInput): Promise<CodexModelList> {
+    if (!this.localModels) throw new Error('本地模型配置不可用')
+    this.selectedModelId = await this.localModels.addModel(input)
+    return this.listModels()
   }
 
   private async resolveCollaborationMode(
@@ -472,9 +491,10 @@ export class CodexChatRuntimeService {
     const modelId = this.selectedModelId ?? modelList.selectedModelId
     if (!modelId) throw new Error('No Codex model selected for commit message generation.')
 
-    const clientModel = this.modelCatalog
-      ? await this.modelCatalog.resolveClientModel(modelId)
-      : undefined
+    const clientModel = await this.localModels?.resolveClientModel(modelId)
+    if (this.localModels && modelId.startsWith('local:') && !clientModel) {
+      throw new Error(`Unknown local model: ${modelId}`)
+    }
     const executionTarget = await this.resolveCommitMessageExecutionTarget(input.target)
     const messageId = `commit-message:${randomUUID()}`
     const request: CodexChatRequest = {
@@ -630,9 +650,10 @@ export class CodexChatRuntimeService {
       }
       const modelId = effectiveRequest.modelId ?? this.selectedModelId
       if (!modelId) throw new Error('No Codex model selected')
-      const clientModel = this.modelCatalog
-        ? await this.modelCatalog.resolveClientModel(modelId)
-        : undefined
+      const clientModel = await this.localModels?.resolveClientModel(modelId)
+      if (this.localModels && modelId.startsWith('local:') && !clientModel) {
+        throw new Error(`Unknown local model: ${modelId}`)
+      }
       const streamModelId = clientModel?.model_id ?? modelId
       const threadGoalDraft = threadGoalDraftFromRequest(effectiveRequest)
       const threadGoalControl = threadGoalControlFromRequest(effectiveRequest)
@@ -745,9 +766,7 @@ export class CodexChatRuntimeService {
         system: effectiveRequest.body?.system,
         projectAssignment: conversation.projectAssignment,
         capabilities: {
-          workspaceDependencies: capabilitySnapshot.availableToolNames.includes(
-            'load_workspace_dependencies'
-          )
+          workspaceDependencies: capabilitySnapshot.workspaceInstructionsEnabled
         },
         availableToolNames: capabilitySnapshot.availableToolNames
       })

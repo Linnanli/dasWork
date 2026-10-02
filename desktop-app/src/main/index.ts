@@ -8,6 +8,7 @@ import {
   nativeTheme,
   net,
   protocol,
+  safeStorage,
   session
 } from 'electron'
 import { stat } from 'node:fs/promises'
@@ -36,6 +37,7 @@ import {
 } from './conversations/ConversationApiService'
 import { createNativeContextMenuHandler, installWindowContextMenu } from './contextMenu'
 import { createPickLocalContextHandler } from './localContextPicker'
+import { registerChatImageIpc } from './chatImages/registerChatImageIpc'
 import { ArtifactPreviewCapabilityStore } from './artifacts/ArtifactPreviewCapabilityStore'
 import { ArtifactComposerAttachmentStore } from './artifacts/ArtifactComposerAttachmentStore'
 import { ArtifactPreviewSourceManifest } from './artifacts/ArtifactPreviewSourceManifest'
@@ -49,7 +51,7 @@ import {
   registerAppProtocol,
   registerAppSchemePrivileges
 } from './localMediaProtocol'
-import { createModelCatalogService } from './modelCatalogService'
+import { LocalModelStore } from './localModels/LocalModelStore'
 import { ComposerContextCatalogService } from './composerContext/ComposerContextCatalogService'
 import { ComposerContextChangeBroker } from './composerContext/ComposerContextChangeBroker'
 import { ComposerContextSearchService } from './composerContext/ComposerContextSearchService'
@@ -94,14 +96,27 @@ import { TerminalBackendFactory } from './terminal/TerminalBackendFactory'
 import { createLocalGitIpcHandlers } from './localGit/localGitIpc'
 import { LocalGitWatchBroker, localGitWatchControlChannels } from './localGit/LocalGitWatchBroker'
 import { invalidateLocalGitWatchCaches } from './localGit/LocalGitWatchInvalidation'
-import { loadDesktopRuntimeConfig, type DesktopRuntimeConfig } from './runtimeConfig'
+import type { DesktopRuntimeConfig } from './runtimeConfig'
+import { loadPrimaryRuntimeStartupConfig } from './primaryRuntime/PrimaryRuntimeStartupConfig'
+import { resolvePrimaryRuntimeCacheRoot } from './primaryRuntime/primaryRuntimeCacheRoot'
 import {
   FilePrimaryRuntimeManifestSequenceStore,
+  FilePrimaryRuntimeTrustStateStore,
+  FilePrimaryRuntimeUpdateJitterStore,
   PRIMARY_RUNTIME_MANIFEST_PUBLIC_KEYS,
+  PrimaryRuntimeCapabilityPolicy,
+  PrimaryRuntimeHttpClient,
   PrimaryRuntimeLocator,
+  PrimaryRuntimeProductConfigClient,
+  PrimaryRuntimeProductReleaseProvider,
+  PrimaryRuntimePostInstallError,
   PrimaryRuntimeService,
+  PrimaryRuntimeTlsPolicy,
+  PrimaryRuntimeUpdateCoordinator,
   SignedPrimaryRuntimeReleaseProvider,
-  TrustedPrimaryRuntimeReleaseProvider
+  TrustedPrimaryRuntimeReleaseProvider,
+  WorkspaceDependenciesFeatureGate,
+  type PrimaryRuntimeDiagnostic
 } from './primaryRuntime'
 import {
   BundledPluginReconcileCoordinator,
@@ -109,12 +124,16 @@ import {
   isInternalBundledPlugin,
   readAppBundledPluginDescriptors,
   readPrimaryRuntimeBundledPluginDescriptors,
+  readRetiredPrimaryRuntimeBundledPluginDescriptors,
+  readInstalledPrimaryRuntimePluginCatalog,
+  RuntimeOwnedSkillManager,
   type BundledPluginDescriptor
 } from './bundledPlugins'
 import {
   registerRightWorkspaceIpc,
   type RightWorkspaceIpcRegistration
 } from './rightWorkspace/registerRightWorkspaceIpc'
+import { bindRightWorkspaceWindowLifecycle } from './rightWorkspace/bindRightWorkspaceWindowLifecycle'
 import { createMainWindowOptions } from './windowOptions'
 import {
   codexChatAttachPayloadSchema,
@@ -131,6 +150,7 @@ import {
   codexRespondApprovalPayloadSchema,
   codexSnoozeApprovalAutoResolutionPayloadSchema,
   codexSetSelectedModelPayloadSchema,
+  addLocalModelInputSchema,
   type CodexChatAttachResult,
   type ComposerContextCatalogChangeEvent,
   type FollowUpQueueChangeEvent,
@@ -152,6 +172,7 @@ import {
 import { gitIpcChannels } from '../shared/localGitApi'
 import { nativeContextMenuIpcChannels } from '../shared/nativeContextMenuApi'
 import type { ProjectState } from '../shared/projects/projectTypes'
+import { PLUGIN_CENTER_API_VERSION, pluginCenterIpcEvents } from '../shared/pluginCenterApi'
 
 let codexRuntime: CodexChatRuntimeService | undefined
 let projectApi: ProjectApiService | undefined
@@ -170,8 +191,10 @@ let localGitWatchBroker: LocalGitWatchBroker | undefined
 let gitHostRegistry: GitHostRegistry | undefined
 let codexHostConnectionRegistry: CodexHostConnectionRegistry | undefined
 let rightWorkspaceIpc: RightWorkspaceIpcRegistration | undefined
+let chatImageIpc: ReturnType<typeof registerChatImageIpc> | undefined
 let codexAppToolsPipe: CodexAppToolsNativePipeServer | undefined
 let primaryRuntimeService: PrimaryRuntimeService | undefined
+let primaryRuntimeUpdateCoordinator: PrimaryRuntimeUpdateCoordinator | undefined
 const localImageCapabilities = new LocalImageCapabilityStore()
 const localPathCapabilities = new LocalPathCapabilityStore()
 const artifactPreviewCapabilities = new ArtifactPreviewCapabilityStore()
@@ -180,6 +203,12 @@ const convergingConversationThreadIds = new Set<string>()
 
 const e2eUserDataPath = process.env.DASCOWORK_E2E_USER_DATA_DIR?.trim()
 if (e2eUserDataPath) app.setPath('userData', e2eUserDataPath)
+const primaryRuntimeCacheRoot = resolvePrimaryRuntimeCacheRoot({
+  userDataPath: app.getPath('userData'),
+  localFeedCachePath: process.env.DASCOWORK_DEV_LOCAL_FEED_RUNTIME_CACHE_DIR,
+  useLocalFeedCache: process.env.DASCOWORK_DEV_LOCAL_FEED === '1',
+  isPackaged: app.isPackaged
+})
 const e2eDocumentsPath = process.env.DASCOWORK_E2E_DOCUMENTS_DIR?.trim()
 if (e2eDocumentsPath) app.setPath('documents', e2eDocumentsPath)
 const artifactPreviewManifest = new ArtifactPreviewSourceManifest(
@@ -193,62 +222,105 @@ async function createCodexRuntime(
   turnDiffStore: TurnDiffStore,
   runtimeConfig: DesktopRuntimeConfig
 ): Promise<CodexChatRuntimeService> {
+  const primaryRuntimeCapabilities = new PrimaryRuntimeCapabilityPolicy(
+    runtimeConfig.workspaceDependenciesFeatureEnabled ?? true
+  )
+  const primaryRuntimeReleaseProvider = runtimeConfig.primaryRuntimeProductConfig
+    ? await createPrimaryRuntimeProductReleaseProvider(
+        runtimeConfig.primaryRuntimeProductConfig,
+        primaryRuntimeCacheRoot
+      )
+    : runtimeConfig.primaryRuntimeRelease
+      ? new TrustedPrimaryRuntimeReleaseProvider({
+          ...runtimeConfig.primaryRuntimeRelease,
+          archiveFormat: 'zip'
+        })
+      : runtimeConfig.primaryRuntimeManifest
+        ? new SignedPrimaryRuntimeReleaseProvider({
+            ...runtimeConfig.primaryRuntimeManifest,
+            publicKeys: PRIMARY_RUNTIME_MANIFEST_PUBLIC_KEYS,
+            sequenceStore: new FilePrimaryRuntimeManifestSequenceStore(
+              join(primaryRuntimeCacheRoot, 'release-sequence.json')
+            ),
+            trustState: new FilePrimaryRuntimeTrustStateStore(
+              join(primaryRuntimeCacheRoot, 'trust-state.json')
+            )
+          })
+        : undefined
   const primaryRuntime = new PrimaryRuntimeService({
     locator: new PrimaryRuntimeLocator({
       env: process.env,
       allowDevelopmentRoot: is.dev || process.env['NODE_ENV'] === 'test',
-      appCacheRoot: join(app.getPath('userData'), 'primary-runtime'),
+      appCacheRoot: primaryRuntimeCacheRoot,
       resourcesPath: process.resourcesPath
     }),
-    cacheRoot: join(app.getPath('userData'), 'primary-runtime'),
-    ...(runtimeConfig.primaryRuntimeRelease
-      ? {
-          releaseProvider: new TrustedPrimaryRuntimeReleaseProvider({
-            ...runtimeConfig.primaryRuntimeRelease,
-            archiveFormat: 'zip'
-          })
-        }
-      : runtimeConfig.primaryRuntimeManifest
-        ? {
-            releaseProvider: new SignedPrimaryRuntimeReleaseProvider({
-              ...runtimeConfig.primaryRuntimeManifest,
-              publicKeys: PRIMARY_RUNTIME_MANIFEST_PUBLIC_KEYS,
-              sequenceStore: new FilePrimaryRuntimeManifestSequenceStore(
-                join(app.getPath('userData'), 'primary-runtime', 'release-sequence.json')
-              )
-            })
-          }
-        : {})
+    cacheRoot: primaryRuntimeCacheRoot,
+    // A repository-owned synthetic Runtime can exercise the signed Feed path
+    // locally. Packaged builds always reject it, even if the environment leaks.
+    allowSyntheticTestRuntime:
+      !app.isPackaged && process.env.DASCOWORK_PRIMARY_RUNTIME_ALLOW_SYNTHETIC_TEST_RUNTIME === '1',
+    ...(primaryRuntimeReleaseProvider ? { releaseProvider: primaryRuntimeReleaseProvider } : {})
   })
   primaryRuntimeService = primaryRuntime
+  primaryRuntime.subscribeStatus(() => {
+    void primaryRuntime
+      .getUserStatus()
+      .then((status) => broadcastPrimaryRuntimeStatus(status))
+      .catch(() => undefined)
+  })
   const hostCapabilities = new DesktopHostCapabilityRuntime({
     workspaceDependencies: primaryRuntime,
+    primaryRuntimeCapabilities,
     readThreadTerminal: (threadId) =>
       rightWorkspaceIpc?.terminalManager.readThreadTerminal(threadId) ?? { terminalAttached: false }
   })
   const desktopToolBridge = await startDesktopToolBridge(hostCapabilities)
-  let bundledPluginDescriptors = uniqueBundledPluginDescriptors([
-    ...desktopToolBridge.descriptors,
-    ...(await readPrimaryRuntimeBundledPluginDescriptors(
-      await primaryRuntime.diagnoseDependencies()
-    ).catch((error) => {
-      console.warn('[bundled-plugins] failed to discover initial runtime descriptors', error)
-      return []
-    }))
-  ])
-  const reconcileBundledPluginCatalog = async (): Promise<void> => {
-    const activeDescriptors = await reconcileBundledPlugins({
+  const localModels = new LocalModelStore({
+    userDataPath: app.getPath('userData'),
+    secretStorage: safeStorage
+  })
+  const modelCatalogPath = await localModels.prepareCatalog()
+  const launch = resolveCodexAppServerLaunchOptions({
+    env: process.env,
+    modelCatalogPath
+  })
+  const codexHome = resolveCodexHome(launch.env)
+  let bundledPluginDescriptors = uniqueBundledPluginDescriptors([...desktopToolBridge.descriptors])
+  const reconcileBundledPluginCatalog = async ({
+    cleanupRuntimeSkills = false
+  }: {
+    cleanupRuntimeSkills?: boolean
+  } = {}): Promise<void> => {
+    const previousPrimaryRuntimeDescriptors = bundledPluginDescriptors.filter(
+      (descriptor) => descriptor.sourceKind === 'primary-runtime'
+    )
+    const diagnostic = await primaryRuntime.diagnoseDependencies({ recoverActivation: false })
+    const active = await reconcileBundledPlugins({
       catalogClient: requireComposerContextClient(),
       appDescriptors: desktopToolBridge.descriptors,
       primaryRuntime,
-      hostCapabilities
+      hostCapabilities,
+      retiredPrimaryRuntimeDescriptors: previousPrimaryRuntimeDescriptors,
+      primaryRuntimeDiagnostic: diagnostic,
+      primaryRuntimeCacheRoot,
+      codexHome,
+      cleanupRuntimeSkills
     })
-    bundledPluginDescriptors = uniqueBundledPluginDescriptors([
-      ...bundledPluginDescriptors,
-      ...activeDescriptors
-    ])
+    // Each reconcile is a replacement of the committed desired set. Retaining
+    // historical Runtime descriptors makes a new bundle look healthy while its
+    // old skill remains enabled.
+    bundledPluginDescriptors = uniqueBundledPluginDescriptors(active.descriptors)
+    hostCapabilities.updatePrimaryRuntimeState({
+      diagnostic,
+      runtimePluginsSynchronized: diagnostic.status === 'ready' && active.status === 'ready'
+    })
+    if (active.status !== 'ready') {
+      throw new PrimaryRuntimePostInstallError(
+        active.failureStage ?? 'sync_plugins',
+        'Runtime-owned skills and bundled plugins did not reconcile successfully.'
+      )
+    }
   }
-  const launch = resolveCodexAppServerLaunchOptions({ env: process.env })
   const connection = createCodexNativeSharedConnection(launch)
   codexAppServerConnection = connection
   const hostConnection = new HostCodexConnection(launch, connection.connection)
@@ -257,6 +329,16 @@ async function createCodexRuntime(
     experimentalApi: true,
     acquireClient: () => hostConnection.acquireLease()
   })
+  primaryRuntimeCapabilities.setLoaderFeatureGate(
+    new WorkspaceDependenciesFeatureGate({
+      // The desktop product owns this feature flag. The app-server feature is
+      // checked separately below for every new-thread capability snapshot.
+      productFeatureEnabled: runtimeConfig.workspaceDependenciesFeatureEnabled ?? true,
+      listExperimentalFeatures: () => historyClient.listExperimentalFeatures(),
+      connectionGeneration: () => hostConnection.diagnostics()?.generation
+    })
+  )
+  hostCapabilities.refresh()
   const projectRuntimeServices = createProjectRuntimeServices({
     userDataPath: app.getPath('userData'),
     documentsPath: app.getPath('documents'),
@@ -279,7 +361,6 @@ async function createCodexRuntime(
       rightWorkspaceIpc?.terminalManager.closeForConversation(conversationId) ?? Promise.resolve()
   })
   const liveAgents = new LiveAgentRegistry(threadClient)
-  const codexHome = resolveCodexHome(launch.env)
   const agentRoles = new LocalAgentRoleCatalog({
     codexHome,
     projectService: projectRuntimeServices.projectService,
@@ -307,7 +388,13 @@ async function createCodexRuntime(
         id: plugin.id,
         name: plugin.name,
         marketplaceName: plugin.marketplaceId
-      })
+      }),
+    primaryRuntime: {
+      getUserStatus: () => primaryRuntime.getUserStatus(),
+      installOrRepair: () => primaryRuntime.installOrRepair(),
+      runUpdateNow: () => primaryRuntime.runUpdateNow(),
+      cancelInstall: () => primaryRuntime.cancelInstall()
+    }
   })
   composerContextCatalog = new ComposerContextCatalogService({
     provider: composerContextClient,
@@ -368,15 +455,51 @@ async function createCodexRuntime(
     warn: (message, error) => console.warn(message, error)
   })
 
-  void bundledPluginReconciler.run('startup')
-  if (runtimeConfig.primaryRuntimeRelease || runtimeConfig.primaryRuntimeManifest) {
-    void installPrimaryRuntimeIfNeeded(primaryRuntime, bundledPluginReconciler, hostCapabilities)
-  }
+  primaryRuntime.setPostActivationHook(async (result) => {
+    await bundledPluginReconciler.run('primary-runtime-install', {
+      propagateFailure: true,
+      cleanupRuntimeSkills: result === null
+    })
+  })
+
+  const primaryRuntimeUpdates = primaryRuntimeReleaseProvider
+    ? new PrimaryRuntimeUpdateCoordinator({
+        runtime: primaryRuntime,
+        pollIntervalMs: () =>
+          primaryRuntimeReleaseProvider instanceof PrimaryRuntimeProductReleaseProvider
+            ? primaryRuntimeReleaseProvider.pollIntervalMs(
+                runtimeConfig.primaryRuntimeProductConfig?.pollIntervalMs ?? 60 * 60 * 1000
+              )
+            : 60 * 60 * 1000,
+        onUpdated: () => hostCapabilities.refresh(),
+        onFailure: (error) => {
+          console.warn('[primary-runtime] scheduled update check failed', error)
+          hostCapabilities.refresh()
+        },
+        jitterStore: new FilePrimaryRuntimeUpdateJitterStore(
+          join(primaryRuntimeCacheRoot, 'update-jitter.json')
+        ),
+        onScheduled: (nextCheckAt) => primaryRuntime.setNextUpdateCheckAt(nextCheckAt)
+      })
+    : undefined
+  primaryRuntimeUpdateCoordinator = primaryRuntimeUpdates
+  // Initial app-plugin reconciliation and the first Runtime update are
+  // independent, Main-owned background work. Do not make a cold Runtime
+  // install wait for marketplace synchronization: post-activation still uses
+  // the same serial reconciler, so plugin/skill ordering remains intact.
+  void primaryRuntime
+    .diagnoseDependencies()
+    .then(() => bundledPluginReconciler.run('startup'))
+    .catch((error) => {
+      hostCapabilities.setBundledPluginsStatus('degraded')
+      console.warn('[primary-runtime] startup activation recovery failed', error)
+    })
+  if (primaryRuntimeReleaseProvider) void primaryRuntimeUpdates?.start()
 
   return new CodexChatRuntimeService({
     launch,
     hostConnection,
-    modelCatalog: createModelCatalogService(runtimeConfig),
+    localModels,
     projectService: projectRuntimeServices.projectService,
     projectStore: projectRuntimeServices.projectStore,
     turnDiffStore,
@@ -392,8 +515,10 @@ async function createCodexRuntime(
         scope: { threadId: event.threadId }
       })
     },
-    onThreadBound: (conversationId, threadId) =>
-      rightWorkspaceIpc?.terminalManager.bindThread(conversationId, threadId),
+    onThreadBound: (conversationId, threadId) => {
+      rightWorkspaceIpc?.terminalManager.bindThread(conversationId, threadId)
+      chatImageIpc?.service.bindThread(conversationId, threadId)
+    },
     hostCapabilities
   })
 }
@@ -442,21 +567,83 @@ async function startDesktopToolBridge(
   }
 }
 
-async function installPrimaryRuntimeIfNeeded(
-  primaryRuntime: PrimaryRuntimeService,
-  bundledPluginReconciler: BundledPluginReconcileCoordinator,
-  hostCapabilities: DesktopHostCapabilityRuntime
-): Promise<void> {
-  const diagnostic = await primaryRuntime.diagnoseDependencies()
-  if (diagnostic.status === 'ready') return
-  try {
-    await primaryRuntime.install()
-  } catch (error) {
-    console.warn('[primary-runtime] trusted release installation failed', error)
-    hostCapabilities.refresh()
-    return
+async function createPrimaryRuntimeProductReleaseProvider(
+  config: NonNullable<DesktopRuntimeConfig['primaryRuntimeProductConfig']>,
+  cacheRoot: string
+): Promise<PrimaryRuntimeProductReleaseProvider> {
+  const trustState = new FilePrimaryRuntimeTrustStateStore(join(cacheRoot, 'trust-state.json'))
+  const manifestSequenceStore = new FilePrimaryRuntimeManifestSequenceStore(
+    join(cacheRoot, 'release-sequence.json')
+  )
+  const packagedLoopbackTestCaPath = resolvePackagedLoopbackTestCaPath(config)
+  const localTestCaPath = app.isPackaged ? packagedLoopbackTestCaPath : config.localTestCaPath
+  const tlsPolicy = await PrimaryRuntimeTlsPolicy.create({
+    production: app.isPackaged,
+    allowPackagedLoopbackTestCa: packagedLoopbackTestCaPath !== undefined,
+    localTestCaPath,
+    allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins]
+  })
+  const httpClient = new PrimaryRuntimeHttpClient({
+    allowedOrigins: [...config.allowedConfigOrigins, ...config.allowedManifestOrigins],
+    production: app.isPackaged,
+    ...(tlsPolicy ? { fetchImpl: tlsPolicy.fetchImpl } : {})
+  })
+  return new PrimaryRuntimeProductReleaseProvider({
+    configClient: new PrimaryRuntimeProductConfigClient({
+      configUrl: config.configUrl,
+      channel: config.channel,
+      configPublicKeys: config.configPublicKeys,
+      allowedConfigOrigins: config.allowedConfigOrigins,
+      allowedManifestOrigins: config.allowedManifestOrigins,
+      httpClient
+    }),
+    trustState,
+    createManifestProvider: (verifiedConfig) =>
+      new SignedPrimaryRuntimeReleaseProvider({
+        manifestUrl: verifiedConfig.manifestUrl,
+        allowedOrigins: config.allowedManifestOrigins,
+        channel: config.channel,
+        publicKeys: config.manifestPublicKeys,
+        sequenceStore: manifestSequenceStore,
+        httpClient,
+        trustState
+      })
+  })
+}
+
+function resolvePackagedLoopbackTestCaPath(
+  config: NonNullable<DesktopRuntimeConfig['primaryRuntimeProductConfig']>
+): string | undefined {
+  if (!app.isPackaged) return undefined
+
+  const certificatePath = process.env.DASCOWORK_PRIMARY_RUNTIME_PACKAGED_E2E_LOCAL_CA_PATH?.trim()
+  if (!certificatePath) return undefined
+  if (process.env.DASCOWORK_PRIMARY_RUNTIME_FEED_E2E !== '1') {
+    throw new Error('Packaged Primary Runtime test CA requires the feed E2E opt-in.')
   }
-  await bundledPluginReconciler.run('primary-runtime-install')
+  if (
+    ![config.configUrl, ...config.allowedConfigOrigins, ...config.allowedManifestOrigins].every(
+      isLoopbackHttpsUrl
+    )
+  ) {
+    throw new Error('Packaged Primary Runtime test CA requires a loopback HTTPS feed.')
+  }
+  return certificatePath
+}
+
+function isLoopbackHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase()
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      (hostname === '127.0.0.1' || hostname === '::1' || hostname === 'localhost')
+    )
+  } catch {
+    return false
+  }
 }
 
 async function reconcileBundledPlugins(input: {
@@ -464,26 +651,69 @@ async function reconcileBundledPlugins(input: {
   appDescriptors: readonly BundledPluginDescriptor[]
   primaryRuntime: PrimaryRuntimeService
   hostCapabilities: DesktopHostCapabilityRuntime
-}): Promise<BundledPluginDescriptor[]> {
-  const primaryDescriptors = await readPrimaryRuntimeBundledPluginDescriptors(
-    await input.primaryRuntime.diagnoseDependencies()
-  ).catch((error) => {
-    console.warn('[bundled-plugins] failed to read primary runtime descriptors', error)
-    return []
-  })
+  retiredPrimaryRuntimeDescriptors: readonly BundledPluginDescriptor[]
+  primaryRuntimeDiagnostic?: PrimaryRuntimeDiagnostic
+  primaryRuntimeDescriptors?: readonly BundledPluginDescriptor[]
+  primaryRuntimeCacheRoot?: string
+  codexHome: string
+  cleanupRuntimeSkills?: boolean
+  requireReady?: boolean
+}): Promise<{
+  descriptors: BundledPluginDescriptor[]
+  status: 'ready' | 'degraded' | 'unavailable'
+  failureStage?: 'sync_plugins' | 'sync_skills' | 'reload_skills'
+}> {
+  const diagnostic =
+    input.primaryRuntimeDiagnostic ?? (await input.primaryRuntime.diagnoseDependencies())
+  const primaryDescriptors =
+    input.primaryRuntimeDescriptors ??
+    (await readPrimaryRuntimeBundledPluginDescriptors(diagnostic).catch((error) => {
+      console.warn('[bundled-plugins] failed to read primary runtime descriptors', error)
+      return []
+    }))
   const descriptors = uniqueBundledPluginDescriptors([
     ...input.appDescriptors,
     ...primaryDescriptors
   ])
-  if (descriptors.length === 0) {
+  const hasRuntimeSkills =
+    diagnostic.status === 'ready' && Boolean(diagnostic.manifest?.bundledSkills?.length)
+  if (descriptors.length === 0 && !hasRuntimeSkills && !input.cleanupRuntimeSkills) {
     input.hostCapabilities.setBundledPluginsStatus('unavailable')
-    return []
+    if (input.requireReady) throw new Error('Bundled plugin desired set is empty.')
+    return { descriptors: [], status: 'unavailable', failureStage: 'sync_plugins' }
   }
+
+  const retiredDescriptors = await retiredPrimaryRuntimeDescriptorsForReconcile({
+    catalogClient: input.catalogClient,
+    cacheRoot: input.primaryRuntimeCacheRoot,
+    activeDescriptors: descriptors,
+    committedDescriptors: input.retiredPrimaryRuntimeDescriptors
+  })
 
   const result = await new BundledPluginManager({
     catalogClient: input.catalogClient,
     descriptors,
-    invalidateCaches: () => input.hostCapabilities.refresh()
+    retiredDescriptors,
+    invalidateCaches: () => input.hostCapabilities.refresh(),
+    syncRuntimeSkills: async () => {
+      if (input.cleanupRuntimeSkills) {
+        const transaction = await new RuntimeOwnedSkillManager({
+          codexHome: input.codexHome,
+          runtimeRoot: input.codexHome,
+          bundleVersion: 'recovery-without-active-runtime',
+          manifest: { bundledSkills: [] }
+        }).reconcileWithRollback()
+        return transaction.rollback
+      }
+      if (diagnostic.status !== 'ready' || !diagnostic.root || !diagnostic.manifest) return
+      const transaction = await new RuntimeOwnedSkillManager({
+        codexHome: input.codexHome,
+        runtimeRoot: diagnostic.root,
+        bundleVersion: diagnostic.manifest.bundleVersion,
+        manifest: diagnostic.manifest
+      }).reconcileWithRollback()
+      return transaction.rollback
+    }
   }).reconcile()
   input.hostCapabilities.setBundledPluginsStatus(
     result.status === 'ready' ? 'ready' : result.status === 'degraded' ? 'degraded' : 'unavailable'
@@ -491,7 +721,42 @@ async function reconcileBundledPlugins(input: {
   if (result.status !== 'ready') {
     console.warn('[bundled-plugins] reconcile degraded', result.failures)
   }
-  return descriptors
+  if (input.requireReady && result.status !== 'ready') {
+    throw new Error('Runtime-owned bundled plugins did not reconcile successfully.')
+  }
+  return {
+    descriptors,
+    status: result.status,
+    ...(result.failures[0]?.stage ? { failureStage: result.failures[0].stage } : {})
+  }
+}
+
+async function retiredPrimaryRuntimeDescriptorsForReconcile(input: {
+  catalogClient: NonNullable<typeof composerContextClient>
+  cacheRoot?: string
+  activeDescriptors: readonly BundledPluginDescriptor[]
+  committedDescriptors: readonly BundledPluginDescriptor[]
+}): Promise<BundledPluginDescriptor[]> {
+  if (!input.cacheRoot) return [...input.committedDescriptors]
+
+  try {
+    const installed = await readInstalledPrimaryRuntimePluginCatalog({
+      cacheRoot: input.cacheRoot,
+      listInstalledPluginsForManagement: (query) =>
+        input.catalogClient.listInstalledPluginsForManagement(query)
+    })
+    return uniqueBundledPluginDescriptors([
+      ...input.committedDescriptors,
+      ...(await readRetiredPrimaryRuntimeBundledPluginDescriptors({
+        installed,
+        cacheRoot: input.cacheRoot,
+        activeDescriptors: input.activeDescriptors
+      }))
+    ])
+  } catch (error) {
+    console.warn('[bundled-plugins] failed to recover retired primary runtime descriptors', error)
+    return [...input.committedDescriptors]
+  }
 }
 
 function uniqueBundledPluginDescriptors(
@@ -579,6 +844,11 @@ function requirePluginCenterService(): PluginCenterService {
   return pluginCenterService
 }
 
+function requirePrimaryRuntimeService(): PrimaryRuntimeService {
+  if (!primaryRuntimeService) throw new Error('Primary Runtime service is not initialized')
+  return primaryRuntimeService
+}
+
 function requireFollowUpQueue(): ConversationFollowUpQueueService {
   if (!followUpQueue) throw new Error('Follow-up queue is not initialized')
   return followUpQueue
@@ -590,6 +860,17 @@ function broadcastStatus(): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       sendToActiveRenderer(window.webContents, 'codex:status-change', status)
+    }
+  }
+}
+
+function broadcastPrimaryRuntimeStatus(
+  status: Awaited<ReturnType<PrimaryRuntimeService['getUserStatus']>>
+): void {
+  const payload = { version: PLUGIN_CENTER_API_VERSION, runtime: status }
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      sendToActiveRenderer(window.webContents, pluginCenterIpcEvents.primaryRuntimeStatus, payload)
     }
   }
 }
@@ -720,17 +1001,7 @@ function createWindow(runtime: CodexChatRuntimeService): void {
     })
   )
   const ownerWebContentsId = mainWindow.webContents.id
-  rightWorkspaceIpc?.attachWindow(mainWindow)
-
-  mainWindow.webContents.on('did-start-loading', () => {
-    rightWorkspaceIpc?.detachWindow(ownerWebContentsId)
-  })
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (!mainWindow.isDestroyed()) rightWorkspaceIpc?.attachWindow(mainWindow)
-  })
-  mainWindow.webContents.on('render-process-gone', () => {
-    rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
-  })
+  if (rightWorkspaceIpc) bindRightWorkspaceWindowLifecycle(mainWindow, rightWorkspaceIpc)
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -754,7 +1025,6 @@ function createWindow(runtime: CodexChatRuntimeService): void {
   mainWindow.on('closed', () => {
     unsubscribeApprovals()
     unsubscribeSettledApprovals()
-    rightWorkspaceIpc?.disposeWindow(ownerWebContentsId)
   })
   mainWindow.webContents.once('destroyed', () => {
     void composerContextSearch?.stopOwnedBy(ownerWebContentsId)
@@ -776,7 +1046,12 @@ app.whenReady().then(async () => {
     netFetch: (url, init) => net.fetch(url, init),
     logger: console
   })
-  const runtimeConfig = loadDesktopRuntimeConfig(process.env)
+  const runtimeConfig = await loadPrimaryRuntimeStartupConfig({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    env: process.env,
+    logError: console.error
+  })
   const hosts = new GitHostRegistry({
     remoteCodexCommand: runtimeConfig.remoteCodexCommand
   })
@@ -789,6 +1064,14 @@ app.whenReady().then(async () => {
   const turnDiffStore = new TurnDiffStore(join(app.getPath('userData'), 'turn-diffs'))
   const runtime = await createCodexRuntime(hosts, manager, turnDiffStore, runtimeConfig)
   codexRuntime = runtime
+  chatImageIpc = registerChatImageIpc({
+    ipcMain,
+    projectService: requireProjectService(),
+    windowForSender: (event) => BrowserWindow.fromWebContents(event.sender),
+    showSaveDialog: (window, fileName) =>
+      dialog.showSaveDialog(window, { title: '保存图片', defaultPath: fileName }),
+    devRendererUrl: is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined
+  })
   const targetResolver = new GitRepositoryTargetResolver({
     projectService: requireProjectService(),
     gitManager: manager,
@@ -813,6 +1096,7 @@ app.whenReady().then(async () => {
     redeemAuthorizedLocalPreview: (token) => artifactPreviewCapabilities.redeem(token),
     issueArtifactComposerAttachment: (input) => artifactComposerAttachments.issue(input),
     artifactPreviewManifest,
+    loadPrimaryRuntimeDependencies: () => requirePrimaryRuntimeService().loadDependencies(),
     fileSearchProvider: requireComposerContextClient(),
     terminalBackendFactory: new TerminalBackendFactory(terminalHosts),
     terminalCommand: runtimeConfig.terminalCommand
@@ -834,6 +1118,9 @@ app.whenReady().then(async () => {
     )
   )
   ipcMain.handle('codex:list-models', () => runtime.listModels())
+  ipcMain.handle('codex:add-local-model', (_, payload: unknown) =>
+    runtime.addLocalModel(addLocalModelInputSchema.parse(payload))
+  )
   ipcMain.handle('codex:list-mcp-servers', createListMcpServersHandler(requireMcpServerStatus()))
   for (const [channel, handler] of Object.entries(
     createPluginCenterIpcHandlers(requirePluginCenterService())
@@ -1265,12 +1552,14 @@ app.on(
       } finally {
         localGitWatchBroker?.dispose()
         rightWorkspaceIpc?.dispose()
+        chatImageIpc?.dispose()
         composerContextChanges?.dispose()
         await Promise.allSettled([
           codexRuntime?.stop(),
           composerContextClient?.shutdown(),
           gitHostRegistry?.shutdown(),
-          codexHostConnectionRegistry?.shutdown()
+          codexHostConnectionRegistry?.shutdown(),
+          primaryRuntimeUpdateCoordinator?.stop()
         ])
         primaryRuntimeService?.dispose()
         await codexAppToolsPipe?.shutdown()

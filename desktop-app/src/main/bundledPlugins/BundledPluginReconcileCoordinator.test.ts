@@ -57,6 +57,34 @@ describe('BundledPluginReconcileCoordinator', () => {
     )
     expect(onFailure).toHaveBeenCalledOnce()
   })
+
+  it('propagates a post-install failure after recording it and keeps the queue usable', async () => {
+    const failure = new Error('runtime plugin install failed')
+    const onFailure = vi.fn()
+    const warn = vi.fn()
+    let runCount = 0
+    const coordinator = new BundledPluginReconcileCoordinator({
+      reconcile: vi.fn(async () => {
+        runCount += 1
+        if (runCount === 1) throw failure
+      }),
+      refreshCapabilities: vi.fn(),
+      onFailure,
+      warn
+    })
+
+    await expect(
+      coordinator.run('primary-runtime-install', { propagateFailure: true })
+    ).rejects.toBe(failure)
+    await coordinator.run('repair')
+
+    expect(runCount).toBe(2)
+    expect(onFailure).toHaveBeenCalledWith(failure)
+    expect(warn).toHaveBeenCalledWith(
+      '[bundled-plugins] reconcile failed after primary-runtime-install',
+      failure
+    )
+  })
 })
 
 function deferred(): {

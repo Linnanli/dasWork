@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import protocolManifest from '../../../vendors/codex-app-server-client/protocol-manifest.json'
+
 import {
   CodexAppServerVersionUnsupportedError,
   verifyCodexAppServerVersion
@@ -13,9 +15,10 @@ const launch = {
 
 describe('verifyCodexAppServerVersion', () => {
   it('accepts the manifest-pinned launch executable version', async () => {
+    const version = protocolManifest.supportedAppServerVersions[0]
     await expect(
-      verifyCodexAppServerVersion(launch, async () => 'codex-cli 0.148.0-alpha.21\n')
-    ).resolves.toBe('0.148.0-alpha.21')
+      verifyCodexAppServerVersion(launch, async () => `codex-cli ${version}\n`)
+    ).resolves.toBe(version)
   })
 
   it.each(['codex-cli 0.147.0', 'codex-cli 999.0.0', 'unexpected version output'])(

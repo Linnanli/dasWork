@@ -146,7 +146,8 @@ function signedManifest(): Record<string, unknown> {
         archiveFormat: 'zip',
         archiveUrl: 'https://releases.example.test/runtime.zip',
         archiveSizeBytes: 3,
-        archiveSha256: 'a'.repeat(64)
+        archiveSha256: 'a'.repeat(64),
+        budget: releaseBudget()
       }
     ]
   }
@@ -157,5 +158,23 @@ function signedManifest(): Record<string, unknown> {
       Buffer.from(canonicalPrimaryRuntimeReleaseManifestPayload(unsigned), 'utf8'),
       privateKey
     ).toString('base64')
+  }
+}
+
+function releaseBudget(): {
+  maxArchiveBytes: number
+  maxUnpackedBytes: number
+  minimumFreeDiskBytes: number
+  maxColdInstallMs: number
+  maxMainEventLoopDelayP99Ms: number
+  maxMainEventLoopDelayMaxMs: number
+} {
+  return {
+    maxArchiveBytes: 1_000,
+    maxUnpackedBytes: 2_000,
+    minimumFreeDiskBytes: 5_750,
+    maxColdInstallMs: 1_000,
+    maxMainEventLoopDelayP99Ms: 50,
+    maxMainEventLoopDelayMaxMs: 250
   }
 }

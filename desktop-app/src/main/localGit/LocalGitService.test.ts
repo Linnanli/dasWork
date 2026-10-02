@@ -11,6 +11,7 @@ import {
 } from './GitManager'
 import type { GitRepositoryTargetResolver } from './GitRepositoryTargetResolver'
 import { LocalGitService } from './LocalGitService'
+import { computeWorkspaceStateHash, InMemorySnapshotGenerationStore } from './reviewSnapshot'
 import { git, createGitFixture, gitTarget } from './testHelpers'
 import {
   LOCAL_GIT_PATCH_MAX_CHARACTERS,
@@ -18,6 +19,23 @@ import {
 } from '../../shared/localGitApi'
 
 describe('LocalGitService', () => {
+  it('derives watch snapshots and working-tree paths from one consistent status sample', async () => {
+    const { repo, projectService } = await createGitFixture()
+    await writeFile(join(repo, 'tracked.txt'), 'changed\n')
+    await writeFile(join(repo, 'untracked.txt'), 'new\n')
+    const snapshots = new InMemorySnapshotGenerationStore()
+    const service = new LocalGitService({ projectService, snapshots })
+    const target = gitTarget(repo)
+
+    const watchState = await service.getWatchState(target)
+    const repository = (await service.resolveTrustedRepository(target)).repository
+
+    expect(snapshots.get(watchState.snapshotGeneration)?.stateHash).toBe(
+      await computeWorkspaceStateHash(repository)
+    )
+    expect(watchState.workingTreePaths).toEqual(['tracked.txt', 'untracked.txt'])
+  })
+
   it('retries a snapshot once when a Git change notification invalidates the initial read', async () => {
     const { repo, projectService } = await createGitFixture()
     await writeFile(join(repo, 'tracked.txt'), 'one\ntwo\n')

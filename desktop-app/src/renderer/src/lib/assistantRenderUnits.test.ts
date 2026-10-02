@@ -13,6 +13,368 @@ import { buildAssistantRenderUnits, displayNameForSubagentPath } from './assista
 import { assistantRenderUnitFixtures } from './__fixtures__/assistantRenderUnitFixtures'
 
 describe('buildAssistantRenderUnits', () => {
+  it('keeps consecutive image views inside a process group until the final answer begins', () => {
+    const content = [
+      { type: 'text', text: '先查看两张图片。' },
+      imageViewPart('image-a', '/workspace/a.png'),
+      imageViewPart('image-b', '/workspace/b.png')
+    ]
+    const beforeAnswer = buildAssistantRenderUnits({
+      status: { type: 'running' },
+      content,
+      textPhases: ['commentary']
+    })
+    expect(beforeAnswer.units[0]).toMatchObject({
+      type: 'reasoning-group',
+      hasFinalAnswerStarted: false,
+      canCollapse: false,
+      expanded: true,
+      children: [
+        { type: 'text' },
+        {
+          type: 'tool-group',
+          kind: 'image-view',
+          partIndices: [1, 2],
+          summary: { label: '已查看 2 张图片', count: 2 },
+          children: [{ id: 'image-a' }, { id: 'image-b' }]
+        }
+      ]
+    })
+    const withAnswer = buildAssistantRenderUnits({
+      status: { type: 'running' },
+      content: [...content, { type: 'text', text: '图中显示了市场规模。' }],
+      textPhases: ['commentary', 'final_answer']
+    })
+    expect(withAnswer.units).toMatchObject([
+      {
+        type: 'reasoning-group',
+        turnRunning: true,
+        hasFinalAnswerStarted: true,
+        canCollapse: true,
+        defaultExpanded: false,
+        expanded: false
+      },
+      { type: 'text', phase: 'final_answer', text: '图中显示了市场规模。' }
+    ])
+  })
+
+  it.each(['stopped', 'error', 'incomplete'])(
+    'keeps a %s process without an answer expanded',
+    (type) => {
+      const model = buildAssistantRenderUnits({
+        status: { type },
+        content: [{ type: 'text', text: '我会先查看图片。' }, imageViewPart('image-a', '/a.png')],
+        textPhases: ['commentary'],
+        metadata: { codexTurn: { status: type === 'error' ? 'failed' : 'interrupted' } }
+      })
+      expect(model.units[0]).toMatchObject({
+        type: 'reasoning-group',
+        canCollapse: false,
+        expanded: true,
+        children: [{ type: 'text' }, { kind: 'image-view', summary: { label: '已查看 1 张图片' } }]
+      })
+    }
+  )
+
+  it('does not mistake an interrupted turn or assistant-ui cancelled reason for explicit cancellation', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'incomplete', reason: 'cancelled' },
+      content: [
+        { type: 'text', text: '查看图片。' },
+        imageViewPart('image-a', '/a.png'),
+        { type: 'text', text: '结论。' }
+      ],
+      textPhases: ['commentary', 'final_answer'],
+      metadata: { codexTurn: { status: 'interrupted' } }
+    })
+    expect(model.units[0]).toMatchObject({
+      type: 'reasoning-group',
+      canCollapse: true,
+      expanded: false
+    })
+  })
+
+  it.each([
+    {
+      input: { explicitUserCancelled: true },
+      canCollapse: false,
+      defaultExpanded: true,
+      expanded: true
+    },
+    { input: { forceExpanded: true }, canCollapse: false, defaultExpanded: true, expanded: true },
+    { input: { disableCollapse: true }, canCollapse: false, defaultExpanded: true, expanded: true },
+    {
+      input: { preventAutoCollapse: true },
+      canCollapse: true,
+      defaultExpanded: true,
+      expanded: true
+    },
+    { input: { userExpanded: true }, canCollapse: true, defaultExpanded: false, expanded: true },
+    {
+      input: { userExpanded: false, forceExpanded: true },
+      canCollapse: false,
+      defaultExpanded: true,
+      expanded: true
+    }
+  ])('honors process collapse context $input', ({ input, ...expected }) => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'running' },
+      content: [
+        { type: 'text', text: '查看图片。' },
+        imageViewPart('image-a', '/a.png'),
+        { type: 'text', text: '结论。' }
+      ],
+      textPhases: ['commentary', 'final_answer'],
+      processCollapse: input
+    })
+    expect(model.units[0]).toMatchObject({ type: 'reasoning-group', ...expected })
+  })
+
+  it('counts different image view IDs at the same path and coalesces started/completed replay', () => {
+    const started = imageViewPart('image-a', '/same.png', 'input-available')
+    const completed = imageViewPart('image-a', '/same.png')
+    const other = imageViewPart('image-b', '/same.png')
+    const model = buildAssistantRenderUnits({ content: [started, completed, other, started] })
+    expect(model.units).toHaveLength(1)
+    expect(model.units[0]).toMatchObject({ type: 'reasoning-group', canCollapse: false })
+    const unit = model.units[0]?.type === 'reasoning-group' ? model.units[0].children[0] : undefined
+    expect(unit).toMatchObject({
+      type: 'tool-group',
+      kind: 'image-view',
+      partIndices: [0, 1, 2, 3],
+      target: { itemIds: ['image-a', 'image-b'] },
+      summary: { label: '已查看 2 张图片', count: 2 },
+      children: [
+        { id: 'image-a', kind: 'imageView', status: 'complete', rawPart: completed, partIndex: 1 },
+        { id: 'image-b', kind: 'imageView', rawPart: other, partIndex: 2 }
+      ]
+    })
+    expect(unit?.type === 'tool-group' ? unit.parts : []).toEqual([
+      started,
+      completed,
+      other,
+      started
+    ])
+  })
+
+  it('does not merge image views across text, other tools, or native turn identities', () => {
+    const content = [
+      imageViewPart('a', '/a.png'),
+      { type: 'text', text: '另一个视角。' },
+      imageViewPart('b', '/b.png'),
+      toolPart('command-a', 'commandExecution'),
+      imageViewPart('c', '/c.png', 'output-available', 'turn-a'),
+      imageViewPart('d', '/d.png', 'output-available', 'turn-b')
+    ]
+    const model = buildAssistantRenderUnits({ content })
+    const units = model.units.flatMap((unit) =>
+      unit.type === 'reasoning-group' ? unit.children : [unit]
+    )
+    expect(units.filter((unit) => unit.type === 'tool-group').map((unit) => unit.kind)).toEqual([
+      'image-view',
+      'image-view',
+      'command',
+      'image-view',
+      'image-view'
+    ])
+  })
+
+  it('preserves history-only paths, native provider metadata, and canonical wrappers without inventing success', () => {
+    const history = mapCodexThreadItemToUiPart({
+      type: 'imageView',
+      id: 'history-image',
+      path: '/history.png'
+    }) as unknown as Record<string, unknown>
+    const provider = {
+      type: 'dynamic-tool',
+      toolName: 'codex_image_view',
+      toolCallId: 'provider-image',
+      state: 'input-available',
+      input: { path: '/provider.png' },
+      providerMetadata: {
+        [CODEX_MESSAGE_METADATA_KEY]: {
+          item: { type: 'imageView', id: 'provider-image', path: '/provider.png' }
+        }
+      }
+    }
+    const wrapper = {
+      type: 'dynamic-tool',
+      toolName: 'codex_image_view',
+      toolCallId: 'wrapper-image',
+      state: 'output-error',
+      input: { path: '/wrapper.png' },
+      errorText: 'View failed'
+    }
+    const model = buildAssistantRenderUnits({
+      status: { type: 'incomplete' },
+      content: [history, provider, wrapper],
+      metadata: { codexTurn: { status: 'failed' } }
+    })
+    const unit = model.units[0]?.type === 'reasoning-group' ? model.units[0].children[0] : undefined
+    expect(unit).toMatchObject({
+      type: 'tool-group',
+      kind: 'image-view',
+      summary: { label: '已查看 3 张图片' },
+      children: [
+        { id: 'history-image', rawItem: { type: 'imageView', path: '/history.png' } },
+        { id: 'provider-image', rawItem: { type: 'imageView', path: '/provider.png' } },
+        { id: 'wrapper-image', rawPart: wrapper }
+      ]
+    })
+    expect(unit?.type === 'tool-group' ? unit.children[0]?.rawItem : undefined).toEqual({
+      type: 'imageView',
+      id: 'history-image',
+      path: '/history.png'
+    })
+    expect(
+      buildAssistantRenderUnits({
+        status: { type: 'incomplete' },
+        content: [{ type: 'text', text: '没有图片查看记录。' }],
+        metadata: { codexTurn: { status: 'failed' } }
+      }).units.some((unit) => unit.type === 'tool-group' && unit.kind === 'image-view')
+    ).toBe(false)
+  })
+
+  it('retains the first image-view position and raw updates when a replay follows other activity', () => {
+    const started = imageViewPart('image-a', '/a.png', 'input-available')
+    const completed = imageViewPart('image-a', '/a.png')
+    const model = buildAssistantRenderUnits({
+      content: [
+        started,
+        toolPart('cmd', 'commandExecution'),
+        completed,
+        imageViewPart('image-b', '/b.png')
+      ]
+    })
+    expect(model.units[0]).toMatchObject({ type: 'reasoning-group', partIndices: [0, 1, 2, 3] })
+    const units = model.units[0]?.type === 'reasoning-group' ? model.units[0].children : model.units
+    expect(units).toMatchObject([
+      {
+        kind: 'image-view',
+        partIndices: [0, 2],
+        children: [{ id: 'image-a', rawPart: completed }]
+      },
+      { kind: 'command' },
+      { kind: 'image-view', partIndices: [3], children: [{ id: 'image-b' }] }
+    ])
+  })
+
+  it('retains actual error data when a started/completed image record is replayed', () => {
+    const failed = {
+      ...imageViewPart('image-error', '/missing.png', 'output-error'),
+      errorText: 'File is missing'
+    }
+    const model = buildAssistantRenderUnits({
+      content: [
+        failed,
+        imageViewPart('image-error', '/missing.png'),
+        imageViewPart('image-error', '/missing.png', 'input-available')
+      ]
+    })
+    const unit = model.units[0]?.type === 'reasoning-group' ? model.units[0].children[0] : undefined
+    expect(unit).toMatchObject({
+      kind: 'image-view',
+      summary: { label: '已查看 1 张图片' },
+      children: [{ id: 'image-error', status: 'error', rawPart: failed }]
+    })
+  })
+
+  it('preserves same item IDs from different native turns as different records', () => {
+    const model = buildAssistantRenderUnits({
+      content: [
+        imageViewPart('same-id', '/a.png', 'output-available', 'turn-a'),
+        imageViewPart('same-id', '/b.png', 'output-available', 'turn-b')
+      ]
+    })
+    const units = model.units[0]?.type === 'reasoning-group' ? model.units[0].children : model.units
+    expect(units).toMatchObject([
+      { kind: 'image-view', children: [{ rawItem: { path: '/a.png' } }] },
+      { kind: 'image-view', children: [{ rawItem: { path: '/b.png' } }] }
+    ])
+    expect(new Set(units.map((unit) => unit.key)).size).toBe(2)
+  })
+
+  it('can collapse once a final-answer text part starts before its first visible token', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'running' },
+      content: [
+        {
+          type: 'text',
+          text: '查看图片。',
+          providerMetadata: { [CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'commentary' } }
+        },
+        imageViewPart('image-a', '/a.png'),
+        {
+          type: 'text',
+          text: '',
+          providerMetadata: { [CODEX_MESSAGE_METADATA_KEY]: { messagePhase: 'final_answer' } }
+        }
+      ]
+    })
+    expect(model.units[0]).toMatchObject({
+      type: 'reasoning-group',
+      hasFinalAnswerStarted: true,
+      canCollapse: true,
+      defaultExpanded: false,
+      active: false
+    })
+  })
+
+  it('uses native imageView events with original id/path and does not add historical success fields', async () => {
+    const mapper = new CodexEventMapper()
+    const first: ThreadItem = { type: 'imageView', id: 'image-live-a', path: '/a.png' }
+    const second: ThreadItem = { type: 'imageView', id: 'image-live-b', path: '/b.png' }
+    const events = [
+      { method: 'turn/started', params: { threadId: 'image-thread', turn: { id: 'image-turn' } } },
+      ...[first, second].flatMap((item) => [
+        {
+          method: 'item/started',
+          params: { threadId: 'image-thread', turnId: 'image-turn', item }
+        },
+        {
+          method: 'item/completed',
+          params: { threadId: 'image-thread', turnId: 'image-turn', item }
+        }
+      ]),
+      {
+        method: 'turn/completed',
+        params: {
+          threadId: 'image-thread',
+          turn: { id: 'image-turn', items: [first, second], status: 'interrupted', error: null }
+        }
+      }
+    ].flatMap((event) => mapper.map(event))
+    const content = await messagePartsFromNativeRunEvents(events)
+    const live = buildAssistantRenderUnits({ status: { type: 'incomplete' }, content })
+    const history = buildAssistantRenderUnits({
+      status: { type: 'incomplete' },
+      content: [first, second].map(
+        (item) => mapCodexThreadItemToUiPart(item) as unknown as Record<string, unknown>
+      )
+    })
+    for (const model of [live, history]) {
+      expect(model.units[0]).toMatchObject({
+        type: 'reasoning-group',
+        canCollapse: false,
+        children: [
+          {
+            kind: 'image-view',
+            summary: { label: '已查看 2 张图片' },
+            children: [
+              { id: 'image-live-a', rawItem: first },
+              { id: 'image-live-b', rawItem: second }
+            ]
+          }
+        ]
+      })
+      const group =
+        model.units[0]?.type === 'reasoning-group' ? model.units[0].children[0] : undefined
+      expect(
+        group?.type === 'tool-group' ? group.children.map((item) => item.rawItem) : []
+      ).toEqual([first, second])
+    }
+  })
+
   it('marks text as streaming only while the assistant message is running', () => {
     const content = [{ type: 'text', text: 'Visible response' }]
 
@@ -185,7 +547,7 @@ describe('buildAssistantRenderUnits', () => {
     expect(JSON.stringify(running.units)).toContain('::code-comment')
   })
 
-  it('derives completed output resources but excludes HTML files', () => {
+  it('derives declared output files while excluding JSON and HTML files', () => {
     const visualizationPath =
       '/repo/.codex/visualizations/2026/08/19/agent_123/security-market-analysis.html'
     const htmlExportPath = '/repo/exports/metrics-dashboard.html'
@@ -194,6 +556,16 @@ describe('buildAssistantRenderUnits', () => {
       workspaceCwd: '/repo',
       content: [
         toolPart('generated-files', 'fileChange', {
+          artifacts: {
+            outputFilePaths: [
+              '/repo/report.pdf',
+              'exports/metrics.xlsx',
+              '/repo/qa-receipt.json',
+              '/repo/.codex/visualizations/renders/slide-1.png',
+              visualizationPath,
+              htmlExportPath
+            ]
+          },
           changes: [
             { path: '/repo/report.pdf', kind: { type: 'add' }, diff: '' },
             { path: visualizationPath, kind: { type: 'add' }, diff: '' },
@@ -217,6 +589,12 @@ describe('buildAssistantRenderUnits', () => {
       target: { itemIds: ['generated-files'] },
       item: {
         resources: [
+          {
+            type: 'file',
+            path: '/repo/.codex/visualizations/renders/slide-1.png',
+            title: 'slide-1.png',
+            cwd: '/repo'
+          },
           { type: 'file', path: '/repo/report.pdf', title: 'report.pdf', cwd: '/repo' },
           { type: 'file', path: 'exports/metrics.xlsx', title: 'metrics.xlsx', cwd: '/repo' }
         ]
@@ -224,6 +602,7 @@ describe('buildAssistantRenderUnits', () => {
     })
     expect(JSON.stringify(resourcesUnit)).not.toContain(visualizationPath)
     expect(JSON.stringify(resourcesUnit)).not.toContain(htmlExportPath)
+    expect(JSON.stringify(resourcesUnit)).not.toContain('qa-receipt.json')
   })
 
   it('does not derive HTML output resources for historical messages without an explicit status', () => {
@@ -331,6 +710,7 @@ describe('buildAssistantRenderUnits', () => {
       content: [
         { type: 'text', text: `[下载](${encodedUrl})` },
         toolPart('case-distinct-files', 'fileChange', {
+          artifacts: { outputFilePaths: ['/repo/Report.pdf', '/repo/report.pdf'] },
           changes: [
             { path: '/repo/Report.pdf', kind: { type: 'add' }, diff: '' },
             { path: '/repo/report.pdf', kind: { type: 'add' }, diff: '' }
@@ -444,7 +824,75 @@ describe('buildAssistantRenderUnits', () => {
     ).toBe(false)
   })
 
-  it('derives generic output files and every completed remote resource', () => {
+  it('adds only document links from the final answer', () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      workspaceCwd: '/repo',
+      content: [
+        {
+          type: 'text',
+          text: '[草稿](/repo/draft.pdf)'
+        },
+        {
+          type: 'text',
+          text: [
+            '[PPT](/repo/ai-agent-security-market.pptx)',
+            '[结构](/repo/outline.json)',
+            '[预览](/repo/renders/slide-1.png)',
+            '[报告](/repo/report.docx)'
+          ].join('\n')
+        }
+      ],
+      textPhases: ['commentary', 'final_answer']
+    })
+
+    const resourcesUnit = model.units.find(
+      (unit) => unit.type === 'entry' && unit.itemType === 'endResources'
+    )
+    expect(resourcesUnit).toMatchObject({
+      item: {
+        resources: [
+          { type: 'file', path: '/repo/ai-agent-security-market.pptx' },
+          { type: 'file', path: '/repo/report.docx' }
+        ]
+      }
+    })
+    expect(JSON.stringify(resourcesUnit)).not.toContain('draft.pdf')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('outline.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('slide-1.png')
+  })
+
+  it("keeps an older turn's inline PPTX deliverable without adding its JSON or PNG support files", () => {
+    const model = buildAssistantRenderUnits({
+      status: { type: 'complete' },
+      workspaceCwd: '/repo',
+      content: [
+        {
+          type: 'text',
+          text: [
+            '主文件：`ai-agent-security-market.pptx`',
+            '大纲：`outline.json`；QA：`qa-receipt.json`',
+            '![第1页](/repo/renders/slide-01.png)'
+          ].join('\n')
+        }
+      ],
+      textPhases: ['final_answer']
+    })
+
+    const resourcesUnit = model.units.find(
+      (unit) => unit.type === 'entry' && unit.itemType === 'endResources'
+    )
+    expect(resourcesUnit).toMatchObject({
+      item: {
+        resources: [{ type: 'file', path: 'ai-agent-security-market.pptx', cwd: '/repo' }]
+      }
+    })
+    expect(JSON.stringify(resourcesUnit)).not.toContain('outline.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('qa-receipt.json')
+    expect(JSON.stringify(resourcesUnit)).not.toContain('slide-01.png')
+  })
+
+  it('keeps remote resources but excludes JSON links from end cards', () => {
     const model = buildAssistantRenderUnits({
       status: { type: 'complete' },
       workspaceCwd: '/repo',
@@ -481,7 +929,6 @@ describe('buildAssistantRenderUnits', () => {
             url: 'https://reports.example.test/monthly',
             title: 'reports.example.test'
           },
-          { type: 'file', path: '/repo/exports/results.json', title: '结果数据' },
           {
             type: 'google-drive',
             url: 'https://docs.google.com/document/d/doc-1/edit',
@@ -509,12 +956,13 @@ describe('buildAssistantRenderUnits', () => {
     ).toBe(false)
   })
 
-  it('derives completed artifact metadata and historical diff paths without file changes', () => {
+  it('uses output paths rather than edited or referenced paths in artifact metadata', () => {
     const artifactModel = buildAssistantRenderUnits({
       status: { type: 'complete' },
       workspaceCwd: '/repo',
       metadata: {
         artifacts: {
+          outputFilePaths: ['/repo/report.pdf', '/repo/qa.json'],
           editedFilePaths: ['/repo/notes.md'],
           referencedFilePaths: ['/repo/data.csv']
         }
@@ -534,8 +982,10 @@ describe('buildAssistantRenderUnits', () => {
       ]
     })
 
-    expect(JSON.stringify(artifactModel.units)).toContain('/repo/data.csv')
-    expect(JSON.stringify(artifactModel.units)).toContain('/repo/notes.md')
+    expect(JSON.stringify(artifactModel.units)).toContain('/repo/report.pdf')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/data.csv')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/notes.md')
+    expect(JSON.stringify(artifactModel.units)).not.toContain('/repo/qa.json')
     expect(
       diffModel.units.some((unit) => unit.type === 'entry' && unit.itemType === 'endResources')
     ).toBe(false)
@@ -2308,6 +2758,24 @@ function toolPart(
     toolName: toolNameForItemType(itemType, overrides),
     status: overrides.status ?? { type: 'complete' },
     result: { item }
+  }
+}
+
+function imageViewPart(
+  id: string,
+  path: string,
+  state = 'output-available',
+  turnId?: string
+): Record<string, unknown> {
+  const item = { type: 'imageView', id, path }
+  return {
+    type: 'dynamic-tool',
+    toolName: 'codex_image_view',
+    toolCallId: id,
+    state,
+    input: { path },
+    ...(state === 'output-available' ? { output: { item } } : {}),
+    providerMetadata: { [CODEX_MESSAGE_METADATA_KEY]: { item, ...(turnId ? { turnId } : {}) } }
   }
 }
 

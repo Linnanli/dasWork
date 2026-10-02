@@ -1,5 +1,14 @@
 /* eslint-disable react-refresh/only-export-components -- context and hooks are one state boundary. */
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  type ReactNode
+} from 'react'
 
 import {
   createWorkspaceContainerState,
@@ -26,6 +35,25 @@ type WorkspaceContainerContextValue = {
 
 const WorkspaceContainerContext = createContext<WorkspaceContainerContextValue | null>(null)
 
+type ScopedWorkspaceState = {
+  projectScope: string
+  workspace: WorkspaceContainerState
+}
+
+type ScopedWorkspaceAction =
+  | { type: 'dispatch'; action: WorkspaceContainerAction }
+  | { type: 'switch-scope'; projectScope: string; workspace: WorkspaceContainerState }
+
+function scopedWorkspaceReducer(
+  state: ScopedWorkspaceState,
+  action: ScopedWorkspaceAction
+): ScopedWorkspaceState {
+  if (action.type === 'switch-scope') {
+    return { projectScope: action.projectScope, workspace: action.workspace }
+  }
+  return { ...state, workspace: workspaceContainerReducer(state.workspace, action.action) }
+}
+
 export function WorkspaceContainerProvider({
   children,
   fallbackProjectScopes = [],
@@ -35,13 +63,39 @@ export function WorkspaceContainerProvider({
   fallbackProjectScopes?: readonly string[]
   projectScope: string
 }): React.JSX.Element {
-  const [state, dispatch] = useReducer(workspaceContainerReducer, projectScope, (scope) =>
-    loadWorkspaceContainerState(browserStorage(), scope, fallbackProjectScopes)
+  const [scopedState, dispatchScoped] = useReducer(
+    scopedWorkspaceReducer,
+    { projectScope, fallbackProjectScopes },
+    ({
+      projectScope: initialProjectScope,
+      fallbackProjectScopes: initialFallbackProjectScopes
+    }): ScopedWorkspaceState => ({
+      projectScope: initialProjectScope,
+      workspace: loadWorkspaceContainerState(
+        browserStorage(),
+        initialProjectScope,
+        initialFallbackProjectScopes
+      )
+    })
+  )
+  const state = scopedState.workspace
+  const dispatch = useCallback(
+    (action: WorkspaceContainerAction): void => dispatchScoped({ type: 'dispatch', action }),
+    []
   )
 
+  useLayoutEffect(() => {
+    if (scopedState.projectScope === projectScope) return
+    dispatchScoped({
+      type: 'switch-scope',
+      projectScope,
+      workspace: loadWorkspaceContainerState(browserStorage(), projectScope, fallbackProjectScopes)
+    })
+  }, [fallbackProjectScopes, projectScope, scopedState.projectScope])
+
   useEffect(() => {
-    persistWorkspaceContainerState(browserStorage(), projectScope, state)
-  }, [projectScope, state])
+    persistWorkspaceContainerState(browserStorage(), scopedState.projectScope, state)
+  }, [scopedState.projectScope, state])
 
   const value = useMemo<WorkspaceContainerContextValue>(
     () => ({
@@ -54,7 +108,7 @@ export function WorkspaceContainerProvider({
       },
       tabRuntime: (tabId) => state.runtime[tabId]
     }),
-    [state]
+    [dispatch, state]
   )
 
   return (

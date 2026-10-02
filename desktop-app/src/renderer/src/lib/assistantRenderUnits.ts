@@ -3,12 +3,15 @@ import { parseCodeCommentDirectives, type CodeComment } from './codeCommentDirec
 import {
   extractToolInput,
   extractThreadItem,
+  imageViewRecordIdentity,
+  isImageViewPart,
   isActiveStatus,
   isToolPartActive,
   summarizeToolGroup,
   type ToolGroupSummary
 } from './toolGroupSummary'
 import { ENTRY_ITEM_RENDER_MODES, type EntryRenderMode } from './renderUnitCapabilityMatrix'
+import { readCodexMessageMetadata } from '../../../shared/codexMessageMetadata'
 
 type AssistantMessagePart = Record<string, unknown>
 
@@ -16,8 +19,16 @@ export type AssistantRenderDetailLevel = 'default' | 'stepsProse'
 export type AssistantMessagePhase = 'commentary' | 'final_answer'
 export type ReasoningGroupState = 'thinking' | 'blocked' | 'completed'
 
+export type AssistantProcessCollapseOptions = {
+  explicitUserCancelled?: boolean
+  forceExpanded?: boolean
+  disableCollapse?: boolean
+  preventAutoCollapse?: boolean
+  userExpanded?: boolean
+}
+
 type AssistantMessageLike = {
-  status?: { type?: string }
+  status?: { type?: string; reason?: string }
   content: readonly AssistantMessagePart[]
   parts?: readonly AssistantMessagePart[]
   textPhases?: readonly (AssistantMessagePhase | undefined)[]
@@ -27,6 +38,7 @@ type AssistantMessageLike = {
   workspaceCwd?: string
   canOpenLocalPaths?: boolean
   metadata?: unknown
+  processCollapse?: AssistantProcessCollapseOptions
 }
 
 type AssistantActivityPhase =
@@ -92,6 +104,7 @@ export type ToolGroupKind =
   | 'mcp'
   | 'dynamic'
   | 'multi-agent'
+  | 'image-view'
   | 'command'
   | 'file-change'
   | 'generic'
@@ -163,6 +176,11 @@ export type AssistantRenderUnit =
       durationMs?: number
       state: ReasoningGroupState
       turnRunning: boolean
+      hasFinalAnswerStarted: boolean
+      canCollapse: boolean
+      defaultExpanded: boolean
+      expanded: boolean
+      forceExpanded: boolean
     })
   | (AssistantRenderUnitBase & {
       type: 'entry'
@@ -357,6 +375,27 @@ const END_RESOURCE_SOURCE_FILE_EXTENSIONS = new Set([
   'zsh'
 ])
 const WEBSITE_FILE_EXTENSIONS = new Set(['htm', 'html'])
+const OUTPUT_FILE_EXTENSIONS = new Set([
+  'avif',
+  'csv',
+  'doc',
+  'docx',
+  'gif',
+  'jpeg',
+  'jpg',
+  'md',
+  'mdx',
+  'pdf',
+  'png',
+  'ppt',
+  'pptx',
+  'tsv',
+  'webp',
+  'xls',
+  'xlsm',
+  'xlsx'
+])
+const LINKED_FILE_EXTENSIONS = new Set(['docx', 'pdf', 'pptx', 'xlsx'])
 type SubagentRenderContext = {
   displayNamesByThreadId: ReadonlyMap<string, string>
   activityStatusesByPartIndex: ReadonlyMap<number, SubagentActivityDisplayStatus>
@@ -402,17 +441,27 @@ export function buildAssistantRenderUnits(message: AssistantMessageLike): Assist
   const isRunning = message.status?.type === 'running'
   const detailLevel = message.detailLevel ?? 'default'
   const normalized = normalizeParts(parts, isRunning, message.textPhases)
+  const hasNativeFinalAnswerStarted =
+    message.textPhases?.includes('final_answer') === true ||
+    parts.some((part) => part.type === 'text' && nativeMessagePhase(part) === 'final_answer')
   const subagentContext = buildSubagentRenderContext(normalized)
   const visibleParts = normalized.filter((part) => !isWaitingMultiAgentPart(part))
   const preGrouped = groupWebSearchAndMultiAgent(visibleParts, subagentContext)
-  const dynamicGrouped = groupDynamicToolCalls(preGrouped)
+  const imageGrouped = groupImageViewCalls(preGrouped)
+  const dynamicGrouped = groupDynamicToolCalls(imageGrouped)
   const mcpGrouped = groupPendingMcpToolCalls(dynamicGrouped)
   const activityCollapsed = groupAdjacentToolActivity(mcpGrouped, { detailLevel })
   const visibleUnits = activityCollapsed.map((unit, index) =>
     toRenderUnit(unit, index, isRunning, subagentContext)
   )
   const { processUnits, completedTurnDiffs } = partitionCompletedTurnDiffs(visibleUnits, isRunning)
-  const groupedUnits = groupAssistantProcess(processUnits, isRunning, message.processDurationMs)
+  const groupedUnits = groupAssistantProcess(
+    processUnits,
+    isRunning,
+    message.processDurationMs,
+    message.processCollapse,
+    hasNativeFinalAnswerStarted
+  )
   const orderedUnits = [...groupedUnits, ...completedTurnDiffs]
   const unitsWithThinking = applyThinkingPresentation(orderedUnits, {
     isRunning,
@@ -529,12 +578,12 @@ function deriveEndResources(
   const sourceItemIds = new Set<string>()
   const externalUrls = new Set<string>()
 
-  for (const resource of artifactResourcesFromMetadata(metadata, workspaceCwd)) {
+  for (const resource of outputFileResourcesFromMetadata(metadata, workspaceCwd)) {
     addEndResource(resourcesByKey, resource)
   }
 
   for (const part of parts) {
-    if (part.kind === 'text') {
+    if (part.kind === 'text' && part.phase !== 'commentary') {
       const textResources = endResourcesFromAssistantText(part.text, workspaceCwd)
       for (const resource of textResources.resources) {
         addEndResource(resourcesByKey, resource)
@@ -550,14 +599,10 @@ function deriveEndResources(
 
     if (part.kind !== 'tool' || !part.item || isFailedToolPart(part.part, part.item)) continue
 
-    const resources =
-      part.itemType === 'fileChange'
-        ? arrayValue(part.item.changes)
-            .map((change) => endResourceForFileChange(change, workspaceCwd))
-            .filter(isDefined)
-        : [endResourceForMcpItem(part.item)]
-    const artifactResources = artifactResourcesFromPart(part, workspaceCwd)
-    resources.push(...artifactResources)
+    const resources = [
+      endResourceForMcpItem(part.item),
+      ...outputFileResourcesFromPart(part, workspaceCwd)
+    ]
     for (const resource of resources) {
       addEndResource(resourcesByKey, resource)
     }
@@ -628,17 +673,21 @@ function endResourcesFromAssistantText(
     }
 
     const localPath = localMarkdownPath(destination)
-    const resource = localPath
-      ? endResourceForPath(localPath.path, workspaceCwd, link.label, false, localPath.line)
-      : undefined
+    const resource =
+      localPath && LINKED_FILE_EXTENSIONS.has(fileExtension(localPath.path) ?? '')
+        ? endResourceForPath(localPath.path, workspaceCwd, link.label, false, localPath.line)
+        : undefined
     if (resource) resources.push(resource)
   }
 
+  // Older turns can mention the deliverable only as inline code while lacking
+  // turn.artifacts.outputFilePaths. Keep the same narrow document allowlist.
   for (const inlineCode of inlineCodeSpansOutsideCodeFences(text)) {
     const localPath = localMarkdownPath(inlineCode)
-    const resource = localPath
-      ? endResourceForPath(localPath.path, workspaceCwd, undefined, false, localPath.line)
-      : undefined
+    const resource =
+      localPath && LINKED_FILE_EXTENSIONS.has(fileExtension(localPath.path) ?? '')
+        ? endResourceForPath(localPath.path, workspaceCwd, undefined, false, localPath.line)
+        : undefined
     if (resource) resources.push(resource)
   }
 
@@ -689,7 +738,6 @@ function inlineCodeSpansOutsideCodeFences(text: string): string[] {
       continue
     }
     if (inFence) continue
-
     for (const match of line.matchAll(/(`+)([^`]+?)\1/g)) {
       const value = match[2]?.trim()
       if (value) spans.push(value)
@@ -816,7 +864,7 @@ function isAppgenMcpItem(item: Record<string, unknown>): boolean {
   return server === 'sites' || tool.startsWith('sites_') || tool.startsWith('codex_apps__sites_')
 }
 
-function artifactResourcesFromPart(
+function outputFileResourcesFromPart(
   part: Extract<NormalizedPart, { kind: 'tool' }>,
   workspaceCwd: string | undefined
 ): DerivedEndResource[] {
@@ -824,55 +872,38 @@ function artifactResourcesFromPart(
     .flatMap((value) => {
       const record = recordValue(value)
       const artifacts = recordValue(record?.artifacts)
-      return [
-        ...arrayValue(artifacts?.editedFilePaths),
-        ...arrayValue(artifacts?.referencedFilePaths),
-        ...arrayValue(record?.editedFilePaths),
-        ...arrayValue(record?.referencedFilePaths)
-      ]
+      return [...arrayValue(artifacts?.outputFilePaths), ...arrayValue(record?.outputFilePaths)]
     })
     .map(stringValue)
     .filter(isDefined)
-  const diffPaths = [
-    ...arrayValue(part.item?.patchBatches).flatMap((batch) => {
-      const record = recordValue(batch)
-      return diffPathsFromUnifiedDiff(stringValue(record?.diff))
-    }),
-    ...diffPathsFromUnifiedDiff(stringValue(part.item?.diff))
-  ]
-  return [...candidates, ...diffPaths]
-    .map((path) => endResourceForPath(path, workspaceCwd))
-    .filter(isDefined)
+  return candidates.map((path) => outputFileResource(path, workspaceCwd)).filter(isDefined)
 }
 
-function artifactResourcesFromMetadata(
+function outputFileResourcesFromMetadata(
   metadata: unknown,
   workspaceCwd: string | undefined
 ): DerivedEndResource[] {
   const record = recordValue(metadata)
   const candidates = [record, recordValue(record?.artifacts), recordValue(record?.codexArtifacts)]
-    .flatMap((value) => [
-      ...arrayValue(value?.editedFilePaths),
-      ...arrayValue(value?.referencedFilePaths),
-      ...arrayValue(value?.files)
-    ])
-    .map((value) => {
-      const file = recordValue(value)
-      return stringValue(file?.path) ?? stringValue(value)
-    })
+    .flatMap((value) => arrayValue(value?.outputFilePaths))
+    .map(stringValue)
     .filter(isDefined)
-  return candidates.map((path) => endResourceForPath(path, workspaceCwd)).filter(isDefined)
+  return candidates.map((path) => outputFileResource(path, workspaceCwd)).filter(isDefined)
 }
 
-function diffPathsFromUnifiedDiff(diff: string | undefined): string[] {
-  if (!diff) return []
-  const paths: string[] = []
-  for (const line of diff.split(/\r?\n/u)) {
-    const match = line.match(/^\+\+\+ (.*?)(?:\t.*)?$/u)
-    const path = match?.[1]?.replace(/^[ab]\//u, '')
-    if (path && path !== '/dev/null') paths.push(path)
-  }
-  return paths
+function outputFileResource(
+  path: string,
+  workspaceCwd: string | undefined
+): DerivedEndResource | undefined {
+  if (!OUTPUT_FILE_EXTENSIONS.has(fileExtension(path) ?? '')) return undefined
+  const segments = path.replace(/\\/g, '/').split('/')
+  if (
+    segments.some(
+      (segment, index) => segment === 'work' && segments[index + 1] === '.codex_scratch'
+    )
+  )
+    return undefined
+  return endResourceForPath(path, workspaceCwd)
 }
 
 function externalUrlsFromRecord(item: Record<string, unknown>): string[] {
@@ -892,22 +923,6 @@ function websiteTitle(url: string): string {
   } catch {
     return 'Website'
   }
-}
-
-function endResourceForFileChange(
-  value: unknown,
-  workspaceCwd: string | undefined
-): DerivedEndResource | undefined {
-  const change = recordValue(value)
-  const kind = recordValue(change?.kind)
-  if (stringValue(kind?.type) === 'delete') return undefined
-
-  const path =
-    (stringValue(kind?.type) === 'update' ? stringValue(kind?.move_path) : undefined) ??
-    stringValue(change?.path)
-  if (!path) return undefined
-
-  return endResourceForPath(path, workspaceCwd)
 }
 
 function isFailedToolPart(part: AssistantMessagePart, item: Record<string, unknown>): boolean {
@@ -1031,7 +1046,7 @@ function normalizeParts(
 
     if (type === 'text') {
       const text = typeof part.text === 'string' ? part.text : ''
-      const phase = textPhases?.[textIndex]
+      const phase = textPhases?.[textIndex] ?? nativeMessagePhase(part)
       textIndex += 1
       return isVisibleAssistantText(text) ? [{ kind: 'text', partIndex, part, text, phase }] : []
     }
@@ -1080,6 +1095,11 @@ function normalizeParts(
 
     return [{ kind: 'unknown', partIndex, part }]
   })
+}
+
+function nativeMessagePhase(part: AssistantMessagePart): AssistantMessagePhase | undefined {
+  const phase = readCodexMessageMetadata(part.providerMetadata)?.messagePhase
+  return phase === 'commentary' || phase === 'final_answer' ? phase : undefined
 }
 
 function groupWebSearchAndMultiAgent(
@@ -1189,6 +1209,49 @@ function groupAdjacentToolActivity(
 
     pushAdjacentToolGroup(result, group)
     index += group.length - 1
+  }
+
+  return result
+}
+
+function groupImageViewCalls(units: readonly GroupableUnit[]): GroupableUnit[] {
+  const result: GroupableUnit[] = []
+  type ImageGroup = Extract<GroupableUnit, { type: 'tool-group-candidate' }>
+  const groupsByIdentity = new Map<string, ImageGroup>()
+  let currentGroup: ImageGroup | undefined
+  let currentTurnId: string | undefined
+
+  for (const unit of units) {
+    if (unit.type !== 'entry' || !isImageViewPart(unit.part)) {
+      currentGroup = undefined
+      result.push(unit)
+      continue
+    }
+
+    const identity = imageViewRecordIdentity(unit.part)
+    const identityKey = identity ? JSON.stringify([identity.turnId, identity.id]) : undefined
+    const existingGroup = identityKey ? groupsByIdentity.get(identityKey) : undefined
+    if (existingGroup) {
+      // Preserve the item's first position while retaining subsequent native
+      // updates/replayed parts for its latest data and existing item navigation.
+      existingGroup.partIndices = [...existingGroup.partIndices, ...unit.partIndices]
+      existingGroup.parts = [...existingGroup.parts, unit.part]
+      continue
+    }
+
+    if (!currentGroup || currentTurnId !== identity?.turnId) {
+      currentGroup = {
+        type: 'tool-group-candidate',
+        kind: 'image-view',
+        parts: [],
+        partIndices: []
+      }
+      currentTurnId = identity?.turnId
+      result.push(currentGroup)
+    }
+    currentGroup.partIndices = [...currentGroup.partIndices, ...unit.partIndices]
+    currentGroup.parts = [...currentGroup.parts, unit.part]
+    if (identityKey) groupsByIdentity.set(identityKey, currentGroup)
   }
 
   return result
@@ -1440,21 +1503,58 @@ function isThinkingFallbackToolGroup(
 function groupAssistantProcess(
   units: readonly AssistantRenderUnit[],
   isRunning: boolean,
-  processDurationMs: number | undefined
+  processDurationMs: number | undefined,
+  collapse: AssistantProcessCollapseOptions = {},
+  hasNativeFinalAnswerStarted = false
 ): AssistantRenderUnit[] {
   const hasCommentary = units.some((unit) => unit.type === 'text' && unit.phase === 'commentary')
-  if (hasCommentary) return groupCommentaryProcess(units, isRunning, processDurationMs)
+  if (hasCommentary) {
+    return groupCommentaryProcess(
+      units,
+      isRunning,
+      processDurationMs,
+      collapse,
+      hasNativeFinalAnswerStarted
+    )
+  }
 
   const hasExplicitPhase = units.some((unit) => unit.type === 'text' && unit.phase !== undefined)
-  if (hasExplicitPhase) return [...units]
+  if (hasExplicitPhase) {
+    const answerIndex = units.findIndex(
+      (unit) => unit.type === 'text' && unit.phase === 'final_answer'
+    )
+    if (answerIndex > 0 && units.slice(0, answerIndex).some(isImageViewUnit)) {
+      return groupProcessSegments(units.slice(0, answerIndex), units.slice(answerIndex), {
+        active: false,
+        state: 'completed',
+        durationMs: isRunning ? undefined : processDurationMs,
+        turnRunning: isRunning,
+        hasFinalAnswerStarted: true,
+        collapse
+      })
+    }
+    return [...units]
+  }
 
-  return groupUnphasedAssistantProcess(units, isRunning, processDurationMs)
+  return groupUnphasedAssistantProcess(
+    units,
+    isRunning,
+    processDurationMs,
+    collapse,
+    hasNativeFinalAnswerStarted
+  )
+}
+
+function isImageViewUnit(unit: AssistantRenderUnit): boolean {
+  return unit.type === 'tool-group' && unit.kind === 'image-view'
 }
 
 function groupCommentaryProcess(
   units: readonly AssistantRenderUnit[],
   isRunning: boolean,
-  processDurationMs: number | undefined
+  processDurationMs: number | undefined,
+  collapse: AssistantProcessCollapseOptions,
+  hasNativeFinalAnswerStarted: boolean
 ): AssistantRenderUnit[] {
   const commentaryIndex = units.findIndex(
     (unit) => unit.type === 'text' && unit.phase === 'commentary'
@@ -1467,23 +1567,38 @@ function groupCommentaryProcess(
   const processEnd = answerIndex >= 0 ? answerIndex : units.length
   const children = units.slice(0, processEnd)
   if (children.length === 0) return [...units]
+  const hasFinalAnswerStarted = answerIndex >= 0 || hasNativeFinalAnswerStarted
 
   return groupProcessSegments(children, units.slice(processEnd), {
-    active: isRunning && answerIndex < 0,
-    state: isRunning && answerIndex < 0 ? 'thinking' : 'completed',
+    active: isRunning && !hasFinalAnswerStarted,
+    state: isRunning && !hasFinalAnswerStarted ? 'thinking' : 'completed',
     durationMs: isRunning ? undefined : processDurationMs,
-    turnRunning: isRunning
+    turnRunning: isRunning,
+    hasFinalAnswerStarted,
+    collapse
   })
 }
 
 function groupUnphasedAssistantProcess(
   units: readonly AssistantRenderUnit[],
   isRunning: boolean,
-  processDurationMs: number | undefined
+  processDurationMs: number | undefined,
+  collapse: AssistantProcessCollapseOptions,
+  hasNativeFinalAnswerStarted: boolean
 ): AssistantRenderUnit[] {
   // Without provider phases, only the trailing assistant text is a provisional answer.
   // A later activity item moves that text back into the process group on the next render.
-  if (!units.some((unit) => unit.type === 'text')) return [...units]
+  if (!units.some((unit) => unit.type === 'text')) {
+    if (!units.some(isImageViewUnit)) return [...units]
+    return groupProcessSegments(units, [], {
+      active: isRunning && !hasNativeFinalAnswerStarted,
+      state: isRunning && !hasNativeFinalAnswerStarted ? 'thinking' : 'completed',
+      durationMs: isRunning ? undefined : processDurationMs,
+      turnRunning: isRunning,
+      hasFinalAnswerStarted: hasNativeFinalAnswerStarted,
+      collapse
+    })
+  }
 
   const tail = units.at(-1)
   if (!tail || (tail.type !== 'text' && !isActivityUnit(tail))) return [...units]
@@ -1493,12 +1608,15 @@ function groupUnphasedAssistantProcess(
   const children = units.slice(0, processEnd)
   if (children.length === 0) return [...units]
 
-  const active = isRunning && candidateAnswerIndex < 0
+  const hasFinalAnswerStarted = candidateAnswerIndex >= 0 || hasNativeFinalAnswerStarted
+  const active = isRunning && !hasFinalAnswerStarted
   return groupProcessSegments(children, units.slice(processEnd), {
     active,
     state: active ? 'thinking' : 'completed',
     durationMs: isRunning ? undefined : processDurationMs,
-    turnRunning: isRunning
+    turnRunning: isRunning,
+    hasFinalAnswerStarted,
+    collapse
   })
 }
 
@@ -1507,6 +1625,8 @@ type ReasoningGroupOptions = {
   state: ReasoningGroupState
   durationMs: number | undefined
   turnRunning: boolean
+  hasFinalAnswerStarted: boolean
+  collapse: AssistantProcessCollapseOptions
 }
 
 function groupProcessSegments(
@@ -1552,8 +1672,16 @@ function reasoningGroupForProcessSegment(
   options: ReasoningGroupOptions,
   key: string
 ): Extract<AssistantRenderUnit, { type: 'reasoning-group' }> {
-  const partIndices = [...new Set(children.flatMap((unit) => [...unit.partIndices]))]
+  const partIndices = [...new Set(children.flatMap((unit) => [...unit.partIndices]))].sort(
+    (left, right) => left - right
+  )
   const itemIds = [...new Set(children.flatMap((unit) => [...unit.target.itemIds]))]
+  const canCollapse =
+    options.hasFinalAnswerStarted &&
+    options.collapse.explicitUserCancelled !== true &&
+    options.collapse.forceExpanded !== true &&
+    options.collapse.disableCollapse !== true
+  const defaultExpanded = !canCollapse || options.collapse.preventAutoCollapse === true
   return {
     type: 'reasoning-group',
     key,
@@ -1564,6 +1692,11 @@ function reasoningGroupForProcessSegment(
     state: options.state,
     durationMs: options.durationMs,
     turnRunning: options.turnRunning,
+    hasFinalAnswerStarted: options.hasFinalAnswerStarted,
+    canCollapse,
+    defaultExpanded,
+    expanded: canCollapse ? (options.collapse.userExpanded ?? defaultExpanded) : true,
+    forceExpanded: !canCollapse,
     showThinkingFallback: false
   }
 }
@@ -1667,15 +1800,25 @@ function toToolGroupRenderUnit(
   isMessageRunning: boolean,
   subagentContext: SubagentRenderContext
 ): AssistantRenderUnit {
-  const children = toolItemsForUnit(unit, subagentContext)
+  const originalChildren = toolItemsForUnit(unit, subagentContext)
+  const isImageGroup = unit.type === 'tool-group-candidate' && unit.kind === 'image-view'
+  const children = isImageGroup ? coalesceImageViewItems(originalChildren) : originalChildren
   // One file-change part can include several files, which are expanded into individual
   // child items below. Build the group summary from the original parts so those files
   // are counted once rather than once per expanded child.
-  const summary = summarizeToolGroup(partsForUnit(unit))
+  const originalSummary = summarizeToolGroup(partsForUnit(unit))
+  const summary = isImageGroup
+    ? {
+        ...originalSummary,
+        active: children.some(
+          (item) => item.status === 'running' || item.status === 'requires-action'
+        )
+      }
+    : originalSummary
   const kind = toolGroupKindForUnit(unit, children)
   const key = toolGroupKey(unit, index, children)
   const status = toolGroupStatus(children)
-  const dynamicMetadata = dynamicMetadataForToolGroup(unit, children)
+  const dynamicMetadata = isImageGroup ? undefined : dynamicMetadataForToolGroup(unit, children)
   const active =
     summary.active ||
     status === 'running' ||
@@ -1702,6 +1845,32 @@ function toToolGroupRenderUnit(
     action: toolGroupAction(unit, kind, children),
     summaryOnly: isSummaryOnlyToolGroup(children)
   }
+}
+
+function coalesceImageViewItems(items: readonly ToolItem[]): ToolItem[] {
+  const result: ToolItem[] = []
+  const indicesByIdentity = new Map<string, number>()
+  const rank: Record<ToolItemStatus, number> = {
+    running: 0,
+    'requires-action': 1,
+    complete: 2,
+    error: 3
+  }
+  for (const item of items) {
+    const identity = imageViewRecordIdentity(item.rawPart)
+    const key = identity ? JSON.stringify([identity.turnId, identity.id]) : undefined
+    const index = key ? indicesByIdentity.get(key) : undefined
+    if (index === undefined) {
+      if (key) indicesByIdentity.set(key, result.length)
+      result.push(item)
+      continue
+    }
+    const existing = result[index]!
+    // A replayed started/input part must not replace a later output already
+    // present in the stream. Keep error/result/raw metadata from real updates.
+    if (rank[item.status] >= rank[existing.status]) result[index] = item
+  }
+  return result
 }
 
 function normalizedToUnit(part: NormalizedPart): GroupableUnit {
@@ -1846,18 +2015,23 @@ function toolItemFromPart({
     item ??
     extractThreadItem(part) ??
     inferredItemForToolPart(part, toolName, isToolPartActive(part))
-  const kind =
-    canonicalItemType(stringValue(rawItem?.type)) ??
-    fallbackKind ??
-    inferredToolKindFromToolName(toolName, part, rawItem) ??
-    (part.type === 'dynamic-tool' ? 'dynamicToolCall' : undefined) ??
-    'generic'
+  const kind = isImageViewPart(part)
+    ? 'imageView'
+    : (canonicalItemType(stringValue(rawItem?.type)) ??
+      fallbackKind ??
+      inferredToolKindFromToolName(toolName, part, rawItem) ??
+      (part.type === 'dynamic-tool' ? 'dynamicToolCall' : undefined) ??
+      'generic')
   const source =
     mcpSource ?? (MCP_ITEM_TYPES.has(kind) ? mcpSourceForPart(part, rawItem) : undefined)
   const input = extractToolInput(part)
   const output = part.output ?? part.result
   const error = rawItem?.error ?? recordValue(part.result)?.error ?? recordValue(part.output)?.error
-  const id = partCallId(part, rawItem) ?? stringValue(part.id) ?? `${kind}:${partIndex}`
+  const id =
+    (kind === 'imageView' ? imageViewRecordIdentity(part)?.id : undefined) ??
+    partCallId(part, rawItem) ??
+    stringValue(part.id) ??
+    `${kind}:${partIndex}`
 
   return {
     id,
@@ -2020,6 +2194,11 @@ function toolGroupKey(unit: GroupableUnit, index: number, children: readonly Too
   const firstIndex = unit.partIndices[0] ?? index
   const stableIdentity = firstChild?.id ?? firstIndex
 
+  if (unit.type === 'tool-group-candidate' && unit.kind === 'image-view' && firstChild) {
+    const turnId = imageViewRecordIdentity(firstChild.rawPart)?.turnId
+    if (turnId) return `tool-group:image-view:${turnId}:${stableIdentity}`
+  }
+
   return `tool-group:${stableIdentity}`
 }
 
@@ -2077,7 +2256,9 @@ function collectConsecutive(
 }
 
 function isAdjacentToolActivityUnit(unit: GroupableUnit): boolean {
-  if (unit.type === 'tool-group-candidate') return unit.kind !== 'multi-agent'
+  if (unit.type === 'tool-group-candidate') {
+    return unit.kind !== 'multi-agent' && unit.kind !== 'image-view'
+  }
   if (unit.type !== 'entry') return false
 
   const renderMode = entryRenderModeFor(unit.itemType)

@@ -1,0 +1,749 @@
+{
+  "schemaVersion": 1,
+  "sourceRunId": "36512308682",
+  "excluded": [
+    "files.json"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5696,
+      "sha256": "f8f7b51962703d718cc978c574df1f7a00e3ba657ce784ca65f5419daf40e37f"
+    },
+    {
+      "path": "audit-summary.json",
+      "bytes": 12819,
+      "sha256": "5e9602d65f60fb38bd42e1fd43beab268512c13d9e970ae329c2e20bfe1e1342"
+    },
+    {
+      "path": "budget-review.json",
+      "bytes": 6899,
+      "sha256": "4cd4076e13a4ebd85609237b3b0b3214921a8ab228e38da2f692a2c372c74ebf"
+    },
+    {
+      "path": "darwin-arm64/SBOM.json",
+      "bytes": 17017,
+      "sha256": "9b25f695adbae21a780d1ea0664a257237b3fc4a551a4cd6f6110400a56351a4"
+    },
+    {
+      "path": "darwin-arm64/build-unpack-measurement.json",
+      "bytes": 938,
+      "sha256": "677468d50a35e3c14660ae66f7b3c9072df9a6a1809167f4ddaf140cf3031d6b"
+    },
+    {
+      "path": "darwin-arm64/component-smoke.json",
+      "bytes": 47021,
+      "sha256": "c339c653f87bf6e270f7575e8100dbadc522309d60b19319f69ad568b1d64c80"
+    },
+    {
+      "path": "darwin-arm64/extraction-inventory.json",
+      "bytes": 6031,
+      "sha256": "505f34f85dda2843c7f0353b0e7281e4787ab486302577261c495af7e24cbab7"
+    },
+    {
+      "path": "darwin-arm64/install-stress-memory.json",
+      "bytes": 395,
+      "sha256": "73274b300fcfdf32bc4f599a194498de3723dcc7558b51e5fdc2aea13d897d33"
+    },
+    {
+      "path": "darwin-arm64/main-overlap-performance.json",
+      "bytes": 8828,
+      "sha256": "9a5bece9469e4533d2f7bc52bedd651b8b036bfc92c362cc55c495728587f277"
+    },
+    {
+      "path": "darwin-arm64/measurements/build-unpack-1.json",
+      "bytes": 938,
+      "sha256": "7cc1eea1c258057e76caa77267a9602d80ac10a91d1a77d4bfad7bd4b4eb2603"
+    },
+    {
+      "path": "darwin-arm64/measurements/build-unpack-2.json",
+      "bytes": 938,
+      "sha256": "3461a96406b52c0fa5f8554567507d996a21c3fa91364c34b782aac98a978b47"
+    },
+    {
+      "path": "darwin-arm64/measurements/build-unpack-3.json",
+      "bytes": 938,
+      "sha256": "f5c4cbbf0b1b7cd4abbdc75635dc3fde128d7d2ce97f1f58418328529a7f8edc"
+    },
+    {
+      "path": "darwin-arm64/measurements/build-unpack-4.json",
+      "bytes": 938,
+      "sha256": "21aafe10c403d18b354eec37fca0c594476f897b5090a795534c335e45339c16"
+    },
+    {
+      "path": "darwin-arm64/measurements/build-unpack-5.json",
+      "bytes": 938,
+      "sha256": "677468d50a35e3c14660ae66f7b3c9072df9a6a1809167f4ddaf140cf3031d6b"
+    },
+    {
+      "path": "darwin-arm64/migration-matrix.json",
+      "bytes": 158931,
+      "sha256": "b311a31758c3de4bc68cca46068d86a0bd5f442962119401e2925c1ec5b55b88"
+    },
+    {
+      "path": "darwin-arm64/performance-target-report.json",
+      "bytes": 1712,
+      "sha256": "932dfa724f4ca319491b29408fd54cb3d2de96ff66592ee73e824cda2754574b"
+    },
+    {
+      "path": "darwin-arm64/platform-validation.json",
+      "bytes": 25171,
+      "sha256": "755c9da28edba095aae0018063a2605d9328f2cee152f1ce701fe722b2ff0060"
+    },
+    {
+      "path": "darwin-arm64/provenance.json",
+      "bytes": 2959,
+      "sha256": "474eff0f5491a0182959c76a325601a8725de5cac8dc12b5dac50c9acdd56fbe"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-01.png",
+      "bytes": 43862,
+      "sha256": "c857999a0354e6f5ca7f9a926ada473424d5ac483fe365ce89b69f35c46c782f"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-02.png",
+      "bytes": 129600,
+      "sha256": "c517c5186159f3a79b29a815610a0e8a005edffb6fe54777315fa7c35c0f1564"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-03.png",
+      "bytes": 97693,
+      "sha256": "d8a6cf07091cf22fa7ac069859ad6b7b4361c2e07725e1f2c1d375cf7cc1757a"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-04.png",
+      "bytes": 100294,
+      "sha256": "504c18fc8bf8d6545b3f66ad2510ac2b217dd5338cda453ec27f198b513cfc55"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-05.png",
+      "bytes": 60829,
+      "sha256": "7bdbdf9e0200855153d1b0f412c31c23529a6de35a9785275293f942615aa070"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/legacy-slides/slide-06.png",
+      "bytes": 53310,
+      "sha256": "c153cbd6bf0bb70be95c0eb78a48aa7155678cca95f966cb1f55d1667d1f2920"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 67366,
+      "sha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/r07-contact-sheet.png",
+      "bytes": 33606,
+      "sha256": "35216a9b6c1a432408a4391f62aff9f4bc74795f85d9a3148c58ea6f9b6aff83"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 118432,
+      "sha256": "8ec3e1d4fe9e6993c6351d3bd6c28959996b3728d9197167e5f14853a66d70e6"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8851,
+      "sha256": "4d1c16f87c5b6fc8f3abe9ddab4ce7aa429d752a49cafcb4e09ed1f9f82e9035"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4189,
+      "sha256": "1005d0eca08a57bdd26eb6be857a39daf02743da53db2fae55c9d0cb53de2d11"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-01.png",
+      "bytes": 33083,
+      "sha256": "00d9b062939341113b872f042e319318b5d6ea30cc190f5f6f1d30e843f6f0ba"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-02.png",
+      "bytes": 93835,
+      "sha256": "e245634d93f2a9ce412f2a5215374d7169a4d12a494a65bb701827bbcaef8b7c"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-03.png",
+      "bytes": 64793,
+      "sha256": "c11446a6999fd82ea061acac1b3ac84baaf99f9e0a1c5a1c3016fc2349bd9286"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-04.png",
+      "bytes": 71143,
+      "sha256": "c0294a58d4b00797b6a54ac4ab4ee57971ffe043f8d7d96eaf85ca7a21141d94"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-05.png",
+      "bytes": 42388,
+      "sha256": "7cb5d8908b06187ed0c505132002a4a10919186171233ade158fd878062cdc00"
+    },
+    {
+      "path": "darwin-arm64/r07-visual/slides/slide-06.png",
+      "bytes": 65964,
+      "sha256": "c1e962b86aa4dbb551b577d39e92f19da5d7b67349d59a31b94ecfe8837709f3"
+    },
+    {
+      "path": "darwin-arm64/runtime-inputs.manifest.json",
+      "bytes": 30425,
+      "sha256": "3c2626b555d1ed4538eb2bd43e76c06e11f87b215b40d6addfde492bd0fff7a8"
+    },
+    {
+      "path": "darwin-arm64/runtime.json",
+      "bytes": 1381,
+      "sha256": "7a91a73b5e309e7aba6cd94983b34d93fd98946712b338b2baf9c01e6100341f"
+    },
+    {
+      "path": "darwin-arm64/source-fetch.json",
+      "bytes": 1804,
+      "sha256": "cd4cc700fd77e2bfbd47b4803616afe4fc0ab263a6901f340ab4b55c0dc33f4a"
+    },
+    {
+      "path": "darwin-x64/SBOM.json",
+      "bytes": 17016,
+      "sha256": "9e9b77ab5da0bc5e0c7fbe2ce7c441d153ece38095a4869940250f129667222c"
+    },
+    {
+      "path": "darwin-x64/build-unpack-measurement.json",
+      "bytes": 942,
+      "sha256": "0c34ee8f55fa888e527ea175c8dbcf73e112d25fac87d07dba8345e38f6f1544"
+    },
+    {
+      "path": "darwin-x64/component-smoke.json",
+      "bytes": 46917,
+      "sha256": "852f27d06f8b7662bf48b00c8b717089b147a9504f6e3ebfba7f5576c04e540f"
+    },
+    {
+      "path": "darwin-x64/extraction-inventory.json",
+      "bytes": 6031,
+      "sha256": "fd7eda8cadb39042b9f0b17030faa83c8235f81c01bf3b54744a160e33a663ab"
+    },
+    {
+      "path": "darwin-x64/install-stress-memory.json",
+      "bytes": 393,
+      "sha256": "dfb4eebbb3db8d5148dfc91566c2aeab327ebd4b15be1c0da28b31ead3d37818"
+    },
+    {
+      "path": "darwin-x64/main-overlap-performance.json",
+      "bytes": 8866,
+      "sha256": "90b490075853f52470d7fd7fc3cfcf2c4964decdb10da5eee92fe1569d2259a2"
+    },
+    {
+      "path": "darwin-x64/measurements/build-unpack-1.json",
+      "bytes": 942,
+      "sha256": "a93af3c0de7d5b4b73645c3113525375bd296c3835e2d87ff2811a6142ee3f79"
+    },
+    {
+      "path": "darwin-x64/measurements/build-unpack-2.json",
+      "bytes": 942,
+      "sha256": "a3b78e7c9ad6083d9258b56a5ea5c1fe9e977dbf900f6c1098fe15662c538494"
+    },
+    {
+      "path": "darwin-x64/measurements/build-unpack-3.json",
+      "bytes": 942,
+      "sha256": "0eca463a162df1c1648e3f69c9b388e8995585a458c3fcd299ef8aa6e62349f5"
+    },
+    {
+      "path": "darwin-x64/measurements/build-unpack-4.json",
+      "bytes": 942,
+      "sha256": "354a155616cf4f59b3fabddd931854c61eb928e1671d13785405474e44f48ea3"
+    },
+    {
+      "path": "darwin-x64/measurements/build-unpack-5.json",
+      "bytes": 942,
+      "sha256": "0c34ee8f55fa888e527ea175c8dbcf73e112d25fac87d07dba8345e38f6f1544"
+    },
+    {
+      "path": "darwin-x64/migration-matrix.json",
+      "bytes": 158873,
+      "sha256": "77a2eb1e4ed6bd80395e4d80b49de4974005421472ec9bb10d40350fe206181b"
+    },
+    {
+      "path": "darwin-x64/performance-target-report.json",
+      "bytes": 1742,
+      "sha256": "cdd559cee3f1a17e8cb9417060b337040d2323af1cd2bc8b5ba93b5188c4df73"
+    },
+    {
+      "path": "darwin-x64/platform-validation.json",
+      "bytes": 25173,
+      "sha256": "ab96232e69b1813688aca5b4b0ca5e8f2e05dc5c7c6cc76d851b03a57af817e2"
+    },
+    {
+      "path": "darwin-x64/provenance.json",
+      "bytes": 2973,
+      "sha256": "e902dd4df1096b7bd30763ff976f855b6d3e9988fcc9b4329bb4d63644ba5e52"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-01.png",
+      "bytes": 43862,
+      "sha256": "c857999a0354e6f5ca7f9a926ada473424d5ac483fe365ce89b69f35c46c782f"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-02.png",
+      "bytes": 129600,
+      "sha256": "c517c5186159f3a79b29a815610a0e8a005edffb6fe54777315fa7c35c0f1564"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-03.png",
+      "bytes": 97693,
+      "sha256": "d8a6cf07091cf22fa7ac069859ad6b7b4361c2e07725e1f2c1d375cf7cc1757a"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-04.png",
+      "bytes": 100294,
+      "sha256": "504c18fc8bf8d6545b3f66ad2510ac2b217dd5338cda453ec27f198b513cfc55"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-05.png",
+      "bytes": 60829,
+      "sha256": "7bdbdf9e0200855153d1b0f412c31c23529a6de35a9785275293f942615aa070"
+    },
+    {
+      "path": "darwin-x64/r07-visual/legacy-slides/slide-06.png",
+      "bytes": 53310,
+      "sha256": "c153cbd6bf0bb70be95c0eb78a48aa7155678cca95f966cb1f55d1667d1f2920"
+    },
+    {
+      "path": "darwin-x64/r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 67482,
+      "sha256": "a5948873531caac205cd269f642d280813cb00dd73f68f580bb55fd73503fcf3"
+    },
+    {
+      "path": "darwin-x64/r07-visual/r07-contact-sheet.png",
+      "bytes": 33640,
+      "sha256": "f58a191a6f83d67661a558fbfa72c9a2f83e3ecad88606d6392d54322f9f29de"
+    },
+    {
+      "path": "darwin-x64/r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 118614,
+      "sha256": "d72c0683ef3a7ef82986fb272a6e54d552685296ad89ba802d7834d417e86234"
+    },
+    {
+      "path": "darwin-x64/r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8838,
+      "sha256": "5394915edeaa3b2d0b8cdcc94bf22cf1d420a044e4ca929bcdcca0080cfa8ba1"
+    },
+    {
+      "path": "darwin-x64/r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4189,
+      "sha256": "e99615ebb6e61b205aae53a316240bcd20208979860bc6cacedfb3d723a7d177"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-01.png",
+      "bytes": 33512,
+      "sha256": "9e1b5ce86abb1b58bbffdb5563fe0b2198aef79148b815ddad16d373c9d9888b"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-02.png",
+      "bytes": 95149,
+      "sha256": "1fa49f4b4e31e71f0bc2e35223ec56c32cd48a6f127a2d69ced87f00e466592d"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-03.png",
+      "bytes": 64793,
+      "sha256": "c11446a6999fd82ea061acac1b3ac84baaf99f9e0a1c5a1c3016fc2349bd9286"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-04.png",
+      "bytes": 70840,
+      "sha256": "205cbb22a676d09eec4664396b3e69c4a8ef2b51a4b296581a5869602a9477a7"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-05.png",
+      "bytes": 42531,
+      "sha256": "25a8a7e142fae5004db55870db14f7111f42bcb41a67e11a4bd7fb651be760ec"
+    },
+    {
+      "path": "darwin-x64/r07-visual/slides/slide-06.png",
+      "bytes": 66206,
+      "sha256": "656b0fa81e87cbbf783dcdee9e100f2d31601f67a9db323d759b5de9f11b0c31"
+    },
+    {
+      "path": "darwin-x64/runtime-inputs.manifest.json",
+      "bytes": 30439,
+      "sha256": "867cc54ea0abab613eb083b34cb06d8f4cad2150acf29c7790550fdfe70467e8"
+    },
+    {
+      "path": "darwin-x64/runtime.json",
+      "bytes": 1377,
+      "sha256": "b58b49c1e844fb52d413100d0cb1a18c879cd1decc55e93ee3c8a0d84c1fd6d4"
+    },
+    {
+      "path": "darwin-x64/source-fetch.json",
+      "bytes": 1800,
+      "sha256": "c67bc1c74d9e3103946bf64bd24925c5afe9ae90889e6c54d395bd93c428484e"
+    },
+    {
+      "path": "darwin-x64-visual-review.json",
+      "bytes": 1194,
+      "sha256": "2163444b0086991a042676b83797defd52a59b5d5dc0d0df99a006ae321cfc36"
+    },
+    {
+      "path": "linux-x64/SBOM.json",
+      "bytes": 17001,
+      "sha256": "35448dd92188e61ea249868855466c1c88ebb14a56a9e798351bdfa3e7df8880"
+    },
+    {
+      "path": "linux-x64/build-unpack-measurement.json",
+      "bytes": 939,
+      "sha256": "5b8092cc9548ab35bc6b1d97a2ed9d98e407e5117c79d4ccc704934cdc6b296f"
+    },
+    {
+      "path": "linux-x64/component-smoke.json",
+      "bytes": 49676,
+      "sha256": "5927759c7c39522a2bc2c700617980b8c2c6664c0a0d74923f60f5edfdfc9925"
+    },
+    {
+      "path": "linux-x64/extraction-inventory.json",
+      "bytes": 6029,
+      "sha256": "25f162ac9fa1bc2665c16dca376977428a5495df083226ebd09dd85c62d3c10f"
+    },
+    {
+      "path": "linux-x64/install-stress-memory.json",
+      "bytes": 392,
+      "sha256": "33fe570f543db4ed5bb3f00d086b4abc0f89c811d3f2adf5ae7651abd1d016fc"
+    },
+    {
+      "path": "linux-x64/main-overlap-performance.json",
+      "bytes": 8790,
+      "sha256": "f703228c62aa410f2f1698980b683c386c58a8bcf047b998c9ff0e2bb6ede6e3"
+    },
+    {
+      "path": "linux-x64/measurements/build-unpack-1.json",
+      "bytes": 939,
+      "sha256": "4dc13350e93a5002cf6cda19abf096e9cb071e6eef2fa84a07ab5fa1ea12c0df"
+    },
+    {
+      "path": "linux-x64/measurements/build-unpack-2.json",
+      "bytes": 939,
+      "sha256": "60e2739a74fb0c1e175d22ca086b1e1d37a854aa04c0a4f86e046c72cda158e1"
+    },
+    {
+      "path": "linux-x64/measurements/build-unpack-3.json",
+      "bytes": 939,
+      "sha256": "7742e71b7684dacb9b5fd49ddd131cc9a6ed4f01fc49b5669c6a6465f93e957e"
+    },
+    {
+      "path": "linux-x64/measurements/build-unpack-4.json",
+      "bytes": 939,
+      "sha256": "ccb44f99894526d0082b3909f7b55c73b1e1d04c099ebdda311708ce5c2a8959"
+    },
+    {
+      "path": "linux-x64/measurements/build-unpack-5.json",
+      "bytes": 939,
+      "sha256": "5b8092cc9548ab35bc6b1d97a2ed9d98e407e5117c79d4ccc704934cdc6b296f"
+    },
+    {
+      "path": "linux-x64/migration-matrix.json",
+      "bytes": 158594,
+      "sha256": "cd68ebc696f4b62b5d970c90200cc6b9978518fd4768c2ccce95939d2cd738ea"
+    },
+    {
+      "path": "linux-x64/performance-target-report.json",
+      "bytes": 1692,
+      "sha256": "67836d86198a2a0906715d28f335ee2788dc260c2c7e93b9f08c375f9c1a3c69"
+    },
+    {
+      "path": "linux-x64/platform-validation.json",
+      "bytes": 23055,
+      "sha256": "77686d7a505ee703b3edc20e8a72d4cdd9418c90f988b109abc93d4d3207fe5e"
+    },
+    {
+      "path": "linux-x64/provenance.json",
+      "bytes": 2961,
+      "sha256": "b60f3407c6c6f340d11c4af74a246c12853fbea7529a9f7b3c7dc0935a1243e5"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-01.png",
+      "bytes": 44364,
+      "sha256": "4adb4c3ecf561b9582fe6d6d36737cfcce9b8d89620f50ec87c7b95fd6a59f67"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-02.png",
+      "bytes": 132268,
+      "sha256": "015b347af8043eb05697babad61ff3fa2761a86032aa74a54948d300876d6b0a"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-03.png",
+      "bytes": 99507,
+      "sha256": "3d855361cd73adedfa30ab14b3c2cac6577202b2f9bc5c690b2788ea35365fa3"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-04.png",
+      "bytes": 97862,
+      "sha256": "8d2c28d0635f57339cce8db30f72bc1c125b56bfec971e7b970dd7275d618627"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-05.png",
+      "bytes": 62156,
+      "sha256": "83a629a9a31e5d0bc745d22f4d496ed76ecb337ba0370cc9c266053204bc7ac3"
+    },
+    {
+      "path": "linux-x64/r07-visual/legacy-slides/slide-06.png",
+      "bytes": 79973,
+      "sha256": "a55fe587bdc0df828dd27329de272c24ca9e75d18e683ddbdd1bfb34bf7a312c"
+    },
+    {
+      "path": "linux-x64/r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 70211,
+      "sha256": "be40b21528b5364d89b9ce281b71e700a5252b7df255c467aad78c9874350283"
+    },
+    {
+      "path": "linux-x64/r07-visual/r07-contact-sheet.png",
+      "bytes": 33522,
+      "sha256": "b0a07d59d806b23fc91158b1128bcebc0486e97f8c1b161158546c5e1b6d5093"
+    },
+    {
+      "path": "linux-x64/r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 125714,
+      "sha256": "276617a6a5b40f47cdcd041c2d0ea79c25217c7b27482067f5b6471f3d5d872e"
+    },
+    {
+      "path": "linux-x64/r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8828,
+      "sha256": "f94f83d3c21d1857c1c7b19c523d9f0d7e6d0de2b92f7d73567088f864b414de"
+    },
+    {
+      "path": "linux-x64/r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4190,
+      "sha256": "d63d73a4ba034cfd50986f602a6c99978cd3a471748b5c90c9d2de7eb4402ab0"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-01.png",
+      "bytes": 32523,
+      "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-02.png",
+      "bytes": 91157,
+      "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-03.png",
+      "bytes": 59172,
+      "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-04.png",
+      "bytes": 67533,
+      "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-05.png",
+      "bytes": 39732,
+      "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5"
+    },
+    {
+      "path": "linux-x64/r07-visual/slides/slide-06.png",
+      "bytes": 67514,
+      "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614"
+    },
+    {
+      "path": "linux-x64/runtime-inputs.manifest.json",
+      "bytes": 26907,
+      "sha256": "aff27a4556ae0d96bbf205c720a526877473a32d760f8998dad1ae45f57d0e15"
+    },
+    {
+      "path": "linux-x64/runtime.json",
+      "bytes": 1375,
+      "sha256": "44381f0f27e411ff82ca52a17c6abc1a52926a7882d758206feac268f6940194"
+    },
+    {
+      "path": "linux-x64/source-fetch.json",
+      "bytes": 1797,
+      "sha256": "89f515a9cb4a717223236ac597e70bd213579a94ba7660266085d0b12a0503e6"
+    },
+    {
+      "path": "review/performance-report.json",
+      "bytes": 6371,
+      "sha256": "33d8d29e93df5ba67596ec32ed24097a4bc6dae1910485e052eca3d3efc4f07c"
+    },
+    {
+      "path": "review/runtime-budget-candidate.json",
+      "bytes": 1739,
+      "sha256": "99333f3957897bee2f3b57954708e9865c74402b6ac16552a79834090b4b88b2"
+    },
+    {
+      "path": "run.json",
+      "bytes": 45654,
+      "sha256": "580932e68646b8d459a8bf1e43acff2c65054a3533ab80b7495d13e119949292"
+    },
+    {
+      "path": "three-platform-visual-review.json",
+      "bytes": 1457,
+      "sha256": "a51e2dc55a396cf0ff67b7276377036523af96ac185777be0c12eb4523357b8e"
+    },
+    {
+      "path": "win32-x64/SBOM.json",
+      "bytes": 17813,
+      "sha256": "af3a37e60694e930159330fe90031b2ced4e1164b1163c318157c684340e5af6"
+    },
+    {
+      "path": "win32-x64/build-unpack-measurement.json",
+      "bytes": 939,
+      "sha256": "76cc4c61168ba0397ac7049231fc14b82caac5e86e635a44a1fd88a6646cac7c"
+    },
+    {
+      "path": "win32-x64/component-smoke.json",
+      "bytes": 47823,
+      "sha256": "febc956ffc1eb6d7542d3a40ce3ba8af242873f09a0ae3e728565ce0fb537083"
+    },
+    {
+      "path": "win32-x64/extraction-inventory.json",
+      "bytes": 6031,
+      "sha256": "b6d20e19306050b3b8153629ceea41221ab1a4b401a601d17f1269ed5ba56f35"
+    },
+    {
+      "path": "win32-x64/install-stress-memory.json",
+      "bytes": 392,
+      "sha256": "ee4628ce9e0c2f688125f0a699189fddf5c0b2f9bc05e9569e7122133ae8946d"
+    },
+    {
+      "path": "win32-x64/main-overlap-performance.json",
+      "bytes": 8816,
+      "sha256": "1b7a99805e0b30ef14cfc970f44778324c11e1849ebabd3854a355900f37d458"
+    },
+    {
+      "path": "win32-x64/measurements/build-unpack-1.json",
+      "bytes": 939,
+      "sha256": "1436056dea16c7c93204db3d94143d3425dc11efccf265d326986d3e84ef7c62"
+    },
+    {
+      "path": "win32-x64/measurements/build-unpack-2.json",
+      "bytes": 939,
+      "sha256": "dd9639ecb8694abd31e830ed94ea0eab3b3e17a8cb6df76970e55a97bfbf62de"
+    },
+    {
+      "path": "win32-x64/measurements/build-unpack-3.json",
+      "bytes": 939,
+      "sha256": "a9bf95f645b86c3e3e165215916e899d2e8637ae69f123ecd70ca4edf88d6eec"
+    },
+    {
+      "path": "win32-x64/measurements/build-unpack-4.json",
+      "bytes": 939,
+      "sha256": "04e31bef0ed04bec8f61f6dba09a9bcc8c9351056974eee3d84e3c5f8dd76ed0"
+    },
+    {
+      "path": "win32-x64/measurements/build-unpack-5.json",
+      "bytes": 939,
+      "sha256": "76cc4c61168ba0397ac7049231fc14b82caac5e86e635a44a1fd88a6646cac7c"
+    },
+    {
+      "path": "win32-x64/migration-matrix.json",
+      "bytes": 157538,
+      "sha256": "0f9ad74e0a26394489b8011ffd76bf52bc394f44ad0184855308d989a7ac9cc5"
+    },
+    {
+      "path": "win32-x64/performance-target-report.json",
+      "bytes": 1705,
+      "sha256": "34472d143aa28e18b06bcca30a97ab3b39920c6330f6c91bcd66b748c9562f28"
+    },
+    {
+      "path": "win32-x64/platform-validation.json",
+      "bytes": 25156,
+      "sha256": "bdcd011f5521a1980badd2fdf75e0859779b002c518e521e7232b88bf7bf711d"
+    },
+    {
+      "path": "win32-x64/provenance.json",
+      "bytes": 2959,
+      "sha256": "b763d979729471d0ebb7b0a6d0bce38a7363e3e656230792d5e0cd772443dcbd"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-01.png",
+      "bytes": 44565,
+      "sha256": "eed41ade073483e3abe818239e45c489fb405c7d32c4f602ab8bd4c35dc84493"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-02.png",
+      "bytes": 131469,
+      "sha256": "eff56dd2b491fdab5f88ac92469020d280c1edef6cc350f05a558dc02ffcc6f3"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-03.png",
+      "bytes": 99137,
+      "sha256": "a11762e3c8b94a2deccb06cb1e65a09f7376ba6f76de9eab8b6a2472387188ae"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-04.png",
+      "bytes": 108076,
+      "sha256": "816a9a25749d54c9571bad273e4b09e1b164f68e320826344a18477844b13aab"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-05.png",
+      "bytes": 63678,
+      "sha256": "fcc7cab088c6aa05e1e07403e85d4c19291c5e6fa97099ed753bb3e96d51062e"
+    },
+    {
+      "path": "win32-x64/r07-visual/legacy-slides/slide-06.png",
+      "bytes": 55106,
+      "sha256": "8d2fb116e9bfc56572528d83e96b1df6a87e6c88b1dc379454d6be2994aa791d"
+    },
+    {
+      "path": "win32-x64/r07-visual/r07-ai-agent-security-market.pptx",
+      "bytes": 70587,
+      "sha256": "9cc8f0bf8af0c4bd0dd5704fbf8b5dab9e6e62d44d395becaf0e56527716cae9"
+    },
+    {
+      "path": "win32-x64/r07-visual/r07-contact-sheet.png",
+      "bytes": 33596,
+      "sha256": "b76364f2a6ba47ea81b58b29980605d375074f8a1ee3a4625e55711b3dd47eec"
+    },
+    {
+      "path": "win32-x64/r07-visual/r07-preview-comparison-contact-sheet.png",
+      "bytes": 122451,
+      "sha256": "b68f1b97ea7512cddbea02f48083368d1d19df0ab11c63c5eb83f091823a7721"
+    },
+    {
+      "path": "win32-x64/r07-visual/r07-preview-comparison-report.json",
+      "bytes": 8759,
+      "sha256": "4f75cbf8b0258c2542c75d86e6efa2455e167c4f2d397b42fd38a9f511c46ae0"
+    },
+    {
+      "path": "win32-x64/r07-visual/r07-preview-render-receipt.json",
+      "bytes": 4187,
+      "sha256": "5fc76ff1394366a4e34b4665fa370c8af60d09d1bed08eca9dcb32561232663c"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-01.png",
+      "bytes": 31493,
+      "sha256": "2c86b94fc9dd1499ea417bcab1efe363f59eeb85d78bfd906e4b51cb4b341a39"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-02.png",
+      "bytes": 92654,
+      "sha256": "76e66812c831e8e544106c975e73f28af5783ea07ad6a6c9844832b4c5c9ece8"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-03.png",
+      "bytes": 62661,
+      "sha256": "69e0f0d53e3da6c572c6b8c6cb50f4f019a2b2c4b8ffc187a8362a6f63a8bd1b"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-04.png",
+      "bytes": 68524,
+      "sha256": "e7e1267ea7f9b932d7dd1395d2161e2c122579114f2013ad005e54e8ab14c4f8"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-05.png",
+      "bytes": 41558,
+      "sha256": "b8cd81a4357a34411bd074c906637f267f0a7588fd975b9a41ac23c281716ae1"
+    },
+    {
+      "path": "win32-x64/r07-visual/slides/slide-06.png",
+      "bytes": 65753,
+      "sha256": "c536d05338f2e662db7a107ab56911525d9344e7750fef110826742cbf40a049"
+    },
+    {
+      "path": "win32-x64/runtime-inputs.manifest.json",
+      "bytes": 26388,
+      "sha256": "3144eef6f2269fe172ee3332d4e22f5d8ebc429e89c9e9aee079937b69da7243"
+    },
+    {
+      "path": "win32-x64/runtime.json",
+      "bytes": 1387,
+      "sha256": "dc878a4a648a44a025bca22cb66a7787eb7844cb53ec57e243552fd2e3e4b2f8"
+    },
+    {
+      "path": "win32-x64/source-fetch.json",
+      "bytes": 1787,
+      "sha256": "ba7ad3f93ccc5f48f39416d13e85db5932f155667f6a0216a30bee6ab14f1a0a"
+    }
+  ]
+}

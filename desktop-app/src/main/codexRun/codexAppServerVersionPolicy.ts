@@ -53,7 +53,11 @@ export function probeLaunchExecutableVersion(launch: CodexAppServerLaunchOptions
     const child = spawn(launch.command, ['--version'], {
       cwd: launch.cwd,
       env: launch.env,
-      stdio: ['ignore', 'pipe', 'ignore']
+      stdio: ['ignore', 'pipe', 'ignore'],
+      // npm exposes the default Windows CLI as codex.cmd. Node cannot
+      // execute a command-script directly without a shell. The default
+      // command and fixed --version argument contain no user input.
+      shell: process.platform === 'win32' && launch.command === 'codex'
     })
     let output = ''
     child.stdout.setEncoding('utf8')

@@ -1,0 +1,1897 @@
+{
+  "artifactId": 11013452988,
+  "artifactZipBytes": 2619036729,
+  "entries": [
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "bytes": 115377512
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "bytes": 116313335
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "bytes": 179820975
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "current/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "current/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "evidence/app-tools-release/at-e2e-01.json",
+      "bytes": 3659
+    },
+    {
+      "name": "evidence/app-tools-release/at-live-01.json",
+      "bytes": 3660
+    },
+    {
+      "name": "evidence/app-tools-release/at-live-pkg-01.json",
+      "bytes": 3764
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-e2e-01-r07-dev-live-trace.json",
+      "bytes": 6128
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-live-01-r07-dev-live-trace.json",
+      "bytes": 6128
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-live-pkg-01-r07-packaged-live-trace.json",
+      "bytes": 6134
+    },
+    {
+      "name": "evidence/app-tools-release/reports/packaged-app-assets.json",
+      "bytes": 211
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-ai-agent-security-market.pptx",
+      "bytes": 70211
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-ai-agent-security-market.pptx",
+      "bytes": 70206
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "four-target-summary.json",
+      "bytes": 345
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "bytes": 115377512
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "bytes": 116313335
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "bytes": 179820975
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "bytes": 115377512
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "bytes": 116313335
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "bytes": 179820975
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "bytes": 115377512
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "bytes": 116313335
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "bytes": 179820975
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/primary-runtime.zip",
+      "bytes": 115377512
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 19264
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/primary-runtime.zip",
+      "bytes": 116313335
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16849
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/primary-runtime.zip",
+      "bytes": 179820975
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/canonical-file-manifest.txt",
+      "bytes": 16527
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/primary-runtime.zip",
+      "bytes": 112773705
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "staged/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "staged/channels/engineering/manifest.json",
+      "bytes": 3194
+    }
+  ],
+  "extracted": [
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "current/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "current/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "current/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "evidence/app-tools-release/at-e2e-01.json",
+      "bytes": 3659
+    },
+    {
+      "name": "evidence/app-tools-release/at-live-01.json",
+      "bytes": 3660
+    },
+    {
+      "name": "evidence/app-tools-release/at-live-pkg-01.json",
+      "bytes": 3764
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-e2e-01-r07-dev-live-trace.json",
+      "bytes": 6128
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-live-01-r07-dev-live-trace.json",
+      "bytes": 6128
+    },
+    {
+      "name": "evidence/app-tools-release/reports/at-live-pkg-01-r07-packaged-live-trace.json",
+      "bytes": 6134
+    },
+    {
+      "name": "evidence/app-tools-release/reports/packaged-app-assets.json",
+      "bytes": 211
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-ai-agent-security-market.pptx",
+      "bytes": 70211
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "evidence/r07-visual-dev/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "evidence/r07-visual-dev/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-ai-agent-security-market.pptx",
+      "bytes": 70206
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-contact-sheet.png",
+      "bytes": 33522
+    },
+    {
+      "name": "evidence/r07-visual-packaged/r07-preview-render-receipt.json",
+      "bytes": 4190
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-01.png",
+      "bytes": 32523
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-02.png",
+      "bytes": 91157
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-03.png",
+      "bytes": 59172
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-04.png",
+      "bytes": 67533
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-05.png",
+      "bytes": 39732
+    },
+    {
+      "name": "evidence/r07-visual-packaged/slides/slide-06.png",
+      "bytes": 67514
+    },
+    {
+      "name": "four-target-summary.json",
+      "bytes": 345
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "releases/1790656218043-257f20006f6ad/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656259403-b0721eabd9d2e/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/channels/engineering/manifest.json",
+      "bytes": 3194
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/build-unpack-measurement.json",
+      "bytes": 854
+    },
+    {
+      "name": "releases/1790656424012-e153fdbd80eb6/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/component-smoke.json",
+      "bytes": 47022
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/platform-validation.json",
+      "bytes": 25171
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime.json",
+      "bytes": 1381
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/source-fetch.json",
+      "bytes": 1804
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30425
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-arm64-final/darwin-arm64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/build-unpack-measurement.json",
+      "bytes": 858
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/component-smoke.json",
+      "bytes": 46917
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/platform-validation.json",
+      "bytes": 25173
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 30439
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/runtime.json",
+      "bytes": 1377
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/evidence/source-fetch.json",
+      "bytes": 1800
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-darwin-x64-final/darwin-x64/provenance.json",
+      "bytes": 3170
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/component-smoke.json",
+      "bytes": 49676
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/platform-validation.json",
+      "bytes": 23055
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26907
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/runtime.json",
+      "bytes": 1375
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/evidence/source-fetch.json",
+      "bytes": 1797
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final/linux-x64/provenance.json",
+      "bytes": 3158
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/build-unpack-measurement.json",
+      "bytes": 855
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/performance-report.json",
+      "bytes": 6371
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/component-smoke.json",
+      "bytes": 47823
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-budgets.json",
+      "bytes": 2071
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/platform-validation.json",
+      "bytes": 25156
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime-inputs.manifest.json",
+      "bytes": 26388
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/source-fetch.json",
+      "bytes": 1787
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/evidence/runtime.json",
+      "bytes": 1387
+    },
+    {
+      "name": "staged/archives/7612f7dfbcd8529c469efbc0b7672dd17446b3b8-win32-x64-final/win32-x64/provenance.json",
+      "bytes": 3156
+    },
+    {
+      "name": "staged/config.json",
+      "bytes": 417
+    },
+    {
+      "name": "staged/channels/engineering/manifest.json",
+      "bytes": 3194
+    }
+  ],
+  "method": "bounded byte-range extraction with ZIP CRC/length checks; large Runtime ZIP not downloaded or locally hashed"
+}

@@ -13,7 +13,9 @@
 
 `DynamicToolsDispatcher` 继续属于 AI-free app-server client，负责协议调用的执行、超时、取消与结果归一化；main 的 registry 只定义业务工具、可用性与两种协议投影。因此不存在 renderer 输入的工具 schema、MCP command/env、Pipe path 或 Runtime 根目录。
 
-Primary Runtime 也由 main 诊断并提供；`load_workspace_dependencies` 是 local-only、无参数、只读工具。它只在可执行的受控 Runtime 存在时发布，提示词与该次动态工具快照来自同一 capability revision。
+Primary Runtime 也由 main 诊断并提供；`load_workspace_dependencies` 是 local-only、无参数、只读工具。只有本机产品能力、app-server feature gate 和 Runtime 健康状态同时满足时，它才进入新 thread 的工具目录并返回已验证的白名单依赖路径说明。Runtime 未安装、安装中或损坏时，由 Plugin Center 暴露稳定状态与恢复建议；模型不得自行搜索目录、临时安装 npm/pip 包或改用替代生成器。
+
+Runtime 激活事务只覆盖 candidate diagnostics、active pointer 和失败恢复。指针成功切换后，main 再通过 app-server catalog 按 marketplace、skills、`skills/list { forceReload: true }` 的顺序同步 Runtime-owned plugin；同步失败会让安装报告失败并可由 repair 重试，但不会扩张为跨 pointer/plugin 的持久事务。旧 Runtime-owned plugin 在新 desired set 成功后退役，用户插件不在该同步逻辑的所有权范围内。
 
 打包的 `codex-app-tools` 资源由 hash 锁定、在启动时以 main-owned MCP 配置连接私有 Pipe；插件注册仅负责发现和管理，不是第二个激活来源。Unix socket 目录和 socket 分别限制为 `0700` 和 `0600`。Windows 在具备命名管道 ACL 实现前明确禁用该兼容入口，避免把未授权 IPC 当作可接受的降级。
 

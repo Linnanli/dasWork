@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-p1a-build-unpack-measurement.v1",
+  "target": "win32-x64",
+  "archiveSha256": "916857145aeac0d3b8f11e5d22ebe2889f2c7c546bdea8dfc227b4bf279a9eb3",
+  "archiveBytes": 112773705,
+  "unpackedBytes": 162905404,
+  "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+  "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+  "inputManifestSha256": "3144eef6f2269fe172ee3332d4e22f5d8ebc429e89c9e9aee079937b69da7243",
+  "canonicalFileManifestSha256": "03953a2969074d15a4306579a6dd679a93b86b325b0a2ef3d5a58b2ab1d4719f",
+  "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+  "runner": "windows-2025",
+  "releaseClass": "engineering-final-candidate",
+  "productionTrust": false,
+  "zipCompressionLevel": 6
+}

@@ -110,6 +110,17 @@ export function buildToolGroupDisplay(
   items: readonly ToolItemDisplay[] = unit.children.map((item) => buildToolItemDisplay(item, unit)),
   options: ToolActivityDisplayOptions = {}
 ): ToolGroupDisplay {
+  if (unit.kind === 'image-view') {
+    return {
+      label: `已查看 ${unit.children.length} 张图片`,
+      icon: 'image-view',
+      status: toolGroupActivityStatus(unit, items),
+      showShimmer: false,
+      count: unit.children.length,
+      expandable: true,
+      detailRows: []
+    }
+  }
   const status = toolGroupActivityStatus(unit, items)
   const showThinkingFallback = unit.showThinkingFallback === true
   const showShimmer =

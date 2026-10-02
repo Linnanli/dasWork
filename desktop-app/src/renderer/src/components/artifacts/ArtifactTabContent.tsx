@@ -5,7 +5,7 @@ import {
   PlusIcon,
   RefreshCwIcon
 } from 'lucide-react'
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import type { GitConversationTarget } from '../../../../shared/localGitApi'
@@ -13,7 +13,10 @@ import type { WorkspaceTabRuntime } from '../workspace-container/workspaceTypes'
 import type { ArtifactTabDescriptor } from './artifactTabDescriptor'
 import { parsePresentationInWorker } from './presentation/PresentationRendererAdapter'
 import { PresentationPanel } from './presentation/PresentationPanel'
-import type { PresentationParseResult } from './presentation/presentationTypes'
+import type {
+  PresentationDocument,
+  PresentationParseResult
+} from './presentation/presentationTypes'
 import { useArtifactSource, type ArtifactRuntime } from './useArtifactSource'
 import { ArtifactAnnotationEditor } from './annotations/ArtifactAnnotationEditor'
 import {
@@ -49,21 +52,42 @@ export function ArtifactTabContent({
     parsed?: PresentationParseResult
     error?: string
   }>()
+  const [renderState, setRenderState] = useState<{
+    key: string
+    slides?: readonly string[]
+    html?: string
+    slideCount?: number
+    error?: string
+  }>()
   const [annotationState, dispatchAnnotation] = useReducer(
     artifactAnnotationReducer,
     initialArtifactAnnotationState
   )
   const [actionError, setActionError] = useState<string>()
-  const annotationSource = source.binary
-    ? { sourceId: source.binary.sourceId, generation: source.binary.generation }
-    : undefined
+  const annotationSource = useMemo(
+    () =>
+      source.binary
+        ? { sourceId: source.binary.sourceId, generation: source.binary.generation }
+        : undefined,
+    [source.binary]
+  )
   const previousAnnotationSource = useRef<typeof annotationSource>(undefined)
   const presentationKey = source.binary
     ? `${source.binary.sourceId}:${source.binary.generation}:${source.binary.checksum}`
     : undefined
   const activeParseState = parseState?.key === presentationKey ? parseState : undefined
   const parsed = activeParseState?.parsed
-  const parseError = activeParseState?.error
+  const activeRenderState = renderState?.key === presentationKey ? renderState : undefined
+  const renderedSlides = activeRenderState?.slides
+  const renderedHtml = activeRenderState?.html
+  const hasPreview = Boolean(renderedHtml || renderedSlides)
+  const renderError = activeRenderState?.error
+  const document = hasPreview
+    ? presentationDocumentForRender(
+        parsed?.document,
+        activeRenderState?.slideCount ?? renderedSlides?.length ?? 0
+      )
+    : undefined
 
   useEffect(() => {
     const previous = previousAnnotationSource.current
@@ -102,6 +126,40 @@ export function ArtifactTabContent({
           })
       })
     return () => controller.abort()
+  }, [presentationKey, source.binary])
+
+  useEffect(() => {
+    const binary = source.binary
+    if (!binary || !presentationKey) return
+    let active = true
+    void window.desktopApp.workspace.artifacts
+      .renderPresentation({ version: 1, sourceId: binary.sourceId })
+      .then((result) => {
+        if (!active) return
+        if (result.generation !== binary.generation) {
+          setRenderState({ key: presentationKey, error: '文件已更新，请刷新演示文稿预览。' })
+          return
+        }
+        if ('html' in result) {
+          setRenderState({ key: presentationKey, html: result.html, slideCount: result.slideCount })
+          return
+        }
+        const slides = result.slides.map((slide, index) => {
+          if (slide.number !== index + 1) throw new Error('幻灯片预览页码不连续。')
+          return `data:image/png;base64,${slide.base64}`
+        })
+        setRenderState({ key: presentationKey, slides })
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setRenderState({
+            key: presentationKey,
+            error: error instanceof Error ? error.message : '无法生成演示文稿预览。'
+          })
+      })
+    return () => {
+      active = false
+    }
   }, [presentationKey, source.binary])
 
   const openWithSystem = (): void => {
@@ -153,7 +211,12 @@ export function ArtifactTabContent({
     })
   }
   return (
-    <section data-slot="artifact-tab-content" className="flex h-full min-h-0 flex-col">
+    <section
+      data-slot="artifact-tab-content"
+      data-artifact-source-id={source.binary?.sourceId}
+      data-artifact-preview-generation={hasPreview ? source.binary?.generation : undefined}
+      className="flex h-full min-h-0 flex-col"
+    >
       <header className="flex min-h-13 shrink-0 items-center justify-between gap-3 border-b border-border/70 px-4">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-medium">{artifact.title}</h2>
@@ -274,24 +337,27 @@ export function ArtifactTabContent({
           action={openWithSystem}
         />
       ) : null}
-      {!source.loading && !source.tooLarge && !source.error && !parsed && !parseError ? (
+      {!source.loading && !source.tooLarge && !source.error && !hasPreview && !renderError ? (
         <StateView
           icon={<LoaderCircleIcon className="size-5 animate-spin" />}
-          message="正在解析演示文稿…"
+          message="正在生成演示文稿预览…"
         />
       ) : null}
-      {parseError ? (
+      {renderError ? (
         <StateView
           icon={<AlertTriangleIcon className="size-5" />}
-          message={parseError}
+          message={renderError}
           action={openWithSystem}
         />
       ) : null}
-      {parsed ? (
+      {document && hasPreview && !renderError ? (
         <div className="min-h-0 flex-1">
           <PresentationPanel
             key={`${presentationKey ?? 'presentation'}:${artifact.navigation?.requestId ?? ''}`}
-            document={parsed.document}
+            document={document}
+            renderedSlides={renderedSlides}
+            html={renderedHtml}
+            onPreviewError={(error) => setRenderState({ key: presentationKey!, error })}
             navigation={artifact.navigation}
             annotations={annotationState.annotations.filter(
               (annotation) =>
@@ -344,4 +410,21 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const bytes = new Uint8Array(decoded.length)
   for (let index = 0; index < decoded.length; index += 1) bytes[index] = decoded.charCodeAt(index)
   return bytes.buffer
+}
+
+function presentationDocumentForRender(
+  parsed: PresentationDocument | undefined,
+  slideCount: number
+): PresentationDocument {
+  if (parsed?.slides.length === slideCount) return parsed
+  return {
+    width: parsed?.width ?? 16,
+    height: parsed?.height ?? 9,
+    slides: Array.from({ length: slideCount }, (_, index) => ({
+      id: `slide-${index + 1}`,
+      number: index + 1,
+      name: `幻灯片 ${index + 1}`,
+      elements: []
+    }))
+  }
 }

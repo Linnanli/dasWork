@@ -187,6 +187,7 @@ const runtimeState = vi.hoisted<{
   selectedModelId: string | undefined
   modelSelectionError: string | undefined
   setSelectedModelId: ReturnType<typeof vi.fn>
+  addLocalModel: ReturnType<typeof vi.fn>
   setActiveProjectSelection: ReturnType<typeof vi.fn>
   startNewConversation: ReturnType<typeof vi.fn>
   startNewConversationWithDraft: ReturnType<typeof vi.fn>
@@ -241,6 +242,7 @@ const runtimeState = vi.hoisted<{
   selectedModelId: 'gpt-5-codex',
   modelSelectionError: undefined,
   setSelectedModelId: vi.fn(),
+  addLocalModel: vi.fn(),
   setActiveProjectSelection: vi.fn(),
   startNewConversation: vi.fn(),
   startNewConversationWithDraft: vi.fn(),
@@ -382,6 +384,8 @@ function resetThreadMessageState(): void {
   runtimeState.modelSelectionError = undefined
   runtimeState.setSelectedModelId.mockReset()
   runtimeState.setSelectedModelId.mockResolvedValue(undefined)
+  runtimeState.addLocalModel.mockReset()
+  runtimeState.addLocalModel.mockResolvedValue(undefined)
   runtimeState.setActiveProjectSelection.mockReset()
   runtimeState.startNewConversation.mockReset()
   runtimeState.startNewConversationWithDraft.mockReset()
@@ -437,6 +441,11 @@ function installDesktopApp(projects?: Partial<DesktopProjectsApi>): void {
   vi.stubGlobal('desktopApp', {
     environment: { platform: 'darwin' },
     codex: {
+      resolveImageSource: vi.fn(async ({ source }) => ({
+        status: 'available',
+        displaySrc: source
+      })),
+      saveImage: vi.fn(async () => ({ status: 'cancelled' })),
       openExternalHttpUrl: vi.fn(async () => undefined),
       openLocalPath: vi.fn(async () => undefined),
       revealLocalPath: vi.fn(async () => undefined),
@@ -781,6 +790,7 @@ vi.mock('./hooks/useCodexIpcAssistantRuntime', () => {
       restoreActiveConversation: runtimeState.restoreActiveConversation,
       restoreSingleActiveConversation: runtimeState.restoreSingleActiveConversation,
       setSelectedModelId: runtimeState.setSelectedModelId,
+      addLocalModel: runtimeState.addLocalModel,
       setActiveProjectSelection: runtimeState.setActiveProjectSelection,
       setActiveDraft: runtimeState.setActiveDraft,
       setActiveDraftAttachments: runtimeState.setActiveDraftAttachments,
@@ -1230,20 +1240,22 @@ vi.mock('@assistant-ui/react', () => {
     useAui: () => mockAui,
     useMessageTiming: () => null,
     useAuiState: (selector: (state: Record<string, unknown>) => unknown) => {
-      const attachment = threadMessageState.message.content
+      const attachments = threadMessageState.message.content
         .filter((part): part is Extract<MockMessagePart, { type: 'file' }> => part.type === 'file')
-        .map((part) => ({
+        .map((part, index) => ({
+          id: `attachment-${index}`,
           type: part.mediaType.startsWith('image/') ? 'image' : 'file',
           name: part.name ?? 'file',
           status: { type: 'complete' as const },
           content: part.mediaType.startsWith('image/')
             ? [{ type: 'image' as const, image: part.url ?? part.data ?? '' }]
             : []
-        }))[0]
+        }))
 
       return selector({
         ...currentAssistantState(),
-        attachment,
+        message: { ...currentAssistantState().message, attachments },
+        attachment: attachments[0],
         threadListItem: {
           id: 'main',
           remoteId: undefined,
@@ -1770,6 +1782,24 @@ describe('App composer', () => {
     expect(runtimeState.setActiveDraftAttachments).toHaveBeenLastCalledWith([])
   })
 
+  it('keeps the composer mounted when a new conversation receives its durable thread id', async () => {
+    await renderApp()
+
+    const composer = container.querySelector('[data-testid="lexical-composer-input"]')
+    expect(composer).not.toBeNull()
+
+    runtimeState.activeEntry.context = {
+      ...runtimeState.activeEntry.context,
+      threadId: 'thread-after-send'
+    }
+    await act(async () => {
+      root.render(<App />)
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="lexical-composer-input"]')).toBe(composer)
+  })
+
   it('loads the unified context catalog for the selected project', async () => {
     const listContext = vi.mocked(window.desktopApp.composerContext.list)
 
@@ -2047,6 +2077,107 @@ describe('App composer', () => {
 
     expect(runtimeState.setSelectedModelId).toHaveBeenCalledWith('gpt-5.5')
     expect(container.textContent).toContain('model catalog unavailable')
+  })
+
+  it('opens the local add-model dialog from the model picker', async () => {
+    await renderApp()
+
+    await act(async () => {
+      buttonWithText('GPT-5 Codex')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-slot="model-selector-add-model"]')?.click()
+    })
+
+    expect(document.querySelector('[data-slot="dialog-title"]')?.textContent).toBe('添加模型')
+    expect(document.querySelector('#add-model-base-url')).not.toBeNull()
+    expect(document.querySelector('#add-model-api-key')).not.toBeNull()
+    expect(document.querySelector('#add-model-name')).not.toBeNull()
+
+    const setInput = async (id: string, value: string): Promise<void> => {
+      await act(async () => {
+        const input = document.querySelector<HTMLInputElement>(id)
+        expect(input).not.toBeNull()
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          input,
+          value
+        )
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await setInput('#add-model-base-url', 'https://models.example.test/v1')
+    await setInput('#add-model-api-key', 'secret-key')
+    await setInput('#add-model-name', 'my-model')
+    await act(async () => {
+      document
+        .querySelector<HTMLFormElement>('[data-slot="dialog-content"] form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+
+    expect(runtimeState.addLocalModel).toHaveBeenCalledWith({
+      platform: 'custom',
+      baseUrl: 'https://models.example.test/v1',
+      fullUrl: false,
+      apiKey: 'secret-key',
+      modelId: 'my-model',
+      imageInput: 'auto',
+      apiMode: 'auto'
+    })
+  })
+
+  it('prefills the DeepSeek Responses base URL in the add-model dialog', async () => {
+    await renderApp()
+
+    await act(async () => {
+      buttonWithText('GPT-5 Codex')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-slot="model-selector-add-model"]')?.click()
+    })
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('#add-model-platform')?.click()
+    })
+    expect(document.body.textContent).toContain('DeepSeek')
+    expect(
+      [...document.body.querySelectorAll<HTMLElement>('[data-slot="command-item"]')].find((item) =>
+        item.textContent?.includes('OpenAI')
+      )
+    ).toBeUndefined()
+    await act(async () => {
+      const deepSeekOption = [
+        ...document.body.querySelectorAll<HTMLElement>('[data-slot="command-item"]')
+      ].find((item) => item.textContent?.includes('DeepSeek'))
+      deepSeekOption?.click()
+    })
+
+    expect(document.querySelector<HTMLInputElement>('#add-model-base-url')?.value).toBe(
+      'https://api.deepseek.com'
+    )
+    for (const [id, value] of [
+      ['#add-model-api-key', 'secret-key'],
+      ['#add-model-name', 'deepseek-flash']
+    ]) {
+      await act(async () => {
+        const input = document.querySelector<HTMLInputElement>(id)
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          input,
+          value
+        )
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await act(async () => {
+      document
+        .querySelector<HTMLFormElement>('[data-slot="dialog-content"] form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(runtimeState.addLocalModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'deepseek',
+        baseUrl: 'https://api.deepseek.com',
+        modelId: 'deepseek-flash'
+      })
+    )
   })
 
   it('renders split sidebar sections without delete actions', async () => {
@@ -2468,6 +2599,32 @@ describe('App composer', () => {
 
     expect(container.querySelector('[data-slot="composer-project-card-shell"]')).toBeNull()
     expect(container.querySelector('[data-slot="local-branch-switcher"]')).toBeNull()
+  })
+
+  it('records the mounted viewport when performance collection starts after initial render', async () => {
+    const performanceTarget = globalThis as typeof globalThis & {
+      __DASCOWORK_CONVERSATION_PERF_COUNTS__?: Record<string, number>
+    }
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = false
+    delete performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__
+
+    await renderApp()
+
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = true
+    performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__ = {}
+    await renderApp()
+
+    expect(performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__).toMatchObject({
+      forwardedRefAttachCount: 1
+    })
+
+    await renderApp()
+    expect(performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__).toMatchObject({
+      forwardedRefAttachCount: 1
+    })
+
+    globalThis.__DASCOWORK_CONVERSATION_PERF__ = false
+    delete performanceTarget.__DASCOWORK_CONVERSATION_PERF_COUNTS__
   })
 
   it('hides the Git branch control and does not render a duplicate Review action', async () => {
@@ -2979,7 +3136,7 @@ describe('App composer', () => {
     const tile = container.querySelector<HTMLDivElement>('.aui-attachment-tile')
 
     expect(preview?.getAttribute('src')).toBe('app://fs/@fs/tmp/codex-clipboard.png')
-    expect(preview?.getAttribute('alt')).toBe('Attachment preview')
+    expect(preview?.getAttribute('alt')).toBe('codex-clipboard.png')
     expect(tile?.className).toContain('size-14')
     expect(tile?.className).toContain('rounded-md')
     expect(container.querySelector('.aui-attachment-root')?.className).not.toContain('size-24')
@@ -2989,7 +3146,7 @@ describe('App composer', () => {
     })
 
     expect(container.querySelector('.aui-attachment-tile-image')).toBeNull()
-    expect(container.querySelector('.aui-attachment-tile-fallback-icon')).not.toBeNull()
+    expect(container.querySelector('[data-chat-image-state="unavailable"]')).not.toBeNull()
   })
 
   it('renders the edit composer when a user message enters editing state', async () => {
@@ -3668,11 +3825,10 @@ describe('App composer', () => {
     await renderApp()
 
     const reasoning = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')
-    expect(reasoning?.dataset.state).toBe('closed')
-
-    await act(async () => {
-      reasoning?.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')?.click()
-    })
+    expect(reasoning?.dataset.state).toBe('open')
+    expect(
+      reasoning?.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')?.disabled
+    ).toBe(true)
 
     const webSearchGroup = toolGroup('web-search')
     const dynamicGroup = toolGroup('dynamic')
@@ -4028,6 +4184,10 @@ describe('App composer', () => {
     expect(container.querySelector('[data-slot="generated-image-entry-unit"]')).not.toBeNull()
     expect(container.textContent).toContain('已生成 1 张图片')
     expect(container.querySelector('[data-slot="end-resource-cards-unit"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-slot="end-resource-card-unit"]')).toHaveLength(3)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-slot="end-resource-expand"]')?.click()
+    })
     expect(container.querySelectorAll('[data-slot="end-resource-card-unit"]')).toHaveLength(4)
     expect(container.textContent).toContain('Report')
     await act(async () => {
@@ -4947,6 +5107,66 @@ describe('App composer', () => {
     expect(completedReasoning?.getAttribute('data-state')).toBe('open')
     expect(completedReasoning?.textContent).toContain('我会按“只分析、不改代码”的方式')
     expect(completedReasoning?.textContent).toContain('现已核对实时流与历史记录')
+  })
+
+  it('keeps image records lazy through both disclosures and preserves the user expansion during final streaming', async () => {
+    threadMessageState.message.role = 'assistant'
+    threadMessageState.message.status = { type: 'running' }
+    threadMessageState.message.content = [
+      { type: 'text', text: '先查看图片。' },
+      genericToolPart('view-a', 'codex_image_view', 'imageView', { path: '/tmp/a.png' }),
+      genericToolPart('view-b', 'codex_image_view', 'imageView', { path: '/tmp/b.png' })
+    ]
+    threadMessageState.externalMessages = [
+      { parts: [{ type: 'text', providerMetadata: messagePhaseMetadata('commentary') }] }
+    ]
+    await renderApp()
+    let process = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')!
+    expect(process.dataset.state).toBe('open')
+    expect(
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.disabled
+    ).toBe(true)
+    expect(container.textContent).toContain('已查看 2 张图片')
+    expect(window.desktopApp.codex.resolveImageSource).not.toHaveBeenCalled()
+
+    threadMessageState.message.content.push({ type: 'text', text: '图片分析完成。' })
+    threadMessageState.externalMessages[0]!.parts.push({
+      type: 'text',
+      providerMetadata: messagePhaseMetadata('final_answer')
+    })
+    await renderApp()
+    process = container.querySelector<HTMLElement>('[data-slot="reasoning-group"]')!
+    expect(process.dataset.state).toBe('closed')
+    expect(container.textContent).toContain('图片分析完成。')
+    expect(container.querySelector('[data-slot="image-view-activity"]')).toBeNull()
+    act(() =>
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.click()
+    )
+    expect(
+      container.querySelector('[data-slot="image-view-activity"]')?.getAttribute('data-state')
+    ).toBe('closed')
+    expect(window.desktopApp.codex.resolveImageSource).not.toHaveBeenCalled()
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[data-slot="image-view-activity"] [data-slot="tool-group-trigger"]'
+        )!
+        .click()
+    )
+    expect(window.desktopApp.codex.resolveImageSource).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-slot="image-view-images"]')).not.toBeNull()
+    threadMessageState.message.content.push({ type: 'text', text: '补充结论。' })
+    threadMessageState.externalMessages[0]!.parts.push({
+      type: 'text',
+      providerMetadata: messagePhaseMetadata('final_answer')
+    })
+    await renderApp()
+    expect(process.dataset.state).toBe('open')
+    expect(window.desktopApp.codex.resolveImageSource).toHaveBeenCalledTimes(2)
+    act(() =>
+      process.querySelector<HTMLButtonElement>('[data-slot="reasoning-group-trigger"]')!.click()
+    )
+    expect(container.querySelector('[data-slot="image-view-images"]')).toBeNull()
   })
 
   it('collapses an inferred process when the candidate answer starts', async () => {

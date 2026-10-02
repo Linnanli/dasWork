@@ -1,0 +1,454 @@
+{
+  "sourceRunId": "36512308682",
+  "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+  "reviewRunId": "36517699704",
+  "scope": "native calibration; final rebuild and engineering Feed gates pending",
+  "archiveHashEvidence": "CI provenance, native platform validation and migration binding; large Runtime ZIPs were not downloaded or locally rehashed",
+  "visualAcceptance": {
+    "status": "pending",
+    "accepted": false,
+    "reason": "Agent image review and user acceptance recorded separately; final gates pending"
+  },
+  "targets": {
+    "darwin-x64": {
+      "artifactId": 11011541886,
+      "archiveSha256": "0840ce3eb836cb75fd89a37ced8e7a7efaf139a4b1810a252f126baefc2be49e",
+      "archiveBytes": 116313429,
+      "unpackedBytes": 174667526,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "48e1a5ed1095a536e4c8b492065536dfcc5af47e-darwin-x64-p1a-5",
+        "archiveSha256": "0840ce3eb836cb75fd89a37ced8e7a7efaf139a4b1810a252f126baefc2be49e",
+        "archiveSizeBytes": 116313429,
+        "baselineRssBytes": 63025152,
+        "peakRssBytes": 111616000,
+        "rssDeltaBytes": 48590848,
+        "maxRssDeltaBytes": 402653184
+      },
+      "runtimeDefaultFont": {
+        "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+        "mode": "100644",
+        "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+      },
+      "chartLabelRatios": {
+        "category1": 0.024752475247524754,
+        "category2": 0.03143063583815029,
+        "legend": 0.006222222222222222
+      },
+      "deckSha256": "a5948873531caac205cd269f642d280813cb00dd73f68f580bb55fd73503fcf3",
+      "trace": {
+        "sourceId": "93d1b37ef9554cc298b811185ee1c878",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "a5948873531caac205cd269f642d280813cb00dd73f68f580bb55fd73503fcf3"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.682952069716776
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 11.75714680496912
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 8.072660844081978
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.708619642547285
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.50991462137133
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 6.571988933233077
+        }
+      ]
+    },
+    "darwin-arm64": {
+      "artifactId": 11011220147,
+      "archiveSha256": "1d710784b7fd62e4cd107a808bceb104bc6778d1615963b486fd1083d7b1f681",
+      "archiveBytes": 115377521,
+      "unpackedBytes": 173626167,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "48e1a5ed1095a536e4c8b492065536dfcc5af47e-darwin-arm64-p1a-5",
+        "archiveSha256": "1d710784b7fd62e4cd107a808bceb104bc6778d1615963b486fd1083d7b1f681",
+        "archiveSizeBytes": 115377521,
+        "baselineRssBytes": 75694080,
+        "peakRssBytes": 174555136,
+        "rssDeltaBytes": 98861056,
+        "maxRssDeltaBytes": 402653184
+      },
+      "runtimeDefaultFont": {
+        "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+        "mode": "100644",
+        "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+      },
+      "chartLabelRatios": {
+        "category1": 0.024752475247524754,
+        "category2": 0.03143063583815029,
+        "legend": 0.006222222222222222
+      },
+      "deckSha256": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff",
+      "trace": {
+        "sourceId": "b15f5f3219ec448296452cd1a41920a0",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "aa47f10b1da61b53bcb262ffecd7f665e6a5150f06ec463ecb2560a2b391ccff"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.6821731544141745
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 11.76424171438487
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 8.072660844081978
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.713034138598081
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.511756993849655
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 6.56865508576423
+        }
+      ]
+    },
+    "win32-x64": {
+      "artifactId": 11011135829,
+      "archiveSha256": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+      "archiveBytes": 112773712,
+      "unpackedBytes": 162905404,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "48e1a5ed1095a536e4c8b492065536dfcc5af47e-win32-x64-p1a-5",
+        "archiveSha256": "b89fd2c8ba4d05606d27ebba1335ef4684a0856cb855b90f72c9e7092ee9de09",
+        "archiveSizeBytes": 112773712,
+        "baselineRssBytes": 62746624,
+        "peakRssBytes": 113246208,
+        "rssDeltaBytes": 50499584,
+        "maxRssDeltaBytes": 402653184
+      },
+      "runtimeDefaultFont": {
+        "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+        "mode": "100644",
+        "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+      },
+      "chartLabelRatios": {
+        "category1": 0.025216584158415843,
+        "category2": 0.03359826589595376,
+        "legend": 0.01274074074074074
+      },
+      "deckSha256": "9cc8f0bf8af0c4bd0dd5704fbf8b5dab9e6e62d44d395becaf0e56527716cae9",
+      "trace": {
+        "sourceId": "b34f14cbd28b4bf088c0c7002d61db5f",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "9cc8f0bf8af0c4bd0dd5704fbf8b5dab9e6e62d44d395becaf0e56527716cae9"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.535149517033952
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 11.496222871318308
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 7.476405517959396
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 14.010466353044004
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.778587219876478
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 6.435978721216444
+        }
+      ]
+    },
+    "linux-x64": {
+      "artifactId": 11009879512,
+      "archiveSha256": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499",
+      "archiveBytes": 179820974,
+      "unpackedBytes": 351018995,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "48e1a5ed1095a536e4c8b492065536dfcc5af47e-linux-x64-p1a-5",
+        "archiveSha256": "70a978f4e3e4c0435df80f9d014e9d5cd0f4d8a6488f9ec29039c553298aa499",
+        "archiveSizeBytes": 179820974,
+        "baselineRssBytes": 76783616,
+        "peakRssBytes": 121757696,
+        "rssDeltaBytes": 44974080,
+        "maxRssDeltaBytes": 402653184
+      },
+      "runtimeDefaultFont": {
+        "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+        "mode": "100644",
+        "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+      },
+      "chartLabelRatios": {
+        "category1": 0.023669554455445545,
+        "category2": 0.026463150289017343,
+        "legend": 0.004148148148148148
+      },
+      "deckSha256": "be40b21528b5364d89b9ce281b71e700a5252b7df255c467aad78c9874350283",
+      "trace": {
+        "sourceId": "f41bd41ec2244da5a7284c1036093ff8",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "be40b21528b5364d89b9ce281b71e700a5252b7df255c467aad78c9874350283"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.555721364258584
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 11.446466443017718
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 7.70296624057686
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.393414566744429
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.17484816935624
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 7.212720033932944
+        }
+      ]
+    }
+  }
+}

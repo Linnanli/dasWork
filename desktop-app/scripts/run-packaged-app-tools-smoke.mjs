@@ -21,7 +21,7 @@ async function main() {
   )
   const resourcesPath = await realpath(resolve(configuredResourcesPath))
   const packagedExecutable = await realpath(resolve(configuredExecutable))
-  const marketplaceRoot = join(resourcesPath, 'plugins', 'openai-bundled')
+  const marketplaceRoot = join(resourcesPath, 'plugins', 'dascowork-bundled')
   const marketplacePath = join(marketplaceRoot, '.agents', 'plugins', 'marketplace.json')
   const pluginRoot = join(marketplaceRoot, 'plugins', 'codex-app-tools')
   const launcher = join(
@@ -30,7 +30,7 @@ async function main() {
     process.platform === 'win32' ? 'launch_codex_app_tools_mcp.cmd' : 'launch_codex_app_tools_mcp'
   )
   const serverPath = join(pluginRoot, 'server.mjs')
-  await assertFile(marketplacePath, 'openai-bundled marketplace manifest')
+  await assertFile(marketplacePath, 'dascowork-bundled marketplace manifest')
   await assertFile(launcher, 'codex-app-tools launcher')
   await assertFile(serverPath, 'codex-app-tools MCP server')
   await assertFile(packagedExecutable, 'packaged Electron executable')

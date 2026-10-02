@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -14,12 +14,19 @@ const enabled = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS === '1'
 const sourceArchive = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_ARCHIVE?.trim()
 const version = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_VERSION?.trim()
 const expectedSha256 = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_SHA256?.trim().toLowerCase()
+const reportPath = process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_REPORT?.trim()
 const maxRssDeltaMiB = Number(process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_MAX_RSS_MIB ?? '384')
+const stressTimeoutMs = parsePositiveTimeout(
+  // P3a is one full archive install and must retain enough headroom for the
+  // fixed Intel macOS runner. P3b separately measures ten cold installs and
+  // owns the reviewed product budget.
+  process.env.DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS ?? String(15 * 60 * 1000)
+)
 const directories: string[] = []
 
 afterEach(async () => {
   await Promise.all(directories.splice(0).map(removeRuntimeCache))
-})
+}, stressTimeoutMs)
 
 describe.skipIf(!enabled)('Primary Runtime install stress', () => {
   it('installs a real archive without an archive-sized main-process allocation', async () => {
@@ -60,16 +67,45 @@ describe.skipIf(!enabled)('Primary Runtime install stress', () => {
 
       const result = await service.install()
       maxRss = Math.max(maxRss, process.memoryUsage.rss())
+      const rssDeltaBytes = maxRss - baselineRss
       expect(result.status).toBe('installed')
       expect(result.version).toBe(version)
-      expect(maxRss - baselineRss).toBeLessThanOrEqual(maxRssDeltaMiB * 1024 * 1024)
+      expect(rssDeltaBytes).toBeLessThanOrEqual(maxRssDeltaMiB * 1024 * 1024)
+      if (reportPath) {
+        await mkdir(dirname(reportPath), { recursive: true })
+        await writeFile(
+          reportPath,
+          `${JSON.stringify(
+            {
+              schemaVersion: 'dascowork-primary-runtime-install-stress-memory.v1',
+              version,
+              archiveSha256: expectedSha256,
+              archiveSizeBytes: archiveDetails.size,
+              baselineRssBytes: baselineRss,
+              peakRssBytes: maxRss,
+              rssDeltaBytes,
+              maxRssDeltaBytes: maxRssDeltaMiB * 1024 * 1024
+            },
+            null,
+            2
+          )}\n`
+        )
+      }
       const downloads = await readdir(join(cacheRoot, 'downloads'))
       expect(downloads).toEqual([`${expectedSha256}.zip`])
     } finally {
       clearInterval(sampler)
     }
-  })
+  }, stressTimeoutMs)
 })
+
+function parsePositiveTimeout(value: string): number {
+  const timeoutMs = Number(value)
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('DASCOWORK_PRIMARY_RUNTIME_STRESS_TIMEOUT_MS must be a positive integer.')
+  }
+  return timeoutMs
+}
 
 async function sha256File(path: string): Promise<string> {
   const digest = createHash('sha256')

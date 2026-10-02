@@ -418,6 +418,19 @@ describe('SpecialEntryRenderer resource availability', () => {
       ])
     )
 
+    expect(container.querySelectorAll('[data-slot="resource-file-icon"]')).toHaveLength(3)
+    await act(async () => {
+      const expandButton = container.querySelector<HTMLButtonElement>(
+        '[data-slot="end-resource-expand"]'
+      )
+      expect(expandButton).not.toBeNull()
+      expandButton?.click()
+    })
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        '[data-slot="end-resource-expand"][aria-expanded="true"]'
+      )
+    ).not.toBeNull()
     const icons = Array.from(container.querySelectorAll('[data-slot="resource-file-icon"]'))
     expect(icons.map((icon) => icon.getAttribute('data-file-icon'))).toEqual([
       ...cases.map(([, kind]) => kind),

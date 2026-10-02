@@ -1,0 +1,17 @@
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	﻿2026-09-28T10:20:49.7580740Z ##[group]Run actions/upload-artifact@v7
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7581740Z with:
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7582430Z   name: primary-runtime-darwin-x64-candidate-staging
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7583390Z   if-no-files-found: error
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7585830Z   path: /Users/runner/work/_temp/primary-runtime-darwin-x64-candidate-staging
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7588440Z   compression-level: 6
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7589410Z   overwrite: false
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7590710Z   include-hidden-files: false
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7591830Z   archive: true
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7592380Z env:
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7592870Z   PRIMARY_RUNTIME_MODE: calibrate
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:49.7593530Z ##[endgroup]
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:52.2523350Z With the provided path, there will be 37 files uploaded
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:52.2529110Z Artifact name is valid!
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:20:52.2535240Z Root directory input is valid!
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	2026-09-28T10:22:07.2003480Z ##[error]Failed to CreateArtifact: Unable to make request: ETIMEDOUT
+calibrate P3 validation darwin-x64	Upload target-native calibration staging	If you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#communication-between-self-hosted-runners-and-github

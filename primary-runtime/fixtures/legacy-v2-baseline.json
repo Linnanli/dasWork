@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-legacy-baseline.v1",
+  "sourceRunId": "35977341257",
+  "sourceCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
+  "reviewedBudgetCommit": "d460786c",
+  "purpose": "Immutable verified v2 migration and preview comparison input; never a new production Runtime source.",
+  "targets": {
+    "darwin-x64": {
+      "archiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff"
+    },
+    "darwin-arm64": {
+      "archiveSha256": "f9905487c3860ad4ca3cc79e4cdba4ab8a51301ef775ad8c619323a6af3bad2f"
+    },
+    "win32-x64": {
+      "archiveSha256": "1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7"
+    },
+    "linux-x64": {
+      "archiveSha256": "11a05282fe7a0430c432edc8c3812ca78035243afa6dea82514df109ac37f60a"
+    }
+  }
+}

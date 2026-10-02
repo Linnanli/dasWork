@@ -1,0 +1,414 @@
+{
+  "sourceRunId": "36412021750",
+  "sourceCommit": "84732005a79c559c2111b1764efc0a13d0ca2cc8",
+  "reviewRunId": "36417936943",
+  "scope": "native calibration; final rebuild and engineering Feed gates pending",
+  "archiveHashEvidence": "CI provenance, native platform validation and migration binding; large Runtime ZIPs were not downloaded or locally rehashed",
+  "visualAcceptance": {
+    "status": "blocked",
+    "accepted": false,
+    "reason": "Linux slide05 category/legend Chinese text missing despite whole-slide pixel gate passing"
+  },
+  "targets": {
+    "darwin-x64": {
+      "artifactId": 10967943497,
+      "archiveSha256": "d889b4f10d61f165985da11666ee97c92645d1c3b1c9706cf4ce7f8f3271b4fa",
+      "archiveBytes": 116313331,
+      "unpackedBytes": 174667171,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "84732005a79c559c2111b1764efc0a13d0ca2cc8-darwin-x64-p1a-5",
+        "archiveSha256": "d889b4f10d61f165985da11666ee97c92645d1c3b1c9706cf4ce7f8f3271b4fa",
+        "archiveSizeBytes": 116313331,
+        "baselineRssBytes": 63184896,
+        "peakRssBytes": 109129728,
+        "rssDeltaBytes": 45944832,
+        "maxRssDeltaBytes": 402653184
+      },
+      "deckSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b",
+      "trace": {
+        "sourceId": "874b9f808545446a9aee5a456f5cf922",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.933778221219658
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 12.543350460472618
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 9.269784737887289
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.691010983219902
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.470504688273213
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 7.038759551673833
+        }
+      ]
+    },
+    "darwin-arm64": {
+      "artifactId": 10968250109,
+      "archiveSha256": "ca7359aec1bf2283cb68c13b010aaea36f8101a1322dde5a0426437fed18380d",
+      "archiveBytes": 115377326,
+      "unpackedBytes": 173625811,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "84732005a79c559c2111b1764efc0a13d0ca2cc8-darwin-arm64-p1a-5",
+        "archiveSha256": "ca7359aec1bf2283cb68c13b010aaea36f8101a1322dde5a0426437fed18380d",
+        "archiveSizeBytes": 115377326,
+        "baselineRssBytes": 76300288,
+        "peakRssBytes": 163627008,
+        "rssDeltaBytes": 87326720,
+        "maxRssDeltaBytes": 402653184
+      },
+      "deckSha256": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03",
+      "trace": {
+        "sourceId": "c72412742f9b4beba62874cf76b764b9",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "acb09e4109cb38d89bf81f6014c75e857480db69ad1d08c1f27e0f9afeafeb03"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.933129125134157
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 12.551001439579437
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 9.269798715946555
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.695334541551789
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.472331958020835
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 7.036067570259831
+        }
+      ]
+    },
+    "win32-x64": {
+      "artifactId": 10968045772,
+      "archiveSha256": "cb1676f1757bfd3bb5eb1ad36a91be89545945ad72adaf99d65bdaeab14f4bd6",
+      "archiveBytes": 112773562,
+      "unpackedBytes": 162905048,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "84732005a79c559c2111b1764efc0a13d0ca2cc8-win32-x64-p1a-5",
+        "archiveSha256": "cb1676f1757bfd3bb5eb1ad36a91be89545945ad72adaf99d65bdaeab14f4bd6",
+        "archiveSizeBytes": 112773562,
+        "baselineRssBytes": 62488576,
+        "peakRssBytes": 113303552,
+        "rssDeltaBytes": 50814976,
+        "maxRssDeltaBytes": 402653184
+      },
+      "deckSha256": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90",
+      "trace": {
+        "sourceId": "1bdef2bc295a4eae9c4d2907e5c1b762",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "0bc97ddef5c65d734e754239305971b17af132657ee5fcf6f50b482ad948aa90"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 4.629179600388173
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 12.186666698800137
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 8.45653498370833
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 13.425930585279016
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.587677135751054
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 6.772162132634109
+        }
+      ]
+    },
+    "linux-x64": {
+      "artifactId": 10966574630,
+      "archiveSha256": "e4779e3249135867bc21e62c57f1d565ddef4c0cd8fe3459df5bb94f839e5d2e",
+      "archiveBytes": 179820851,
+      "unpackedBytes": 351018639,
+      "migrationScenarios": 12,
+      "isolatedCommandCount": 25,
+      "networkAndExecProbePassed": true,
+      "memory": {
+        "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+        "version": "84732005a79c559c2111b1764efc0a13d0ca2cc8-linux-x64-p1a-5",
+        "archiveSha256": "e4779e3249135867bc21e62c57f1d565ddef4c0cd8fe3459df5bb94f839e5d2e",
+        "archiveSizeBytes": 179820851,
+        "baselineRssBytes": 77156352,
+        "peakRssBytes": 121720832,
+        "rssDeltaBytes": 44564480,
+        "maxRssDeltaBytes": 402653184
+      },
+      "deckSha256": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50",
+      "trace": {
+        "sourceId": "a859bf6f7bbe4702a13e58b3134ef023",
+        "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+        "generation": 1,
+        "checksum": "a12fe632486bfd9e325ea414c554cfb7d48e4a3c808298586a7c74b9a2717c50"
+      },
+      "slides": [
+        {
+          "file": "slide-01.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 5.3232100050770885
+        },
+        {
+          "file": "slide-02.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 12.793509842481733
+        },
+        {
+          "file": "slide-03.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 9.290581037396931
+        },
+        {
+          "file": "slide-04.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 14.75453483589437
+        },
+        {
+          "file": "slide-05.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 18.43910096978811
+        },
+        {
+          "file": "slide-06.png",
+          "legacy": [
+            1921,
+            1080
+          ],
+          "current": [
+            1920,
+            1080
+          ],
+          "meanAbsoluteChannelDelta": 8.180654365974512
+        }
+      ]
+    }
+  }
+}

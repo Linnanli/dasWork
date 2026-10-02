@@ -1,0 +1,225 @@
+{
+  "schemaVersion": "dascowork-r07-preview-comparison.v1",
+  "migrationReport": {
+    "path": "/Users/runner/work/_temp/runtime-dist/darwin-x64/migration-matrix.json",
+    "previewBaseline": {
+      "legacyRuntimeRoot": "/Users/runner/work/_temp/dsc-mig-Al454B/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+      "legacyArchiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+      "cacheRoot": "/Users/runner/work/_temp/dsc-mig-Al454B/cache",
+      "target": "darwin-x64"
+    }
+  },
+  "deck": {
+    "path": "/Users/runner/work/_temp/runtime-dist/darwin-x64/r07-visual/r07-ai-agent-security-market.pptx",
+    "sha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+  },
+  "legacyRuntimeEvidence": {
+    "source": "electron-main-process-env",
+    "expectedPrimaryRuntimeRoot": "/Users/runner/work/_temp/dsc-mig-Al454B/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+    "observedPrimaryRuntimeRoot": "/Users/runner/work/_temp/dsc-mig-Al454B/cache/versions/8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+    "legacyArchiveSha256": "8ba5d1cdd10271205c02fe99f52f596996a415895a9b22620833722a18f1f4ff",
+    "previewRendererBoundary": "The renderPresentation IPC result does not expose the preview renderer runtime identity; this comparison binds the legacy preview run to Electron Main launch env and the verified migration previewBaseline."
+  },
+  "legacySlidesDirectory": "/Users/runner/work/_temp/runtime-dist/darwin-x64/r07-visual/legacy-slides",
+  "currentSlidesDirectory": "/Users/runner/work/_temp/runtime-dist/darwin-x64/r07-visual/slides",
+  "contactSheet": "/Users/runner/work/_temp/runtime-dist/darwin-x64/r07-visual/r07-preview-comparison-contact-sheet.png",
+  "visualAcceptance": {
+    "status": "pending",
+    "accepted": false,
+    "requiredReview": "Inspect all six full-size slide pairs for Chinese text, layout, tables and charts before accepting A6. Capture success and pixel deltas do not establish visual acceptance."
+  },
+  "comparisons": [
+    {
+      "file": "slide-01.png",
+      "legacy": {
+        "file": "slide-01.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.9994794377928162,
+        "colorBucketCount": 55,
+        "sha256": "c857999a0354e6f5ca7f9a926ada473424d5ac483fe365ce89b69f35c46c782f"
+      },
+      "current": {
+        "file": "slide-01.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 1,
+        "colorBucketCount": 50,
+        "sha256": "4b19cfc1d6b35707d8522849f62de55e18520a4b019afd487f160b2026babcb1",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 4.933778221219658
+    },
+    {
+      "file": "slide-02.png",
+      "legacy": {
+        "file": "slide-02.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.18473981529681685,
+        "colorBucketCount": 146,
+        "sha256": "c517c5186159f3a79b29a815610a0e8a005edffb6fe54777315fa7c35c0f1564"
+      },
+      "current": {
+        "file": "slide-02.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.17849006558641975,
+        "colorBucketCount": 180,
+        "sha256": "69749aca1472868def43cc205d91178a61d1724b2bc45cc80d4acc9ffd006a23",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 12.543350460472618
+    },
+    {
+      "file": "slide-03.png",
+      "legacy": {
+        "file": "slide-03.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.02778500780843311,
+        "colorBucketCount": 16,
+        "sha256": "d8a6cf07091cf22fa7ac069859ad6b7b4361c2e07725e1f2c1d375cf7cc1757a"
+      },
+      "current": {
+        "file": "slide-03.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.020218460648148147,
+        "colorBucketCount": 16,
+        "sha256": "5cf765fa60c85a3fd3fb69c3b302a4d8cf20368cdf28d3d06f5f9cce632f5829",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 9.269784737887289
+    },
+    {
+      "file": "slide-04.png",
+      "legacy": {
+        "file": "slide-04.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.2884975032294137,
+        "colorBucketCount": 64,
+        "sha256": "504c18fc8bf8d6545b3f66ad2510ac2b217dd5338cda453ec27f198b513cfc55"
+      },
+      "current": {
+        "file": "slide-04.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.28249758873456793,
+        "colorBucketCount": 65,
+        "sha256": "b09fe5f980b8be25b22bd07c2f67f1c5215f66a80593e71198900b9921d52e49",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 13.691010983219902
+    },
+    {
+      "file": "slide-05.png",
+      "legacy": {
+        "file": "slide-05.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.07684269381302176,
+        "colorBucketCount": 21,
+        "sha256": "7bdbdf9e0200855153d1b0f412c31c23529a6de35a9785275293f942615aa070"
+      },
+      "current": {
+        "file": "slide-05.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.08653983410493828,
+        "colorBucketCount": 36,
+        "sha256": "15af33b28bbf298cc80c8c6862ad457d745fbdbd68273a625aa9ba362d17c9c7",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 18.470504688273213
+    },
+    {
+      "file": "slide-06.png",
+      "legacy": {
+        "file": "slide-06.png",
+        "width": 1921,
+        "height": 1080,
+        "nonWhiteRatio": 0.0192506796228816,
+        "colorBucketCount": 16,
+        "sha256": "c153cbd6bf0bb70be95c0eb78a48aa7155678cca95f966cb1f55d1667d1f2920"
+      },
+      "current": {
+        "file": "slide-06.png",
+        "width": 1920,
+        "height": 1080,
+        "nonWhiteRatio": 0.03254243827160494,
+        "colorBucketCount": 251,
+        "sha256": "13c0e934fdf2cb3358178c55d2fac6076b8dfaf51f797f99a1a96a80f0dc781f",
+        "source": {
+          "kind": "electron-host-preview",
+          "artifactSourceId": "874b9f808545446a9aee5a456f5cf922",
+          "receiptId": "artifact:workspace:r07-ai-agent-security-market.pptx",
+          "generation": 1,
+          "presentationSha256": "035b5a42895e5196b7093fff2ea72940e57aaf3de307ea62d69e0636968aec5b"
+        }
+      },
+      "sameDimensions": false,
+      "comparisonDimensions": {
+        "width": 1921,
+        "height": 1080
+      },
+      "meanAbsoluteChannelDelta": 7.038759551673833
+    }
+  ]
+}

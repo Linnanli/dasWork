@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-provenance.v1",
+  "builder": "@dascowork/primary-runtime-builder",
+  "builderVersion": "1.2.0",
+  "target": "win32-x64",
+  "bundleVersion": "4bc5515c106d5c0e732768ef29cb86e5149f07ec-win32-x64-p1a-5",
+  "archiveSha256": "1d2e3522fd263de115351b68af517a05e5abf5e002a70848bd0fc9217dca5ee7",
+  "archiveSizeBytes": 728851864,
+  "sourceLockSha256": "54efc2fc6d877eec5cddad954ae8ecbfa4df73291088a45bb53c76792e3aa283",
+  "toolchainsLockSha256": "95a990efabdf170f4dfb8504baf70407772889538c43d96b330c0e6809a0d560",
+  "inputManifestSha256": "b0bce4d95377486002d7603e35ddc812b176b847d363639c01f05bc197e06af1",
+  "inputFileManifestSha256": "3a371fcb994e03a49d0ce04173861095d91b3f097f909b2ab281ef55292b5873",
+  "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+  "runtimeManifestSha256": "c9bf9471ee3bb796d078b540148a8622c8843a07c77d35b1a6a3f3ced3179963",
+  "canonicalFileManifestSha256": "1a582ef987da6fa090d627b8dba0dfc50fdd8785b30bcb8fec041e82a8748cbc",
+  "sbomSha256": "d218258ccc28f8ebe2054da25e6e8ea4b868a1d3ae6d634a0caa9456d873a369",
+  "noticesSha256": "a2a4b2398bcb5d8b6553e611e8374c069c3121f08937faa240d3f2bb606dcaf8",
+  "componentSmokeSha256": "352d7e27326d6cb7a0632e787c78061d87831b055b9ea311cbf78724d11a5096",
+  "patchSha256": "aea6b4642a6ab02836b588433d41201b59c7457480a0b19bf84fd7b7a6055e6c",
+  "builderIdentity": {
+    "name": "@dascowork/primary-runtime-materializer",
+    "version": "1.3.0",
+    "runner": "windows-2025",
+    "identity": "github-hosted:windows-2025",
+    "observedImage": "github-hosted:windows-2025:20260907.229.1",
+    "observedImageSha256": "45b476598f1be15036d0a2a9f6aa632d3df958b16de3e09f64e747c6a0d35879",
+    "tools": [
+      {
+        "command": "git",
+        "versionSha256": "34008fbff8ba6a406ab91d345acddd79b20f2c76ebab00605941095029c13155"
+      },
+      {
+        "command": "tar",
+        "versionSha256": "2941776cfd01da95ac4c6cb5dc6804a4c9f90e1b8f48ace095d7061e36c7d1be"
+      },
+      {
+        "command": "msiexec",
+        "versionSha256": "7dc6e1d7908c16e291c87085f2c79c698e60b7141e232102cd0fb7f53bfdc6f2"
+      },
+      {
+        "command": "cmake",
+        "versionSha256": "74d0fc9e7ef3e40d8870ede13815452387844cf67fda196956eb7efb88eae2f2"
+      },
+      {
+        "command": "ninja",
+        "versionSha256": "87729f1910e8eb02719463db46083e0f1a4c3cbade23b357806338b25df16a6a"
+      },
+      {
+        "command": "cl",
+        "versionSha256": "b4da4759c9d6c2c26073170dc758e417d3fbe26c414b2f96b373c75f7e64260b"
+      }
+    ]
+  },
+  "releaseClass": "engineering-candidate",
+  "productionTrust": false,
+  "zipCompressionLevel": 6,
+  "desktopCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
+  "runtimeCommit": "4bc5515c106d5c0e732768ef29cb86e5149f07ec",
+  "workflowRun": {
+    "id": "35977341257",
+    "repository": "Linnanli/dasWork",
+    "url": "https://github.com/Linnanli/dasWork/actions/runs/35977341257"
+  },
+  "platformValidationSha256": "bfbbd44fe45524e35b4d8074fc2cc6d6207e52e4c2a7b0e0159ac16346d8329e"
+}

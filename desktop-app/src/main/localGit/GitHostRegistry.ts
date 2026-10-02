@@ -31,6 +31,7 @@ const READ_ONLY_SUBCOMMANDS = new Set([
   'log',
   'ls-files',
   'merge-base',
+  'rev-list',
   'rev-parse',
   'show',
   'show-ref',
@@ -81,7 +82,6 @@ export class GitHostRegistry {
     if (host instanceof RemoteGitHost) return host
     throw new Error('Remote Git requires a non-local host ID')
   }
-
 }
 
 export class LocalGitHost implements GitHost {
@@ -170,6 +170,9 @@ export class RemoteGitHost implements GitHost {
   private availabilityPromise: Promise<void> | undefined
   private writeTail: Promise<void> = Promise.resolve()
   private readonly activeReadCommands = new Set<Promise<void>>()
+  private backgroundReadTail: Promise<void> = Promise.resolve()
+  private foregroundOperationCount = 0
+  private readonly foregroundIdleWaiters = new Set<() => void>()
   private readonly removeTransportTerminationListener: () => void
 
   constructor(
@@ -243,7 +246,13 @@ export class RemoteGitHost implements GitHost {
     } = {}
   ): Promise<GitRunResult> {
     const execute = (): Promise<GitRunResult> => this.executeCommand(command, options)
-    return options.readOnly ? this.runReadCommand(execute) : this.runWriteCommand(execute)
+    if (options.priority === 'background') {
+      if (!options.readOnly) throw new Error('Background Git commands must be read-only')
+      return this.runBackgroundReadCommand(execute)
+    }
+    return this.runForegroundCommand(() =>
+      options.readOnly ? this.runReadCommand(execute) : this.runWriteCommand(execute)
+    )
   }
 
   private async executeCommand(
@@ -285,9 +294,7 @@ export class RemoteGitHost implements GitHost {
     }
   }
 
-  private async runReadCommand(
-    execute: () => Promise<GitRunResult>
-  ): Promise<GitRunResult> {
+  private async runReadCommand(execute: () => Promise<GitRunResult>): Promise<GitRunResult> {
     const execution = this.writeTail.then(execute)
     const tracking = execution.then(
       () => undefined,
@@ -310,6 +317,36 @@ export class RemoteGitHost implements GitHost {
       () => undefined
     )
     return execution
+  }
+
+  private async runForegroundCommand(execute: () => Promise<GitRunResult>): Promise<GitRunResult> {
+    this.foregroundOperationCount += 1
+    try {
+      return await execute()
+    } finally {
+      this.foregroundOperationCount -= 1
+      if (this.foregroundOperationCount === 0) {
+        for (const resolve of this.foregroundIdleWaiters) resolve()
+        this.foregroundIdleWaiters.clear()
+      }
+    }
+  }
+
+  private runBackgroundReadCommand(execute: () => Promise<GitRunResult>): Promise<GitRunResult> {
+    const execution = this.backgroundReadTail.then(async () => {
+      await this.waitForForegroundIdle()
+      return this.runReadCommand(execute)
+    })
+    this.backgroundReadTail = execution.then(
+      () => undefined,
+      () => undefined
+    )
+    return execution
+  }
+
+  private waitForForegroundIdle(): Promise<void> {
+    if (this.foregroundOperationCount === 0) return Promise.resolve()
+    return new Promise((resolve) => this.foregroundIdleWaiters.add(resolve))
   }
 
   async createTempDirectory(
@@ -673,6 +710,7 @@ function commandResult(result: CodexCommandExecResult): GitRunResult {
 
 function isReadOnlyGitCommand(args: readonly string[]): boolean {
   const subcommand = gitSubcommand(args)
+  if (subcommand === 'remote') return args.at(-1) === 'remote'
   if (!READ_ONLY_SUBCOMMANDS.has(subcommand)) return false
   return !(subcommand === 'config' && args.some((arg) => /^--?(add|replace-all|unset)/u.test(arg)))
 }

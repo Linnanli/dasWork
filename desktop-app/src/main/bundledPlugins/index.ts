@@ -1,13 +1,21 @@
 export {
   readAppBundledPluginDescriptors,
   readBundledPluginDescriptorsFromMarketplaceRoot,
+  readInstalledPrimaryRuntimePluginCatalog,
   readPrimaryRuntimeBundledPluginDescriptors,
+  readRetiredPrimaryRuntimeBundledPluginDescriptors,
   parseBundledPluginLock
 } from './BundledPluginDescriptors'
-export type { BundledPluginDescriptor, BundledPluginLock } from './BundledPluginDescriptors'
+export type {
+  BundledPluginDescriptor,
+  BundledPluginLock,
+  PrimaryRuntimePluginCatalogReader
+} from './BundledPluginDescriptors'
 export { BundledPluginManager, isInternalBundledPlugin } from './BundledPluginManager'
 export { BundledPluginReconcileCoordinator } from './BundledPluginReconcileCoordinator'
 export type { BundledPluginReconcileCoordinatorInput } from './BundledPluginReconcileCoordinator'
+export { RuntimeOwnedSkillManager } from './RuntimeOwnedSkillManager'
+export type { RuntimeOwnedSkillReconcileResult } from './RuntimeOwnedSkillManager'
 export type {
   BundledPluginCatalogClient,
   BundledPluginIdentity,

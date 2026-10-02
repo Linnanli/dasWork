@@ -15,15 +15,16 @@ export type MockRequest = {
 
 export type MockBackend = {
   baseUrl: string
+  modelApiBasePath: string
+  capabilities: string[]
   requests: MockRequest[]
   close(): Promise<void>
 }
 
 export type MockBackendOptions = {
-  responses: ResponsesStep[]
+  responses: Array<ResponsesStep | ResponsesStepFactory>
   searchResponses?: unknown[]
   modelApiBasePath?: string
-  modelProvider?: string
   capabilities?: string[]
 }
 
@@ -44,6 +45,14 @@ export type ResponsesErrorStep = {
 }
 
 export type ResponsesStep = ResponsesStreamStep | ResponsesErrorStep
+
+/**
+ * Derives the next model response from the actual preceding tool output. This
+ * remains a mock only at the model HTTP boundary; it lets E2E scenarios bind
+ * a follow-up command to values returned by the production app-server tool
+ * invocation instead of hard-coding a local fixture path.
+ */
+export type ResponsesStepFactory = (request: MockRequest) => ResponsesStep | Promise<ResponsesStep>
 
 export type ResponseEvent = {
   type: string
@@ -69,24 +78,6 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
     const body = await readRequestBody(request)
     capturedRequest.body = body
 
-    if (request.method === 'GET' && request.url?.startsWith('/api/client-models')) {
-      writeJson(response, [
-        {
-          model_id: 'qwen3.7-plus',
-          display_name: 'qwen3.7-plus',
-          description: null,
-          provider: options.modelProvider ?? 'qwen',
-          is_default: true,
-          capabilities: options.capabilities ?? ['text'],
-          api_base_url: `${serverBaseUrl(server)}${options.modelApiBasePath ?? ''}`,
-          api_key: 'sk-e2e-test-key',
-          api_format: 'openai',
-          source: 'admin'
-        }
-      ])
-      return
-    }
-
     if (request.method === 'GET' && (request.url === '/v1/models' || request.url === '/models')) {
       writeJson(response, {
         object: 'list',
@@ -104,12 +95,16 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
     }
 
     if (request.method === 'POST' && isResponsesUrl(request.url)) {
-      const nextResponse = responses.shift()
-      if (!nextResponse) {
+      const configuredResponse = responses.shift()
+      if (!configuredResponse) {
         response.writeHead(500, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ error: 'No scripted /responses payload remaining' }))
         return
       }
+      const nextResponse =
+        typeof configuredResponse === 'function'
+          ? await configuredResponse(capturedRequest)
+          : configuredResponse
       await nextResponse.beforeResponse?.()
       if ('status' in nextResponse) {
         response.writeHead(nextResponse.status, { 'content-type': 'application/json' })
@@ -129,6 +124,8 @@ export async function startMockBackend(options: MockBackendOptions): Promise<Moc
 
   return {
     baseUrl: serverBaseUrl(server),
+    modelApiBasePath: options.modelApiBasePath ?? '',
+    capabilities: options.capabilities ?? ['text'],
     requests,
     close: () =>
       new Promise((resolveClose, rejectClose) => {
@@ -303,7 +300,7 @@ export function functionCallOutputText(providerBody: unknown, callId: string): s
 }
 
 export function functionCallOutputCount(providerBodies: unknown[], callId: string): number {
-  return providerBodies.reduce((count, providerBody) => {
+  return providerBodies.reduce<number>((count, providerBody) => {
     if (!isRecord(providerBody) || !Array.isArray(providerBody.input)) return count
     return (
       count +

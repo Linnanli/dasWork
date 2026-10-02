@@ -5,7 +5,7 @@ import { DesktopThreadConfigSource, mergeDesktopThreadConfig } from './DesktopTh
 describe('DesktopThreadConfigSource', () => {
   it('creates one main-owned MCP projection with the private pipe path', () => {
     const pluginRoot =
-      '/Applications/dasCowork.app/Contents/Resources/plugins/openai-bundled/plugins/codex-app-tools'
+      '/Applications/dasCowork.app/Contents/Resources/plugins/dascowork-bundled/plugins/codex-app-tools'
     const config = new DesktopThreadConfigSource({
       pipePath: '/private/tmp/codex-app-tools.sock',
       pluginRoot,
@@ -16,11 +16,11 @@ describe('DesktopThreadConfigSource', () => {
       mcp_servers: {
         codex_app: {
           command:
-            '/Applications/dasCowork.app/Contents/Resources/plugins/openai-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp',
+            '/Applications/dasCowork.app/Contents/Resources/plugins/dascowork-bundled/plugins/codex-app-tools/scripts/launch_codex_app_tools_mcp',
           args: [
-            '/Applications/dasCowork.app/Contents/Resources/plugins/openai-bundled/plugins/codex-app-tools/server.mjs'
+            '/Applications/dasCowork.app/Contents/Resources/plugins/dascowork-bundled/plugins/codex-app-tools/server.mjs'
           ],
-          cwd: '/Applications/dasCowork.app/Contents/Resources/plugins/openai-bundled/plugins/codex-app-tools',
+          cwd: '/Applications/dasCowork.app/Contents/Resources/plugins/dascowork-bundled/plugins/codex-app-tools',
           enabled: true,
           env: {
             CODEX_APP_TOOLS_PIPE_PATH: '/private/tmp/codex-app-tools.sock',

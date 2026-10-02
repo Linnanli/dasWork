@@ -30,14 +30,22 @@ export type GitRunOptions = {
   maxOutputBytes?: number
   signal?: AbortSignal
   env?: Record<string, string | undefined>
+  priority?: 'background'
 }
 
 export type GitHost = {
   id: string
   isLocal: boolean
   runGit(args: readonly string[], cwd: string, options?: GitRunOptions): Promise<GitRunResult>
-  runGitBytes?(args: readonly string[], cwd: string, options?: GitRunOptions): Promise<GitBytesResult>
-  readFileBytes?(path: string, options?: { maxBytes?: number; signal?: AbortSignal }): Promise<Uint8Array>
+  runGitBytes?(
+    args: readonly string[],
+    cwd: string,
+    options?: GitRunOptions
+  ): Promise<GitBytesResult>
+  readFileBytes?(
+    path: string,
+    options?: { maxBytes?: number; signal?: AbortSignal }
+  ): Promise<Uint8Array>
   realpathFile?(path: string, options?: { signal?: AbortSignal }): Promise<string>
   createTempDirectory?(prefix: string, options?: { signal?: AbortSignal }): Promise<string>
   copyFile?(source: string, destination: string, options?: { signal?: AbortSignal }): Promise<void>

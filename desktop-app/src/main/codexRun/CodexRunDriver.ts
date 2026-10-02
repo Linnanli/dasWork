@@ -4,7 +4,7 @@ import type {
   CodexExistingTurnRecoveryState
 } from '@dascowork/codex-app-server-client'
 
-import type { AdminBackendClientModel } from '../adminBackendModelClient'
+import type { LocalClientModel } from '../localModels/LocalClientModel'
 import type { CodexAppServerLaunchOptions } from '../codexAppServerLaunch'
 import type { ConversationExecutionTarget } from '../threads/startConversation'
 import type {
@@ -38,7 +38,7 @@ export type CodexRunDriverInput = {
   request: CodexChatRequest
   modelId: string
   abortSignal: AbortSignal
-  clientModel?: AdminBackendClientModel
+  clientModel?: LocalClientModel
   executionTarget?: ConversationExecutionTarget
   resumeThreadId?: string
   resumeActiveTurn?: boolean

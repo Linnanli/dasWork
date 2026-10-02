@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-four-target-summary.v1",
+  "engineeringOnly": true,
+  "productionTrust": false,
+  "publiclyDeployable": false,
+  "sourceRunId": "36518852520",
+  "sourceCommit": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8",
+  "targets": [
+    "darwin-x64",
+    "darwin-arm64",
+    "win32-x64",
+    "linux-x64"
+  ]
+}

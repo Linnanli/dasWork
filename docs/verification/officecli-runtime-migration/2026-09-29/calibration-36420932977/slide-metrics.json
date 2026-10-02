@@ -1,0 +1,240 @@
+[
+  {
+    "file": "linux-after/slide-01.png",
+    "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 1,
+    "colorBucketCount": 53
+  },
+  {
+    "file": "darwin-x64-after/slide-01.png",
+    "sha256": "9cb5095a6a8c13bcf495b7c3673ab4e3f835e133f8644e37485829eee0164920",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 1,
+    "colorBucketCount": 50
+  },
+  {
+    "file": "linux-before/slide-01.png",
+    "sha256": "f6b1efac5536c387c752b64f53f8d98569533160e08167da97ab07e617ef6f59",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 1,
+    "colorBucketCount": 53
+  },
+  {
+    "file": "linux-repeat/slide-01.png",
+    "sha256": "19ba89804363977521ac7d59da60ddba744c90ad88a0f65bcb64d7458917c745",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 1,
+    "colorBucketCount": 53
+  },
+  {
+    "file": "linux-after/slide-02.png",
+    "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.17576003086419753,
+    "colorBucketCount": 197
+  },
+  {
+    "file": "darwin-x64-after/slide-02.png",
+    "sha256": "8ff94066b1493f7b8c5a2f284a5e8cacd7973593a9662eb465a558cdb31ff0aa",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.17690248842592593,
+    "colorBucketCount": 195
+  },
+  {
+    "file": "linux-before/slide-02.png",
+    "sha256": "289820794aa67a652934761cefe7813be196a6379f73fee2deccfd448a459691",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.1807277199074074,
+    "colorBucketCount": 175
+  },
+  {
+    "file": "linux-repeat/slide-02.png",
+    "sha256": "a88e7892694e35b47c208409964cfe551359e84df8aa480ab0af2543937344c3",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.17576003086419753,
+    "colorBucketCount": 197
+  },
+  {
+    "file": "linux-after/slide-03.png",
+    "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.01259741512345679,
+    "colorBucketCount": 16
+  },
+  {
+    "file": "darwin-x64-after/slide-03.png",
+    "sha256": "71c0d182e4a67c9357ba1199f9829ee82d1b485dd473e5d29d044de6617a6217",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.015308159722222223,
+    "colorBucketCount": 16
+  },
+  {
+    "file": "linux-before/slide-03.png",
+    "sha256": "8c3145e72b41b222cf70b658a42a99e20e51d5f8e80c051f102db6ea56ef2ef0",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.020381944444444446,
+    "colorBucketCount": 16
+  },
+  {
+    "file": "linux-repeat/slide-03.png",
+    "sha256": "c0899e1c7a114f702592be0bafd9058eccaf1b717d8b08ffbf6bd5b3417a89d6",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.01259741512345679,
+    "colorBucketCount": 16
+  },
+  {
+    "file": "ci-linux-failure/slide-04.png",
+    "sha256": "1c18360c3744aef4ffc5387689bf4bf746114aa9a846164644d578fa34fa20d9",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.2762721836419753,
+    "colorBucketCount": 12
+  },
+  {
+    "file": "linux-after/slide-04.png",
+    "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.28176890432098767,
+    "colorBucketCount": 68
+  },
+  {
+    "file": "darwin-x64-after/slide-04.png",
+    "sha256": "460a4ef99e06341ec19fdffebfaee3d80a51a8e86b7eb24760b9509b6da14426",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.28316454475308644,
+    "colorBucketCount": 66
+  },
+  {
+    "file": "linux-before/slide-04.png",
+    "sha256": "1c18360c3744aef4ffc5387689bf4bf746114aa9a846164644d578fa34fa20d9",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.2762721836419753,
+    "colorBucketCount": 12
+  },
+  {
+    "file": "linux-repeat/slide-04.png",
+    "sha256": "440d944395553bd4c4d4f8a7d4693465ec63af12fd6298f3dad45a963e358214",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.28176890432098767,
+    "colorBucketCount": 68
+  },
+  {
+    "file": "ci-linux-failure/slide-05.png",
+    "sha256": "f4030251d66043955091eb449f2816c1b85812e0f4b1414bf6e9a76f89aae8ac",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08877025462962963,
+    "colorBucketCount": 237,
+    "chartLabelRatios": {
+      "category1": 0,
+      "category2": 0.000180635838150289,
+      "legend": 0
+    },
+    "labelGatePassed": false
+  },
+  {
+    "file": "linux-after/slide-05.png",
+    "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08553144290123457,
+    "colorBucketCount": 36,
+    "chartLabelRatios": {
+      "category1": 0.023669554455445545,
+      "category2": 0.026463150289017343,
+      "legend": 0.004148148148148148
+    },
+    "labelGatePassed": true
+  },
+  {
+    "file": "darwin-x64-after/slide-05.png",
+    "sha256": "3f6683dd15eb0a616152eb1fcc87c642e776574e7aeae80f001382c4b81a7246",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08690538194444444,
+    "colorBucketCount": 37,
+    "chartLabelRatios": {
+      "category1": 0.024752475247524754,
+      "category2": 0.03170158959537572,
+      "legend": 0.006222222222222222
+    },
+    "labelGatePassed": true
+  },
+  {
+    "file": "linux-before/slide-05.png",
+    "sha256": "e1ea0bb917b8992c2c36f99cefb3edb493166cb5c01f3bf791b7fd27da5e6dbd",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08864390432098765,
+    "colorBucketCount": 36,
+    "chartLabelRatios": {
+      "category1": 0,
+      "category2": 0.000541907514450867,
+      "legend": 0
+    },
+    "labelGatePassed": false
+  },
+  {
+    "file": "linux-repeat/slide-05.png",
+    "sha256": "fc2ac30ce3e4c927e959d2c311472009ecbaee782b09a6f8915ce75b415426a5",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.08553144290123457,
+    "colorBucketCount": 36,
+    "chartLabelRatios": {
+      "category1": 0.023669554455445545,
+      "category2": 0.026463150289017343,
+      "legend": 0.004148148148148148
+    },
+    "labelGatePassed": true
+  },
+  {
+    "file": "linux-after/slide-06.png",
+    "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.02896749614197531,
+    "colorBucketCount": 256
+  },
+  {
+    "file": "darwin-x64-after/slide-06.png",
+    "sha256": "a7b77c6cba5799203db50f05e0c79678dc5cc727414f3992239d90d2b564a89b",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.03064959490740741,
+    "colorBucketCount": 249
+  },
+  {
+    "file": "linux-before/slide-06.png",
+    "sha256": "3192411967cfa045d37456afebdb01c2e33ddbbfc8cc045b73ecd010b6e583f9",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.034437692901234565,
+    "colorBucketCount": 256
+  },
+  {
+    "file": "linux-repeat/slide-06.png",
+    "sha256": "b9c7833ee325e2acf841a308f529178050fcc1a9f1c82e988b4e9b4c1b87a614",
+    "width": 1920,
+    "height": 1080,
+    "nonWhiteRatio": 0.02896749614197531,
+    "colorBucketCount": 256
+  }
+]

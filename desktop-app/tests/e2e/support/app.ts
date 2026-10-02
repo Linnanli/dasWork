@@ -1,6 +1,7 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import type { Readable } from 'node:stream'
 import {
   _electron as electron,
   expect,
@@ -9,12 +10,20 @@ import {
   type TestInfo
 } from '@playwright/test'
 import electronExecutable from 'electron'
+import type { AddLocalModelInput } from '../../../src/shared/codexIpcApi'
 import type { MockBackend } from './mockBackend'
 
 export const appRoot = resolve(__dirname, '..', '..', '..')
 export const repoRoot = resolve(appRoot, '..')
 
+export function e2eTempRoot(): string {
+  // GitHub-hosted Windows runners expose a short D:\a\_temp root. Prefer it
+  // so Runtime dependency paths remain below the Windows DLL loader limit.
+  return process.env.RUNNER_TEMP?.trim() || tmpdir()
+}
+
 export type LaunchAppOptions = {
+  initialModel?: AddLocalModelInput
   configureCodexHome?: (codexHomeDir: string) => Promise<void>
   userDataDir?: string
   codexHomeDir?: string
@@ -22,6 +31,7 @@ export type LaunchAppOptions = {
   executablePath?: string
   args?: string[]
   cwd?: string
+  launchTimeoutMs?: number
   /** Extra environment values for an E2E launch. Undefined values remove inherited variables. */
   environment?: NodeJS.ProcessEnv
 }
@@ -29,6 +39,12 @@ export type LaunchAppOptions = {
 const appTempDirs = new WeakMap<ElectronApplication, string[]>()
 const e2eLaunchCooldownMs = 1_500
 let nextE2eLaunchAt = 0
+
+// Keep the generated roots compact so Runtime-owned scripts (notably the
+// Windows Python presentation lint path) stay below MAX_PATH after the
+// version/target/plugin directories are appended.
+const e2eUserDataPrefix = 'dsc-ud-'
+const e2eCodexHomePrefix = 'dsc-ch-'
 
 export type AppReadinessSnapshot = {
   bridgeReady: boolean
@@ -41,14 +57,14 @@ export type AppReadinessSnapshot = {
 }
 
 export async function launchApp(
-  backend: Pick<MockBackend, 'baseUrl'>,
+  backend: Pick<MockBackend, 'baseUrl'> &
+    Partial<Pick<MockBackend, 'modelApiBasePath' | 'capabilities'>>,
   logs: string[],
   options: LaunchAppOptions = {}
 ): Promise<ElectronApplication> {
-  const userDataDir =
-    options.userDataDir ?? (await mkdtemp(join(tmpdir(), 'dascowork-e2e-user-data-')))
+  const userDataDir = options.userDataDir ?? (await mkdtemp(join(e2eTempRoot(), e2eUserDataPrefix)))
   const codexHomeDir =
-    options.codexHomeDir ?? (await mkdtemp(join(tmpdir(), 'dascowork-e2e-codex-home-')))
+    options.codexHomeDir ?? (await mkdtemp(join(e2eTempRoot(), e2eCodexHomePrefix)))
   const dataDirectories = [userDataDir, codexHomeDir]
   const documentsDir = join(userDataDir, 'Documents')
   let app: ElectronApplication | undefined
@@ -63,23 +79,35 @@ export async function launchApp(
       cwd: options.cwd ?? appRoot,
       env: {
         ...process.env,
-        ADMIN_BACKEND_URL: backend.baseUrl,
-        ADMIN_BACKEND_MODEL_USER_ID: 'e2e-user',
-        ADMIN_BACKEND_MODEL_CACHE_TTL_MS: '1000',
         CODEX_ASP_DEBUG_PACKETS: '1',
         CODEX_APP_SERVER_DISABLE_MANAGED_CONFIG: '1',
         CODEX_HOME: codexHomeDir,
         DASCOWORK_E2E_DOCUMENTS_DIR: documentsDir,
         DASCOWORK_E2E_USER_DATA_DIR: userDataDir,
         ELECTRON_ENABLE_LOGGING: '1',
+        TEMP: e2eTempRoot(),
+        TMP: e2eTempRoot(),
         ...options.environment
       },
-      timeout: 30_000
+      timeout: options.launchTimeoutMs ?? 30_000
     })
     appTempDirs.set(app, options.preserveDataDirectories ? [] : dataDirectories)
-    app.process().stdout?.on('data', (chunk) => logs.push(`[main:stdout] ${String(chunk)}`))
-    app.process().stderr?.on('data', (chunk) => logs.push(`[main:stderr] ${String(chunk)}`))
-    await expectAppReady(await app.firstWindow())
+    collectMainProcessLogs(app.process().stdout, 'stdout', logs)
+    collectMainProcessLogs(app.process().stderr, 'stderr', logs)
+    const page = await app.firstWindow()
+    await page.waitForFunction(() => Boolean(window.desktopApp?.codex?.addLocalModel))
+    const initialModel: AddLocalModelInput = options.initialModel ?? {
+      platform: 'custom',
+      baseUrl: `${backend.baseUrl}${backend.modelApiBasePath ?? ''}`,
+      fullUrl: false,
+      apiKey: 'sk-e2e-test-key',
+      modelId: 'qwen3.7-plus',
+      imageInput: backend.capabilities?.includes('image') ? 'supported' : 'unsupported',
+      apiMode: 'responses'
+    }
+    await page.evaluate(async (input) => window.desktopApp.codex.addLocalModel(input), initialModel)
+    await page.reload()
+    await expectAppReady(page)
   } catch (error) {
     if (app) await terminateElectronApp(app)
     else markE2eLaunchClosed()
@@ -206,6 +234,10 @@ export async function crashApp(app: ElectronApplication | undefined): Promise<vo
 export async function cleanupTempDirs(paths: string[]): Promise<void> {
   await Promise.all(
     paths.map(async (path) => {
+      // Primary Runtime versions are deliberately published read-only. E2E owns
+      // these temporary user-data roots, so restore write access before asking
+      // Node to remove the tree. Do not follow symlinks while doing so.
+      await makeTempTreeWritable(path)
       await rm(path, {
         recursive: true,
         force: true,
@@ -215,6 +247,30 @@ export async function cleanupTempDirs(paths: string[]): Promise<void> {
       await expectPathRemoved(path)
     })
   )
+}
+
+async function makeTempTreeWritable(path: string): Promise<void> {
+  let details
+  try {
+    details = await lstat(path)
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
+
+  if (details.isSymbolicLink() || !details.isDirectory()) {
+    if (details.isFile()) await chmod(path, 0o600)
+    return
+  }
+
+  for (const entry of await readdir(path)) {
+    await makeTempTreeWritable(join(path, entry))
+  }
+  await chmod(path, 0o700)
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }
 
 async function terminateElectronApp(app: ElectronApplication): Promise<void> {
@@ -303,6 +359,29 @@ async function waitForE2eLaunchCooldown(): Promise<void> {
 
 function markE2eLaunchClosed(): void {
   nextE2eLaunchAt = Date.now() + e2eLaunchCooldownMs
+}
+
+export function collectMainProcessLogs(
+  stream: Readable | null | undefined,
+  channel: 'stdout' | 'stderr',
+  logs: string[]
+): void {
+  if (!stream) return
+  let pending = ''
+  stream.setEncoding('utf8')
+  stream.on('data', (chunk: string) => {
+    pending += chunk
+    let boundary = pending.indexOf('\n')
+    while (boundary >= 0) {
+      const line = pending.slice(0, boundary).replace(/\r$/u, '')
+      if (line) logs.push(`[main:${channel}] ${line}`)
+      pending = pending.slice(boundary + 1)
+      boundary = pending.indexOf('\n')
+    }
+  })
+  stream.on('end', () => {
+    if (pending) logs.push(`[main:${channel}] ${pending}`)
+  })
 }
 
 export function collectRendererLogs(page: Page, logs: string[]): void {
@@ -405,9 +484,8 @@ export async function attachReleaseDiagnostics(
  * attach for every test without a production-only diagnostics bridge.
  */
 async function captureVisibleState(page: Page): Promise<unknown> {
-  const readiness = await page
-    .evaluate(collectAppReadinessSnapshot)
-    .catch((error: unknown): AppReadinessSnapshot => ({
+  const readiness = await page.evaluate(collectAppReadinessSnapshot).catch(
+    (error: unknown): AppReadinessSnapshot => ({
       bridgeReady: false,
       modelCatalogReady: false,
       composerMounted: false,
@@ -415,7 +493,8 @@ async function captureVisibleState(page: Page): Promise<unknown> {
       sendButtonPresent: false,
       stopButtonPresent: false,
       probeError: `E2E readiness snapshot unavailable: ${errorMessage(error)}`
-    }))
+    })
+  )
   return page.evaluate(
     async ({ readinessSnapshot }) => {
       const queueRoots = [...document.querySelectorAll('[data-slot="queued-follow-up-list"]')]

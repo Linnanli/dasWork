@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 
 import {
   ARTIFACT_PREVIEW_API_VERSION,
@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/artifactPreviewApi'
 import type { GitConversationTarget } from '../../../../shared/localGitApi'
 import type { ArtifactTabDescriptor } from './artifactTabDescriptor'
+import type { ArtifactPreviewSource } from '../workspace-container/workspaceOpenTargets'
 
 export type ArtifactRuntime = { artifactSourceId?: string; artifactSourceKey?: string }
 
@@ -39,18 +40,35 @@ export function useArtifactSource({
   runtime?: ArtifactRuntime
   onRuntimeChange(runtime: ArtifactRuntime): void
 }): SourceState & { refresh(): void } {
-  const sourceKey = useMemo(
+  const relativePath =
+    artifact.source.kind === 'workspace-file' ? artifact.source.relativePath : undefined
+  const authorizedSourceId =
+    artifact.source.kind === 'authorized-local' ? artifact.source.sourceId : undefined
+  // Workspace focus rebuilds descriptors and callbacks. Only a changed source
+  // or conversation should restart the load and discard the current preview.
+  const previewSource = useMemo<ArtifactPreviewSource>(
     () =>
-      artifact.source.kind === 'workspace-file'
-        ? `workspace:${workspaceId}:${artifact.source.relativePath}`
-        : `local:${artifact.source.sourceId}`,
-    [artifact.source, workspaceId]
+      relativePath !== undefined
+        ? { kind: 'workspace-file', relativePath }
+        : { kind: 'authorized-local', sourceId: authorizedSourceId ?? '' },
+    [relativePath, authorizedSourceId]
   )
+  const conversationId = target?.conversationId
+  const threadId = target?.threadId
+  const sourceTarget = useMemo<GitConversationTarget | undefined>(
+    () => (conversationId ? { conversationId, threadId } : undefined),
+    [conversationId, threadId]
+  )
+  const reportRuntime = useEffectEvent(onRuntimeChange)
+  const sourceKey =
+    previewSource.kind === 'workspace-file'
+      ? `workspace:${JSON.stringify([workspaceId, previewSource.relativePath, conversationId ?? null, threadId ?? null])}`
+      : `local:${previewSource.sourceId}`
   const [refreshKey, setRefreshKey] = useState(0)
   const [state, setState] = useState<SourceState>({ loading: true })
   const sourceId =
-    artifact.source.kind === 'authorized-local'
-      ? artifact.source.sourceId
+    previewSource.kind === 'authorized-local'
+      ? previewSource.sourceId
       : runtime?.artifactSourceKey === sourceKey
         ? runtime.artifactSourceId
         : undefined
@@ -61,10 +79,15 @@ export function useArtifactSource({
     const load = async (): Promise<void> => {
       setState({ sourceId, loading: true })
       try {
-        const resolvedSourceId = await ensureSourceId(artifact, workspaceId, target, sourceId)
+        const resolvedSourceId = await ensureSourceId(
+          previewSource,
+          workspaceId,
+          sourceTarget,
+          sourceId
+        )
         if (!active) return
-        if (artifact.source.kind === 'workspace-file' && resolvedSourceId !== sourceId) {
-          onRuntimeChange({ artifactSourceId: resolvedSourceId, artifactSourceKey: sourceKey })
+        if (previewSource.kind === 'workspace-file' && resolvedSourceId !== sourceId) {
+          reportRuntime({ artifactSourceId: resolvedSourceId, artifactSourceKey: sourceKey })
         }
         const metadataResult = await window.desktopApp.workspace.artifacts.metadata({
           version: ARTIFACT_PREVIEW_API_VERSION,
@@ -120,16 +143,14 @@ export function useArtifactSource({
     return () => {
       active = false
     }
-  }, [artifact, onRuntimeChange, refreshKey, sourceId, sourceKey, target, workspaceId])
+  }, [previewSource, refreshKey, sourceId, sourceKey, sourceTarget, workspaceId])
 
   useEffect(() => {
-    const relativePath =
-      artifact.source.kind === 'workspace-file' ? artifact.source.relativePath : undefined
     if (!relativePath) return
     return window.desktopApp.workspace.files.onEvent((event) => {
       if (event.rootId === workspaceId && (!event.path || event.path === relativePath)) refresh()
     })
-  }, [artifact.source, refresh, workspaceId])
+  }, [relativePath, refresh, workspaceId])
 
   useEffect(() => {
     if (!sourceId) return
@@ -142,19 +163,19 @@ export function useArtifactSource({
 }
 
 async function ensureSourceId(
-  artifact: ArtifactTabDescriptor,
+  source: ArtifactPreviewSource,
   workspaceId: string,
   target: GitConversationTarget | undefined,
   sourceId: string | undefined
 ): Promise<string> {
   if (sourceId) return sourceId
-  if (artifact.source.kind === 'authorized-local') return artifact.source.sourceId
+  if (source.kind === 'authorized-local') return source.sourceId
   if (!target) throw new Error('当前会话没有可用的本地工作区。')
   const root = await window.desktopApp.workspace.files.prepareRoot({ workspaceId, target })
   const result = await window.desktopApp.workspace.artifacts.registerWorkspaceSource({
     version: ARTIFACT_PREVIEW_API_VERSION,
     rootId: root.rootId,
-    path: artifact.source.relativePath
+    path: source.relativePath
   })
   return result.sourceId
 }

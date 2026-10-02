@@ -21,12 +21,15 @@ const isReleaseRuntime = realModelRuntime === 'release'
 const realModelSmokeEnabled = isReleaseRuntime
   ? process.env['DASCOWORK_RELEASE_LLM_SMOKE'] === '1'
   : process.env['DASCOWORK_DEV_LLM_SMOKE'] === '1'
-const adminBackendUrl = isReleaseRuntime
-  ? process.env['DASCOWORK_RELEASE_ADMIN_BACKEND_URL']?.trim()
-  : process.env['DASCOWORK_DEV_ADMIN_BACKEND_URL']?.trim()
-const adminBackendUserId = isReleaseRuntime
-  ? process.env['DASCOWORK_RELEASE_ADMIN_BACKEND_USER_ID']?.trim()
-  : process.env['DASCOWORK_DEV_ADMIN_BACKEND_USER_ID']?.trim()
+const modelBaseUrl = isReleaseRuntime
+  ? process.env['DASCOWORK_RELEASE_MODEL_BASE_URL']?.trim()
+  : process.env['DASCOWORK_DEV_MODEL_BASE_URL']?.trim()
+const modelApiKey = isReleaseRuntime
+  ? process.env['DASCOWORK_RELEASE_MODEL_API_KEY']?.trim()
+  : process.env['DASCOWORK_DEV_MODEL_API_KEY']?.trim()
+const modelId = isReleaseRuntime
+  ? process.env['DASCOWORK_RELEASE_MODEL_ID']?.trim()
+  : process.env['DASCOWORK_DEV_MODEL_ID']?.trim()
 const packagedExecutable = process.env['DASCOWORK_RELEASE_PACKAGED_APP_EXECUTABLE']
 const realModelAssertionTimeoutMs = 120_000
 const realModelTestTimeoutMs = 180_000
@@ -215,11 +218,11 @@ async function withReleaseApp(
   workspaceRoot = appRoot,
   options: ReleaseAppOptions = {}
 ): Promise<void> {
-  if (!adminBackendUrl) {
+  if (!modelBaseUrl || !modelApiKey || !modelId) {
     throw new Error(
       isReleaseRuntime
-        ? 'DASCOWORK_RELEASE_ADMIN_BACKEND_URL is required'
-        : 'DASCOWORK_DEV_ADMIN_BACKEND_URL is required'
+        ? 'DASCOWORK_RELEASE_MODEL_BASE_URL, MODEL_API_KEY and MODEL_ID are required'
+        : 'DASCOWORK_DEV_MODEL_BASE_URL, MODEL_API_KEY and MODEL_ID are required'
     )
   }
   if (isReleaseRuntime && !packagedExecutable) throw new Error('A packaged executable is required')
@@ -230,16 +233,23 @@ async function withReleaseApp(
   let app: ElectronApplication | undefined
   try {
     app = await launchApp(
-      { baseUrl: adminBackendUrl, requests: [], close: async () => undefined },
+      { baseUrl: modelBaseUrl },
       logs,
       {
         cwd: appRoot,
         configureCodexHome: options.configureCodexHome,
+        initialModel: {
+          platform: 'custom',
+          baseUrl: modelBaseUrl,
+          fullUrl: false,
+          apiKey: modelApiKey,
+          modelId,
+          imageInput: 'auto',
+          apiMode: 'responses'
+        },
         environment: {
-          // The generic E2E launch default uses `e2e-user`, which is only valid for the mock
-          // backend. Real catalog backends may reject it, so omit user_id unless explicitly set.
-          ADMIN_BACKEND_MODEL_USER_ID: adminBackendUserId ?? '',
           CODEX_APP_SERVER_BIN: undefined,
+          ...withoutDirectPrimaryRuntimeOverrides(),
           CODEX_ASP_DEBUG_PACKETS: process.env.DASCOWORK_RELEASE_LLM_DEBUG === '1' ? '1' : undefined
         },
         executablePath: isReleaseRuntime ? packagedExecutable : undefined,
@@ -412,6 +422,20 @@ async function expectReleaseRuntime(page: Page, runtime: RuntimeExpectation): Pr
   const status = await page.evaluate(() => window.desktopApp.codex.getStatus())
   expect(status.binary).toBe(runtime.expectedBinary)
   expect(status.binary).not.toMatch(/(?:^|\s)cargo(?:\s|$)/u)
+}
+
+function withoutDirectPrimaryRuntimeOverrides(): NodeJS.ProcessEnv {
+  return {
+    DASCOWORK_PRIMARY_RUNTIME_ROOT: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_VERSION: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SHA256: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ARCHIVE_SIZE_BYTES: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_URL: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_ALLOWED_ORIGINS: undefined,
+    DASCOWORK_PRIMARY_RUNTIME_MANIFEST_CHANNEL: undefined
+  }
 }
 
 async function expectNoBundledAppServerResources(resourcesPath: string): Promise<void> {

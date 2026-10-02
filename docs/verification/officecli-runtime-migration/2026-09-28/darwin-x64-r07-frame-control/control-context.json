@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "dascowork-officecli-r07-frame-control.v1",
+  "status": "passed",
+  "hostTarget": "darwin-x64",
+  "failedCalibrationRun": 36395096696,
+  "baseCommit": "c49c334253650c7fc650a2d1f7ca5e99dbb4ba38",
+  "runtimeArchive": {
+    "sourceRun": 36379148451,
+    "artifactId": 10952445907,
+    "bundleVersion": "2f2ea382dfdf29e36b400a4432112951e9c73b9d-darwin-x64-p1a-5",
+    "sha256": "602a4a5d45e43d2b57f0e31702748c0ffa3c32b62ed82c0cffd33b6d73aed3c0"
+  },
+  "result": "1 R07 test passed in 3.1 minutes; real signed Feed install, ordinary chat, app-server loader/command, source change and six real PNGs passed original pixel thresholds",
+  "scope": "single functional control with deterministic external model responses; not ten-sample calibration, native Windows/Linux execution, old/new human visual acceptance, or A1-A9 completion",
+  "fontControl": {
+    "source": "OfficeCLI SVG exported from the actual failed native Linux R07 PPTX",
+    "testModification": "preferred font names replaced with an unavailable name to verify Runtime fallback usage",
+    "actualGlyphProof": "Chromium CSS.getPlatformFontsForNode reports NotoSansCJKsc-Regular, isCustomFont=true, 16 glyphs in each title/body span",
+    "documentJavaScript": false,
+    "hostFontWait": "fixed Main expression, first hidden paint and two animation frames"
+  },
+  "workspaceFilesSha256": {
+    "desktop-app/src/main/artifacts/rasterizePresentationSvg.ts": "8a6aa8bb449afedf32a232a7c476c76d965d168804eee1d4200940711d88fc61",
+    "desktop-app/src/main/artifacts/PresentationArtifactPreviewService.ts": "fdf9b2711e31c2c998c67f2e09d27605e1edfd174b9dd9be46ed615158b1903e",
+    "desktop-app/tests/e2e/support/r07Presentation.ts": "03bd32f8f98328536a8d8b04cadca9df0cd19162a1516b941a4d4132b80dba1e"
+  }
+}

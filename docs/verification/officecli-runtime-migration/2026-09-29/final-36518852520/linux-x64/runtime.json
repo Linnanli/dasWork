@@ -1,0 +1,54 @@
+{
+  "bundleFormatVersion": 3,
+  "bundleVersion": "7612f7dfbcd8529c469efbc0b7672dd17446b3b8-linux-x64-final",
+  "target": {
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "binaries": [
+    {
+      "name": "pdfinfo",
+      "path": "dependencies/native/poppler/bin/pdfinfo",
+      "required": true
+    },
+    {
+      "name": "pdftoppm",
+      "path": "dependencies/native/poppler/bin/pdftoppm",
+      "required": true
+    },
+    {
+      "name": "officecli",
+      "path": "dependencies/native/officecli/officecli",
+      "required": true
+    }
+  ],
+  "fonts": [
+    {
+      "name": "noto-sans-cjk-sc",
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf"
+    }
+  ],
+  "bundledPlugins": [],
+  "bundledSkills": [
+    {
+      "path": "skills/officecli/SKILL.md",
+      "sha256": "b9462d0d8c480cb48d04f9f479a6b0d9eeb0feb6880e76ccae57ba7131925ba5",
+      "sizeBytes": 5190
+    }
+  ],
+  "skillsToRemove": [],
+  "sourceDigests": [
+    {
+      "path": "provenance/source-lock.json",
+      "sha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d"
+    },
+    {
+      "path": "provenance/THIRD_PARTY_NOTICES.txt",
+      "sha256": "ed63b0405ff4a78dc0a0c66e9042d2415dba21f1fd85363e355d7b1d3531fe6d"
+    },
+    {
+      "path": "provenance/toolchains-lock.json",
+      "sha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6"
+    }
+  ]
+}

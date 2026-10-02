@@ -1,0 +1,168 @@
+[
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-01.png",
+    "sha256": "9ebccc0f87c9633647e8d032892f5e69eda25db6514196bb60adf0332a993277"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-02.png",
+    "sha256": "10b1b10e18de4caf4e17e7ae872ff666c85001d98a0ef4afc5aca81e8ddb9017"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-03.png",
+    "sha256": "c74d9a65e4b1aa98977c550b429aaf58b0fc4e657fc396a8a0ccb52d7ed0bdb9"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-04.png",
+    "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [
+      {
+        "text": "市场指标",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "18.4",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "37",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "市场规模（亿元）",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "企业试点渗透率（%）",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "0",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "5",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "10",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "15",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "20",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "25",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "30",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "35",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "40",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      },
+      {
+        "text": "市场指标",
+        "fontFamily": "\"PingFang SC\", \"Noto Sans CJK SC\"",
+        "inlineFamily": "\"PingFang SC\", \"Noto Sans CJK SC\""
+      }
+    ],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-05.png",
+    "sha256": "420eac096b75ea6fa19c92f9352fafbbfab1f3825ba418bcdbecc101f0665246"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "svgText": [],
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-06.png",
+    "sha256": "805abf6f31d9e9b8aff03125f700154e17bf5be5d972d1443e43e0dd7e680227"
+  }
+]

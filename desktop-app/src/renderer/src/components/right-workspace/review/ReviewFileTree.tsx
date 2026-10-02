@@ -191,7 +191,7 @@ function VisibleReviewFileTree({
     <aside
       aria-label="Review file tree"
       className="relative flex min-h-0 shrink-0 flex-col border-l bg-background"
-      style={{ width: controller.preferences.treeWidth }}
+      style={{ width: controller.preferences.treeWidth, maxWidth: '45%' }}
     >
       <div
         role="separator"

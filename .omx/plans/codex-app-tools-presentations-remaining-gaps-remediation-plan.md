@@ -193,7 +193,7 @@ P1 可先用开发版 fixture Runtime验证主链。Windows packaged app-tools �
 
 ```text
 primary-runtime/
-  versions/<bundleVersion>-<archiveSha256>/...
+  versions/<archiveSha256>/...
   active.json
   active.json.next
   downloads/<archiveSha256>.zip
@@ -202,7 +202,7 @@ primary-runtime/
 
 步骤：
 
-1. 新版本完整解压、诊断、只读化后移动到不可变 `versions/<version>-<sha>`；旧版本不改名、不删除。
+1. 新版本完整解压、诊断、只读化后移动到不可变、内容寻址的 `versions/<archiveSha256>`；版本保存在原子指针中，不进入 Windows 原生工具的安装路径；旧版本不改名、不删除。
 2. `active.json.next` 只记录受约束的相对 version directory、bundle version、manifest SHA 和 generation。写入、flush 后用单次同目录 rename 替换 `active.json`。
 3. locator 每次读取一份完整指针快照，校验路径仍在 `versions/` 内，再 realpath/diagnose。读者只能观察旧指针或新指针，不解析 `active/` 目录。
 4. 首次升级时迁移现有 `active/`：先把健康目录放入 `versions/` 并写 pointer，确认新 locator 可读后才删除旧别名。崩溃恢复以最后一个合法 pointer 为准，忽略/清理 `.next`。

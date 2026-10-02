@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore } from 'react'
 
 import type {
+  AddLocalModelInput,
   CodexApprovalRequest,
   CodexApprovalResponse,
   CodexModelList,
@@ -43,6 +44,7 @@ export type CodexIpcAssistantRuntimeState = {
   restoreSingleActiveConversation: () => Promise<boolean>
   openConversation: (input: SidebarConversationActionPayload) => Promise<void>
   setSelectedModelId: (modelId: string) => Promise<void>
+  addLocalModel: (input: AddLocalModelInput) => Promise<void>
   setActiveProjectSelection: (selection: ProjectSelection | undefined) => void
   setActiveDraft: (draft: string) => void
   setActiveDraftAttachments: (attachments: readonly ConversationDraftAttachment[]) => void
@@ -238,6 +240,23 @@ export function useCodexIpcAssistantRuntime(
     [activeEntry, registry]
   )
 
+  const addLocalModel = useCallback(
+    async (input: AddLocalModelInput) => {
+      const targetEntry = activeEntry
+      try {
+        const list = await window.desktopApp.codex.addLocalModel(input)
+        setModels(toModelOptions(list))
+        setSelectedModelIdState(list.selectedModelId)
+        registry.applyDefaultModel(list.selectedModelId)
+        if (list.selectedModelId) registry.setSelectedModel(targetEntry, list.selectedModelId)
+      } catch (error) {
+        registry.setModelSelectionError(targetEntry, errorMessage(error))
+        throw error
+      }
+    },
+    [activeEntry, registry]
+  )
+
   const setActiveDraft = useCallback(
     (draft: string) => registry.setDraft(activeEntry, draft),
     [activeEntry, registry]
@@ -345,6 +364,7 @@ export function useCodexIpcAssistantRuntime(
     restoreSingleActiveConversation,
     openConversation,
     setSelectedModelId,
+    addLocalModel,
     setActiveProjectSelection,
     setActiveDraft,
     setActiveDraftAttachments,

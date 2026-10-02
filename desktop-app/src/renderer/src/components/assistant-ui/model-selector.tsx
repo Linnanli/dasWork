@@ -16,9 +16,10 @@ import {
   type ReactNode,
 } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PlusIcon } from "lucide-react";
 import { useAui } from "@assistant-ui/react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -586,7 +587,32 @@ export type ModelSelectorProps = Omit<ModelSelectorRootProps, "children"> &
     searchable?: boolean;
     className?: string;
     contentClassName?: string;
+    onAddModel?: () => void;
   };
+
+function ModelSelectorAddModel({ onAddModel }: { onAddModel: () => void }) {
+  const { setOpen } = useModelSelectorContext();
+  return (
+    <div className="border-t p-1.5">
+      <Button
+        data-slot="model-selector-add-model"
+        type="button"
+        variant="ghost"
+        className="w-full justify-start gap-2 text-xs"
+        onClick={() => {
+          setOpen(false);
+          onAddModel();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.stopPropagation();
+        }}
+      >
+        <PlusIcon className="size-4" />
+        添加模型
+      </Button>
+    </div>
+  );
+}
 
 /** Registers the selection with assistant-ui's ModelContext system. The
  * context's effort is already resolved against the selected model. */
@@ -616,6 +642,7 @@ const ModelSelectorImpl = ({
   size,
   className,
   contentClassName,
+  onAddModel,
   ...rootProps
 }: ModelSelectorProps) => {
   return (
@@ -629,6 +656,7 @@ const ModelSelectorImpl = ({
       <ModelSelectorContent className={contentClassName}>
         {searchable && <ModelSelectorSearch />}
         <ModelSelectorList />
+        {onAddModel && <ModelSelectorAddModel onAddModel={onAddModel} />}
         <ModelSelectorEffort />
       </ModelSelectorContent>
     </ModelSelectorRoot>

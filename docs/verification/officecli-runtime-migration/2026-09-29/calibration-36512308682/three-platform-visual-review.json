@@ -1,0 +1,41 @@
+{
+  "sourceRunId": "36512308682",
+  "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+  "reviewer": "/root/visual_review_36412021750",
+  "scope": "All six legacy/current pages for linux-x64, win32-x64 and darwin-arm64, 36 original PNGs",
+  "status": "no-blocking-visual-regression-found",
+  "acceptedByUser": false,
+  "targets": {
+    "linux-x64": {
+      "pages": 6,
+      "chineseReadable": true,
+      "tofuOrClippingObserved": false,
+      "tableTextAnd46PercentVisible": true,
+      "chartTitleCategoriesLegendAnd18437Visible": true,
+      "controlImageAndChineseBodyVisible": true,
+      "blockingRegressions": []
+    },
+    "win32-x64": {
+      "pages": 6,
+      "chineseReadable": true,
+      "tofuOrClippingObserved": false,
+      "tableTextAnd46PercentVisible": true,
+      "chartTitleCategoriesLegendAnd18437Visible": true,
+      "controlImageAndChineseBodyVisible": true,
+      "blockingRegressions": []
+    },
+    "darwin-arm64": {
+      "pages": 6,
+      "chineseReadable": true,
+      "tofuOrClippingObserved": false,
+      "tableTextAnd46PercentVisible": true,
+      "chartTitleCategoriesLegendAnd18437Visible": true,
+      "controlImageAndChineseBodyVisible": true,
+      "blockingRegressions": []
+    }
+  },
+  "differences": [
+    "Current font weight, size, whitespace and local positions differ from legacy; content remains complete.",
+    "Contact-sheet delta column is dimension mismatch; review used original images."
+  ]
+}

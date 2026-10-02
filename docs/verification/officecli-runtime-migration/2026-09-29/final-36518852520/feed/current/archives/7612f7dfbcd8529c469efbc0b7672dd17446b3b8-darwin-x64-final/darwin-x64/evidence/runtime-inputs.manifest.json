@@ -1,0 +1,792 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-inputs.v1",
+  "target": "darwin-x64",
+  "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+  "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+  "builder": {
+    "name": "@dascowork/primary-runtime-materializer",
+    "version": "1.4.0",
+    "runner": "macos-15-intel",
+    "identity": "github-hosted:macos-15-intel",
+    "observedImage": "github-hosted:macos-15-intel:20260824.0482.1",
+    "observedImageSha256": "de0e36560092f16dd09a9d0c3bd46156a5d1d01df5b0211549c16f4a66c54558",
+    "tools": [
+      {
+        "command": "tar",
+        "versionSha256": "f761f3518d37db8e9f1b77644bcbbe85f6b03bb87684b6b16acc8b5b46fbe766"
+      },
+      {
+        "command": "hdiutil",
+        "versionSha256": "f7f096b1726e1fe7d260b2e942b5a964a5ff8c783370ebaabcda19520226031a"
+      },
+      {
+        "command": "xattr",
+        "versionSha256": "5c4088a1385ea3af7acb3ea2df326596831f4552435dfff9b473a6e56e36aca7"
+      },
+      {
+        "command": "cmake",
+        "versionSha256": "25ccfac39d8920de7c484efdef450aebbe777449e219398e3c76851eecdd721c"
+      },
+      {
+        "command": "ninja",
+        "versionSha256": "87729f1910e8eb02719463db46083e0f1a4c3cbade23b357806338b25df16a6a"
+      },
+      {
+        "command": "clang",
+        "versionSha256": "6d366eee5ac6d909249830892c8846df457f835554e1481da864b4d455e951d5"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "libpng",
+      "version": "1.6.52",
+      "sha256": "36bd726228ec93a3b6c22fdb49e94a67b16f2fe9b39b78b7cb65772966661ccc",
+      "license": "Libpng-2.0",
+      "kind": "component:native"
+    },
+    {
+      "name": "officecli-darwin-x64",
+      "version": "1.0.152",
+      "sha256": "5071abef56c1d4a4d60e28ed12bc66183d8dc6a9783529c3f1a9cf6bdfe6c2dd",
+      "license": "Apache-2.0",
+      "kind": "component:native"
+    },
+    {
+      "name": "freetype",
+      "version": "2.13.3",
+      "sha256": "68ce87bb59ea209eb7350f41a94a27519ce16b37011b475a1e62d4abee154b66",
+      "license": "FTL OR GPL-2.0-only",
+      "kind": "component:native"
+    },
+    {
+      "name": "poppler",
+      "version": "26.09.0",
+      "sha256": "8059eadb6805340768f138c465b57f8164c92b4a0773c37ef031ea6c0d987b2e",
+      "license": "GPL-2.0-or-later",
+      "kind": "component:native"
+    },
+    {
+      "name": "noto-sans-cjk-sc",
+      "version": "2.004",
+      "sha256": "a927e56f53bd6c3b920bc139c0b94aa36c7d9ad0cf009b159437a1a003581140",
+      "license": "OFL-1.1",
+      "kind": "component:fonts"
+    },
+    {
+      "name": "zlib",
+      "version": "1.3.1",
+      "sha256": "d9e270d46252734aa49770fbc544125391617956266f220bd63216c834f3a522",
+      "license": "Zlib",
+      "kind": "component:native"
+    }
+  ],
+  "patches": [],
+  "files": [
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/ftconfig.h",
+      "mode": "100644",
+      "sha256": "907749b955e0209b26b22aef9cf8694742017f6cdccd8ac332867b54ec2fc5fc"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/ftheader.h",
+      "mode": "100644",
+      "sha256": "0e731fa6a148f64ff15274423553ec187a1aef297d130c430ff07951554ef8a1"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/ftmodule.h",
+      "mode": "100644",
+      "sha256": "61c76e01106e7b7c80f39f8d6fd479b5323b54d757c9a2cb66d07064ef616649"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/ftoption.h",
+      "mode": "100644",
+      "sha256": "6a14a03776c822b4c528cb05de40e3fea2b87649984a4fb3a852bee87c0f63d9"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/ftstdlib.h",
+      "mode": "100644",
+      "sha256": "fafd7eb672702cb2dc20b7e7e19540d251a3d978745821bc0632ba807c8b6f46"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/integer-types.h",
+      "mode": "100644",
+      "sha256": "8cc533596bff2f044823853f5d394bc697d6572c9c664f6beaaa67e066bfe162"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/mac-support.h",
+      "mode": "100644",
+      "sha256": "557701edb1bf2c98e38c7331e7522b4c35d390cb9899461d2eea4a74ab460196"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/config/public-macros.h",
+      "mode": "100644",
+      "sha256": "eb069473a8fbd2342388fbaade8f1159428b3b7a95a070a16eb84c16cd26316c"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/freetype.h",
+      "mode": "100644",
+      "sha256": "b8d8b9e32b2956cce3a9c5d9b8d18041fb7451acb747805c20b62bf1b4804cdb"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftadvanc.h",
+      "mode": "100644",
+      "sha256": "f8a70e19eac6782a5e6f5199c3cf6922c3cde46a10ffb71fa85f93cd0cf8f6db"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftbbox.h",
+      "mode": "100644",
+      "sha256": "3d04ed642305afb3b2287ef0aba26577748acd581b6bf5df263770af4a3fedc6"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftbdf.h",
+      "mode": "100644",
+      "sha256": "84cdb9ad4caadaee343fe2f3591dcea62aeaa5bf21d5c5595214f38906c58310"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftbitmap.h",
+      "mode": "100644",
+      "sha256": "aba4a5afc772eb002e2fc98ae41dc86b7cbd634a2ccc7c5fcc31861846fa9fc5"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftbzip2.h",
+      "mode": "100644",
+      "sha256": "76c9e1a31ebe293af5989d18c742a33a1869b4cc1ef4dfc3a535fa10a09862cb"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftcache.h",
+      "mode": "100644",
+      "sha256": "ef9835cc69d1bb496605632817d571ecd00691fe986f5e08c552cdf8b56aabd6"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftchapters.h",
+      "mode": "100644",
+      "sha256": "c7d1c2ca13903fb6d0b3b37850344d805280856fb87c7597087ce2352573f752"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftcid.h",
+      "mode": "100644",
+      "sha256": "e5c70ccb41b3c50a9958eee55e10407b2190a4afa1640e8c08c251fe1c0f826a"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftcolor.h",
+      "mode": "100644",
+      "sha256": "ba543bb2f608e8e1d6c97e7cd3da0a9e7ac23af4586bc3db75ca24750ef94692"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftdriver.h",
+      "mode": "100644",
+      "sha256": "cf44747d59263798e482ae5b932732b7729b75744014849d1001c4bdd4446c11"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/fterrdef.h",
+      "mode": "100644",
+      "sha256": "b83e0829b58949afede67e2f8a2fc9b3cafad9e3b4fd11d7ee9c87bd92c6d6c0"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/fterrors.h",
+      "mode": "100644",
+      "sha256": "12e955a5cb109519ee4421a03d4a5c324986c8fa01296eaa56e144e2851927ec"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftfntfmt.h",
+      "mode": "100644",
+      "sha256": "70b57ca7ae6f18403c0bfd2e58ab5e566f42026f25809f7b16fe147e686d4625"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftgasp.h",
+      "mode": "100644",
+      "sha256": "83af54183584ad16843b3d0d54eb63e4776bd0cce2d4b8a68cd80b718d740b76"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftglyph.h",
+      "mode": "100644",
+      "sha256": "7b13bb1d8501458cd35b7a279c01c1ee89417ceefa516b8eb416d175fe8df9e6"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftgxval.h",
+      "mode": "100644",
+      "sha256": "ff9b9e6d8bac9008c3f3404db8eefbe086632ba3dcbd925e59934d87e771535c"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftgzip.h",
+      "mode": "100644",
+      "sha256": "56d7d349af43263a2507cbb7260669f8acd4db2dce08f7a7e7df9d701144de12"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftimage.h",
+      "mode": "100644",
+      "sha256": "6245bd165b8a2f5ea6615be6cfc51aa8327ecbea45f42cbce2b8fb625f84574a"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftincrem.h",
+      "mode": "100644",
+      "sha256": "b5bbf21a6d94d500dd334a99eaf27364fd701d696d8891fd1df013aa0a223b3b"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftlcdfil.h",
+      "mode": "100644",
+      "sha256": "96f6c9bac843c30f3d329760e8f5ea061d958ba302682d69a50d953c193f73bf"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftlist.h",
+      "mode": "100644",
+      "sha256": "47d82894f2c3e187b8659d1966fdba44348c1739a88751a5a42a5a97c7a209ce"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftlogging.h",
+      "mode": "100644",
+      "sha256": "adfcb1f6c6ff73b6bfed707c74d7c22e2aea7528de728588eb051b4ecb18f279"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftlzw.h",
+      "mode": "100644",
+      "sha256": "2d5bf1d9075275776e9be7becd793ac079f52982f7db70ec87ea764f637a4fcd"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftmac.h",
+      "mode": "100644",
+      "sha256": "d39f3c3c117dea90597fc51d6bf51c6e6b3708ac60a5fb52e311d90b04da542b"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftmm.h",
+      "mode": "100644",
+      "sha256": "173d1d20553eec5163d9bb18a78acb3a0059e2879618b9edc5632a3e7a6252a3"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftmodapi.h",
+      "mode": "100644",
+      "sha256": "3b05e210b4705017d68e00def6820749fd0fca2f185ab2bb5df06d71928e29eb"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftmoderr.h",
+      "mode": "100644",
+      "sha256": "5d09e4a254f2f6272ae2661720124cae7678f7b846eb536ff728ae2c62f8bde3"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftotval.h",
+      "mode": "100644",
+      "sha256": "21b618c37fb5443b790eac4dd28ec6116240f8aeb3f24f310332bb40928f8060"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftoutln.h",
+      "mode": "100644",
+      "sha256": "b88abdf1e02e5a463f24e892e69408210816b24aec44bfe2ce2a01531fc483b9"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftparams.h",
+      "mode": "100644",
+      "sha256": "8c91f1d3a6e6461b43bd42afd99cbfea9a4cdfa0f4f135c708a50e835af30b44"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftpfr.h",
+      "mode": "100644",
+      "sha256": "e93451ece1f96472c80019dc755c68c2e7aff48b1bd6229b3c86aad41e6ccdee"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftrender.h",
+      "mode": "100644",
+      "sha256": "4faeb7a50ed0ce94d3cdc39de7496055c71f87c26c889784dfa934faf104a0ca"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftsizes.h",
+      "mode": "100644",
+      "sha256": "2f0fea779f9ebf3feea44ff217464767b0269866161d77e180104876ff64de9c"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftsnames.h",
+      "mode": "100644",
+      "sha256": "f28c45069c82b704e769d63cea39ace70ccecf959a3d10becde6c149c92ccc96"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftstroke.h",
+      "mode": "100644",
+      "sha256": "9fc84bf5969448b1adfac20e4920e614fc03a5d5abe53403a8e969593257c125"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftsynth.h",
+      "mode": "100644",
+      "sha256": "18c685e88e016b33878c29fc3ef08cf11c4a244aab2fc58782ebcbd26ee9b615"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftsystem.h",
+      "mode": "100644",
+      "sha256": "07371a83dafbe99e8575a839da3adb69cc2c5a1c8ebe49c3bc9d40f1baf04078"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/fttrigon.h",
+      "mode": "100644",
+      "sha256": "6de2b389169541a159f10af662f7ca8b5f87e2301c4c7932bbb7030e92659bf6"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/fttypes.h",
+      "mode": "100644",
+      "sha256": "29dd7f8b460633aa04d4eb7313893e43093643036dd025d384d7b1cc20f71375"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ftwinfnt.h",
+      "mode": "100644",
+      "sha256": "55c4863ad6a470209512bc3f3a930af6b691a9f1529ad50227c214aac08143d2"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/otsvg.h",
+      "mode": "100644",
+      "sha256": "15e331a5e93bed1a870d2ef4628184df85a0b22922cd735b0bcdf9910f3901db"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/t1tables.h",
+      "mode": "100644",
+      "sha256": "cba11e1aa574916074f6cb2bd2073f437bc418c961981447b4daad297f6e8535"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/ttnameid.h",
+      "mode": "100644",
+      "sha256": "2a819379237a37af33ee7e63ef8a49c958f767e375177b859b6c3f95fce098de"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/tttables.h",
+      "mode": "100644",
+      "sha256": "8d8e40ed7c940464831527c171f801daf4b6eae67315d309e379ae51a53e1e6d"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/freetype/tttags.h",
+      "mode": "100644",
+      "sha256": "1bee1d2d0b427d3003617e693f320971104a886c0c60e94e3309740b28a3df83"
+    },
+    {
+      "path": "dependencies/native/freetype/include/freetype2/ft2build.h",
+      "mode": "100644",
+      "sha256": "4a6bc059d8e53b189649793aafd26e737d9df0ffafd97b5d6bcbad711bf2548d"
+    },
+    {
+      "path": "dependencies/native/freetype/lib/cmake/freetype/freetype-config-noconfig.cmake",
+      "mode": "100644",
+      "sha256": "f0ae853ad13a19cae2e0f70872e0613b1ec1eb042122553f1fc22aa5467734db"
+    },
+    {
+      "path": "dependencies/native/freetype/lib/cmake/freetype/freetype-config-version.cmake",
+      "mode": "100644",
+      "sha256": "3ed5a306d1f74be6ed2c857640ad6cc66b023af9e1e3b9a4d08454f26edc9d12"
+    },
+    {
+      "path": "dependencies/native/freetype/lib/cmake/freetype/freetype-config.cmake",
+      "mode": "100644",
+      "sha256": "8e727bf6f19e34004898f77e8fd549af3cca2c65d37ab7c6c2f0bde83671e274"
+    },
+    {
+      "path": "dependencies/native/freetype/lib/libfreetype.a",
+      "mode": "100644",
+      "sha256": "da10e3f7f221ac5e250862ef2e42a0593e62385c2c5bd3146111bdc3bff869c0"
+    },
+    {
+      "path": "dependencies/native/freetype/lib/pkgconfig/freetype2.pc",
+      "mode": "100644",
+      "sha256": "23dd3dcc1a0ec4f5c652a8ee8b57c9bf4c42d03f7bcb1deef9359aa498096267"
+    },
+    {
+      "path": "dependencies/native/libpng/bin/libpng-config",
+      "mode": "100755",
+      "sha256": "950a1863d0d59d06bbccabcf3364fac0e4adce9faa9f6f45d94cf8cd698b1349"
+    },
+    {
+      "path": "dependencies/native/libpng/bin/libpng16-config",
+      "mode": "100755",
+      "sha256": "950a1863d0d59d06bbccabcf3364fac0e4adce9faa9f6f45d94cf8cd698b1349"
+    },
+    {
+      "path": "dependencies/native/libpng/include/libpng16/png.h",
+      "mode": "100644",
+      "sha256": "e5f15bc73660f35f2d209a84c171b7af4e346dd9a49c963694f3b8c676f1cd4d"
+    },
+    {
+      "path": "dependencies/native/libpng/include/libpng16/pngconf.h",
+      "mode": "100644",
+      "sha256": "91c8435a674292a7edbd446caed450aff5502fc4613ffa13a03019013c9a797f"
+    },
+    {
+      "path": "dependencies/native/libpng/include/libpng16/pnglibconf.h",
+      "mode": "100644",
+      "sha256": "b3fe5e27e895f45ecd377acb1a156405edec32c40480944be2cf14f855d27449"
+    },
+    {
+      "path": "dependencies/native/libpng/include/png.h",
+      "mode": "100644",
+      "sha256": "e5f15bc73660f35f2d209a84c171b7af4e346dd9a49c963694f3b8c676f1cd4d"
+    },
+    {
+      "path": "dependencies/native/libpng/include/pngconf.h",
+      "mode": "100644",
+      "sha256": "91c8435a674292a7edbd446caed450aff5502fc4613ffa13a03019013c9a797f"
+    },
+    {
+      "path": "dependencies/native/libpng/include/pnglibconf.h",
+      "mode": "100644",
+      "sha256": "b3fe5e27e895f45ecd377acb1a156405edec32c40480944be2cf14f855d27449"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/cmake/PNG/PNGConfig.cmake",
+      "mode": "100644",
+      "sha256": "658ffa30d7073e31f4c4194b83496cc03835d7340e84eda324f308345751874d"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/cmake/PNG/PNGConfigVersion.cmake",
+      "mode": "100644",
+      "sha256": "31165f7b453bba8efff04955fd1055d5d7f1f73663e96b58c8d21d1e51062633"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/cmake/PNG/PNGTargets-noconfig.cmake",
+      "mode": "100644",
+      "sha256": "7be4a09ba10c4731088a8bcd5bba1eb946860c493f5b37a2671408784913e945"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/cmake/PNG/PNGTargets.cmake",
+      "mode": "100644",
+      "sha256": "2b022252aa745bf3f967706a412b1f735c35e5f6cd090ec6c45602c1215ad525"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/libpng.a",
+      "mode": "100644",
+      "sha256": "20249ac944cfe208278a63e5974d13de3cf223abad54789afb50574ad0a51b75"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/libpng/libpng16-noconfig.cmake",
+      "mode": "100644",
+      "sha256": "19cdd6f5b1db76256becdf368dfd760878c5066b5ffee60ca5041408758e0e77"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/libpng/libpng16.cmake",
+      "mode": "100644",
+      "sha256": "a816c19231c116c413d5151e4fbd091373e3d5cb6cbcd50b48f0fcc5128d30ec"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/libpng16.a",
+      "mode": "100644",
+      "sha256": "20249ac944cfe208278a63e5974d13de3cf223abad54789afb50574ad0a51b75"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/pkgconfig/libpng.pc",
+      "mode": "100644",
+      "sha256": "b082e7154ea464c624a3fb157be1ddfd7896c21dc9fe623e43c018cd253b29d0"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/pkgconfig/libpng16.pc",
+      "mode": "100644",
+      "sha256": "b082e7154ea464c624a3fb157be1ddfd7896c21dc9fe623e43c018cd253b29d0"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Headers/png.h",
+      "mode": "100644",
+      "sha256": "e5f15bc73660f35f2d209a84c171b7af4e346dd9a49c963694f3b8c676f1cd4d"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Headers/pngconf.h",
+      "mode": "100644",
+      "sha256": "91c8435a674292a7edbd446caed450aff5502fc4613ffa13a03019013c9a797f"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Headers/pnglibconf.h",
+      "mode": "100644",
+      "sha256": "b3fe5e27e895f45ecd377acb1a156405edec32c40480944be2cf14f855d27449"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/png",
+      "mode": "100755",
+      "sha256": "ea85548020f8b3a5445dbe514507301d215c59471ca83372508554171153eb0a"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Resources/Info.plist",
+      "mode": "100644",
+      "sha256": "da809a928fbf4d216596fbfe19e1006f551b5635721d9c063a20b8015408e330"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/1.6.52/Headers/png.h",
+      "mode": "100644",
+      "sha256": "e5f15bc73660f35f2d209a84c171b7af4e346dd9a49c963694f3b8c676f1cd4d"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/1.6.52/Headers/pngconf.h",
+      "mode": "100644",
+      "sha256": "91c8435a674292a7edbd446caed450aff5502fc4613ffa13a03019013c9a797f"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/1.6.52/Headers/pnglibconf.h",
+      "mode": "100644",
+      "sha256": "b3fe5e27e895f45ecd377acb1a156405edec32c40480944be2cf14f855d27449"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/1.6.52/png",
+      "mode": "100755",
+      "sha256": "ea85548020f8b3a5445dbe514507301d215c59471ca83372508554171153eb0a"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/1.6.52/Resources/Info.plist",
+      "mode": "100644",
+      "sha256": "da809a928fbf4d216596fbfe19e1006f551b5635721d9c063a20b8015408e330"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/Current/Headers/png.h",
+      "mode": "100644",
+      "sha256": "e5f15bc73660f35f2d209a84c171b7af4e346dd9a49c963694f3b8c676f1cd4d"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/Current/Headers/pngconf.h",
+      "mode": "100644",
+      "sha256": "91c8435a674292a7edbd446caed450aff5502fc4613ffa13a03019013c9a797f"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/Current/Headers/pnglibconf.h",
+      "mode": "100644",
+      "sha256": "b3fe5e27e895f45ecd377acb1a156405edec32c40480944be2cf14f855d27449"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/Current/png",
+      "mode": "100755",
+      "sha256": "ea85548020f8b3a5445dbe514507301d215c59471ca83372508554171153eb0a"
+    },
+    {
+      "path": "dependencies/native/libpng/lib/png.framework/Versions/Current/Resources/Info.plist",
+      "mode": "100644",
+      "sha256": "da809a928fbf4d216596fbfe19e1006f551b5635721d9c063a20b8015408e330"
+    },
+    {
+      "path": "dependencies/native/libpng/share/man/man3/libpng.3",
+      "mode": "100644",
+      "sha256": "22397bfff6be60ba946edbd92d14ad4725fa1f73332ccee344fc17bf35e49027"
+    },
+    {
+      "path": "dependencies/native/libpng/share/man/man3/libpngpf.3",
+      "mode": "100644",
+      "sha256": "fb011f6368684a022563dcebfd9d55ec25a46b2edd1c807bb2575960ef047e40"
+    },
+    {
+      "path": "dependencies/native/libpng/share/man/man5/png.5",
+      "mode": "100644",
+      "sha256": "d230a82c3a3526a62dbaf3ab220f7b17279219a7598cbea3e332711744ad4527"
+    },
+    {
+      "path": "dependencies/native/officecli/officecli",
+      "mode": "100755",
+      "sha256": "5071abef56c1d4a4d60e28ed12bc66183d8dc6a9783529c3f1a9cf6bdfe6c2dd"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfattach",
+      "mode": "100755",
+      "sha256": "7c38ccb92d339552baedc19e0feb601aeb26e41b77ef2e344af113d2ad5e244c"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfdetach",
+      "mode": "100755",
+      "sha256": "86afa34d471f76815dda656f7daff1fc5d28b7cf0dcadce950a9f6f4bb024d1f"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdffonts",
+      "mode": "100755",
+      "sha256": "ec3b8c8e38da7c23621130eb6d6f0d69256b464c08b1e6ff208b011664d4461d"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfimages",
+      "mode": "100755",
+      "sha256": "47e2ee00936b97b8946e1436632194699a76690b4d3c6f756b95b21a671044de"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfinfo",
+      "mode": "100755",
+      "sha256": "fec9170949096eabf73fbda2ea28701d90d0cfb29179efedfb56fd046f2c9275"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfseparate",
+      "mode": "100755",
+      "sha256": "93613c9123b7848d4bcf97110f2792d78d08533046dc8c69fb1423b6e3f45ad3"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdftocairo",
+      "mode": "100755",
+      "sha256": "7d9d82c45ea6fe1d8662c0e7ea1938c5eb5b5a2d34d90f61e28bed4e19f3ac34"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdftohtml",
+      "mode": "100755",
+      "sha256": "e65195ae17b22876368b8ee0f280fb2a3533c8e916e7639d16ab07f8ce1ea13d"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdftoppm",
+      "mode": "100755",
+      "sha256": "19cbc354ab544a6b2ff6336b7bc27a1aaf5fca7f972df38f82dd1487ee56a214"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdftops",
+      "mode": "100755",
+      "sha256": "8904b9beee2848dba7f1210f75499ab8b31ecfcef8ab5fda66b06f525ec4ea0e"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdftotext",
+      "mode": "100755",
+      "sha256": "1874e6b358f073f218bbfc7445148a06de2c5d0866ef0b75b05f90ba27838c3e"
+    },
+    {
+      "path": "dependencies/native/poppler/bin/pdfunite",
+      "mode": "100755",
+      "sha256": "1aa719203cd579f6cd7c8fd673208aab5678d7de710836336cdaf9aceeaefd1f"
+    },
+    {
+      "path": "dependencies/native/poppler/lib/libpoppler.164.0.0.dylib",
+      "mode": "100755",
+      "sha256": "2e704e93fb5ec45578eacedc80914f292d40611a96edab708f5fc4d85b56c39b"
+    },
+    {
+      "path": "dependencies/native/poppler/lib/libpoppler.164.dylib",
+      "mode": "100755",
+      "sha256": "2e704e93fb5ec45578eacedc80914f292d40611a96edab708f5fc4d85b56c39b"
+    },
+    {
+      "path": "dependencies/native/poppler/lib/libpoppler.dylib",
+      "mode": "100755",
+      "sha256": "2e704e93fb5ec45578eacedc80914f292d40611a96edab708f5fc4d85b56c39b"
+    },
+    {
+      "path": "dependencies/native/poppler/lib/pkgconfig/poppler.pc",
+      "mode": "100644",
+      "sha256": "6d94c87bdd6c09419b54ec1942f7f4ae797500327152a5fb8063b195ed370620"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfattach.1",
+      "mode": "100644",
+      "sha256": "85da5b4ca51aad4bdd1d6c15a668560a2b983e31bc1344d9f617a0cfc2de00a9"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfdetach.1",
+      "mode": "100644",
+      "sha256": "8c3ac8470e2c066aec161912b4abe2773d320bf1a859eaea1b0619bb63ed16b4"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdffonts.1",
+      "mode": "100644",
+      "sha256": "e69df2498573a49506d87a663678ef4c1278a443a6b173131c24b54bbde3f08b"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfimages.1",
+      "mode": "100644",
+      "sha256": "760483481806194ec6480e0f715087b9c652006480a3dc86f98c3d3020d4e1d7"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfinfo.1",
+      "mode": "100644",
+      "sha256": "9f614f435eaa90f21e91537b947bc0dd25cc4baf67f0b3c78a7a617ea4525d8c"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfseparate.1",
+      "mode": "100644",
+      "sha256": "73f02af30f653bb2a999572f28abff089f39d622c0065c1ea876969f176b4668"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdftocairo.1",
+      "mode": "100644",
+      "sha256": "08b4fbcca2ac5f322878e9a28e7737e68261ec82ffd798974deb1bcca23e4bfb"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdftohtml.1",
+      "mode": "100644",
+      "sha256": "56946903c5f4c1a2025dbb4d5fff345e9b67e65329331c3fd23d36b6560581d2"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdftoppm.1",
+      "mode": "100644",
+      "sha256": "71ac1db50a3f00afafb4d6af6e9babc8aa56a26c6ce197e292ef8f8da0e3acd1"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdftops.1",
+      "mode": "100644",
+      "sha256": "7f1397439a77e5f57cefdea7a9aa308ddfbf7f888cb4700c1d605f097d576d31"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdftotext.1",
+      "mode": "100644",
+      "sha256": "fdfa02a846e9c63756c2e91c1b36226022e33415b73acee477944a4d2af37cfa"
+    },
+    {
+      "path": "dependencies/native/poppler/share/man/man1/pdfunite.1",
+      "mode": "100644",
+      "sha256": "ec2601f61b4407a773f7e0686609d894a15564b61703798425bc3bf6f9311a99"
+    },
+    {
+      "path": "dependencies/native/zlib/include/zconf.h",
+      "mode": "100644",
+      "sha256": "4824af6045d35a80f6bf61d218073ffaff3e8638de7ed2e05303457a7c99340d"
+    },
+    {
+      "path": "dependencies/native/zlib/include/zlib.h",
+      "mode": "100644",
+      "sha256": "8a5579af72ea4f427ff00a4150f0ccb3fc5c1e4379f726e101133b1ab9fc600c"
+    },
+    {
+      "path": "dependencies/native/zlib/lib/libz.1.3.1.dylib",
+      "mode": "100755",
+      "sha256": "249ccc93937adfb7c26420cfb480bb197d1b25498ed807e9a72353adcc5121a9"
+    },
+    {
+      "path": "dependencies/native/zlib/lib/libz.1.dylib",
+      "mode": "100755",
+      "sha256": "249ccc93937adfb7c26420cfb480bb197d1b25498ed807e9a72353adcc5121a9"
+    },
+    {
+      "path": "dependencies/native/zlib/lib/libz.a",
+      "mode": "100644",
+      "sha256": "99546d04083834ab8d743433e72db8d49c798a93184f49b3cc05b840a1fdffd9"
+    },
+    {
+      "path": "dependencies/native/zlib/lib/libz.dylib",
+      "mode": "100755",
+      "sha256": "249ccc93937adfb7c26420cfb480bb197d1b25498ed807e9a72353adcc5121a9"
+    },
+    {
+      "path": "dependencies/native/zlib/share/man/man3/zlib.3",
+      "mode": "100644",
+      "sha256": "5aadb3f129c4c7e29f28bb6c5954dea061df3046d0fe3e134aff2ef4a217b1d6"
+    },
+    {
+      "path": "dependencies/native/zlib/share/pkgconfig/zlib.pc",
+      "mode": "100644",
+      "sha256": "bfa36a5e80594dbc271ae6c67aa4876cb4564fd9a4e4343c344204e67ec05f5c"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/LICENSE",
+      "mode": "100644",
+      "sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Black.otf",
+      "mode": "100644",
+      "sha256": "2267c4a0312d267dff8c0d1609948f7d949a3da8be3e126f5e2690cb9cc883b4"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Bold.otf",
+      "mode": "100644",
+      "sha256": "b5f0d1a190a7f9b43c310a8850630af12553df32c4c050543f9059732d9b4c0a"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-DemiLight.otf",
+      "mode": "100644",
+      "sha256": "4600700d1b10c8e82074de7c91fa60d2ff5d0a7b9588edea6ab0929424b1699f"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Light.otf",
+      "mode": "100644",
+      "sha256": "e78bbbe1573bbb006156c1198f5c8cd6329470cb6e0b6702c7a3c83913db4abf"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Medium.otf",
+      "mode": "100644",
+      "sha256": "ca094f6b0001fb048ca39ddd797a0cdb0179e1e55c6561e111c49c3e6a61d7b7"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf",
+      "mode": "100644",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+    },
+    {
+      "path": "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Thin.otf",
+      "mode": "100644",
+      "sha256": "89bb8179d1b285ac0ca236b37ff29929ee3cc4526048dc11630a55728063e5ba"
+    }
+  ]
+}

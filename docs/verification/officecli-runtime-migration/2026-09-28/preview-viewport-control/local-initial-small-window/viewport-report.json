@@ -1,0 +1,86 @@
+[
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-01.png",
+    "sha256": "9ebccc0f87c9633647e8d032892f5e69eda25db6514196bb60adf0332a993277"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-02.png",
+    "sha256": "10b1b10e18de4caf4e17e7ae872ff666c85001d98a0ef4afc5aca81e8ddb9017"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-03.png",
+    "sha256": "c74d9a65e4b1aa98977c550b429aaf58b0fc4e657fc396a8a0ccb52d7ed0bdb9"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-04.png",
+    "sha256": "f9e94966c144b375662ed666fab77d77b0b32f908e0acde84e6f74a7249175ba"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-05.png",
+    "sha256": "420eac096b75ea6fa19c92f9352fafbbfab1f3825ba418bcdbecc101f0665246"
+  },
+  {
+    "viewport": {
+      "width": 1920,
+      "height": 1080,
+      "scrollWidth": 1920,
+      "scrollHeight": 1080
+    },
+    "captureSize": {
+      "width": 3840,
+      "height": 2160
+    },
+    "file": "slide-06.png",
+    "sha256": "d66821393b4187a7d302ed0917ff86f76d6a4c161aa070eb3901aba8f45c65f3"
+  }
+]

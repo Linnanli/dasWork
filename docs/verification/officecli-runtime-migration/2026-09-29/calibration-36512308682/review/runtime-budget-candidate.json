@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-budget-candidate.v1",
+  "generatedFrom": "dascowork-primary-runtime-budget-measurements.v1",
+  "evidence": {
+    "sourceRunId": "36512308682",
+    "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "installerCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+    "hardLimitsSha256": "9310bf4a71cd04996dfe7a8b3ef464f44baf601b4f8caf69919ea0518bdb3d69",
+    "sourceLockSha256": "5fd22c6ac0a33ad47d98b5cd8a748afbd33dd1c9e3cc93df9bba21a18bd0601d",
+    "toolchainsLockSha256": "f3545e5994eb38c0bf652ff6e6076e459793a9082b28b18cc243f31d884813b6",
+    "measurementsFingerprint": "1508f62ca733546ace4656588ff75ea3a858ea24b32c1560f965bbb4dadd21fc"
+  },
+  "targets": {
+    "darwin-x64": {
+      "maxArchiveBytes": 133760444,
+      "maxUnpackedBytes": 200867655,
+      "minimumFreeDiskBytes": 615820118,
+      "maxColdInstallMs": 62679,
+      "maxMainEventLoopDelayP99Ms": 17,
+      "maxMainEventLoopDelayMaxMs": 1848
+    },
+    "darwin-arm64": {
+      "maxArchiveBytes": 132684150,
+      "maxUnpackedBytes": 199670093,
+      "minimumFreeDiskBytes": 611827987,
+      "maxColdInstallMs": 16593,
+      "maxMainEventLoopDelayP99Ms": 23,
+      "maxMainEventLoopDelayMaxMs": 585
+    },
+    "win32-x64": {
+      "maxArchiveBytes": 129689769,
+      "maxUnpackedBytes": 187341215,
+      "minimumFreeDiskBytes": 580028029,
+      "maxColdInstallMs": 12635,
+      "maxMainEventLoopDelayP99Ms": 9,
+      "maxMainEventLoopDelayMaxMs": 74
+    },
+    "linux-x64": {
+      "maxArchiveBytes": 206794121,
+      "maxUnpackedBytes": 403671845,
+      "minimumFreeDiskBytes": 1166258483,
+      "maxColdInstallMs": 15482,
+      "maxMainEventLoopDelayP99Ms": 5,
+      "maxMainEventLoopDelayMaxMs": 32
+    }
+  }
+}

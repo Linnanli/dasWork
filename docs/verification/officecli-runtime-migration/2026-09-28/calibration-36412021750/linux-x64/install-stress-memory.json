@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-install-stress-memory.v1",
+  "version": "84732005a79c559c2111b1764efc0a13d0ca2cc8-linux-x64-p1a-5",
+  "archiveSha256": "e4779e3249135867bc21e62c57f1d565ddef4c0cd8fe3459df5bb94f839e5d2e",
+  "archiveSizeBytes": 179820851,
+  "baselineRssBytes": 77156352,
+  "peakRssBytes": 121720832,
+  "rssDeltaBytes": 44564480,
+  "maxRssDeltaBytes": 402653184
+}

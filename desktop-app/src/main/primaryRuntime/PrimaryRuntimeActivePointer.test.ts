@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   PrimaryRuntimeActivePointer,
-  parsePrimaryRuntimeActivePointer
+  parsePrimaryRuntimeActivePointer,
+  versionDirectoryForArchive
 } from './PrimaryRuntimeActivePointer'
 
 const directories: string[] = []
@@ -16,6 +17,14 @@ afterEach(async () => {
 })
 
 describe('PrimaryRuntimeActivePointer', () => {
+  it('uses the full archive digest as the immutable release directory identity', () => {
+    const archiveSha256 = 'a'.repeat(64)
+    const versionDirectory = versionDirectoryForArchive(archiveSha256)
+
+    expect(versionDirectory).toBe(join('versions', archiveSha256))
+    expect(versionDirectory.length).toBeLessThanOrEqual('versions/'.length + 64)
+  })
+
   it('only exposes complete old or new version roots while swapping generations', async () => {
     const cacheRoot = await fixtureDirectory()
     const oldDirectory = 'versions/old-generation'
@@ -74,6 +83,22 @@ describe('PrimaryRuntimeActivePointer', () => {
     await expect(readFile(join(cacheRoot, 'active.json.next'), 'utf8')).rejects.toMatchObject({
       code: 'ENOENT'
     })
+  })
+
+  it('normalizes a Windows-native version directory before publishing it', async () => {
+    const cacheRoot = await fixtureDirectory()
+    await mkdir(join(cacheRoot, 'versions', 'windows-p1a'), { recursive: true })
+    const pointer = new PrimaryRuntimeActivePointer(cacheRoot)
+
+    const published = await pointer.publish({
+      version: 'windows-p1a',
+      archiveSha256: 'a'.repeat(64),
+      manifestSha256: 'b'.repeat(64),
+      directory: 'versions\\windows-p1a'
+    })
+
+    expect(published.directory).toBe('versions/windows-p1a')
+    await expect(pointer.resolveRoot()).resolves.toBe(join(cacheRoot, 'versions', 'windows-p1a'))
   })
 
   it('rejects malformed and escaping pointer records', () => {

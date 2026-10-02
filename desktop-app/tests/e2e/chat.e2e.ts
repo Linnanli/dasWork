@@ -31,7 +31,7 @@ const onePixelPng = Buffer.from(
   'base64'
 )
 
-test('sends a real desktop chat turn through the admin backend model provider', async ({
+test('sends a real desktop chat turn through the locally configured model provider', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')
@@ -377,7 +377,9 @@ test('preserves a workspace reference, local file, folder and image after conver
       await page.getByRole('option', { name: 'Files and folders', exact: true }).click()
     }
     await expect(page.getByRole('button', { name: 'File attachment', exact: true })).toHaveCount(2)
-    await expect(page.getByRole('button', { name: 'Image attachment', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: '预览e2e-context.png', exact: true })
+    ).toBeVisible()
 
     const sendButton = page.getByRole('button', { name: '发送消息', exact: true })
     await expect(sendButton).toBeEnabled()
@@ -481,7 +483,7 @@ async function expectAttachmentNames(
   const imagePreviewSource = await imagePreview.getAttribute('src')
   expect(imagePreviewSource).toMatch(/^app:\/\/fs\//u)
   expect(imagePreviewSource?.endsWith(`/${names.image}`)).toBe(true)
-  await expect(imagePreview).toHaveAttribute('alt', 'Attachment preview')
+  await expect(imagePreview).toHaveAttribute('alt', names.image)
 }
 
 async function expectAttachmentTooltip(
@@ -720,7 +722,7 @@ test('stops only the active conversation while a background conversation continu
   }
 })
 
-test('shows upstream quota errors returned by the admin backend model provider', async ({
+test('shows upstream quota errors returned by the local model provider', async ({
   browserName
 }, testInfo) => {
   test.skip(browserName !== 'chromium', 'Electron E2E runs through Chromium')

@@ -1,0 +1,35 @@
+{
+  "sourceRunId": "36512308682",
+  "sourceCommit": "48e1a5ed1095a536e4c8b492065536dfcc5af47e",
+  "target": "darwin-x64",
+  "reviewer": "root",
+  "method": "All twelve original legacy/current PNGs viewed pair by pair",
+  "status": "no-blocking-visual-regression-found",
+  "acceptedByUser": false,
+  "pages": [
+    {
+      "slide": 1,
+      "result": "Chinese title and subtitle complete; no clipping; current text smaller than legacy."
+    },
+    {
+      "slide": 2,
+      "result": "All four cards and 2026/18.4/37%/46% facts readable; line wrapping, font size and whitespace differ."
+    },
+    {
+      "slide": 3,
+      "result": "All five summary lines and values readable; no missing characters; current content more compact."
+    },
+    {
+      "slide": 4,
+      "result": "All table headers and three rows readable, including 46%; full table bounds visible."
+    },
+    {
+      "slide": 5,
+      "result": "Chart title, both Chinese categories, legend and 18.4/37 values visible; chart/font geometry differs."
+    },
+    {
+      "slide": 6,
+      "result": "Current control-flow image and both Chinese statements complete; legacy image region is blank in this original PNG."
+    }
+  ]
+}

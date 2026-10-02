@@ -13,7 +13,16 @@ export type DesktopToolContext = {
   threadId?: string
   turnId?: string
   callId?: string
-  primaryRuntimeStatus?: 'ready' | 'missing' | 'broken' | 'unsupported'
+  primaryRuntimeStatus?:
+    | 'ready'
+    | 'missing'
+    | 'broken'
+    | 'unsupported'
+    | 'checking'
+    | 'installing'
+    | 'failed'
+  /** Resolved once for a new-thread snapshot by Main's feature gate. */
+  workspaceDependenciesEnabled?: boolean
 }
 
 export type ToolAvailability = { state: 'available' } | { state: 'unavailable'; reason: string }

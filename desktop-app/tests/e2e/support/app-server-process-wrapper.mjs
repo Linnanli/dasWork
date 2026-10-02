@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 
-import { existsSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
@@ -11,6 +11,7 @@ const heldSteerRequestPath = process.env.DASCOWORK_E2E_HELD_STEER_REQUEST_PATH
 const originalTurnCompletedPath = process.env.DASCOWORK_E2E_ORIGINAL_TURN_COMPLETED_PATH
 const heldThreadStartPath = process.env.DASCOWORK_E2E_HELD_THREAD_START_PATH
 const releaseThreadStartPath = process.env.DASCOWORK_E2E_RELEASE_THREAD_START_PATH
+const requestLogPath = process.env.DASCOWORK_E2E_APP_SERVER_REQUEST_LOG_PATH
 
 if (process.argv.includes('--version')) {
   const versionExitCode = await new Promise((resolve) => {
@@ -43,6 +44,7 @@ let heldThreadStartRequest
 let releaseThreadStartTimer
 const clientInput = createInterface({ input: process.stdin, crlfDelay: Infinity })
 clientInput.on('line', (line) => {
+  if (requestLogPath) appendFileSync(requestLogPath, `${line}\n`, 'utf8')
   if (
     !heldThreadStartRequest &&
     heldThreadStartPath &&

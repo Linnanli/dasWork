@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 
+import { once } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createVitestPlanAssertionRecorder } from '../../../scripts/lib/test-plan-assertions.mjs'
 
-import { collectAppReadinessSnapshot, redactDiagnosticData, serializeDiagnosticData } from './app'
+import {
+  collectAppReadinessSnapshot,
+  collectMainProcessLogs,
+  redactDiagnosticData,
+  serializeDiagnosticData
+} from './app'
 
 const { planAssert } = createVitestPlanAssertionRecorder(expect)
 
@@ -35,6 +42,45 @@ afterEach(() => {
   document.body.innerHTML = ''
   Reflect.deleteProperty(window, 'desktopApp')
   vi.restoreAllMocks()
+})
+
+describe('collectMainProcessLogs', () => {
+  it('keeps coalesced and fragmented app-server packets as separate complete JSON lines', async () => {
+    const stream = new PassThrough()
+    const logs: string[] = []
+    collectMainProcessLogs(stream, 'stdout', logs)
+    const packets = [
+      { message: { method: 'item/started' } },
+      { message: { method: 'item/tool/call', params: { tool: 'load_workspace_dependencies' } } },
+      { message: { method: 'item/commandExecution/requestApproval' } }
+    ]
+    const lines = packets.map((packet) => `[codex packet] ${JSON.stringify(packet)}`)
+    stream.write(`${lines[0]}\n${lines[1]}\r\n${lines[2]!.slice(0, 20)}`)
+    expect(logs).toHaveLength(2)
+    const ended = once(stream, 'end')
+    stream.end(lines[2]!.slice(20))
+    await ended
+    expect(
+      logs.map((line) => JSON.parse(line.slice('[main:stdout] [codex packet] '.length)))
+    ).toEqual(packets)
+  })
+
+  it('decodes UTF-8 across byte boundaries and keeps stdout and stderr buffers separate', async () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const logs: string[] = []
+    collectMainProcessLogs(stdout, 'stdout', logs)
+    collectMainProcessLogs(stderr, 'stderr', logs)
+    const chinese = Buffer.from('预览完成\n')
+    stdout.write(chinese.subarray(0, 2))
+    stderr.write('compiler ready\n')
+    stdout.write(chinese.subarray(2))
+    const ended = [once(stdout, 'end'), once(stderr, 'end')]
+    stdout.end()
+    stderr.end()
+    await Promise.all(ended)
+    expect(logs).toEqual(['[main:stderr] compiler ready', '[main:stdout] 预览完成'])
+  })
 })
 
 describe('collectAppReadinessSnapshot', () => {

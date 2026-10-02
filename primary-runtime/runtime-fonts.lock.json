@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "dascowork-primary-runtime-fonts.v1",
+  "fonts": [
+    {
+      "name": "noto-sans-cjk-sc",
+      "family": "Noto Sans CJK SC",
+      "version": "2.004",
+      "source": "https://github.com/notofonts/noto-cjk/releases/download/Sans2.004/08_NotoSansCJKsc.zip",
+      "sha256": "a927e56f53bd6c3b920bc139c0b94aa36c7d9ad0cf009b159437a1a003581140",
+      "license": "OFL-1.1",
+      "platforms": ["darwin-x64", "darwin-arm64", "win32-x64", "linux-x64"],
+      "fallbackOrder": ["Noto Sans CJK SC", "Noto Sans CJK", "sans-serif"]
+    }
+  ],
+  "policy": "Fonts are copied only from runtime-sources.lock.json, require a locked source SHA-256 and license, and are rendered on every target-native runner before staging."
+}

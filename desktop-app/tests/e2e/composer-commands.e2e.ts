@@ -19,6 +19,8 @@ import {
   ensureLocalProjectSelected,
   sendComposerMessage
 } from './support/chatActions'
+import { createAppServerRequestCapture } from './support/appServerRequestCapture'
+import { outboundCodexRequestParams } from './support/codexPackets'
 import { assistantMessageResponse, startMockBackend } from './support/mockBackend'
 
 const execFile = promisify(execFileCallback)
@@ -129,11 +131,12 @@ test('sends Plan as a real turn/start collaboration mode packet', async ({
   const backend = await startMockBackend({
     responses: [assistantMessageResponse('plan-mode', 'plan-mode-message', 'Plan response')]
   })
+  const appServerCapture = await createAppServerRequestCapture()
   const logs: string[] = []
   let app: ElectronApplication | undefined
 
   try {
-    app = await launchApp(backend, logs)
+    app = await launchApp(backend, logs, { environment: appServerCapture.environment })
     const page = await app.firstWindow()
     collectRendererLogs(page, logs)
     await ensureLocalProjectSelected(page)
@@ -148,16 +151,23 @@ test('sends Plan as a real turn/start collaboration mode packet', async ({
     await expect(page.locator('[data-role="assistant"]')).toContainText('Plan response')
 
     await expect
-      .poll(() => logs.some((line) => line.includes('"debug":"turn/start"')), {
+      .poll(async () => (await appServerCapture.requestParams('turn/start')).length, {
         timeout: 10_000
       })
-      .toBe(true)
-    const turnStartPacket = logs.findLast((line) => line.includes('"debug":"turn/start"'))
-    expect(turnStartPacket).toContain('"collaborationMode":{"mode":"plan"')
-    expect(turnStartPacket).toContain('"developer_instructions":null')
+      .toBeGreaterThan(0)
+    const turnStartParams = (await appServerCapture.requestParams('turn/start')).at(-1)
+    expect(turnStartParams).toMatchObject({
+      collaborationMode: {
+        mode: 'plan',
+        settings: {
+          developer_instructions: null
+        }
+      }
+    })
   } finally {
     await attachDiagnostics(testInfo, logs, backend, app)
     await closeApp(app)
+    await appServerCapture.cleanup()
     await backend.close()
   }
 })
@@ -192,9 +202,7 @@ test('resumes an existing conversation Goal without adding a user turn', async (
     await sendComposerMessage(page, '先创建这个已有会话。')
     await expect(page.locator('[data-role="assistant"]')).toContainText('Initial reply')
 
-    const turnStartCountBeforeGoal = logs.filter((line) =>
-      line.includes('"debug":"turn/start"')
-    ).length
+    const turnStartCountBeforeGoal = outboundCodexRequestParams(logs, 'turn/start').length
     const composerInput = page.locator('.aui-lexical-input[contenteditable="true"]').last()
     await composerInput.fill('/goal')
     await expect(
@@ -213,9 +221,7 @@ test('resumes an existing conversation Goal without adding a user turn', async (
     expect(goalControlLogs.indexOf('"debug":"thread/resume"')).toBeLessThan(
       goalControlLogs.indexOf('"method":"thread/goal/set"')
     )
-    expect(logs.filter((line) => line.includes('"debug":"turn/start"')).length).toBe(
-      turnStartCountBeforeGoal
-    )
+    expect(outboundCodexRequestParams(logs, 'turn/start').length).toBe(turnStartCountBeforeGoal)
     await expect(page.getByRole('button', { name: '清除目标' })).toBeVisible()
 
     const goalSetCountBeforeEdit = logs.filter((line) =>
